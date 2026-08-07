@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Soluções Rápidas</title>
+  <meta name="theme-color" content="#0f1220" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="card">
+    <h1>Soluções Rápidas</h1>
+    <p class="subtitle">Etapa 1 · teste de conexão com o n8n</p>
+
+    <form id="test-form">
+      <label for="password">Senha de acesso</label>
+      <input type="password" id="password" placeholder="Digite a senha" required />
+      <button type="submit" id="test-button">Testar conexão</button>
+    </form>
+
+    <div id="status" class="status"></div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

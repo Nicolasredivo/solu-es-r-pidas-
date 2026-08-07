@@ -1,0 +1,22 @@
+{
+  "name": "Soluções Rápidas",
+  "short_name": "Sol. Rápidas",
+  "description": "Interface para acionar e acompanhar automações do n8n.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f1220",
+  "theme_color": "#0f1220",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
