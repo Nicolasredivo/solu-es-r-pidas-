@@ -20,18 +20,20 @@ form.addEventListener("submit", async (event) => {
   showStatus("loading", "Conectando ao n8n...");
 
   try {
+    // Enviado como formulário simples de propósito: assim o navegador não
+    // precisa fazer a verificação extra de segurança (CORS preflight).
     const response = await fetch(N8N_TEST_WEBHOOK_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ senha: passwordInput.value }),
+      body: new URLSearchParams({ senha: passwordInput.value }),
     });
 
-    if (!response.ok) {
-      showStatus("error", "Acesso negado. Confira a senha e tente de novo.");
-      return;
-    }
+    const data = await response.json().catch(() => null);
 
-    showStatus("ok", "Conectado com sucesso!");
+    if (data && data.ok) {
+      showStatus("ok", data.mensagem || "Conectado com sucesso!");
+    } else {
+      showStatus("error", (data && data.mensagem) || "Acesso negado. Confira a senha.");
+    }
   } catch (err) {
     showStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
   } finally {
