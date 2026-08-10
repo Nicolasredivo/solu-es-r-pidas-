@@ -1,10 +1,9 @@
-const CACHE_NAME = "solucoes-rapidas-v1";
+const CACHE_NAME = "solucoes-rapidas-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
-  "./config.js",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -32,6 +31,13 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+
+  // config.js muda com frequência (endereço do túnel): sempre busca na rede,
+  // nunca serve do cache.
+  if (url.pathname.endsWith("/config.js")) {
+    event.respondWith(fetch(event.request, { cache: "no-store" }));
+    return;
+  }
 
   // Nunca cacheia chamadas para o n8n: sempre precisam ser em tempo real.
   if (event.request.method !== "GET" || !url.pathname.match(/\.(html|css|js|json|png)$|\/$/)) {
