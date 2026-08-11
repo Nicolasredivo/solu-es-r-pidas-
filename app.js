@@ -3,6 +3,9 @@ const passwordInput = document.getElementById("password");
 const testButton = document.getElementById("test-button");
 const statusBox = document.getElementById("status");
 
+const gateView = document.getElementById("gate-view");
+const appView = document.getElementById("app-view");
+
 const menuButton = document.getElementById("menu-button");
 const sidebar = document.getElementById("sidebar");
 const sidebarOverlay = document.getElementById("sidebar-overlay");
@@ -57,6 +60,8 @@ form.addEventListener("submit", async (event) => {
 
     if (data && data.ok) {
       showStatus("ok", data.mensagem || "Conectado com sucesso!");
+      gateView.classList.add("hidden");
+      appView.classList.remove("hidden");
     } else {
       showStatus("error", (data && data.mensagem) || "Acesso negado. Confira a senha.");
     }

@@ -11,31 +11,41 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="topbar">
-    <button type="button" id="menu-button" class="menu-button" aria-label="Abrir menu" aria-expanded="false">☰</button>
-    <span class="topbar-title">Soluções Rápidas</span>
-  </div>
-
-  <div id="sidebar-overlay" class="sidebar-overlay"></div>
-
-  <nav id="sidebar" class="sidebar">
-    <button type="button" id="sidebar-item-testar" class="sidebar-item active">Testar conexão</button>
-  </nav>
-
-  <main class="main-content">
+  <div id="gate-view" class="gate-view">
     <div class="card">
-      <h1>Testar conexão</h1>
-      <p class="subtitle">Etapa 1 · teste de conexão com o n8n</p>
+      <h1>Soluções Rápidas</h1>
+      <p class="subtitle">Digite a senha para acessar</p>
 
       <form id="test-form">
         <label for="password">Senha de acesso</label>
         <input type="password" id="password" placeholder="Digite a senha" required />
-        <button type="submit" id="test-button">Testar conexão</button>
+        <button type="submit" id="test-button">Entrar</button>
       </form>
 
       <div id="status" class="status"></div>
     </div>
-  </main>
+  </div>
+
+  <div id="app-view" class="app-view hidden">
+    <div class="topbar">
+      <button type="button" id="menu-button" class="menu-button" aria-label="Abrir menu" aria-expanded="false">☰</button>
+      <span class="topbar-title">Soluções Rápidas</span>
+    </div>
+
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <nav id="sidebar" class="sidebar">
+      <button type="button" id="sidebar-item-inicio" class="sidebar-item active">Início</button>
+    </nav>
+
+    <main class="main-content">
+      <div class="card">
+        <h1>Início</h1>
+        <p class="subtitle">Conectado com sucesso ✅</p>
+        <p class="placeholder-text">Em breve, mais opções aparecem aqui.</p>
+      </div>
+    </main>
+  </div>
 
   <script src="config.js"></script>
   <script src="app.js"></script>
