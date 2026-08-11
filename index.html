@@ -11,18 +11,31 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="card">
-    <h1>Soluções Rápidas</h1>
-    <p class="subtitle">Etapa 1 · teste de conexão com o n8n</p>
-
-    <form id="test-form">
-      <label for="password">Senha de acesso</label>
-      <input type="password" id="password" placeholder="Digite a senha" required />
-      <button type="submit" id="test-button">Testar conexão</button>
-    </form>
-
-    <div id="status" class="status"></div>
+  <div class="topbar">
+    <button type="button" id="menu-button" class="menu-button" aria-label="Abrir menu" aria-expanded="false">☰</button>
+    <span class="topbar-title">Soluções Rápidas</span>
   </div>
+
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <nav id="sidebar" class="sidebar">
+    <button type="button" id="sidebar-item-testar" class="sidebar-item active">Testar conexão</button>
+  </nav>
+
+  <main class="main-content">
+    <div class="card">
+      <h1>Testar conexão</h1>
+      <p class="subtitle">Etapa 1 · teste de conexão com o n8n</p>
+
+      <form id="test-form">
+        <label for="password">Senha de acesso</label>
+        <input type="password" id="password" placeholder="Digite a senha" required />
+        <button type="submit" id="test-button">Testar conexão</button>
+      </form>
+
+      <div id="status" class="status"></div>
+    </div>
+  </main>
 
   <script src="config.js"></script>
   <script src="app.js"></script>

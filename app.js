@@ -3,6 +3,32 @@ const passwordInput = document.getElementById("password");
 const testButton = document.getElementById("test-button");
 const statusBox = document.getElementById("status");
 
+const menuButton = document.getElementById("menu-button");
+const sidebar = document.getElementById("sidebar");
+const sidebarOverlay = document.getElementById("sidebar-overlay");
+
+function openSidebar() {
+  sidebar.classList.add("open");
+  sidebarOverlay.classList.add("show");
+  menuButton.setAttribute("aria-expanded", "true");
+}
+
+function closeSidebar() {
+  sidebar.classList.remove("open");
+  sidebarOverlay.classList.remove("show");
+  menuButton.setAttribute("aria-expanded", "false");
+}
+
+menuButton.addEventListener("click", () => {
+  sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
+});
+
+sidebarOverlay.addEventListener("click", closeSidebar);
+
+document.querySelectorAll(".sidebar-item").forEach((item) => {
+  item.addEventListener("click", closeSidebar);
+});
+
 function showStatus(kind, message) {
   statusBox.textContent = message;
   statusBox.className = `status show ${kind}`;
