@@ -73,7 +73,16 @@ form.addEventListener("submit", async (event) => {
 });
 
 if ("serviceWorker" in navigator) {
+  // Quando uma versão nova do app assumir o controle, recarrega a página
+  // sozinho — evita ficar preso numa versão antiga até o usuário limpar
+  // o cache manualmente.
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    window.location.reload();
+  });
+
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("service-worker.js");
+    navigator.serviceWorker.register("service-worker.js").then((registration) => {
+      registration.update();
+    });
   });
 }
