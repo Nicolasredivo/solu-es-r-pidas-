@@ -19,10 +19,28 @@
       <form id="test-form">
         <label for="password">Senha de acesso</label>
         <input type="password" id="password" placeholder="Digite a senha" required />
+
+        <label class="checkbox-linha">
+          <input type="checkbox" id="lembrar-senha" />
+          <span>Lembrar neste aparelho</span>
+        </label>
+
         <button type="submit" id="test-button">Entrar</button>
       </form>
 
       <div id="status" class="status"></div>
+
+      <button type="button" id="toggle-config" class="link-button">⚙ Endereço do n8n</button>
+
+      <div id="config-box" class="config-box hidden">
+        <label for="n8n-url">Endereço do túnel (Cloudflare)</label>
+        <input type="text" id="n8n-url" placeholder="https://algo.trycloudflare.com" autocomplete="off" />
+        <div class="config-acoes">
+          <button type="button" id="salvar-url">Salvar</button>
+          <button type="button" id="restaurar-url" class="botao-secundario">Restaurar padrão</button>
+        </div>
+        <p id="config-hint" class="config-hint"></p>
+      </div>
     </div>
   </div>
 

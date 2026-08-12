@@ -1,5 +1,8 @@
-// Endereço público do seu n8n (gerado pelo Cloudflare Tunnel).
-// ATENÇÃO: esse endereço MUDA toda vez que você fecha e abre o túnel.
-// Quando mudar, troque só a parte "https://...trycloudflare.com" da linha abaixo.
-const N8N_TEST_WEBHOOK_URL =
-  "https://cable-term-prev-resource.trycloudflare.com/webhook/testar-conexao";
+// Endereço padrão do seu n8n (gerado pelo Cloudflare Tunnel).
+//
+// Você NÃO precisa mais editar este arquivo quando o túnel mudar: dá para
+// trocar o endereço direto no app, em "Endereço do n8n" na tela de entrada.
+// O que você salvar lá vale só no seu aparelho e tem prioridade sobre isto.
+//
+// Coloque só o endereço base, sem nada depois da barra.
+const N8N_BASE_URL = "https://cable-term-prev-resource.trycloudflare.com";

@@ -6,6 +6,28 @@ const statusBox = document.getElementById("status");
 const gateView = document.getElementById("gate-view");
 const appView = document.getElementById("app-view");
 
+const lembrarSenha = document.getElementById("lembrar-senha");
+const toggleConfig = document.getElementById("toggle-config");
+const configBox = document.getElementById("config-box");
+const n8nUrlInput = document.getElementById("n8n-url");
+const salvarUrlBotao = document.getElementById("salvar-url");
+const restaurarUrlBotao = document.getElementById("restaurar-url");
+const configHint = document.getElementById("config-hint");
+
+const CHAVE_URL = "n8n_base_url";
+const CHAVE_SENHA = "senha_salva";
+
+// O endereço salvo no aparelho tem prioridade sobre o padrão do config.js,
+// para você poder trocar o link do túnel sem depender de uma publicação.
+function baseUrlN8n() {
+  const salvo = localStorage.getItem(CHAVE_URL);
+  return (salvo || N8N_BASE_URL || "").replace(/\/+$/, "");
+}
+
+function urlWebhook(caminho) {
+  return `${baseUrlN8n()}/webhook/${caminho}`;
+}
+
 const menuButton = document.getElementById("menu-button");
 const sidebar = document.getElementById("sidebar");
 const sidebarOverlay = document.getElementById("sidebar-overlay");
@@ -173,11 +195,9 @@ function showStatus(kind, message) {
   statusBox.className = `status show ${kind}`;
 }
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  if (!N8N_TEST_WEBHOOK_URL || N8N_TEST_WEBHOOK_URL === "COLE_AQUI_A_URL_DO_SEU_N8N") {
-    showStatus("error", "Ainda falta configurar o endereço do n8n em config.js.");
+async function entrar(senha) {
+  if (!baseUrlN8n()) {
+    showStatus("error", "Falta o endereço do n8n — toque em '⚙ Endereço do n8n' abaixo.");
     return;
   }
 
@@ -187,18 +207,26 @@ form.addEventListener("submit", async (event) => {
   try {
     // Enviado como formulário simples de propósito: assim o navegador não
     // precisa fazer a verificação extra de segurança (CORS preflight).
-    const response = await fetch(N8N_TEST_WEBHOOK_URL, {
+    const response = await fetch(urlWebhook("testar-conexao"), {
       method: "POST",
-      body: new URLSearchParams({ senha: passwordInput.value }),
+      body: new URLSearchParams({ senha }),
     });
 
     const data = await response.json().catch(() => null);
 
     if (data && data.ok) {
+      if (lembrarSenha.checked) {
+        localStorage.setItem(CHAVE_SENHA, senha);
+      } else {
+        localStorage.removeItem(CHAVE_SENHA);
+      }
+
       showStatus("ok", data.mensagem || "Conectado com sucesso!");
       gateView.classList.add("hidden");
       appView.classList.remove("hidden");
     } else {
+      // Senha recusada: não adianta manter a que estava guardada.
+      localStorage.removeItem(CHAVE_SENHA);
       showStatus("error", (data && data.mensagem) || "Acesso negado. Confira a senha.");
     }
   } catch (err) {
@@ -206,7 +234,53 @@ form.addEventListener("submit", async (event) => {
   } finally {
     testButton.disabled = false;
   }
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  entrar(passwordInput.value);
 });
+
+// ----- Ajuste do endereço do n8n -----
+
+function mostrarConfigHint(tipo, mensagem) {
+  configHint.textContent = mensagem;
+  configHint.className = `config-hint ${tipo}`;
+}
+
+toggleConfig.addEventListener("click", () => {
+  configBox.classList.toggle("hidden");
+});
+
+salvarUrlBotao.addEventListener("click", () => {
+  const valor = n8nUrlInput.value.trim().replace(/\/+$/, "");
+
+  if (!valor.startsWith("https://")) {
+    mostrarConfigHint("error", "O endereço precisa começar com https://");
+    return;
+  }
+
+  localStorage.setItem(CHAVE_URL, valor);
+  n8nUrlInput.value = valor;
+  mostrarConfigHint("ok", "Endereço salvo neste aparelho.");
+});
+
+restaurarUrlBotao.addEventListener("click", () => {
+  localStorage.removeItem(CHAVE_URL);
+  n8nUrlInput.value = N8N_BASE_URL;
+  mostrarConfigHint("ok", "Voltou para o endereço padrão.");
+});
+
+// ----- Estado inicial da tela de entrada -----
+
+n8nUrlInput.value = baseUrlN8n();
+
+const senhaGuardada = localStorage.getItem(CHAVE_SENHA);
+if (senhaGuardada) {
+  passwordInput.value = senhaGuardada;
+  lembrarSenha.checked = true;
+  entrar(senhaGuardada);
+}
 
 if ("serviceWorker" in navigator) {
   // Só recarrega quando um service worker ATIVO é substituído por um novo
