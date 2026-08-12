@@ -104,10 +104,25 @@ Foi a falta disso que travou o projeto antes. Funciona assim:
 
 - Testar pelo app publicado (o túnel do Cloudflare precisa estar ligado).
   Os testes até aqui foram direto no `localhost`, sem passar pelo túnel.
-- O app ainda não usa o campo `avisoReceita` que o workflow já devolve. Ele
-  explica por que os dados da Receita não vieram ("muitas consultas seguidas"
-  ou "não encontrei este CNPJ"). Hoje o app mostra só o formulário em branco,
-  sem dizer o motivo.
+Só isso. O aviso da Receita já está pronto (veja abaixo).
+
+## Aviso da Receita no cadastro (feito em 12/08/2026)
+
+Quando a Receita não preenche os campos, o app agora diz o motivo em vez de
+mostrar um "CNPJ válido" verde com o formulário em branco:
+
+| Situação | O que aparece | Botão "Tentar de novo"? |
+|---|---|---|
+| Estourou o limite por minuto | Aviso amarelo pedindo para esperar | sim |
+| CNPJ não consta na Receita | Aviso amarelo para preencher à mão | não |
+
+O workflow manda dois campos: `avisoReceita` (o texto) e `podeTentarDeNovo`
+(booleano). **O app decide o botão pelo booleano, nunca lendo o texto** — texto
+muda, e comparar string quebraria calado. O botão só aparece onde insistir
+resolve; num CNPJ que não existe, ele só criaria esperança à toa.
+
+A cor `--aviso` (amarelo) foi criada para isso: o cadastro continua funcionando,
+então não é caso de vermelho de erro.
 
 ## Decisões já tomadas (não relitigar sem motivo)
 

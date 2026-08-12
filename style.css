@@ -6,6 +6,8 @@
   --accent: #5b8def;
   --ok: #3ecf8e;
   --error: #e5484d;
+  /* Amarelo para o que merece atenção mas não é erro: o cadastro segue. */
+  --aviso: #f5a623;
 }
 
 * {
@@ -290,6 +292,17 @@ input[type="text"]:focus {
 
 .doc-hint.neutral {
   color: var(--muted);
+}
+
+.doc-hint.aviso {
+  color: var(--aviso);
+}
+
+/* Aparece colado no aviso, então não herda o espaço de cima do .link-button */
+#tentar-receita {
+  margin-top: 0;
+  margin-bottom: 8px;
+  color: var(--aviso);
 }
 
 /* Grupos de opções (escolher uma entre duas) */

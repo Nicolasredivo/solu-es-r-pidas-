@@ -82,6 +82,7 @@ document.querySelectorAll(".subtab").forEach((tab) => {
 
 const documentoInput = document.getElementById("documento");
 const documentoHint = document.getElementById("documento-hint");
+const tentarReceitaBotao = document.getElementById("tentar-receita");
 const tipoCnpjBox = document.getElementById("tipo-cnpj");
 
 const avisoExiste = document.getElementById("aviso-existe");
@@ -186,6 +187,7 @@ configurarGrupo(grupoStatus);
 function esconderFormulario() {
   formEntidade.classList.add("hidden");
   avisoExiste.classList.add("hidden");
+  tentarReceitaBotao.classList.add("hidden");
 }
 
 function avaliarDocumento(digitos) {
@@ -238,6 +240,9 @@ function limparFormulario() {
 async function consultarDocumento(digitos) {
   documentoAtual = digitos;
   limparFormulario();
+  // O clique em "Tentar de novo" cai aqui direto, sem passar por
+  // avaliarDocumento — então o botão precisa sumir por conta própria.
+  tentarReceitaBotao.classList.add("hidden");
   mostrarDica("neutral", "Consultando...");
 
   try {
@@ -275,6 +280,12 @@ async function consultarDocumento(digitos) {
       emailsInput.value = dados.receita.email || "";
       whatsappInput.value = dados.receita.telefone || "";
       mostrarDica("ok", "Dados encontrados na Receita — confira antes de salvar.");
+    } else if (dados.avisoReceita) {
+      // A Receita não preencheu e o n8n explicou por quê. Só ofereço tentar de
+      // novo quando insistir resolve (excesso de consultas) — num CNPJ que não
+      // existe, o botão só criaria esperança à toa.
+      mostrarDica("aviso", dados.avisoReceita);
+      tentarReceitaBotao.classList.toggle("hidden", !dados.podeTentarDeNovo);
     } else {
       mostrarDica("ok", digitos.length === 11 ? "CPF válido · Pessoa Física" : "CNPJ válido");
     }
@@ -285,6 +296,8 @@ async function consultarDocumento(digitos) {
     mostrarDica("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
   }
 }
+
+tentarReceitaBotao.addEventListener("click", () => consultarDocumento(documentoAtual));
 
 // ----- Salvar a entidade -----
 
