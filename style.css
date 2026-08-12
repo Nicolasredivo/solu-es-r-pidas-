@@ -170,7 +170,8 @@ label {
   margin-bottom: 6px;
 }
 
-input[type="password"] {
+input[type="password"],
+input[type="text"] {
   width: 100%;
   padding: 12px 14px;
   border-radius: 10px;
@@ -181,9 +182,75 @@ input[type="password"] {
   margin-bottom: 16px;
 }
 
-input[type="password"]:focus {
+input[type="password"]:focus,
+input[type="text"]:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+/* Abas internas (Adicionar / Consultar) */
+.subtabs {
+  display: flex;
+  gap: 4px;
+  background: #12162a;
+  padding: 4px;
+  border-radius: 10px;
+  margin-bottom: 22px;
+}
+
+.subtab {
+  flex: 1;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.subtab.active {
+  background: var(--accent);
+  color: white;
+}
+
+/* Campo de CPF/CNPJ */
+.doc-hint {
+  font-size: 0.85rem;
+  margin: -8px 0 4px;
+  min-height: 1.2em;
+}
+
+.doc-hint.ok {
+  color: var(--ok);
+}
+
+.doc-hint.error {
+  color: var(--error);
+}
+
+.doc-hint.neutral {
+  color: var(--muted);
+}
+
+.tipo-cnpj {
+  margin-top: 14px;
+}
+
+.tipo-opcoes {
+  display: flex;
+  gap: 10px;
+}
+
+.tipo-opcao {
+  background: transparent;
+  border: 1px solid #2c3153;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.tipo-opcao.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
 }
 
 button {

@@ -42,6 +42,132 @@ document.querySelectorAll(".sidebar-item").forEach((item) => {
   });
 });
 
+// ----- Abas internas do Cadastro (Adicionar / Consultar) -----
+
+document.querySelectorAll(".subtab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".subtab").forEach((t) => t.classList.remove("active"));
+    tab.classList.add("active");
+
+    const targetId = `subpage-${tab.dataset.subpage}`;
+    document.querySelectorAll(".subpage").forEach((subpage) => {
+      subpage.classList.toggle("hidden", subpage.id !== targetId);
+    });
+  });
+});
+
+// ----- Campo de CPF/CNPJ -----
+
+const documentoInput = document.getElementById("documento");
+const documentoHint = document.getElementById("documento-hint");
+const tipoCnpjBox = document.getElementById("tipo-cnpj");
+
+function formatarCPF(digitos) {
+  const p = [digitos.slice(0, 3), digitos.slice(3, 6), digitos.slice(6, 9), digitos.slice(9, 11)];
+  let saida = p[0];
+  if (p[1]) saida += `.${p[1]}`;
+  if (p[2]) saida += `.${p[2]}`;
+  if (p[3]) saida += `-${p[3]}`;
+  return saida;
+}
+
+function formatarCNPJ(digitos) {
+  const p = [
+    digitos.slice(0, 2),
+    digitos.slice(2, 5),
+    digitos.slice(5, 8),
+    digitos.slice(8, 12),
+    digitos.slice(12, 14),
+  ];
+  let saida = p[0];
+  if (p[1]) saida += `.${p[1]}`;
+  if (p[2]) saida += `.${p[2]}`;
+  if (p[3]) saida += `/${p[3]}`;
+  if (p[4]) saida += `-${p[4]}`;
+  return saida;
+}
+
+// CPF e CNPJ têm dígitos verificadores: uma conta embutida no próprio
+// número que denuncia erro de digitação.
+function cpfValido(cpf) {
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+
+  const digitoVerificador = (ate) => {
+    let soma = 0;
+    for (let i = 0; i < ate; i++) soma += Number(cpf[i]) * (ate + 1 - i);
+    const resto = (soma * 10) % 11;
+    return resto === 10 ? 0 : resto;
+  };
+
+  return digitoVerificador(9) === Number(cpf[9]) && digitoVerificador(10) === Number(cpf[10]);
+}
+
+function cnpjValido(cnpj) {
+  if (cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
+
+  const digitoVerificador = (pesos) => {
+    const soma = pesos.reduce((total, peso, i) => total + Number(cnpj[i]) * peso, 0);
+    const resto = soma % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+
+  const pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+
+  return (
+    digitoVerificador(pesos1) === Number(cnpj[12]) &&
+    digitoVerificador(pesos2) === Number(cnpj[13])
+  );
+}
+
+function mostrarDica(tipo, mensagem) {
+  documentoHint.textContent = mensagem;
+  documentoHint.className = `doc-hint ${tipo}`;
+}
+
+function avaliarDocumento(digitos) {
+  tipoCnpjBox.classList.add("hidden");
+  document.querySelectorAll(".tipo-opcao").forEach((b) => b.classList.remove("active"));
+
+  if (digitos.length === 11) {
+    if (cpfValido(digitos)) {
+      mostrarDica("ok", "CPF válido · Pessoa Física");
+    } else {
+      // Ainda pode ser um CNPJ em digitação, então não trato como erro.
+      mostrarDica("neutral", "Se for CPF, confira os números. Se for CNPJ, continue digitando.");
+    }
+    return;
+  }
+
+  if (digitos.length === 14) {
+    if (cnpjValido(digitos)) {
+      mostrarDica("ok", "CNPJ válido");
+      tipoCnpjBox.classList.remove("hidden");
+    } else {
+      mostrarDica("error", "CNPJ inválido — confira os números.");
+    }
+    return;
+  }
+
+  mostrarDica("neutral", digitos.length === 0 ? "" : "Continue digitando...");
+}
+
+documentoInput.addEventListener("input", () => {
+  const digitos = documentoInput.value.replace(/\D/g, "").slice(0, 14);
+  documentoInput.value = digitos.length <= 11 ? formatarCPF(digitos) : formatarCNPJ(digitos);
+  avaliarDocumento(digitos);
+});
+
+document.querySelectorAll(".tipo-opcao").forEach((botao) => {
+  botao.addEventListener("click", () => {
+    document.querySelectorAll(".tipo-opcao").forEach((b) => b.classList.remove("active"));
+    botao.classList.add("active");
+    mostrarDica("ok", `CNPJ válido · ${botao.textContent}`);
+  });
+});
+
+// ----- Tela de entrada (senha) -----
+
 function showStatus(kind, message) {
   statusBox.textContent = message;
   statusBox.className = `status show ${kind}`;

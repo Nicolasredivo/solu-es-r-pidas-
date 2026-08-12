@@ -48,7 +48,30 @@
 
       <div id="page-cadastro" class="card page hidden">
         <h1>Cadastro</h1>
-        <p class="placeholder-text">Em construção — o conteúdo dessa página ainda vai ser definido.</p>
+
+        <div class="subtabs">
+          <button type="button" class="subtab active" data-subpage="adicionar">Adicionar</button>
+          <button type="button" class="subtab" data-subpage="consultar">Consultar</button>
+        </div>
+
+        <div id="subpage-adicionar" class="subpage">
+          <label for="documento">CPF ou CNPJ</label>
+          <input type="text" id="documento" inputmode="numeric" autocomplete="off"
+                 placeholder="Digite o CPF ou CNPJ" />
+          <div id="documento-hint" class="doc-hint"></div>
+
+          <div id="tipo-cnpj" class="tipo-cnpj hidden">
+            <label>É condomínio ou empresa?</label>
+            <div class="tipo-opcoes">
+              <button type="button" class="tipo-opcao" data-tipo="CNPJ - Condomínio">Condomínio</button>
+              <button type="button" class="tipo-opcao" data-tipo="CNPJ - Empresa">Empresa</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="subpage-consultar" class="subpage hidden">
+          <p class="placeholder-text">Em construção — em breve você vai poder buscar cadastros aqui.</p>
+        </div>
       </div>
     </main>
   </div>
