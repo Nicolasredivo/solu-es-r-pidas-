@@ -1,0 +1,215 @@
+{
+  "name": "App - Consultar documento",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "consultar-documento",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "c1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-00000000000a",
+              "leftValue": "={{ $json.body.senha }}",
+              "rightValue": "TROQUE-ESTA-SENHA",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000002",
+      "name": "Senha esta correta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000003",
+      "name": "Responde senha incorreta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [440, 200]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl5Joji6gAir3mNh",
+          "mode": "id"
+        },
+        "filterByFormula": "={{ \"{CPF_CNPJ} = '\" + $json.body.documento + \"'\" }}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000004",
+      "name": "Procura no Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [440, -100],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Junta o que veio do Airtable com o documento pedido pelo app.\nconst pedido = $('Recebe pedido do app').first().json.body;\nconst documento = String(pedido.documento || '').replace(/\\D/g, '');\n\n// O nó do Airtable devolve um item vazio quando não encontra nada.\nconst achados = items.filter((item) => item.json && item.json.id);\nconst encontrado = achados.length > 0 ? achados[0].json : null;\n\nreturn [{\n  json: {\n    documento,\n    jaExiste: Boolean(encontrado),\n    nome: encontrado ? (encontrado.fields?.Razao_Social_Nome || '') : '',\n    buscarNaReceita: !encontrado && documento.length === 14,\n  },\n}];"
+      },
+      "id": "c0000000-0000-4000-8000-000000000005",
+      "name": "Ja existe?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, -100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-00000000000b",
+              "leftValue": "={{ $json.buscarNaReceita }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000006",
+      "name": "Buscar na Receita?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [880, -100]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://brasilapi.com.br/api/cnpj/v1/' + $json.documento }}",
+        "options": {
+          "timeout": 12000
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000000007",
+      "name": "Consulta a Receita",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, -200],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta a resposta final com os dados da Receita, quando vieram.\nconst receita = $json || {};\n\nconst telefone = receita.ddd_telefone_1 || receita.ddd_telefone_2 || '';\n\nreturn [{\n  json: {\n    ok: true,\n    jaExiste: false,\n    receita: receita.razao_social\n      ? {\n          razaoSocial: receita.razao_social || '',\n          nomeFantasia: receita.nome_fantasia || '',\n          email: receita.email || '',\n          telefone,\n        }\n      : null,\n  },\n}];"
+      },
+      "id": "c0000000-0000-4000-8000-000000000008",
+      "name": "Resposta com Receita",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, -200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Resposta quando já existe, ou quando é CPF (não consultamos a Receita).\nreturn [{\n  json: {\n    ok: true,\n    jaExiste: Boolean($json.jaExiste),\n    entidade: $json.jaExiste ? { nome: $json.nome } : null,\n    receita: null,\n  },\n}];"
+      },
+      "id": "c0000000-0000-4000-8000-000000000009",
+      "name": "Resposta sem Receita",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-00000000000c",
+      "name": "Responde ao app",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1540, -100]
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [[{ "node": "Senha esta correta?", "type": "main", "index": 0 }]]
+    },
+    "Senha esta correta?": {
+      "main": [
+        [{ "node": "Procura no Airtable", "type": "main", "index": 0 }],
+        [{ "node": "Responde senha incorreta", "type": "main", "index": 0 }]
+      ]
+    },
+    "Procura no Airtable": {
+      "main": [[{ "node": "Ja existe?", "type": "main", "index": 0 }]]
+    },
+    "Ja existe?": {
+      "main": [[{ "node": "Buscar na Receita?", "type": "main", "index": 0 }]]
+    },
+    "Buscar na Receita?": {
+      "main": [
+        [{ "node": "Consulta a Receita", "type": "main", "index": 0 }],
+        [{ "node": "Resposta sem Receita", "type": "main", "index": 0 }]
+      ]
+    },
+    "Consulta a Receita": {
+      "main": [[{ "node": "Resposta com Receita", "type": "main", "index": 0 }]]
+    },
+    "Resposta com Receita": {
+      "main": [[{ "node": "Responde ao app", "type": "main", "index": 0 }]]
+    },
+    "Resposta sem Receita": {
+      "main": [[{ "node": "Responde ao app", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

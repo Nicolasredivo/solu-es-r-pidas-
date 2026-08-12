@@ -1,0 +1,152 @@
+{
+  "name": "App - Salvar entidade",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "salvar-entidade",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "50000000-0000-4000-8000-000000000001",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "51000000-0000-4000-8000-000000000001"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "50000000-0000-4000-8000-00000000000a",
+              "leftValue": "={{ $json.body.senha }}",
+              "rightValue": "TROQUE-ESTA-SENHA",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "50000000-0000-4000-8000-000000000002",
+      "name": "Senha esta correta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
+        "options": {}
+      },
+      "id": "50000000-0000-4000-8000-000000000003",
+      "name": "Responde senha incorreta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [440, 160]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl5Joji6gAir3mNh",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "CPF_CNPJ": "={{ $json.body.documento }}",
+            "Razao_Social_Nome": "={{ $json.body.razaoSocial }}",
+            "Nome_Fantasia_Identificador": "={{ $json.body.nomeFantasia }}",
+            "Tipo_Documento": "={{ $json.body.tipo }}",
+            "Exigencia_Fiscal": "={{ $json.body.exigenciaFiscal }}",
+            "Emails_Financeiro_NFE": "={{ $json.body.emails }}",
+            "WhatsApp_Financeiro": "={{ $json.body.whatsapp }}",
+            "Administradora": "={{ $json.body.administradora }}",
+            "Status": "={{ $json.body.status }}",
+            "Observacoes": "={{ $json.body.observacoes }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "50000000-0000-4000-8000-000000000004",
+      "name": "Cria no Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [440, -60],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Cadastro salvo!\"\n}",
+        "options": {}
+      },
+      "id": "50000000-0000-4000-8000-000000000005",
+      "name": "Responde salvo",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [700, -140]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Nao consegui salvar no Airtable. Confira a credencial no n8n.\"\n}",
+        "options": {}
+      },
+      "id": "50000000-0000-4000-8000-000000000006",
+      "name": "Responde erro do Airtable",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [700, 20]
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [[{ "node": "Senha esta correta?", "type": "main", "index": 0 }]]
+    },
+    "Senha esta correta?": {
+      "main": [
+        [{ "node": "Cria no Airtable", "type": "main", "index": 0 }],
+        [{ "node": "Responde senha incorreta", "type": "main", "index": 0 }]
+      ]
+    },
+    "Cria no Airtable": {
+      "main": [
+        [{ "node": "Responde salvo", "type": "main", "index": 0 }],
+        [{ "node": "Responde erro do Airtable", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

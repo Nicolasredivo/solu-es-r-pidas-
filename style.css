@@ -292,26 +292,55 @@ input[type="text"]:focus {
   color: var(--muted);
 }
 
-.tipo-cnpj {
-  margin-top: 14px;
+/* Grupos de opções (escolher uma entre duas) */
+.grupo {
+  margin-bottom: 16px;
 }
 
-.tipo-opcoes {
+.opcoes {
   display: flex;
   gap: 10px;
 }
 
-.tipo-opcao {
+.opcao {
   background: transparent;
   border: 1px solid #2c3153;
   color: var(--text);
   font-weight: 500;
 }
 
-.tipo-opcao.active {
+.opcao.active {
   background: var(--accent);
   border-color: var(--accent);
   color: white;
+}
+
+/* Aviso de cadastro já existente */
+.aviso {
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+  background: rgba(229, 72, 77, 0.15);
+  color: var(--error);
+}
+
+textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #2c3153;
+  background: #12162a;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 1rem;
+  margin-bottom: 16px;
+  resize: vertical;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 button {

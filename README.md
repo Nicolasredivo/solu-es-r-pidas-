@@ -11,7 +11,7 @@ Cloudflare Tunnel).
 - `index.html`, `style.css`, `app.js` — a tela do app
 - `config.js` — **o único arquivo que você precisa editar**: o endereço do túnel
 - `manifest.json`, `service-worker.js`, `icons/` — o que torna o app instalável
-- `n8n/testar-conexao.json` — o workflow pronto para importar no n8n
+- `n8n/*.json` — os workflows prontos para importar no n8n
 
 ## Como colocar para funcionar
 

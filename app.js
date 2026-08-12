@@ -84,6 +84,17 @@ const documentoInput = document.getElementById("documento");
 const documentoHint = document.getElementById("documento-hint");
 const tipoCnpjBox = document.getElementById("tipo-cnpj");
 
+const avisoExiste = document.getElementById("aviso-existe");
+const formEntidade = document.getElementById("form-entidade");
+const razaoSocialInput = document.getElementById("razao-social");
+const nomeFantasiaInput = document.getElementById("nome-fantasia");
+const emailsInput = document.getElementById("emails");
+const whatsappInput = document.getElementById("whatsapp");
+const administradoraInput = document.getElementById("administradora");
+const observacoesInput = document.getElementById("observacoes");
+const salvarBotao = document.getElementById("salvar-entidade");
+const salvarStatus = document.getElementById("salvar-status");
+
 function formatarCPF(digitos) {
   const p = [digitos.slice(0, 3), digitos.slice(3, 6), digitos.slice(6, 9), digitos.slice(9, 11)];
   let saida = p[0];
@@ -147,13 +158,45 @@ function mostrarDica(tipo, mensagem) {
   documentoHint.className = `doc-hint ${tipo}`;
 }
 
+// Cada grupo escolhe uma opção entre as suas — a escolha fica marcada no
+// próprio botão, então não preciso guardar em variável separada.
+function configurarGrupo(container, aoEscolher) {
+  container.querySelectorAll(".opcao").forEach((botao) => {
+    botao.addEventListener("click", () => {
+      container.querySelectorAll(".opcao").forEach((b) => b.classList.remove("active"));
+      botao.classList.add("active");
+      if (aoEscolher) aoEscolher(botao);
+    });
+  });
+}
+
+function escolhaDoGrupo(container) {
+  const ativo = container.querySelector(".opcao.active");
+  return ativo ? ativo.dataset.valor : "";
+}
+
+const grupoTipo = document.getElementById("grupo-tipo");
+const grupoExigencia = document.getElementById("grupo-exigencia");
+const grupoStatus = document.getElementById("grupo-status");
+
+configurarGrupo(grupoTipo, (botao) => mostrarDica("ok", `CNPJ válido · ${botao.textContent}`));
+configurarGrupo(grupoExigencia);
+configurarGrupo(grupoStatus);
+
+function esconderFormulario() {
+  formEntidade.classList.add("hidden");
+  avisoExiste.classList.add("hidden");
+}
+
 function avaliarDocumento(digitos) {
   tipoCnpjBox.classList.add("hidden");
-  document.querySelectorAll(".tipo-opcao").forEach((b) => b.classList.remove("active"));
+  grupoTipo.querySelectorAll(".opcao").forEach((b) => b.classList.remove("active"));
+  esconderFormulario();
 
   if (digitos.length === 11) {
     if (cpfValido(digitos)) {
       mostrarDica("ok", "CPF válido · Pessoa Física");
+      consultarDocumento(digitos);
     } else {
       // Ainda pode ser um CNPJ em digitação, então não trato como erro.
       mostrarDica("neutral", "Se for CPF, confira os números. Se for CNPJ, continue digitando.");
@@ -165,6 +208,7 @@ function avaliarDocumento(digitos) {
     if (cnpjValido(digitos)) {
       mostrarDica("ok", "CNPJ válido");
       tipoCnpjBox.classList.remove("hidden");
+      consultarDocumento(digitos);
     } else {
       mostrarDica("error", "CNPJ inválido — confira os números.");
     }
@@ -180,12 +224,124 @@ documentoInput.addEventListener("input", () => {
   avaliarDocumento(digitos);
 });
 
-document.querySelectorAll(".tipo-opcao").forEach((botao) => {
-  botao.addEventListener("click", () => {
-    document.querySelectorAll(".tipo-opcao").forEach((b) => b.classList.remove("active"));
-    botao.classList.add("active");
-    mostrarDica("ok", `CNPJ válido · ${botao.textContent}`);
-  });
+// ----- Consulta ao n8n: já existe? e dados da Receita -----
+
+let documentoAtual = "";
+
+function limparFormulario() {
+  [razaoSocialInput, nomeFantasiaInput, emailsInput, whatsappInput, administradoraInput,
+   observacoesInput].forEach((campo) => (campo.value = ""));
+  grupoExigencia.querySelectorAll(".opcao").forEach((b) => b.classList.remove("active"));
+  salvarStatus.className = "status";
+}
+
+async function consultarDocumento(digitos) {
+  documentoAtual = digitos;
+  limparFormulario();
+  mostrarDica("neutral", "Consultando...");
+
+  try {
+    const resposta = await fetch(urlWebhook("consultar-documento"), {
+      method: "POST",
+      body: new URLSearchParams({
+        senha: passwordInput.value,
+        documento: digitos,
+      }),
+    });
+
+    const dados = await resposta.json().catch(() => null);
+
+    // O campo pode ter mudado enquanto a consulta acontecia.
+    if (documentoAtual !== digitos) return;
+
+    if (!dados || !dados.ok) {
+      mostrarDica("error", (dados && dados.mensagem) || "Não consegui consultar. Tente de novo.");
+      return;
+    }
+
+    if (dados.jaExiste) {
+      const nome = dados.entidade && dados.entidade.nome;
+      avisoExiste.textContent = nome
+        ? `Já cadastrado como "${nome}".`
+        : "Esse CPF/CNPJ já está cadastrado.";
+      avisoExiste.classList.remove("hidden");
+      mostrarDica("neutral", "");
+      return;
+    }
+
+    if (dados.receita) {
+      razaoSocialInput.value = dados.receita.razaoSocial || "";
+      nomeFantasiaInput.value = dados.receita.nomeFantasia || "";
+      emailsInput.value = dados.receita.email || "";
+      whatsappInput.value = dados.receita.telefone || "";
+      mostrarDica("ok", "Dados encontrados na Receita — confira antes de salvar.");
+    } else {
+      mostrarDica("ok", digitos.length === 11 ? "CPF válido · Pessoa Física" : "CNPJ válido");
+    }
+
+    formEntidade.classList.remove("hidden");
+  } catch (err) {
+    if (documentoAtual !== digitos) return;
+    mostrarDica("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+  }
+}
+
+// ----- Salvar a entidade -----
+
+formEntidade.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const tipo =
+    documentoAtual.length === 11 ? "CPF - Pessoa Física" : escolhaDoGrupo(grupoTipo);
+
+  if (!tipo) {
+    salvarStatus.textContent = "Escolha se é condomínio ou empresa.";
+    salvarStatus.className = "status show error";
+    return;
+  }
+
+  salvarBotao.disabled = true;
+  salvarStatus.textContent = "Salvando...";
+  salvarStatus.className = "status show loading";
+
+  try {
+    const resposta = await fetch(urlWebhook("salvar-entidade"), {
+      method: "POST",
+      body: new URLSearchParams({
+        senha: passwordInput.value,
+        documento: documentoAtual,
+        tipo,
+        razaoSocial: razaoSocialInput.value.trim(),
+        nomeFantasia: nomeFantasiaInput.value.trim(),
+        exigenciaFiscal: escolhaDoGrupo(grupoExigencia),
+        emails: emailsInput.value.trim(),
+        whatsapp: whatsappInput.value.trim(),
+        administradora: administradoraInput.value.trim(),
+        status: escolhaDoGrupo(grupoStatus),
+        observacoes: observacoesInput.value.trim(),
+      }),
+    });
+
+    const dados = await resposta.json().catch(() => null);
+
+    if (dados && dados.ok) {
+      salvarStatus.textContent = dados.mensagem || "Cadastro salvo!";
+      salvarStatus.className = "status show ok";
+      formEntidade.classList.add("hidden");
+      documentoInput.value = "";
+      documentoAtual = "";
+      tipoCnpjBox.classList.add("hidden");
+      mostrarDica("neutral", "");
+    } else {
+      salvarStatus.textContent = (dados && dados.mensagem) || "Não consegui salvar. Tente de novo.";
+      salvarStatus.className = "status show error";
+    }
+  } catch (err) {
+    salvarStatus.textContent = "Não foi possível falar com o n8n. Ele está ligado?";
+    salvarStatus.className = "status show error";
+  } finally {
+    salvarBotao.disabled = false;
+  }
 });
 
 // ----- Tela de entrada (senha) -----

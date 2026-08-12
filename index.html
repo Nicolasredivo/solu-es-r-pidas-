@@ -78,13 +78,54 @@
                  placeholder="Digite o CPF ou CNPJ" />
           <div id="documento-hint" class="doc-hint"></div>
 
-          <div id="tipo-cnpj" class="tipo-cnpj hidden">
+          <div id="tipo-cnpj" class="grupo hidden">
             <label>É condomínio ou empresa?</label>
-            <div class="tipo-opcoes">
-              <button type="button" class="tipo-opcao" data-tipo="CNPJ - Condomínio">Condomínio</button>
-              <button type="button" class="tipo-opcao" data-tipo="CNPJ - Empresa">Empresa</button>
+            <div class="opcoes" id="grupo-tipo">
+              <button type="button" class="opcao" data-valor="CNPJ - Condomínio">Condomínio</button>
+              <button type="button" class="opcao" data-valor="CNPJ - Empresa">Empresa</button>
             </div>
           </div>
+
+          <div id="aviso-existe" class="aviso hidden"></div>
+
+          <form id="form-entidade" class="hidden">
+            <label for="razao-social">Razão social / Nome</label>
+            <input type="text" id="razao-social" required />
+
+            <label for="nome-fantasia">Nome fantasia / Identificador</label>
+            <input type="text" id="nome-fantasia" />
+
+            <div class="grupo">
+              <label>Exigência fiscal</label>
+              <div class="opcoes" id="grupo-exigencia">
+                <button type="button" class="opcao" data-valor="Exige Nota Fiscal">Nota fiscal</button>
+                <button type="button" class="opcao" data-valor="Apenas Recibo">Apenas recibo</button>
+              </div>
+            </div>
+
+            <label for="emails">E-mails (financeiro / NF-e)</label>
+            <input type="text" id="emails" />
+
+            <label for="whatsapp">WhatsApp financeiro</label>
+            <input type="text" id="whatsapp" />
+
+            <label for="administradora">Administradora</label>
+            <input type="text" id="administradora" />
+
+            <div class="grupo">
+              <label>Status</label>
+              <div class="opcoes" id="grupo-status">
+                <button type="button" class="opcao active" data-valor="Ativo">Ativo</button>
+                <button type="button" class="opcao" data-valor="Inativo">Inativo</button>
+              </div>
+            </div>
+
+            <label for="observacoes">Observações</label>
+            <textarea id="observacoes" rows="3"></textarea>
+
+            <button type="submit" id="salvar-entidade">Salvar cadastro</button>
+            <div id="salvar-status" class="status"></div>
+          </form>
         </div>
 
         <div id="subpage-consultar" class="subpage hidden">
