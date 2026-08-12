@@ -55,26 +55,59 @@ Base **"cadastro"** (`app6PyYmtFduIMp7B`), com 3 tabelas ligadas entre si:
 Existe também uma base maior, "ERP Soluções Rápidas - Produção", ainda não usada
 pelo app.
 
+## Workflows do n8n (feitos e testados em 12/08/2026)
+
+Os três estão criados, publicados e testados de ponta a ponta:
+
+| Workflow | Caminho do webhook | ID no n8n |
+|---|---|---|
+| `App - Testar conexao` | `/webhook/testar-conexao` | `cgtZoemwpad0tVTN` |
+| `App - Consultar documento` | `/webhook/consultar-documento` | `jIZWUEwHUU8KnCVR` |
+| `App - Salvar entidade` | `/webhook/salvar-entidade` | `dFV53YYjsktzuEWw` |
+
+As cópias em `n8n/*.json` são só backup/referência. **Nelas a senha aparece
+como `TROQUE-ESTA-SENHA` de propósito** — o repositório é público e a senha
+real vive só dentro do n8n. Quem reimportar precisa trocar na mão.
+
+## Como mexer no n8n direto pela API (evita importação manual)
+
+Foi a falta disso que travou o projeto antes. Funciona assim:
+
+- A chave da API fica em `C:\Users\rediv\chave-n8n.txt`, **fora do repositório
+  e fora do OneDrive**. Criada no n8n em Settings → n8n API.
+- Chamadas: `http://localhost:5678/api/v1/...` com o cabeçalho `X-N8N-API-KEY`.
+- Dá para listar, criar, alterar (`PUT`) e publicar (`POST .../activate`).
+- Dois detalhes que custaram tempo:
+  - `PUT` **despublica** o workflow — tem que republicar depois.
+  - A API só aceita `settings: {"executionOrder":"v1"}`; chaves que a tela
+    aceita (como `binaryMode`) fazem a API recusar com erro 400.
+- Para depurar, `GET /executions?workflowId=...&includeData=true` mostra o que
+  entrou e saiu de cada nó. É o jeito mais rápido de achar erro.
+
+## Coisas descobertas testando (não repetir o erro)
+
+- **Versão do n8n: 2.31.5.** O nó do Airtable é o **2.2**, não o 2.1.
+  A diferença importa: no 2.1 os campos do registro vinham soltos na raiz;
+  no 2.2 vêm dentro de `.fields`. Ler do lugar errado devolve vazio calado.
+- **A Receita (BrasilAPI) limita consultas por minuto** e responde 429 quando
+  passa. Não é defeito. O workflow tenta 3 vezes e, se não conseguir, deixa o
+  cadastro seguir com o formulário em branco em vez de travar.
+- O nó `Consulta a Receita` manda `User-Agent: SolucoesRapidas-App/1.0 (n8n)`.
+  Sem User-Agent nenhum, a BrasilAPI responde 403.
+- Listas do Airtable (Tipo, Exigência, Status) recusam texto vazio. O nó
+  `Prepara dados` converte vazio em `null`, que o Airtable entende como
+  "em branco". Sem isso, campo opcional não preenchido quebraria o salvamento.
+- Os nomes das opções no app batem exatamente com os do Airtable. Se mudar um
+  lado, tem que mudar o outro.
+
 ## PENDENTE AGORA (é por aqui que se continua)
 
-Os dois workflows em `n8n/` **nunca foram importados nem testados** — foram
-escritos sem acesso ao n8n, então podem ter erros:
-
-- `n8n/consultar-documento.json` — recebe CPF/CNPJ, procura no Airtable e avisa
-  se já existe; sendo CNPJ novo, busca os dados na Receita (BrasilAPI)
-- `n8n/salvar-entidade.json` — grava a entidade no Airtable
-
-Para funcionarem, falta:
-1. Importar os dois no n8n
-2. Em cada um, trocar `TROQUE-ESTA-SENHA` pela senha real de acesso ao app
-   (a mesma que já está no workflow `App - Testar conexao`)
-3. Selecionar a credencial do Airtable nos nós de Airtable
-4. Publicar os dois
-5. Testar de ponta a ponta pelo app
-
-Se você tem acesso direto ao n8n (sessão local), prefira criar/corrigir os
-workflows via API do n8n em vez de pedir importação manual — foi exatamente
-essa falta de acesso que travou o projeto até aqui.
+- Testar pelo app publicado (o túnel do Cloudflare precisa estar ligado).
+  Os testes até aqui foram direto no `localhost`, sem passar pelo túnel.
+- O app ainda não usa o campo `avisoReceita` que o workflow já devolve. Ele
+  explica por que os dados da Receita não vieram ("muitas consultas seguidas"
+  ou "não encontrei este CNPJ"). Hoje o app mostra só o formulário em branco,
+  sem dizer o motivo.
 
 ## Decisões já tomadas (não relitigar sem motivo)
 

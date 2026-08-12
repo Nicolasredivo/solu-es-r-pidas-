@@ -14,8 +14,11 @@
       "name": "Recebe pedido do app",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 0],
-      "webhookId": "51000000-0000-4000-8000-000000000001"
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "50000000-0000-4000-8000-000000000001"
     },
     {
       "parameters": {
@@ -28,7 +31,7 @@
           },
           "conditions": [
             {
-              "id": "50000000-0000-4000-8000-00000000000a",
+              "id": "50000000-0000-4000-8000-000000000002-cond",
               "leftValue": "={{ $json.body.senha }}",
               "rightValue": "TROQUE-ESTA-SENHA",
               "operator": {
@@ -47,7 +50,10 @@
       "name": "Senha esta correta?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [220, 0]
+      "position": [
+        220,
+        0
+      ]
     },
     {
       "parameters": {
@@ -59,7 +65,23 @@
       "name": "Responde senha incorreta",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [440, 160]
+      "position": [
+        440,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Limpa o que veio do app antes de gravar.\n// As listas do Airtable (Tipo, Exigencia, Status) recusam texto vazio,\n// entao mando null nesses casos, que o Airtable entende como 'em branco'.\nconst b = $json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => texto(v) || null;\n\nreturn [{\n  json: {\n    documento: texto(b.documento).replace(/\\D/g, ''),\n    razaoSocial: texto(b.razaoSocial),\n    nomeFantasia: texto(b.nomeFantasia),\n    tipo: lista(b.tipo),\n    exigenciaFiscal: lista(b.exigenciaFiscal),\n    emails: texto(b.emails),\n    whatsapp: texto(b.whatsapp),\n    administradora: texto(b.administradora),\n    status: lista(b.status) || 'Ativo',\n    observacoes: texto(b.observacoes),\n  },\n}];"
+      },
+      "id": "50000000-0000-4000-8000-000000000007",
+      "name": "Prepara dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        -60
+      ]
     },
     {
       "parameters": {
@@ -68,29 +90,166 @@
         "base": {
           "__rl": true,
           "value": "app6PyYmtFduIMp7B",
-          "mode": "id"
+          "mode": "list",
+          "cachedResultName": "cadastro"
         },
         "table": {
           "__rl": true,
           "value": "tbl5Joji6gAir3mNh",
-          "mode": "id"
+          "mode": "list",
+          "cachedResultName": "Entidades_Cadastradas"
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "CPF_CNPJ": "={{ $json.body.documento }}",
-            "Razao_Social_Nome": "={{ $json.body.razaoSocial }}",
-            "Nome_Fantasia_Identificador": "={{ $json.body.nomeFantasia }}",
-            "Tipo_Documento": "={{ $json.body.tipo }}",
-            "Exigencia_Fiscal": "={{ $json.body.exigenciaFiscal }}",
-            "Emails_Financeiro_NFE": "={{ $json.body.emails }}",
-            "WhatsApp_Financeiro": "={{ $json.body.whatsapp }}",
-            "Administradora": "={{ $json.body.administradora }}",
-            "Status": "={{ $json.body.status }}",
-            "Observacoes": "={{ $json.body.observacoes }}"
+            "CPF_CNPJ": "={{ $json.documento }}",
+            "Razao_Social_Nome": "={{ $json.razaoSocial }}",
+            "Nome_Fantasia_Identificador": "={{ $json.nomeFantasia }}",
+            "Tipo_Documento": "={{ $json.tipo }}",
+            "Exigencia_Fiscal": "={{ $json.exigenciaFiscal }}",
+            "Emails_Financeiro_NFE": "={{ $json.emails }}",
+            "WhatsApp_Financeiro": "={{ $json.whatsapp }}",
+            "Administradora": "={{ $json.administradora }}",
+            "Status": "={{ $json.status }}",
+            "Observacoes": "={{ $json.observacoes }}"
           },
           "matchingColumns": [],
-          "schema": []
+          "schema": [
+            {
+              "id": "CPF_CNPJ",
+              "displayName": "CPF_CNPJ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Razao_Social_Nome",
+              "displayName": "Razao_Social_Nome",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Nome_Fantasia_Identificador",
+              "displayName": "Nome_Fantasia_Identificador",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Tipo_Documento",
+              "displayName": "Tipo_Documento",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Exigencia_Fiscal",
+              "displayName": "Exigencia_Fiscal",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Emails_Financeiro_NFE",
+              "displayName": "Emails_Financeiro_NFE",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "WhatsApp_Financeiro",
+              "displayName": "WhatsApp_Financeiro",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Administradora",
+              "displayName": "Administradora",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Locais_Atendimento",
+              "displayName": "Locais_Atendimento",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Contatos_Solicitantes",
+              "displayName": "Contatos_Solicitantes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Observacoes",
+              "displayName": "Observacoes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
         "options": {
           "typecast": true
@@ -99,8 +258,17 @@
       "id": "50000000-0000-4000-8000-000000000004",
       "name": "Cria no Airtable",
       "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
-      "position": [440, -60],
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
       "onError": "continueErrorOutput"
     },
     {
@@ -113,7 +281,10 @@
       "name": "Responde salvo",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [700, -140]
+      "position": [
+        900,
+        -160
+      ]
     },
     {
       "parameters": {
@@ -125,23 +296,69 @@
       "name": "Responde erro do Airtable",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [700, 20]
+      "position": [
+        900,
+        20
+      ]
     }
   ],
   "connections": {
     "Recebe pedido do app": {
-      "main": [[{ "node": "Senha esta correta?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Senha esta correta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Senha esta correta?": {
       "main": [
-        [{ "node": "Cria no Airtable", "type": "main", "index": 0 }],
-        [{ "node": "Responde senha incorreta", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Prepara dados",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde senha incorreta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara dados": {
+      "main": [
+        [
+          {
+            "node": "Cria no Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Cria no Airtable": {
       "main": [
-        [{ "node": "Responde salvo", "type": "main", "index": 0 }],
-        [{ "node": "Responde erro do Airtable", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Responde salvo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde erro do Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
