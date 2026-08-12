@@ -29,7 +29,17 @@ menuButton.addEventListener("click", () => {
 sidebarOverlay.addEventListener("click", closeSidebar);
 
 document.querySelectorAll(".sidebar-item").forEach((item) => {
-  item.addEventListener("click", closeSidebar);
+  item.addEventListener("click", () => {
+    document.querySelectorAll(".sidebar-item").forEach((i) => i.classList.remove("active"));
+    item.classList.add("active");
+
+    const targetId = `page-${item.dataset.page}`;
+    document.querySelectorAll(".page").forEach((page) => {
+      page.classList.toggle("hidden", page.id !== targetId);
+    });
+
+    closeSidebar();
+  });
 });
 
 function showStatus(kind, message) {
@@ -73,11 +83,17 @@ form.addEventListener("submit", async (event) => {
 });
 
 if ("serviceWorker" in navigator) {
-  // Quando uma versão nova do app assumir o controle, recarrega a página
-  // sozinho — evita ficar preso numa versão antiga até o usuário limpar
-  // o cache manualmente.
+  // Só recarrega quando um service worker ATIVO é substituído por um novo
+  // (atualização de verdade) — não na primeira vez que o app é aberto, que
+  // também dispara este evento mas não deve interromper o que o usuário
+  // está fazendo (ex: acabou de digitar a senha).
+  let hadController = Boolean(navigator.serviceWorker.controller);
+
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    window.location.reload();
+    if (hadController) {
+      window.location.reload();
+    }
+    hadController = true;
   });
 
   window.addEventListener("load", () => {

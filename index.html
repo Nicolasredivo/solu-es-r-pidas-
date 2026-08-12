@@ -35,14 +35,20 @@
     <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
     <nav id="sidebar" class="sidebar">
-      <button type="button" id="sidebar-item-inicio" class="sidebar-item active">Início</button>
+      <button type="button" class="sidebar-item active" data-page="inicio">Início</button>
+      <button type="button" class="sidebar-item" data-page="cadastro">Cadastro</button>
     </nav>
 
     <main class="main-content">
-      <div class="card">
+      <div id="page-inicio" class="card page">
         <h1>Início</h1>
         <p class="subtitle">Conectado com sucesso ✅</p>
         <p class="placeholder-text">Em breve, mais opções aparecem aqui.</p>
+      </div>
+
+      <div id="page-cadastro" class="card page hidden">
+        <h1>Cadastro</h1>
+        <p class="placeholder-text">Em construção — o conteúdo dessa página ainda vai ser definido.</p>
       </div>
     </main>
   </div>
