@@ -2,4 +2,4 @@
 // ATENÇÃO: esse endereço MUDA toda vez que você fecha e abre o túnel.
 // Quando mudar, troque só a parte "https://...trycloudflare.com" da linha abaixo.
 const N8N_TEST_WEBHOOK_URL =
-  "https://himself-sponsors-resistance-diego.trycloudflare.com/webhook/testar-conexao";
+  "https://cable-term-prev-resource.trycloudflare.com/webhook/testar-conexao";
