@@ -333,14 +333,16 @@ input[type="text"]:focus {
   margin: -2px 0 12px;
 }
 
-.local {
+.local,
+.contato {
   border: 1px solid #2c3153;
   border-radius: 10px;
   padding: 14px;
   margin-bottom: 12px;
 }
 
-.local-topo {
+.local-topo,
+.contato-topo {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -348,19 +350,67 @@ input[type="text"]:focus {
   margin-bottom: 12px;
 }
 
-.local-titulo {
+.local-titulo,
+.contato-titulo {
   font-size: 0.9rem;
   font-weight: 600;
 }
 
-.remover-local {
+.remover-local,
+.remover-contato {
   margin-top: 0;
   color: var(--error);
 }
 
 /* O último campo do bloco não precisa do espaço de baixo: a borda já separa */
-.local > :last-child {
+.local > :last-child,
+.contato > :last-child {
   margin-bottom: 0;
+}
+
+/* Lista de WhatsApps / e-mails: uma linha por valor, sem limite de quantas */
+.canal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.canal input {
+  margin-bottom: 0;
+}
+
+.remover-canal {
+  width: 38px;
+  flex-shrink: 0;
+  padding: 0;
+  height: 38px;
+  background: transparent;
+  border: 1px solid #2c3153;
+  color: var(--muted);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.contato select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #2c3153;
+  background: #12162a;
+  color: var(--text);
+  font-size: 1rem;
+  margin-bottom: 16px;
+}
+
+.contato select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Rótulo que vem logo depois de um botão "+ Adicionar" precisa respirar */
+.rotulo-espacado {
+  margin-top: 18px;
 }
 
 /* Aviso de cadastro já existente */

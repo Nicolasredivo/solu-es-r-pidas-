@@ -96,6 +96,10 @@ const observacoesInput = document.getElementById("observacoes");
 const locaisBox = document.getElementById("locais");
 const adicionarLocalBotao = document.getElementById("adicionar-local");
 const modeloLocal = document.getElementById("modelo-local");
+const contatosBox = document.getElementById("contatos");
+const adicionarContatoBotao = document.getElementById("adicionar-contato");
+const modeloContato = document.getElementById("modelo-contato");
+const modeloCanal = document.getElementById("modelo-canal");
 const salvarBotao = document.getElementById("salvar-entidade");
 const salvarStatus = document.getElementById("salvar-status");
 
@@ -279,6 +283,101 @@ function locaisPreenchidos() {
 
 adicionarLocalBotao.addEventListener("click", () => adicionarLocal(true));
 
+// ----- Contatos / solicitantes -----
+//
+// Cada contato tem duas listas que crescem sem limite: WhatsApps e e-mails.
+// No Airtable elas viram um campo só, com um valor por linha — assim nenhuma
+// coluna nova precisa ser criada por causa de um cliente que tem dez telefones.
+
+// Com uma linha só, tirar deixaria a lista vazia e o botão sem contexto.
+function renumerarCanais(lista) {
+  const linhas = lista.querySelectorAll(".canal");
+  linhas.forEach((linha) => {
+    linha.querySelector(".remover-canal").classList.toggle("hidden", linhas.length < 2);
+  });
+}
+
+function adicionarCanal(lista, tipo, comFoco) {
+  const linha = modeloCanal.content.firstElementChild.cloneNode(true);
+  const campo = linha.querySelector(".canal-valor");
+
+  // Teclado do celular já abre no formato certo.
+  if (tipo === "whatsapp") {
+    campo.placeholder = "(54) 99999-9999";
+    campo.inputMode = "tel";
+  } else {
+    campo.placeholder = "nome@empresa.com.br";
+    campo.inputMode = "email";
+  }
+
+  linha.querySelector(".remover-canal").addEventListener("click", () => {
+    linha.remove();
+    renumerarCanais(lista);
+  });
+
+  lista.appendChild(linha);
+  renumerarCanais(lista);
+  if (comFoco) campo.focus();
+}
+
+function valoresDosCanais(lista) {
+  return [...lista.querySelectorAll(".canal-valor")]
+    .map((campo) => campo.value.trim())
+    .filter(Boolean);
+}
+
+function renumerarContatos() {
+  const blocos = contatosBox.querySelectorAll(".contato");
+  blocos.forEach((bloco, i) => {
+    bloco.querySelector(".contato-titulo").textContent =
+      blocos.length > 1 ? `Contato ${i + 1}` : "Contato";
+    bloco.querySelector(".remover-contato").classList.toggle("hidden", blocos.length < 2);
+  });
+}
+
+function adicionarContato(comFoco) {
+  const bloco = modeloContato.content.firstElementChild.cloneNode(true);
+  const whatsapps = bloco.querySelector(".contato-whatsapps");
+  const emails = bloco.querySelector(".contato-emails");
+
+  // Cada contato já nasce com uma linha de cada, senão o campo fica invisível.
+  adicionarCanal(whatsapps, "whatsapp", false);
+  adicionarCanal(emails, "email", false);
+
+  bloco.querySelector(".adicionar-whatsapp")
+    .addEventListener("click", () => adicionarCanal(whatsapps, "whatsapp", true));
+  bloco.querySelector(".adicionar-email")
+    .addEventListener("click", () => adicionarCanal(emails, "email", true));
+
+  bloco.querySelector(".remover-contato").addEventListener("click", () => {
+    bloco.remove();
+    renumerarContatos();
+  });
+
+  contatosBox.appendChild(bloco);
+  renumerarContatos();
+  if (comFoco) bloco.querySelector(".contato-nome").focus();
+}
+
+function reiniciarContatos() {
+  contatosBox.innerHTML = "";
+  adicionarContato(false);
+}
+
+function contatosPreenchidos() {
+  return [...contatosBox.querySelectorAll(".contato")]
+    .map((bloco) => ({
+      nome: bloco.querySelector(".contato-nome").value.trim(),
+      cargo: bloco.querySelector(".contato-cargo").value,
+      whatsapps: valoresDosCanais(bloco.querySelector(".contato-whatsapps")),
+      emails: valoresDosCanais(bloco.querySelector(".contato-emails")),
+      observacoes: bloco.querySelector(".contato-obs").value.trim(),
+    }))
+    .filter((c) => c.nome || c.whatsapps.length || c.emails.length || c.observacoes);
+}
+
+adicionarContatoBotao.addEventListener("click", () => adicionarContato(true));
+
 // ----- Consulta ao n8n: já existe? e dados da Receita -----
 
 let documentoAtual = "";
@@ -288,6 +387,7 @@ function limparFormulario() {
    observacoesInput].forEach((campo) => (campo.value = ""));
   grupoExigencia.querySelectorAll(".opcao").forEach((b) => b.classList.remove("active"));
   reiniciarLocais();
+  reiniciarContatos();
   salvarStatus.className = "status";
 }
 
@@ -389,6 +489,7 @@ formEntidade.addEventListener("submit", async (event) => {
         // Vai como texto JSON dentro de um campo só, para o envio continuar
         // sendo um formulário simples (sem a verificação extra do navegador).
         locais: JSON.stringify(locaisPreenchidos()),
+        contatos: JSON.stringify(contatosPreenchidos()),
       }),
     });
 

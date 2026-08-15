@@ -282,7 +282,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1560,
+        2440,
         -160
       ]
     },
@@ -495,7 +495,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Cadastro salvo, mas não consegui gravar os endereços. Confira no Airtable.\"\n}",
+        "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Cadastro salvo, mas houve erro ao gravar os endereços. Confira no Airtable.\"\n}",
         "options": {}
       },
       "id": "50000000-0000-4000-8000-00000000000c",
@@ -504,6 +504,239 @@
       "typeVersion": 1.1,
       "position": [
         1560,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transforma a lista de contatos do app em um item por contato, cada um\n// ja apontando para o cliente recem-criado.\nconst corpo = $('Recebe pedido do app').first().json.body || {};\nconst entidadeId = $('Cria no Airtable').first().json.id;\n\nlet recebidos = [];\ntry {\n  recebidos = JSON.parse(corpo.contatos || '[]');\n} catch (erro) {\n  // App antigo (sem o campo) ou texto quebrado: segue sem contato nenhum.\n  recebidos = [];\n}\nif (!Array.isArray(recebidos)) recebidos = [];\n\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => (Array.isArray(v) ? v.map(texto).filter(Boolean) : []);\n\nconst limpos = recebidos\n  .map((c) => ({\n    nome: texto(c.nome),\n    cargo: texto(c.cargo),\n    whatsapps: lista(c.whatsapps),\n    emails: lista(c.emails),\n    observacoes: texto(c.observacoes),\n  }))\n  .filter((c) => c.nome || c.whatsapps.length || c.emails.length || c.observacoes);\n\n// Sem contato nenhum ainda precisa sair um item, senao o fluxo morre aqui\n// e o app fica esperando uma resposta que nunca chega.\nif (limpos.length === 0) return [{ json: { temContato: false } }];\n\nreturn limpos.map((c) => ({\n  json: {\n    temContato: true,\n    entidadeId,\n    // Nome_Contato e o campo principal: em branco, o registro aparece sem\n    // titulo na lista do Airtable.\n    nome: c.nome || c.whatsapps[0] || c.emails[0] || 'Contato sem nome',\n    // Lista de escolha recusa texto vazio; null e 'em branco' para o Airtable.\n    cargo: c.cargo || null,\n    // Um valor por linha: e assim que o campo guarda varios sem criar coluna.\n    whatsapps: c.whatsapps.join('\\n'),\n    emails: c.emails.join('\\n'),\n    observacoes: c.observacoes,\n  },\n}));"
+      },
+      "id": "50000000-0000-4000-8000-00000000000d",
+      "name": "Prepara contatos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "50000000-0000-4000-8000-00000000000e",
+              "leftValue": "={{ $json.temContato }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "50000000-0000-4000-8000-00000000000f",
+      "name": "Tem algum contato?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2000,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblXXOEOCwQnC2qFX",
+          "mode": "list",
+          "cachedResultName": "Contatos_Solicitantes"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Nome_Contato": "={{ $json.nome }}",
+            "Cargo_Funcao": "={{ $json.cargo }}",
+            "WhatsApps": "={{ $json.whatsapps }}",
+            "Emails": "={{ $json.emails }}",
+            "Entidades_Vinculadas": "={{ [$json.entidadeId] }}",
+            "Observacoes": "={{ $json.observacoes }}",
+            "Status": "Ativo"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Nome_Contato",
+              "displayName": "Nome_Contato",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Cargo_Funcao",
+              "displayName": "Cargo_Funcao",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "readOnly": false,
+              "removed": false,
+              "options": [
+                {
+                  "name": "Síndico",
+                  "value": "Síndico"
+                },
+                {
+                  "name": "Administradora",
+                  "value": "Administradora"
+                },
+                {
+                  "name": "Gerente",
+                  "value": "Gerente"
+                },
+                {
+                  "name": "Zelador",
+                  "value": "Zelador"
+                },
+                {
+                  "name": "Proprietário",
+                  "value": "Proprietário"
+                },
+                {
+                  "name": "Outro",
+                  "value": "Outro"
+                }
+              ]
+            },
+            {
+              "id": "WhatsApps",
+              "displayName": "WhatsApps",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Emails",
+              "displayName": "Emails",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Entidades_Vinculadas",
+              "displayName": "Entidades_Vinculadas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Observacoes",
+              "displayName": "Observacoes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "readOnly": false,
+              "removed": false,
+              "options": [
+                {
+                  "name": "Ativo",
+                  "value": "Ativo"
+                },
+                {
+                  "name": "Inativo",
+                  "value": "Inativo"
+                },
+                {
+                  "name": "Arquivado",
+                  "value": "Arquivado"
+                }
+              ]
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "50000000-0000-4000-8000-000000000010",
+      "name": "Cria contatos no Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2220,
+        -160
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Cadastro salvo, mas houve erro ao gravar os contatos. Confira no Airtable.\"\n}",
+        "options": {}
+      },
+      "id": "50000000-0000-4000-8000-000000000011",
+      "name": "Responde erro nos contatos",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2440,
         40
       ]
     }
@@ -589,7 +822,7 @@
         ],
         [
           {
-            "node": "Responde salvo",
+            "node": "Prepara contatos",
             "type": "main",
             "index": 0
           }
@@ -600,7 +833,7 @@
       "main": [
         [
           {
-            "node": "Responde salvo",
+            "node": "Prepara contatos",
             "type": "main",
             "index": 0
           }
@@ -608,6 +841,53 @@
         [
           {
             "node": "Responde erro nos locais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara contatos": {
+      "main": [
+        [
+          {
+            "node": "Tem algum contato?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem algum contato?": {
+      "main": [
+        [
+          {
+            "node": "Cria contatos no Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde salvo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cria contatos no Airtable": {
+      "main": [
+        [
+          {
+            "node": "Responde salvo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde erro nos contatos",
             "type": "main",
             "index": 0
           }

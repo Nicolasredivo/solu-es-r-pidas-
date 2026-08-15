@@ -102,9 +102,11 @@ Foi a falta disso que travou o projeto antes. Funciona assim:
 
 ## PENDENTE AGORA (é por aqui que se continua)
 
-- Cadastro de **Contatos_Solicitantes** ligados à Entidade. A tabela já existe
-  e já está ligada; falta o app usar. O caminho é o mesmo dos Locais: bloco que
-  se repete no formulário + nós no `App - Salvar entidade`.
+- **Apagar na mão, no Airtable, os 8 campos velhos de Contatos_Solicitantes**:
+  `WhatsApp_1` a `WhatsApp_4` e `Email_1` a `Email_4`. Foram substituídos por
+  `WhatsApps` e `Emails`, estão vazios e o app não usa mais. A API do Airtable
+  **não apaga campo** — só dá para fazer pela tela: clicar na setinha do
+  cabeçalho da coluna → "Delete field".
 - A aba "Consultar" continua vazia.
 
 ## Aviso da Receita no cadastro (feito em 12/08/2026)
@@ -157,6 +159,29 @@ registro aparece em branco na lista do Airtable.
 Campo de lista (singleSelect) com **valor fixo** no nó do Airtable exige que as
 opções estejam declaradas no `schema`, senão o n8n recusa publicar. Com
 expressão (`={{ ... }}`) ele não cobra.
+
+## Contatos, com WhatsApps e e-mails sem limite (feito em 15/08/2026)
+
+O formulário ganhou "Contatos / solicitantes": bloco que se repete, e dentro de
+cada contato duas listas que também crescem sem limite (WhatsApps e e-mails).
+
+**Por que não criar coluna nova a cada telefone.** O pedido original era o
+Airtable criar `Email_5`, `Email_6`… sozinho. Isso foi conversado e descartado:
+coluna criada nunca some, então ela passa a existir vazia em *todos* os
+contatos, a tabela vira uma parede de colunas em branco, há teto de campos por
+tabela, e procurar "quem tem tal e-mail" viraria procurar em dezenas de
+colunas. **Não voltar atrás nisso sem motivo forte.**
+
+O que ficou: dois campos `multilineText` novos, `WhatsApps` e `Emails`, com
+**um valor por linha**. Ilimitado, visível de uma vez na célula, e a busca do
+Airtable acha normalmente.
+
+Os 8 campos velhos (`WhatsApp_1..4`, `Email_1..4`) estão vazios e sem uso — só
+podem ser apagados pela tela do Airtable (veja "PENDENTE AGORA"). A API do
+Airtable **não apaga campo nem troca o tipo de um campo**; só cria.
+
+Contato sem nome usa o primeiro WhatsApp (ou e-mail) como título. Linha de
+canal em branco no meio da lista é descartada no envio.
 
 ## Decisões já tomadas (não relitigar sem motivo)
 

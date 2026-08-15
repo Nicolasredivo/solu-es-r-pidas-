@@ -135,6 +135,18 @@
               </button>
             </div>
 
+            <div class="grupo">
+              <label>Contatos / solicitantes</label>
+              <p class="placeholder-text locais-ajuda">
+                Opcional. Quem abre chamado por este cliente. Cada contato aceita
+                quantos WhatsApps e e-mails precisar.
+              </p>
+              <div id="contatos"></div>
+              <button type="button" id="adicionar-contato" class="botao-secundario">
+                + Adicionar contato
+              </button>
+            </div>
+
             <button type="submit" id="salvar-entidade">Salvar cadastro</button>
             <div id="salvar-status" class="status"></div>
           </form>
@@ -159,6 +171,50 @@
 
               <label>Observações de acesso</label>
               <textarea class="local-acesso" rows="2" placeholder="Ex: falar com o zelador"></textarea>
+            </div>
+          </template>
+
+          <!-- Molde de um contato. Os WhatsApps e e-mails dele são listas que
+               crescem sem limite, montadas com o molde de linha abaixo. -->
+          <template id="modelo-contato">
+            <div class="contato">
+              <div class="contato-topo">
+                <span class="contato-titulo">Contato</span>
+                <button type="button" class="remover-contato link-button">Remover</button>
+              </div>
+
+              <label>Nome</label>
+              <input type="text" class="contato-nome" placeholder="Ex: Maria, do financeiro" />
+
+              <label>Cargo / função</label>
+              <select class="contato-cargo">
+                <option value="">Escolha...</option>
+                <option>Síndico</option>
+                <option>Administradora</option>
+                <option>Gerente</option>
+                <option>Zelador</option>
+                <option>Proprietário</option>
+                <option>Outro</option>
+              </select>
+
+              <label>WhatsApps</label>
+              <div class="contato-whatsapps"></div>
+              <button type="button" class="adicionar-whatsapp link-button">+ Adicionar WhatsApp</button>
+
+              <label class="rotulo-espacado">E-mails</label>
+              <div class="contato-emails"></div>
+              <button type="button" class="adicionar-email link-button">+ Adicionar e-mail</button>
+
+              <label class="rotulo-espacado">Observações</label>
+              <textarea class="contato-obs" rows="2"></textarea>
+            </div>
+          </template>
+
+          <!-- Uma linha de WhatsApp ou e-mail, com o botão de tirar do lado -->
+          <template id="modelo-canal">
+            <div class="canal">
+              <input type="text" class="canal-valor" />
+              <button type="button" class="remover-canal" aria-label="Remover">×</button>
             </div>
           </template>
         </div>
