@@ -124,9 +124,43 @@
             <label for="observacoes">Observações</label>
             <textarea id="observacoes" rows="3"></textarea>
 
+            <div class="grupo">
+              <label>Locais de atendimento</label>
+              <p class="placeholder-text locais-ajuda">
+                Opcional. Dá para acrescentar quantos endereços precisar.
+              </p>
+              <div id="locais"></div>
+              <button type="button" id="adicionar-local" class="botao-secundario">
+                + Adicionar endereço
+              </button>
+            </div>
+
             <button type="submit" id="salvar-entidade">Salvar cadastro</button>
             <div id="salvar-status" class="status"></div>
           </form>
+
+          <!-- Molde de um endereço. Não aparece na tela: o app clona quando
+               você toca em "Adicionar endereço". -->
+          <template id="modelo-local">
+            <div class="local">
+              <div class="local-topo">
+                <span class="local-titulo">Endereço</span>
+                <button type="button" class="remover-local link-button">Remover</button>
+              </div>
+
+              <label>Nome do local</label>
+              <input type="text" class="local-nome" placeholder="Ex: Torre A, Matriz" />
+
+              <label>Endereço completo</label>
+              <input type="text" class="local-endereco" placeholder="Rua, número, complemento" />
+
+              <label>Bairro / Cidade</label>
+              <input type="text" class="local-bairro" />
+
+              <label>Observações de acesso</label>
+              <textarea class="local-acesso" rows="2" placeholder="Ex: falar com o zelador"></textarea>
+            </div>
+          </template>
         </div>
 
         <div id="subpage-consultar" class="subpage hidden">

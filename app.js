@@ -93,6 +93,9 @@ const emailsInput = document.getElementById("emails");
 const whatsappInput = document.getElementById("whatsapp");
 const administradoraInput = document.getElementById("administradora");
 const observacoesInput = document.getElementById("observacoes");
+const locaisBox = document.getElementById("locais");
+const adicionarLocalBotao = document.getElementById("adicionar-local");
+const modeloLocal = document.getElementById("modelo-local");
 const salvarBotao = document.getElementById("salvar-entidade");
 const salvarStatus = document.getElementById("salvar-status");
 
@@ -226,6 +229,56 @@ documentoInput.addEventListener("input", () => {
   avaliarDocumento(digitos);
 });
 
+// ----- Locais de atendimento (um bloco por endereço) -----
+
+// O número só aparece quando há mais de um: com um endereço só, "Endereço 1"
+// seria informação sobrando.
+function renumerarLocais() {
+  const blocos = locaisBox.querySelectorAll(".local");
+  blocos.forEach((bloco, i) => {
+    bloco.querySelector(".local-titulo").textContent =
+      blocos.length > 1 ? `Endereço ${i + 1}` : "Endereço";
+    // Com um bloco só, remover deixaria a seção vazia e sem pista do que fazer.
+    bloco.querySelector(".remover-local").classList.toggle("hidden", blocos.length < 2);
+  });
+}
+
+function adicionarLocal(comFoco) {
+  const bloco = modeloLocal.content.firstElementChild.cloneNode(true);
+
+  bloco.querySelector(".remover-local").addEventListener("click", () => {
+    bloco.remove();
+    renumerarLocais();
+  });
+
+  locaisBox.appendChild(bloco);
+  renumerarLocais();
+
+  // Só puxa o cursor quando foi o usuário que pediu o bloco. Ao limpar o
+  // formulário isso roubaria o foco de quem ainda está digitando o CPF/CNPJ.
+  if (comFoco) bloco.querySelector(".local-nome").focus();
+}
+
+function reiniciarLocais() {
+  locaisBox.innerHTML = "";
+  adicionarLocal(false);
+}
+
+// Bloco totalmente em branco não vira registro no Airtable — quem abriu um
+// endereço a mais e desistiu não deve gerar lixo na tabela.
+function locaisPreenchidos() {
+  return [...locaisBox.querySelectorAll(".local")]
+    .map((bloco) => ({
+      nome: bloco.querySelector(".local-nome").value.trim(),
+      endereco: bloco.querySelector(".local-endereco").value.trim(),
+      bairroCidade: bloco.querySelector(".local-bairro").value.trim(),
+      acesso: bloco.querySelector(".local-acesso").value.trim(),
+    }))
+    .filter((local) => local.nome || local.endereco || local.bairroCidade || local.acesso);
+}
+
+adicionarLocalBotao.addEventListener("click", () => adicionarLocal(true));
+
 // ----- Consulta ao n8n: já existe? e dados da Receita -----
 
 let documentoAtual = "";
@@ -234,6 +287,7 @@ function limparFormulario() {
   [razaoSocialInput, nomeFantasiaInput, emailsInput, whatsappInput, administradoraInput,
    observacoesInput].forEach((campo) => (campo.value = ""));
   grupoExigencia.querySelectorAll(".opcao").forEach((b) => b.classList.remove("active"));
+  reiniciarLocais();
   salvarStatus.className = "status";
 }
 
@@ -332,6 +386,9 @@ formEntidade.addEventListener("submit", async (event) => {
         administradora: administradoraInput.value.trim(),
         status: escolhaDoGrupo(grupoStatus),
         observacoes: observacoesInput.value.trim(),
+        // Vai como texto JSON dentro de um campo só, para o envio continuar
+        // sendo um formulário simples (sem a verificação extra do navegador).
+        locais: JSON.stringify(locaisPreenchidos()),
       }),
     });
 

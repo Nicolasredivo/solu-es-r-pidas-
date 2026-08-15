@@ -328,6 +328,41 @@ input[type="text"]:focus {
   color: white;
 }
 
+/* Locais de atendimento: bloco que se repete, um por endereço */
+.locais-ajuda {
+  margin: -2px 0 12px;
+}
+
+.local {
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.local-topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.local-titulo {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.remover-local {
+  margin-top: 0;
+  color: var(--error);
+}
+
+/* O último campo do bloco não precisa do espaço de baixo: a borda já separa */
+.local > :last-child {
+  margin-bottom: 0;
+}
+
 /* Aviso de cadastro já existente */
 .aviso {
   padding: 12px 14px;

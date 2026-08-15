@@ -102,9 +102,10 @@ Foi a falta disso que travou o projeto antes. Funciona assim:
 
 ## PENDENTE AGORA (é por aqui que se continua)
 
-- Testar pelo app publicado (o túnel do Cloudflare precisa estar ligado).
-  Os testes até aqui foram direto no `localhost`, sem passar pelo túnel.
-Só isso. O aviso da Receita já está pronto (veja abaixo).
+- Cadastro de **Contatos_Solicitantes** ligados à Entidade. A tabela já existe
+  e já está ligada; falta o app usar. O caminho é o mesmo dos Locais: bloco que
+  se repete no formulário + nós no `App - Salvar entidade`.
+- A aba "Consultar" continua vazia.
 
 ## Aviso da Receita no cadastro (feito em 12/08/2026)
 
@@ -123,6 +124,39 @@ resolve; num CNPJ que não existe, ele só criaria esperança à toa.
 
 A cor `--aviso` (amarelo) foi criada para isso: o cadastro continua funcionando,
 então não é caso de vermelho de erro.
+
+## Vários endereços por cadastro (feito em 15/08/2026)
+
+Vale para CPF e CNPJ igualmente. O Airtable **não precisou de mudança**: a
+tabela `Locais_Atendimento` e a ligação com as Entidades já existiam prontas.
+
+No app, um bloco que se repete (`<template id="modelo-local">` no HTML, clonado
+pelo `app.js`). Começa com um bloco só e sem botão de remover — remover o único
+deixaria a seção vazia e sem pista do que fazer. A numeração ("Endereço 1, 2…")
+só aparece a partir do segundo. Bloco deixado totalmente em branco não vira
+registro: quem abriu um a mais e desistiu não gera lixo na tabela.
+
+A lista viaja como **texto JSON num campo só** (`locais`), para o envio
+continuar sendo um formulário simples — mandar JSON de verdade faria o
+navegador pedir a verificação extra (CORS preflight) que hoje é evitada.
+
+No `App - Salvar entidade`, depois de criar a entidade: `Prepara locais` monta
+um item por endereço já com o ID do cliente, `Tem algum local?` desvia, e
+`Cria locais no Airtable` grava. Dois cuidados que não são óbvios:
+
+- **Sem endereço nenhum, `Prepara locais` ainda devolve um item** (com
+  `temLocal: false`). Se devolvesse lista vazia, o fluxo morreria ali e o app
+  ficaria esperando para sempre uma resposta que nunca chegaria.
+- **Se os endereços falharem, a resposta é `ok: true`** com aviso, não erro. O
+  cliente já foi gravado; dizer "não consegui salvar" faria cadastrar de novo e
+  duplicar.
+
+Endereço sem nome preenchido usa o próprio endereço como título, senão o
+registro aparece em branco na lista do Airtable.
+
+Campo de lista (singleSelect) com **valor fixo** no nó do Airtable exige que as
+opções estejam declaradas no `schema`, senão o n8n recusa publicar. Com
+expressão (`={{ ... }}`) ele não cobra.
 
 ## Decisões já tomadas (não relitigar sem motivo)
 
