@@ -1,0 +1,207 @@
+{
+  "name": "App - Excluir cadastro",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "excluir-cadastro",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "e0000000-0000-4000-8000-000000000029",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "e0000000-0000-4000-8000-000000000030"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e0000000-0000-4000-8000-000000000031",
+              "leftValue": "={{ $json.body.senha }}",
+              "rightValue": "TROQUE-ESTA-SENHA",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "e0000000-0000-4000-8000-000000000032",
+      "name": "Senha esta correta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
+        "options": {}
+      },
+      "id": "e0000000-0000-4000-8000-000000000033",
+      "name": "Responde senha incorreta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// O app ja abriu o cadastro antes de mandar apagar, entao ele conhece os\n// enderecos e contatos: nao precisamos procurar de novo aqui.\nconst b = $json.body || {};\nconst limpa = (v) => String(v || '').split(',').map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nconst entidadeId = limpa(b.id)[0];\nif (!entidadeId) throw new Error('Pedido sem o codigo do cadastro.');\n\nconst BASE = 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/';\nconst TABELAS = { locais: 'tblffVczCf1VeNxs7', contatos: 'tblXXOEOCwQnC2qFX', entidades: 'tbl5Joji6gAir3mNh' };\n\n// O Airtable apaga no maximo 10 por chamada.\nconst emLotes = (ids) => {\n  const lotes = [];\n  for (let i = 0; i < ids.length; i += 10) lotes.push(ids.slice(i, i + 10));\n  return lotes;\n};\nconst monta = (tabela, ids) => emLotes(ids).map((lote) => ({\n  json: { url: BASE + tabela + '?' + lote.map((id) => 'records[]=' + id).join('&') },\n}));\n\n// Os ligados saem primeiro; o cadastro por ultimo, para nao sobrar\n// endereco apontando para um cliente que ja deixou de existir.\nreturn [\n  ...monta(TABELAS.locais, limpa(b.locaisIds)),\n  ...monta(TABELAS.contatos, limpa(b.contatosIds)),\n  ...monta(TABELAS.entidades, [entidadeId]),\n];"
+      },
+      "id": "e0000000-0000-4000-8000-000000000034",
+      "name": "Monta a lista do que apagar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "e0000000-0000-4000-8000-000000000035",
+      "name": "Apaga no Airtable",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Cadastro excluído.\"\n}",
+        "options": {}
+      },
+      "id": "e0000000-0000-4000-8000-000000000036",
+      "name": "Responde excluido",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Não consegui excluir. Confira no Airtable antes de tentar de novo.\"\n}",
+        "options": {}
+      },
+      "id": "e0000000-0000-4000-8000-000000000037",
+      "name": "Responde erro ao excluir",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        20
+      ]
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Senha esta correta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Senha esta correta?": {
+      "main": [
+        [
+          {
+            "node": "Monta a lista do que apagar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde senha incorreta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta a lista do que apagar": {
+      "main": [
+        [
+          {
+            "node": "Apaga no Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apaga no Airtable": {
+      "main": [
+        [
+          {
+            "node": "Responde excluido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde erro ao excluir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

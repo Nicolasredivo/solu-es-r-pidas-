@@ -515,6 +515,413 @@ formEntidade.addEventListener("submit", async (event) => {
   }
 });
 
+// ----- Consultar cadastros -----
+
+const buscaInput = document.getElementById("busca-cadastro");
+const recarregarBotao = document.getElementById("recarregar-lista");
+const listaStatus = document.getElementById("lista-status");
+const listaBox = document.getElementById("lista-cadastros");
+const modeloLinha = document.getElementById("modelo-linha");
+const modeloDetalhe = document.getElementById("modelo-detalhe");
+
+let cadastros = [];
+let listaCarregada = false;
+
+function mostrarListaStatus(tipo, mensagem) {
+  listaStatus.textContent = mensagem;
+  listaStatus.className = `doc-hint ${tipo}`;
+}
+
+// Toda ação manda a senha junto: o n8n é quem confere, nunca a tela.
+async function pedirAoN8n(caminho, dados) {
+  const resposta = await fetch(urlWebhook(caminho), {
+    method: "POST",
+    body: new URLSearchParams({ senha: passwordInput.value, ...dados }),
+  });
+  return resposta.json();
+}
+
+function formatarDocumento(digitos) {
+  if (digitos.length === 11) return formatarCPF(digitos);
+  if (digitos.length === 14) return formatarCNPJ(digitos);
+  return digitos;
+}
+
+function documentoValido(digitos) {
+  // Cadastro antigo pode estar sem documento; não trava por causa disso.
+  if (!digitos) return true;
+  if (digitos.length === 11) return cpfValido(digitos);
+  if (digitos.length === 14) return cnpjValido(digitos);
+  return false;
+}
+
+async function carregarLista() {
+  mostrarListaStatus("neutral", "Carregando...");
+  listaBox.innerHTML = "";
+
+  try {
+    const dados = await pedirAoN8n("listar-cadastros", {});
+
+    if (!dados || !dados.ok) {
+      mostrarListaStatus("error", (dados && dados.mensagem) || "Não consegui carregar a lista.");
+      return;
+    }
+
+    cadastros = dados.cadastros || [];
+    listaCarregada = true;
+    desenharLista();
+  } catch (err) {
+    mostrarListaStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+  }
+}
+
+function desenharLista() {
+  const termo = buscaInput.value.trim().toLowerCase();
+  const digitos = termo.replace(/\D/g, "");
+
+  const visiveis = cadastros.filter((c) => {
+    if (!termo) return true;
+    const texto = `${c.razaoSocial} ${c.nomeFantasia} ${c.contato}`.toLowerCase();
+    // Procurar por número ignora a pontuação do CPF/CNPJ.
+    return texto.includes(termo) || (digitos !== "" && c.documento.includes(digitos));
+  });
+
+  listaBox.innerHTML = "";
+
+  if (!cadastros.length) {
+    mostrarListaStatus("neutral", "Nenhum cadastro ainda.");
+    return;
+  }
+
+  if (!visiveis.length) {
+    mostrarListaStatus("neutral", `Nada encontrado para "${buscaInput.value.trim()}".`);
+    return;
+  }
+
+  mostrarListaStatus(
+    "neutral",
+    visiveis.length === cadastros.length
+      ? `${cadastros.length} cadastro${cadastros.length > 1 ? "s" : ""}.`
+      : `${visiveis.length} de ${cadastros.length} cadastros.`
+  );
+
+  visiveis.forEach((cadastro) => listaBox.appendChild(montarLinha(cadastro)));
+}
+
+function atualizarResumo(linha, cadastro) {
+  linha.querySelector(".cadastro-doc").textContent =
+    formatarDocumento(cadastro.documento) || "(sem CPF/CNPJ)";
+  linha.querySelector(".cadastro-razao").textContent = cadastro.razaoSocial || "(sem nome)";
+  linha.querySelector(".cadastro-extra").textContent =
+    [cadastro.nomeFantasia, cadastro.contato].filter(Boolean).join(" · ");
+}
+
+function montarLinha(cadastro) {
+  const linha = modeloLinha.content.firstElementChild.cloneNode(true);
+  atualizarResumo(linha, cadastro);
+
+  const caixa = linha.querySelector(".cadastro-detalhe");
+  linha.querySelector(".cadastro-resumo").addEventListener("click", () => {
+    if (linha.classList.contains("aberto")) fecharLinha(linha);
+    else abrirLinha(linha, caixa, cadastro);
+  });
+
+  return linha;
+}
+
+function fecharLinha(linha) {
+  linha.classList.remove("aberto");
+  const caixa = linha.querySelector(".cadastro-detalhe");
+  caixa.classList.add("hidden");
+  caixa.innerHTML = "";
+}
+
+async function abrirLinha(linha, caixa, cadastro) {
+  // Um aberto por vez: dois cadastros abertos ao mesmo tempo confundem mais do
+  // que ajudam, ainda mais no celular.
+  listaBox.querySelectorAll(".cadastro.aberto").forEach(fecharLinha);
+
+  linha.classList.add("aberto");
+  caixa.classList.remove("hidden");
+  caixa.textContent = "Abrindo...";
+
+  let dados;
+  try {
+    dados = await pedirAoN8n("detalhe-cadastro", {
+      id: cadastro.id,
+      documento: cadastro.documento,
+    });
+  } catch (err) {
+    caixa.textContent = "Não consegui abrir. O n8n está ligado?";
+    return;
+  }
+
+  if (!dados || !dados.ok) {
+    caixa.textContent = (dados && dados.mensagem) || "Não consegui abrir este cadastro.";
+    return;
+  }
+
+  caixa.textContent = "";
+  caixa.appendChild(montarDetalhe(linha, cadastro, dados));
+}
+
+// Item só de leitura (endereço ou contato). Usa textContent de propósito: o
+// conteúdo vem do Airtable e não deve poder virar HTML.
+function itemLeitura(titulo, linhas) {
+  const item = document.createElement("div");
+  item.className = "item-leitura";
+
+  const forte = document.createElement("strong");
+  forte.textContent = titulo || "(sem nome)";
+  item.appendChild(forte);
+
+  linhas.filter(Boolean).forEach((texto) => {
+    const linha = document.createElement("span");
+    linha.textContent = texto;
+    item.appendChild(linha);
+  });
+
+  return item;
+}
+
+function desenharLeitura(caixa, itens, aviso, montar) {
+  caixa.textContent = "";
+
+  if (!itens.length) {
+    const vazio = document.createElement("p");
+    vazio.className = "vazio-leitura";
+    vazio.textContent = aviso;
+    caixa.appendChild(vazio);
+    return;
+  }
+
+  itens.forEach((item) => caixa.appendChild(montar(item)));
+}
+
+function montarDetalhe(linha, resumo, dados) {
+  const bloco = modeloDetalhe.content.firstElementChild.cloneNode(true);
+  const cadastro = dados.cadastro;
+
+  const campos = {
+    documento: bloco.querySelector(".d-documento"),
+    razaoSocial: bloco.querySelector(".d-razao"),
+    nomeFantasia: bloco.querySelector(".d-fantasia"),
+    tipo: bloco.querySelector(".d-tipo"),
+    exigenciaFiscal: bloco.querySelector(".d-exigencia"),
+    emails: bloco.querySelector(".d-emails"),
+    whatsapp: bloco.querySelector(".d-whatsapp"),
+    administradora: bloco.querySelector(".d-administradora"),
+    status: bloco.querySelector(".d-status"),
+    observacoes: bloco.querySelector(".d-observacoes"),
+  };
+
+  // Repõe o que está salvo — serve para abrir e para desistir da edição.
+  function preencher() {
+    campos.documento.value = formatarDocumento(cadastro.documento);
+    campos.razaoSocial.value = cadastro.razaoSocial;
+    campos.nomeFantasia.value = cadastro.nomeFantasia;
+    campos.tipo.value = cadastro.tipo;
+    campos.exigenciaFiscal.value = cadastro.exigenciaFiscal;
+    campos.emails.value = cadastro.emails;
+    campos.whatsapp.value = cadastro.whatsapp;
+    campos.administradora.value = cadastro.administradora;
+    campos.status.value = cadastro.status || "Ativo";
+    campos.observacoes.value = cadastro.observacoes;
+  }
+  preencher();
+
+  campos.documento.addEventListener("input", () => {
+    const digitos = campos.documento.value.replace(/\D/g, "").slice(0, 14);
+    campos.documento.value = digitos.length <= 11 ? formatarCPF(digitos) : formatarCNPJ(digitos);
+  });
+
+  desenharLeitura(bloco.querySelector(".d-locais"), dados.locais, "Nenhum endereço cadastrado.",
+    (local) => itemLeitura(local.nome, [local.endereco, local.bairroCidade, local.acesso]));
+
+  desenharLeitura(bloco.querySelector(".d-contatos"), dados.contatos, "Nenhum contato cadastrado.",
+    (contato) => itemLeitura(contato.nome, [
+      contato.cargo,
+      contato.whatsapps.join(" · "),
+      contato.emails.join(" · "),
+      contato.observacoes,
+    ]));
+
+  const botaoEditar = bloco.querySelector(".acao-editar");
+  const botaoSalvar = bloco.querySelector(".acao-salvar");
+  const botaoCancelar = bloco.querySelector(".acao-cancelar");
+  const botaoExcluir = bloco.querySelector(".acao-excluir");
+  const botaoFechar = bloco.querySelector(".acao-fechar");
+  const statusBox = bloco.querySelector(".detalhe-status");
+
+  const editaveis = Object.values(campos);
+
+  // Mantém "detalhe-status" na frente: sem ela o elemento perderia o nome pelo
+  // qual é encontrado, e passaria a existir só na memória deste bloco.
+  function mostrarStatus(tipo, mensagem) {
+    statusBox.textContent = mensagem;
+    statusBox.className = `detalhe-status status show ${tipo}`;
+  }
+
+  function limparStatus() {
+    statusBox.textContent = "";
+    statusBox.className = "detalhe-status status";
+  }
+
+  // Excluir só apaga no segundo clique; qualquer outra ação desarma.
+  function desarmarExclusao() {
+    botaoExcluir.classList.remove("confirmando");
+    botaoExcluir.textContent = "Excluir";
+  }
+
+  function modoEdicao(ligado) {
+    editaveis.forEach((campo) => (campo.disabled = !ligado));
+    botaoEditar.classList.toggle("hidden", ligado);
+    botaoSalvar.classList.toggle("hidden", !ligado);
+    botaoCancelar.classList.toggle("hidden", !ligado);
+    desarmarExclusao();
+    if (ligado) campos.razaoSocial.focus();
+  }
+
+  botaoEditar.addEventListener("click", () => {
+    limparStatus();
+    modoEdicao(true);
+  });
+
+  botaoCancelar.addEventListener("click", () => {
+    preencher();
+    modoEdicao(false);
+    limparStatus();
+  });
+
+  botaoFechar.addEventListener("click", () => fecharLinha(linha));
+
+  botaoSalvar.addEventListener("click", async () => {
+    const digitos = campos.documento.value.replace(/\D/g, "");
+
+    if (!campos.razaoSocial.value.trim()) {
+      mostrarStatus("error", "A razão social não pode ficar em branco.");
+      return;
+    }
+
+    if (!documentoValido(digitos)) {
+      mostrarStatus("error", "CPF/CNPJ inválido — confira os números.");
+      return;
+    }
+
+    botaoSalvar.disabled = true;
+    mostrarStatus("loading", "Salvando...");
+
+    try {
+      const resposta = await pedirAoN8n("atualizar-cadastro", {
+        id: cadastro.id,
+        documento: digitos,
+        razaoSocial: campos.razaoSocial.value.trim(),
+        nomeFantasia: campos.nomeFantasia.value.trim(),
+        tipo: campos.tipo.value,
+        exigenciaFiscal: campos.exigenciaFiscal.value,
+        emails: campos.emails.value.trim(),
+        whatsapp: campos.whatsapp.value.trim(),
+        administradora: campos.administradora.value.trim(),
+        status: campos.status.value,
+        observacoes: campos.observacoes.value.trim(),
+      });
+
+      if (!resposta || !resposta.ok) {
+        mostrarStatus("error", (resposta && resposta.mensagem) || "Não consegui salvar.");
+        return;
+      }
+
+      // Guarda o que foi salvo para "Cancelar" não voltar ao valor antigo, e
+      // atualiza a linha da lista sem precisar recarregar tudo do n8n.
+      Object.assign(cadastro, {
+        documento: digitos,
+        razaoSocial: campos.razaoSocial.value.trim(),
+        nomeFantasia: campos.nomeFantasia.value.trim(),
+        tipo: campos.tipo.value,
+        exigenciaFiscal: campos.exigenciaFiscal.value,
+        emails: campos.emails.value.trim(),
+        whatsapp: campos.whatsapp.value.trim(),
+        administradora: campos.administradora.value.trim(),
+        status: campos.status.value,
+        observacoes: campos.observacoes.value.trim(),
+      });
+
+      Object.assign(resumo, {
+        documento: cadastro.documento,
+        razaoSocial: cadastro.razaoSocial,
+        nomeFantasia: cadastro.nomeFantasia,
+      });
+      atualizarResumo(linha, resumo);
+
+      modoEdicao(false);
+      mostrarStatus("ok", resposta.mensagem || "Alterações salvas!");
+    } catch (err) {
+      mostrarStatus("error", "Não foi possível falar com o n8n.");
+    } finally {
+      botaoSalvar.disabled = false;
+    }
+  });
+
+  botaoExcluir.addEventListener("click", async () => {
+    if (!botaoExcluir.classList.contains("confirmando")) {
+      botaoExcluir.classList.add("confirmando");
+      botaoExcluir.textContent = "Confirmar exclusão";
+
+      const juntos = [];
+      if (dados.locais.length) {
+        juntos.push(`${dados.locais.length} endereço${dados.locais.length > 1 ? "s" : ""}`);
+      }
+      if (dados.contatos.length) {
+        juntos.push(`${dados.contatos.length} contato${dados.contatos.length > 1 ? "s" : ""}`);
+      }
+
+      mostrarStatus("error", juntos.length
+        ? `Isto apaga o cadastro e mais ${juntos.join(" e ")}. Clique de novo para confirmar.`
+        : "Isto apaga o cadastro de vez. Clique de novo para confirmar.");
+      return;
+    }
+
+    botaoExcluir.disabled = true;
+    mostrarStatus("loading", "Excluindo...");
+
+    try {
+      const resposta = await pedirAoN8n("excluir-cadastro", {
+        id: cadastro.id,
+        locaisIds: dados.locais.map((local) => local.id).join(","),
+        contatosIds: dados.contatos.map((contato) => contato.id).join(","),
+      });
+
+      if (!resposta || !resposta.ok) {
+        mostrarStatus("error", (resposta && resposta.mensagem) || "Não consegui excluir.");
+        desarmarExclusao();
+        return;
+      }
+
+      cadastros = cadastros.filter((item) => item.id !== cadastro.id);
+      desenharLista();
+      mostrarListaStatus("ok", resposta.mensagem || "Cadastro excluído.");
+    } catch (err) {
+      mostrarStatus("error", "Não foi possível falar com o n8n.");
+      desarmarExclusao();
+    } finally {
+      botaoExcluir.disabled = false;
+    }
+  });
+
+  return bloco;
+}
+
+buscaInput.addEventListener("input", () => {
+  if (listaCarregada) desenharLista();
+});
+
+recarregarBotao.addEventListener("click", carregarLista);
+
+// Carrega sozinho na primeira vez que a aba é aberta.
+document.querySelector('.subtab[data-subpage="consultar"]').addEventListener("click", () => {
+  if (!listaCarregada) carregarLista();
+});
+
 // ----- Tela de entrada (senha) -----
 
 function showStatus(kind, message) {

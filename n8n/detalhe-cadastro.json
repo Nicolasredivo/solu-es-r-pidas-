@@ -1,0 +1,316 @@
+{
+  "name": "App - Detalhe do cadastro",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "detalhe-cadastro",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "e0000000-0000-4000-8000-000000000009",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "e0000000-0000-4000-8000-000000000010"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e0000000-0000-4000-8000-000000000011",
+              "leftValue": "={{ $json.body.senha }}",
+              "rightValue": "TROQUE-ESTA-SENHA",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "e0000000-0000-4000-8000-000000000012",
+      "name": "Senha esta correta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
+        "options": {}
+      },
+      "id": "e0000000-0000-4000-8000-000000000013",
+      "name": "Responde senha incorreta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl5Joji6gAir3mNh",
+          "mode": "list",
+          "cachedResultName": "Entidades_Cadastradas"
+        },
+        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($json.body.id || '').replace(/[^a-zA-Z0-9]/g, '') + \"'\" }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "e0000000-0000-4000-8000-000000000014",
+      "name": "Busca cadastro",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblffVczCf1VeNxs7",
+          "mode": "list",
+          "cachedResultName": "Locais_Atendimento"
+        },
+        "filterByFormula": "={{ (() => { const d = String($('Recebe pedido do app').first().json.body.documento || '').replace(/\\D/g, ''); return d ? \"FIND('\" + d + \"', {Cliente_Vinculado} & '') > 0\" : 'FALSE()'; })() }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "e0000000-0000-4000-8000-000000000015",
+      "name": "Busca locais",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Volta para um item so, para a proxima busca rodar uma vez.\nreturn [{ json: { seguir: true } }];"
+      },
+      "id": "e0000000-0000-4000-8000-000000000016",
+      "name": "Guarda os locais",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblXXOEOCwQnC2qFX",
+          "mode": "list",
+          "cachedResultName": "Contatos_Solicitantes"
+        },
+        "filterByFormula": "={{ (() => { const d = String($('Recebe pedido do app').first().json.body.documento || '').replace(/\\D/g, ''); return d ? \"FIND('\" + d + \"', {Entidades_Vinculadas} & '') > 0\" : 'FALSE()'; })() }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "e0000000-0000-4000-8000-000000000017",
+      "name": "Busca contatos",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const uteis = (nome) => $(nome).all().filter((i) => i.json && i.json.id && !i.json.error);\n\nconst achado = uteis('Busca cadastro')[0];\nif (!achado) return [{ json: { ok: false, mensagem: 'Cadastro nao encontrado.' } }];\nconst f = achado.json.fields || {};\n\nconst porLinha = (texto) => String(texto || '').split('\\n').map((v) => v.trim()).filter(Boolean);\n\nconst locais = uteis('Busca locais').map((i) => {\n  const c = i.json.fields || {};\n  return {\n    id: i.json.id,\n    nome: c.Nome_do_Local || '',\n    endereco: c.Endereco_Completo || '',\n    bairroCidade: c.Bairro_Cidade || '',\n    acesso: c.Observacoes_Acesso || '',\n    status: c.Status || '',\n  };\n});\n\nconst contatos = uteis('Busca contatos').map((i) => {\n  const c = i.json.fields || {};\n  return {\n    id: i.json.id,\n    nome: c.Nome_Contato || '',\n    cargo: c.Cargo_Funcao || '',\n    whatsapps: porLinha(c.WhatsApps),\n    emails: porLinha(c.Emails),\n    observacoes: c.Observacoes || '',\n    status: c.Status || '',\n  };\n});\n\nreturn [{\n  json: {\n    ok: true,\n    cadastro: {\n      id: achado.json.id,\n      documento: f.CPF_CNPJ || '',\n      razaoSocial: f.Razao_Social_Nome || '',\n      nomeFantasia: f.Nome_Fantasia_Identificador || '',\n      tipo: f.Tipo_Documento || '',\n      exigenciaFiscal: f.Exigencia_Fiscal || '',\n      emails: f.Emails_Financeiro_NFE || '',\n      whatsapp: f.WhatsApp_Financeiro || '',\n      administradora: f.Administradora || '',\n      status: f.Status || '',\n      observacoes: f.Observacoes || '',\n    },\n    locais,\n    contatos,\n  },\n}];"
+      },
+      "id": "e0000000-0000-4000-8000-000000000018",
+      "name": "Monta detalhe",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "e0000000-0000-4000-8000-000000000019",
+      "name": "Responde ao app",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        -60
+      ]
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Senha esta correta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Senha esta correta?": {
+      "main": [
+        [
+          {
+            "node": "Busca cadastro",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde senha incorreta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca cadastro": {
+      "main": [
+        [
+          {
+            "node": "Busca locais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca locais": {
+      "main": [
+        [
+          {
+            "node": "Guarda os locais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guarda os locais": {
+      "main": [
+        [
+          {
+            "node": "Busca contatos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca contatos": {
+      "main": [
+        [
+          {
+            "node": "Monta detalhe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta detalhe": {
+      "main": [
+        [
+          {
+            "node": "Responde ao app",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

@@ -220,7 +220,90 @@
         </div>
 
         <div id="subpage-consultar" class="subpage hidden">
-          <p class="placeholder-text">Em construção — em breve você vai poder buscar cadastros aqui.</p>
+          <div class="busca-linha">
+            <input type="text" id="busca-cadastro" autocomplete="off"
+                   placeholder="Buscar por nome, CPF/CNPJ ou contato" />
+            <button type="button" id="recarregar-lista" class="botao-secundario">Atualizar</button>
+          </div>
+
+          <p id="lista-status" class="doc-hint"></p>
+          <div id="lista-cadastros"></div>
+
+          <!-- Molde de uma linha da lista -->
+          <template id="modelo-linha">
+            <div class="cadastro">
+              <button type="button" class="cadastro-resumo">
+                <span class="cadastro-doc"></span>
+                <span class="cadastro-razao"></span>
+                <span class="cadastro-extra"></span>
+              </button>
+              <div class="cadastro-detalhe hidden"></div>
+            </div>
+          </template>
+
+          <!-- Molde do cadastro aberto. Os campos nascem travados; o lápis
+               destrava, e só então o botão Salvar aparece. -->
+          <template id="modelo-detalhe">
+            <div class="detalhe">
+              <div class="detalhe-acoes">
+                <button type="button" class="acao-editar" title="Editar cadastro">✏️</button>
+                <button type="button" class="acao-salvar botao-secundario hidden">Salvar</button>
+                <button type="button" class="acao-cancelar botao-secundario hidden">Cancelar</button>
+                <button type="button" class="acao-excluir botao-secundario">Excluir</button>
+                <button type="button" class="acao-fechar botao-secundario">Fechar</button>
+              </div>
+
+              <div class="detalhe-status status"></div>
+
+              <label>CPF / CNPJ</label>
+              <input type="text" class="d-documento" disabled />
+
+              <label>Razão social / Nome</label>
+              <input type="text" class="d-razao" disabled />
+
+              <label>Nome fantasia / Identificador</label>
+              <input type="text" class="d-fantasia" disabled />
+
+              <label>Tipo</label>
+              <select class="d-tipo" disabled>
+                <option value="">—</option>
+                <option>CNPJ - Condomínio</option>
+                <option>CNPJ - Empresa</option>
+                <option>CPF - Pessoa Física</option>
+              </select>
+
+              <label>Exigência fiscal</label>
+              <select class="d-exigencia" disabled>
+                <option value="">—</option>
+                <option>Exige Nota Fiscal</option>
+                <option>Apenas Recibo</option>
+              </select>
+
+              <label>E-mails (financeiro / NF-e)</label>
+              <input type="text" class="d-emails" disabled />
+
+              <label>WhatsApp financeiro</label>
+              <input type="text" class="d-whatsapp" disabled />
+
+              <label>Administradora</label>
+              <input type="text" class="d-administradora" disabled />
+
+              <label>Status</label>
+              <select class="d-status" disabled>
+                <option>Ativo</option>
+                <option>Inativo</option>
+              </select>
+
+              <label>Observações</label>
+              <textarea class="d-observacoes" rows="3" disabled></textarea>
+
+              <label class="rotulo-espacado">Endereços</label>
+              <div class="d-locais lista-somente-leitura"></div>
+
+              <label class="rotulo-espacado">Contatos</label>
+              <div class="d-contatos lista-somente-leitura"></div>
+            </div>
+          </template>
         </div>
       </div>
     </main>

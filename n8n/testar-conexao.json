@@ -10,11 +10,14 @@
           "allowedOrigins": "*"
         }
       },
-      "id": "a1000000-0000-4000-8000-000000000001",
+      "id": "a8cb3a7b-3654-46a2-b1fb-c3576602494a",
       "name": "Recebe pedido do app",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 0],
+      "position": [
+        224,
+        768
+      ],
       "webhookId": "b1000000-0000-4000-8000-000000000001"
     },
     {
@@ -43,11 +46,14 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "a1000000-0000-4000-8000-000000000002",
+      "id": "aee9ebf0-4b1a-420a-a48d-0a6d7d7ef7d9",
       "name": "Senha esta correta?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [220, 0]
+      "position": [
+        448,
+        768
+      ]
     },
     {
       "parameters": {
@@ -55,11 +61,14 @@
         "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Conectado com sucesso!\"\n}",
         "options": {}
       },
-      "id": "a1000000-0000-4000-8000-000000000003",
+      "id": "a689a3ad-9353-4106-aa9b-e7f9fd120c8a",
       "name": "Responde OK",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [460, -100]
+      "position": [
+        672,
+        672
+      ]
     },
     {
       "parameters": {
@@ -67,11 +76,14 @@
         "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
         "options": {}
       },
-      "id": "a1000000-0000-4000-8000-000000000004",
+      "id": "f25bf208-1df1-4756-97ce-735102f6cade",
       "name": "Responde senha incorreta",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [460, 100]
+      "position": [
+        672,
+        864
+      ]
     }
   ],
   "connections": {
@@ -106,7 +118,9 @@
     }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
   },
   "pinData": {}
 }

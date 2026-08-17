@@ -55,15 +55,21 @@ Base **"cadastro"** (`app6PyYmtFduIMp7B`), com 3 tabelas ligadas entre si:
 Existe também uma base maior, "ERP Soluções Rápidas - Produção", ainda não usada
 pelo app.
 
-## Workflows do n8n (feitos e testados em 12/08/2026)
+## Workflows do n8n
 
-Os três estão criados, publicados e testados de ponta a ponta:
+Todos criados, publicados e testados de ponta a ponta:
 
 | Workflow | Caminho do webhook | ID no n8n |
 |---|---|---|
 | `App - Testar conexao` | `/webhook/testar-conexao` | `cgtZoemwpad0tVTN` |
 | `App - Consultar documento` | `/webhook/consultar-documento` | `jIZWUEwHUU8KnCVR` |
 | `App - Salvar entidade` | `/webhook/salvar-entidade` | `dFV53YYjsktzuEWw` |
+| `App - Listar cadastros` | `/webhook/listar-cadastros` | `cfcdcr5qYWIVtko2` |
+| `App - Detalhe do cadastro` | `/webhook/detalhe-cadastro` | `fknumisB42zBZNjS` |
+| `App - Atualizar cadastro` | `/webhook/atualizar-cadastro` | `1UbdhChF8Pfse0of` |
+| `App - Excluir cadastro` | `/webhook/excluir-cadastro` | `Zeyk3CwEDKeHjf3G` |
+
+Cada arquivo em `n8n/` tem o nome do caminho do webhook correspondente.
 
 As cópias em `n8n/*.json` são só backup/referência. **Nelas a senha aparece
 como `TROQUE-ESTA-SENHA` de propósito** — o repositório é público e a senha
@@ -100,6 +106,39 @@ Foi a falta disso que travou o projeto antes. Funciona assim:
 - Os nomes das opções no app batem exatamente com os do Airtable. Se mudar um
   lado, tem que mudar o outro.
 
+## Aba Consultar (feita em 16/08/2026)
+
+Lista todos os cadastros, um por linha: CPF/CNPJ, razão social, e embaixo
+nome fantasia · contato. Clicar abre o cadastro ali mesmo; **um aberto por vez**.
+
+Aberto, os campos nascem travados e parecem texto comum (o CSS tira borda e
+fundo de campo desabilitado). O **lápis** destrava e só então aparecem Salvar e
+Cancelar. **Excluir precisa de dois cliques**: o primeiro vira "Confirmar
+exclusão" em vermelho e avisa quantos endereços e contatos vão junto.
+
+**Editar mexe só nos dados do cliente.** Endereços e contatos aparecem só para
+ver — foi decisão consciente, para sair funcionando antes. Editá-los é o
+próximo passo natural.
+
+**Excluir apaga em cascata**: endereços e contatos primeiro, o cliente por
+último, para não sobrar endereço apontando para um cliente que não existe mais.
+Os IDs vêm do próprio app (ele acabou de abrir o cadastro), então o n8n não
+precisa procurar de novo.
+
+Detalhes que custaram tempo:
+
+- **O nó do Airtable roda uma vez por item que chega.** No detalhe, três
+  endereços fariam a busca de contatos rodar três vezes. Por isso existe o nó
+  `Guarda os locais`, que volta para um item só.
+- **`FIND('', {campo})` casa com tudo.** As buscas por ligação usam o CPF/CNPJ
+  (campo principal da tabela de Entidades). Documento vazio viraria uma busca
+  que traz a tabela inteira, então nesse caso a fórmula vira `FALSE()`.
+- **Excluir usa o nó HTTP**, não o do Airtable: o endereço da chamada pode
+  mudar por item, então um nó só apaga nas três tabelas. O Airtable apaga no
+  máximo 10 por chamada, e o código já divide em lotes.
+- Campo de status na tela **precisa manter a própria classe** ao mudar de cor.
+  Reescrever `className` inteiro apagava o nome pelo qual o elemento é achado.
+
 ## PENDENTE AGORA (é por aqui que se continua)
 
 - **Apagar na mão, no Airtable, os 8 campos velhos de Contatos_Solicitantes**:
@@ -107,7 +146,7 @@ Foi a falta disso que travou o projeto antes. Funciona assim:
   `WhatsApps` e `Emails`, estão vazios e o app não usa mais. A API do Airtable
   **não apaga campo** — só dá para fazer pela tela: clicar na setinha do
   cabeçalho da coluna → "Delete field".
-- A aba "Consultar" continua vazia.
+- Editar endereços e contatos pela aba Consultar (hoje só dá para ver).
 
 ## Aviso da Receita no cadastro (feito em 12/08/2026)
 

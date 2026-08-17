@@ -392,7 +392,7 @@ input[type="text"]:focus {
   line-height: 1;
 }
 
-.contato select {
+select {
   width: 100%;
   padding: 12px 14px;
   border-radius: 10px;
@@ -403,14 +403,150 @@ input[type="text"]:focus {
   margin-bottom: 16px;
 }
 
-.contato select:focus {
+select:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+/* Campo travado: some a borda de digitação para parecer texto, não formulário */
+input:disabled,
+textarea:disabled,
+select:disabled {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+  padding-left: 0;
+  opacity: 1;
+  -webkit-text-fill-color: var(--text);
 }
 
 /* Rótulo que vem logo depois de um botão "+ Adicionar" precisa respirar */
 .rotulo-espacado {
   margin-top: 18px;
+}
+
+/* ----- Aba Consultar ----- */
+
+.busca-linha {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.busca-linha input {
+  margin-bottom: 0;
+}
+
+.busca-linha button {
+  width: auto;
+  flex-shrink: 0;
+}
+
+/* Uma linha por cadastro. O resumo é o próprio botão que abre o detalhe. */
+.cadastro {
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.cadastro-resumo {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 12px 14px;
+  font-weight: 400;
+  font-size: 0.95rem;
+}
+
+.cadastro-resumo:hover {
+  background: rgba(91, 141, 239, 0.08);
+}
+
+.cadastro.aberto .cadastro-resumo {
+  background: rgba(91, 141, 239, 0.12);
+}
+
+.cadastro-doc {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.cadastro-razao {
+  display: block;
+  font-weight: 600;
+  margin: 2px 0;
+}
+
+.cadastro-extra {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.cadastro-detalhe {
+  border-top: 1px solid #2c3153;
+  padding: 14px;
+}
+
+.detalhe-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.detalhe-acoes button {
+  width: auto;
+}
+
+/* O lápis fica na esquerda, como um botão só de ícone */
+.acao-editar {
+  padding: 8px 12px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.acao-fechar {
+  margin-left: auto;
+}
+
+/* Segundo clique em Excluir é o que confirma de verdade */
+.acao-excluir.confirmando {
+  background: var(--error);
+  border-color: var(--error);
+  color: white;
+}
+
+.lista-somente-leitura {
+  margin-bottom: 16px;
+}
+
+.item-leitura {
+  border-left: 2px solid #2c3153;
+  padding: 2px 0 2px 10px;
+  margin-bottom: 10px;
+  font-size: 0.88rem;
+}
+
+.item-leitura strong {
+  display: block;
+  font-weight: 600;
+}
+
+.item-leitura span {
+  display: block;
+  color: var(--muted);
+}
+
+.vazio-leitura {
+  color: var(--muted);
+  font-size: 0.88rem;
+  margin: 0 0 4px;
 }
 
 /* Aviso de cadastro já existente */
