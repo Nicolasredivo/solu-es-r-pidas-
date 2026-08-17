@@ -515,11 +515,16 @@ select:disabled {
   margin-left: auto;
 }
 
-/* Segundo clique em Excluir é o que confirma de verdade */
-.acao-excluir.confirmando {
+/* Botão armado: o segundo clique é o que confirma de verdade */
+.confirmando {
   background: var(--error);
   border-color: var(--error);
   color: white;
+}
+
+/* Bloco em modo leitura: os botões de mexer somem até destravar a edição */
+.somente-leitura button {
+  display: none;
 }
 
 .lista-somente-leitura {

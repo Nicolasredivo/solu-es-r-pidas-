@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Limpa o que veio do app antes de gravar.\n// As listas do Airtable (Tipo, Exigencia, Status) recusam texto vazio,\n// entao mando null nesses casos, que o Airtable entende como 'em branco'.\nconst b = $json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => texto(v) || null;\n\nreturn [{\n  json: {\n    documento: texto(b.documento).replace(/\\D/g, ''),\n    razaoSocial: texto(b.razaoSocial),\n    nomeFantasia: texto(b.nomeFantasia),\n    tipo: lista(b.tipo),\n    exigenciaFiscal: lista(b.exigenciaFiscal),\n    emails: texto(b.emails),\n    whatsapp: texto(b.whatsapp),\n    administradora: texto(b.administradora),\n    status: lista(b.status) || 'Ativo',\n    observacoes: texto(b.observacoes),\n  },\n}];"
+        "jsCode": "// Limpa o que veio do app antes de gravar.\n// As listas do Airtable (Tipo, Exigencia, Status) recusam texto vazio,\n// entao mando null nesses casos, que o Airtable entende como 'em branco'.\nconst b = $json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => texto(v) || null;\n\nreturn [{\n  json: {\n    documento: texto(b.documento).replace(/\\D/g, ''),\n    razaoSocial: texto(b.razaoSocial),\n    nomeFantasia: texto(b.nomeFantasia),\n    tipo: lista(b.tipo),\n    exigenciaFiscal: lista(b.exigenciaFiscal),\n    emails: texto(b.emails),\n    // Telefone que consta no CNPJ, nao o do financeiro.\n    whatsappCnpj: texto(b.whatsappCnpj),\n    administradora: texto(b.administradora),\n    empresaSindicos: texto(b.empresaSindicos),\n    status: lista(b.status) || 'Ativo',\n    observacoes: texto(b.observacoes),\n  },\n}];"
       },
       "id": "50000000-0000-4000-8000-000000000007",
       "name": "Prepara dados",
@@ -108,10 +108,11 @@
             "Tipo_Documento": "={{ $json.tipo }}",
             "Exigencia_Fiscal": "={{ $json.exigenciaFiscal }}",
             "Emails_Financeiro_NFE": "={{ $json.emails }}",
-            "WhatsApp_Financeiro": "={{ $json.whatsapp }}",
             "Administradora": "={{ $json.administradora }}",
             "Status": "={{ $json.status }}",
-            "Observacoes": "={{ $json.observacoes }}"
+            "Observacoes": "={{ $json.observacoes }}",
+            "WhatsApp_CNPJ": "={{ $json.whatsappCnpj }}",
+            "Empresa_Sindicos": "={{ $json.empresaSindicos }}"
           },
           "matchingColumns": [],
           "schema": [
@@ -182,17 +183,6 @@
               "removed": false
             },
             {
-              "id": "WhatsApp_Financeiro",
-              "displayName": "WhatsApp_Financeiro",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
               "id": "Administradora",
               "displayName": "Administradora",
               "required": false,
@@ -239,6 +229,28 @@
             {
               "id": "Observacoes",
               "displayName": "Observacoes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "WhatsApp_CNPJ",
+              "displayName": "WhatsApp_CNPJ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Empresa_Sindicos",
+              "displayName": "Empresa_Sindicos",
               "required": false,
               "defaultMatch": false,
               "canBeUsedToMatch": true,

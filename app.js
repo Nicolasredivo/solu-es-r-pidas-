@@ -90,8 +90,9 @@ const formEntidade = document.getElementById("form-entidade");
 const razaoSocialInput = document.getElementById("razao-social");
 const nomeFantasiaInput = document.getElementById("nome-fantasia");
 const emailsInput = document.getElementById("emails");
-const whatsappInput = document.getElementById("whatsapp");
+const whatsappCnpjInput = document.getElementById("whatsapp-cnpj");
 const administradoraInput = document.getElementById("administradora");
+const empresaSindicosInput = document.getElementById("empresa-sindicos");
 const observacoesInput = document.getElementById("observacoes");
 const locaisBox = document.getElementById("locais");
 const adicionarLocalBotao = document.getElementById("adicionar-local");
@@ -101,6 +102,7 @@ const adicionarContatoBotao = document.getElementById("adicionar-contato");
 const modeloContato = document.getElementById("modelo-contato");
 const modeloCanal = document.getElementById("modelo-canal");
 const salvarBotao = document.getElementById("salvar-entidade");
+const cancelarCadastroBotao = document.getElementById("cancelar-cadastro");
 const salvarStatus = document.getElementById("salvar-status");
 
 function formatarCPF(digitos) {
@@ -235,10 +237,13 @@ documentoInput.addEventListener("input", () => {
 
 // ----- Locais de atendimento (um bloco por endereço) -----
 
+// Todas estas funções recebem a caixa onde os blocos ficam, porque as mesmas
+// servem ao formulário de cadastro e à edição na aba Consultar.
+
 // O número só aparece quando há mais de um: com um endereço só, "Endereço 1"
 // seria informação sobrando.
-function renumerarLocais() {
-  const blocos = locaisBox.querySelectorAll(".local");
+function renumerarLocais(caixa) {
+  const blocos = caixa.querySelectorAll(".local");
   blocos.forEach((bloco, i) => {
     bloco.querySelector(".local-titulo").textContent =
       blocos.length > 1 ? `Endereço ${i + 1}` : "Endereço";
@@ -247,32 +252,44 @@ function renumerarLocais() {
   });
 }
 
-function adicionarLocal(comFoco) {
+function adicionarLocal(caixa, comFoco, dados) {
   const bloco = modeloLocal.content.firstElementChild.cloneNode(true);
+
+  if (dados) {
+    // Guarda o código do registro no Airtable: é o que diz, na hora de salvar,
+    // se este endereço deve ser alterado ou criado do zero.
+    if (dados.id) bloco.dataset.id = dados.id;
+    bloco.querySelector(".local-nome").value = dados.nome || "";
+    bloco.querySelector(".local-endereco").value = dados.endereco || "";
+    bloco.querySelector(".local-bairro").value = dados.bairroCidade || "";
+    bloco.querySelector(".local-acesso").value = dados.acesso || "";
+  }
 
   bloco.querySelector(".remover-local").addEventListener("click", () => {
     bloco.remove();
-    renumerarLocais();
+    renumerarLocais(caixa);
   });
 
-  locaisBox.appendChild(bloco);
-  renumerarLocais();
+  caixa.appendChild(bloco);
+  renumerarLocais(caixa);
 
   // Só puxa o cursor quando foi o usuário que pediu o bloco. Ao limpar o
   // formulário isso roubaria o foco de quem ainda está digitando o CPF/CNPJ.
   if (comFoco) bloco.querySelector(".local-nome").focus();
 }
 
-function reiniciarLocais() {
-  locaisBox.innerHTML = "";
-  adicionarLocal(false);
+function reiniciarLocais(caixa, lista) {
+  caixa.innerHTML = "";
+  const itens = lista && lista.length ? lista : [null];
+  itens.forEach((dados) => adicionarLocal(caixa, false, dados));
 }
 
 // Bloco totalmente em branco não vira registro no Airtable — quem abriu um
 // endereço a mais e desistiu não deve gerar lixo na tabela.
-function locaisPreenchidos() {
-  return [...locaisBox.querySelectorAll(".local")]
+function locaisPreenchidos(caixa) {
+  return [...caixa.querySelectorAll(".local")]
     .map((bloco) => ({
+      id: bloco.dataset.id || "",
       nome: bloco.querySelector(".local-nome").value.trim(),
       endereco: bloco.querySelector(".local-endereco").value.trim(),
       bairroCidade: bloco.querySelector(".local-bairro").value.trim(),
@@ -281,7 +298,7 @@ function locaisPreenchidos() {
     .filter((local) => local.nome || local.endereco || local.bairroCidade || local.acesso);
 }
 
-adicionarLocalBotao.addEventListener("click", () => adicionarLocal(true));
+adicionarLocalBotao.addEventListener("click", () => adicionarLocal(locaisBox, true));
 
 // ----- Contatos / solicitantes -----
 //
@@ -297,7 +314,7 @@ function renumerarCanais(lista) {
   });
 }
 
-function adicionarCanal(lista, tipo, comFoco) {
+function adicionarCanal(lista, tipo, comFoco, valor) {
   const linha = modeloCanal.content.firstElementChild.cloneNode(true);
   const campo = linha.querySelector(".canal-valor");
 
@@ -310,6 +327,8 @@ function adicionarCanal(lista, tipo, comFoco) {
     campo.inputMode = "email";
   }
 
+  if (valor) campo.value = valor;
+
   linha.querySelector(".remover-canal").addEventListener("click", () => {
     linha.remove();
     renumerarCanais(lista);
@@ -320,14 +339,20 @@ function adicionarCanal(lista, tipo, comFoco) {
   if (comFoco) campo.focus();
 }
 
+function preencherCanais(lista, tipo, valores) {
+  lista.innerHTML = "";
+  const itens = valores && valores.length ? valores : [""];
+  itens.forEach((valor) => adicionarCanal(lista, tipo, false, valor));
+}
+
 function valoresDosCanais(lista) {
   return [...lista.querySelectorAll(".canal-valor")]
     .map((campo) => campo.value.trim())
     .filter(Boolean);
 }
 
-function renumerarContatos() {
-  const blocos = contatosBox.querySelectorAll(".contato");
+function renumerarContatos(caixa) {
+  const blocos = caixa.querySelectorAll(".contato");
   blocos.forEach((bloco, i) => {
     bloco.querySelector(".contato-titulo").textContent =
       blocos.length > 1 ? `Contato ${i + 1}` : "Contato";
@@ -335,14 +360,21 @@ function renumerarContatos() {
   });
 }
 
-function adicionarContato(comFoco) {
+function adicionarContato(caixa, comFoco, dados) {
   const bloco = modeloContato.content.firstElementChild.cloneNode(true);
   const whatsapps = bloco.querySelector(".contato-whatsapps");
   const emails = bloco.querySelector(".contato-emails");
 
+  if (dados) {
+    if (dados.id) bloco.dataset.id = dados.id;
+    bloco.querySelector(".contato-nome").value = dados.nome || "";
+    bloco.querySelector(".contato-cargo").value = dados.cargo || "";
+    bloco.querySelector(".contato-obs").value = dados.observacoes || "";
+  }
+
   // Cada contato já nasce com uma linha de cada, senão o campo fica invisível.
-  adicionarCanal(whatsapps, "whatsapp", false);
-  adicionarCanal(emails, "email", false);
+  preencherCanais(whatsapps, "whatsapp", dados && dados.whatsapps);
+  preencherCanais(emails, "email", dados && dados.emails);
 
   bloco.querySelector(".adicionar-whatsapp")
     .addEventListener("click", () => adicionarCanal(whatsapps, "whatsapp", true));
@@ -351,22 +383,24 @@ function adicionarContato(comFoco) {
 
   bloco.querySelector(".remover-contato").addEventListener("click", () => {
     bloco.remove();
-    renumerarContatos();
+    renumerarContatos(caixa);
   });
 
-  contatosBox.appendChild(bloco);
-  renumerarContatos();
+  caixa.appendChild(bloco);
+  renumerarContatos(caixa);
   if (comFoco) bloco.querySelector(".contato-nome").focus();
 }
 
-function reiniciarContatos() {
-  contatosBox.innerHTML = "";
-  adicionarContato(false);
+function reiniciarContatos(caixa, lista) {
+  caixa.innerHTML = "";
+  const itens = lista && lista.length ? lista : [null];
+  itens.forEach((dados) => adicionarContato(caixa, false, dados));
 }
 
-function contatosPreenchidos() {
-  return [...contatosBox.querySelectorAll(".contato")]
+function contatosPreenchidos(caixa) {
+  return [...caixa.querySelectorAll(".contato")]
     .map((bloco) => ({
+      id: bloco.dataset.id || "",
       nome: bloco.querySelector(".contato-nome").value.trim(),
       cargo: bloco.querySelector(".contato-cargo").value,
       whatsapps: valoresDosCanais(bloco.querySelector(".contato-whatsapps")),
@@ -376,18 +410,29 @@ function contatosPreenchidos() {
     .filter((c) => c.nome || c.whatsapps.length || c.emails.length || c.observacoes);
 }
 
-adicionarContatoBotao.addEventListener("click", () => adicionarContato(true));
+adicionarContatoBotao.addEventListener("click", () => adicionarContato(contatosBox, true));
+
+// Trava ou destrava um pedaço da tela inteiro. Em modo leitura os botões somem
+// pelo CSS, em vez de esconder um por um — assim a renumeração não briga com
+// a visibilidade quando o bloco volta a ser editável.
+function travarBlocos(caixa, travado) {
+  caixa.classList.toggle("somente-leitura", travado);
+  caixa.querySelectorAll("input, select, textarea").forEach((campo) => {
+    campo.disabled = travado;
+  });
+}
 
 // ----- Consulta ao n8n: já existe? e dados da Receita -----
 
 let documentoAtual = "";
 
 function limparFormulario() {
-  [razaoSocialInput, nomeFantasiaInput, emailsInput, whatsappInput, administradoraInput,
-   observacoesInput].forEach((campo) => (campo.value = ""));
+  [razaoSocialInput, nomeFantasiaInput, emailsInput, whatsappCnpjInput, administradoraInput,
+   empresaSindicosInput, observacoesInput].forEach((campo) => (campo.value = ""));
   grupoExigencia.querySelectorAll(".opcao").forEach((b) => b.classList.remove("active"));
-  reiniciarLocais();
-  reiniciarContatos();
+  reiniciarLocais(locaisBox);
+  reiniciarContatos(contatosBox);
+  desarmarCancelamento();
   salvarStatus.className = "status";
 }
 
@@ -428,11 +473,15 @@ async function consultarDocumento(digitos) {
       return;
     }
 
+    // O endereço da Receita vira o primeiro bloco, já preenchido. Continua
+    // dando para apagá-lo ou acrescentar outros normalmente.
+    if (dados.endereco) reiniciarLocais(locaisBox, [dados.endereco]);
+
     if (dados.receita) {
       razaoSocialInput.value = dados.receita.razaoSocial || "";
       nomeFantasiaInput.value = dados.receita.nomeFantasia || "";
       emailsInput.value = dados.receita.email || "";
-      whatsappInput.value = dados.receita.telefone || "";
+      whatsappCnpjInput.value = dados.receita.telefone || "";
       mostrarDica("ok", "Dados encontrados na Receita — confira antes de salvar.");
     } else if (dados.avisoReceita) {
       // A Receita não preencheu e o n8n explicou por quê. Só ofereço tentar de
@@ -455,8 +504,33 @@ tentarReceitaBotao.addEventListener("click", () => consultarDocumento(documentoA
 
 // ----- Salvar a entidade -----
 
+// Cancelar pede dois cliques, como o Excluir: o cadastro costuma ter bastante
+// coisa digitada, e um toque sem querer apagaria tudo.
+function desarmarCancelamento() {
+  cancelarCadastroBotao.classList.remove("confirmando");
+  cancelarCadastroBotao.textContent = "Cancelar";
+}
+
+cancelarCadastroBotao.addEventListener("click", () => {
+  if (!cancelarCadastroBotao.classList.contains("confirmando")) {
+    cancelarCadastroBotao.classList.add("confirmando");
+    cancelarCadastroBotao.textContent = "Confirmar cancelamento";
+    salvarStatus.textContent = "Isto apaga o que você digitou. Clique de novo para confirmar.";
+    salvarStatus.className = "status show error";
+    return;
+  }
+
+  limparFormulario();
+  esconderFormulario();
+  documentoInput.value = "";
+  documentoAtual = "";
+  tipoCnpjBox.classList.add("hidden");
+  mostrarDica("neutral", "");
+});
+
 formEntidade.addEventListener("submit", async (event) => {
   event.preventDefault();
+  desarmarCancelamento();
 
   const tipo =
     documentoAtual.length === 11 ? "CPF - Pessoa Física" : escolhaDoGrupo(grupoTipo);
@@ -482,14 +556,15 @@ formEntidade.addEventListener("submit", async (event) => {
         nomeFantasia: nomeFantasiaInput.value.trim(),
         exigenciaFiscal: escolhaDoGrupo(grupoExigencia),
         emails: emailsInput.value.trim(),
-        whatsapp: whatsappInput.value.trim(),
+        whatsappCnpj: whatsappCnpjInput.value.trim(),
         administradora: administradoraInput.value.trim(),
+        empresaSindicos: empresaSindicosInput.value.trim(),
         status: escolhaDoGrupo(grupoStatus),
         observacoes: observacoesInput.value.trim(),
         // Vai como texto JSON dentro de um campo só, para o envio continuar
         // sendo um formulário simples (sem a verificação extra do navegador).
-        locais: JSON.stringify(locaisPreenchidos()),
-        contatos: JSON.stringify(contatosPreenchidos()),
+        locais: JSON.stringify(locaisPreenchidos(locaisBox)),
+        contatos: JSON.stringify(contatosPreenchidos(contatosBox)),
       }),
     });
 
@@ -636,7 +711,7 @@ function fecharLinha(linha) {
   caixa.innerHTML = "";
 }
 
-async function abrirLinha(linha, caixa, cadastro) {
+async function abrirLinha(linha, caixa, cadastro, avisoDepois) {
   // Um aberto por vez: dois cadastros abertos ao mesmo tempo confundem mais do
   // que ajudam, ainda mais no celular.
   listaBox.querySelectorAll(".cadastro.aberto").forEach(fecharLinha);
@@ -662,43 +737,10 @@ async function abrirLinha(linha, caixa, cadastro) {
   }
 
   caixa.textContent = "";
-  caixa.appendChild(montarDetalhe(linha, cadastro, dados));
+  caixa.appendChild(montarDetalhe(linha, cadastro, dados, avisoDepois));
 }
 
-// Item só de leitura (endereço ou contato). Usa textContent de propósito: o
-// conteúdo vem do Airtable e não deve poder virar HTML.
-function itemLeitura(titulo, linhas) {
-  const item = document.createElement("div");
-  item.className = "item-leitura";
-
-  const forte = document.createElement("strong");
-  forte.textContent = titulo || "(sem nome)";
-  item.appendChild(forte);
-
-  linhas.filter(Boolean).forEach((texto) => {
-    const linha = document.createElement("span");
-    linha.textContent = texto;
-    item.appendChild(linha);
-  });
-
-  return item;
-}
-
-function desenharLeitura(caixa, itens, aviso, montar) {
-  caixa.textContent = "";
-
-  if (!itens.length) {
-    const vazio = document.createElement("p");
-    vazio.className = "vazio-leitura";
-    vazio.textContent = aviso;
-    caixa.appendChild(vazio);
-    return;
-  }
-
-  itens.forEach((item) => caixa.appendChild(montar(item)));
-}
-
-function montarDetalhe(linha, resumo, dados) {
+function montarDetalhe(linha, resumo, dados, avisoDepois) {
   const bloco = modeloDetalhe.content.firstElementChild.cloneNode(true);
   const cadastro = dados.cadastro;
 
@@ -709,8 +751,9 @@ function montarDetalhe(linha, resumo, dados) {
     tipo: bloco.querySelector(".d-tipo"),
     exigenciaFiscal: bloco.querySelector(".d-exigencia"),
     emails: bloco.querySelector(".d-emails"),
-    whatsapp: bloco.querySelector(".d-whatsapp"),
+    whatsappCnpj: bloco.querySelector(".d-whatsapp-cnpj"),
     administradora: bloco.querySelector(".d-administradora"),
+    empresaSindicos: bloco.querySelector(".d-empresa-sindicos"),
     status: bloco.querySelector(".d-status"),
     observacoes: bloco.querySelector(".d-observacoes"),
   };
@@ -723,8 +766,9 @@ function montarDetalhe(linha, resumo, dados) {
     campos.tipo.value = cadastro.tipo;
     campos.exigenciaFiscal.value = cadastro.exigenciaFiscal;
     campos.emails.value = cadastro.emails;
-    campos.whatsapp.value = cadastro.whatsapp;
+    campos.whatsappCnpj.value = cadastro.whatsappCnpj || "";
     campos.administradora.value = cadastro.administradora;
+    campos.empresaSindicos.value = cadastro.empresaSindicos || "";
     campos.status.value = cadastro.status || "Ativo";
     campos.observacoes.value = cadastro.observacoes;
   }
@@ -735,16 +779,45 @@ function montarDetalhe(linha, resumo, dados) {
     campos.documento.value = digitos.length <= 11 ? formatarCPF(digitos) : formatarCNPJ(digitos);
   });
 
-  desenharLeitura(bloco.querySelector(".d-locais"), dados.locais, "Nenhum endereço cadastrado.",
-    (local) => itemLeitura(local.nome, [local.endereco, local.bairroCidade, local.acesso]));
+  const caixaLocais = bloco.querySelector(".d-locais");
+  const caixaContatos = bloco.querySelector(".d-contatos");
+  const botaoNovoLocal = bloco.querySelector(".d-adicionar-local");
+  const botaoNovoContato = bloco.querySelector(".d-adicionar-contato");
 
-  desenharLeitura(bloco.querySelector(".d-contatos"), dados.contatos, "Nenhum contato cadastrado.",
-    (contato) => itemLeitura(contato.nome, [
-      contato.cargo,
-      contato.whatsapps.join(" · "),
-      contato.emails.join(" · "),
-      contato.observacoes,
-    ]));
+  // Os códigos que já existem no Airtable. O que sumir desta lista na hora de
+  // salvar é o que o usuário removeu — e precisa ser apagado lá também.
+  const idsLocaisOriginais = dados.locais.map((local) => local.id);
+  const idsContatosOriginais = dados.contatos.map((contato) => contato.id);
+
+  function avisarSeVazio(caixa, seletor, texto) {
+    caixa.querySelectorAll(".vazio-leitura").forEach((aviso) => aviso.remove());
+    if (caixa.querySelector(seletor)) return;
+
+    const vazio = document.createElement("p");
+    vazio.className = "vazio-leitura";
+    vazio.textContent = texto;
+    caixa.appendChild(vazio);
+  }
+
+  function mostrarVazios() {
+    avisarSeVazio(caixaLocais, ".local", "Nenhum endereço cadastrado.");
+    avisarSeVazio(caixaContatos, ".contato", "Nenhum contato cadastrado.");
+  }
+
+  // Repõe endereços e contatos como estão salvos — abrir e desistir usam isto.
+  function preencherLigados() {
+    caixaLocais.innerHTML = "";
+    dados.locais.forEach((local) => adicionarLocal(caixaLocais, false, local));
+
+    caixaContatos.innerHTML = "";
+    dados.contatos.forEach((contato) => adicionarContato(caixaContatos, false, contato));
+
+    mostrarVazios();
+  }
+  preencherLigados();
+
+  botaoNovoLocal.addEventListener("click", () => adicionarLocal(caixaLocais, true));
+  botaoNovoContato.addEventListener("click", () => adicionarContato(caixaContatos, true));
 
   const botaoEditar = bloco.querySelector(".acao-editar");
   const botaoSalvar = bloco.querySelector(".acao-salvar");
@@ -778,6 +851,23 @@ function montarDetalhe(linha, resumo, dados) {
     botaoEditar.classList.toggle("hidden", ligado);
     botaoSalvar.classList.toggle("hidden", !ligado);
     botaoCancelar.classList.toggle("hidden", !ligado);
+    botaoNovoLocal.classList.toggle("hidden", !ligado);
+    botaoNovoContato.classList.toggle("hidden", !ligado);
+
+    travarBlocos(caixaLocais, !ligado);
+    travarBlocos(caixaContatos, !ligado);
+
+    if (ligado) {
+      // Sem nenhum endereço ainda, entrar em edição já abre um bloco em branco:
+      // senão o botão "+ Adicionar" seria a única pista do que fazer.
+      caixaLocais.querySelectorAll(".vazio-leitura").forEach((aviso) => aviso.remove());
+      caixaContatos.querySelectorAll(".vazio-leitura").forEach((aviso) => aviso.remove());
+      if (!caixaLocais.querySelector(".local")) adicionarLocal(caixaLocais, false);
+      if (!caixaContatos.querySelector(".contato")) adicionarContato(caixaContatos, false);
+    } else {
+      mostrarVazios();
+    }
+
     desarmarExclusao();
     if (ligado) campos.razaoSocial.focus();
   }
@@ -789,6 +879,7 @@ function montarDetalhe(linha, resumo, dados) {
 
   botaoCancelar.addEventListener("click", () => {
     preencher();
+    preencherLigados();
     modoEdicao(false);
     limparStatus();
   });
@@ -812,6 +903,11 @@ function montarDetalhe(linha, resumo, dados) {
     mostrarStatus("loading", "Salvando...");
 
     try {
+      const locais = locaisPreenchidos(caixaLocais);
+      const contatos = contatosPreenchidos(caixaContatos);
+      const locaisAgora = locais.map((local) => local.id).filter(Boolean);
+      const contatosAgora = contatos.map((contato) => contato.id).filter(Boolean);
+
       const resposta = await pedirAoN8n("atualizar-cadastro", {
         id: cadastro.id,
         documento: digitos,
@@ -820,10 +916,16 @@ function montarDetalhe(linha, resumo, dados) {
         tipo: campos.tipo.value,
         exigenciaFiscal: campos.exigenciaFiscal.value,
         emails: campos.emails.value.trim(),
-        whatsapp: campos.whatsapp.value.trim(),
+        whatsappCnpj: campos.whatsappCnpj.value.trim(),
         administradora: campos.administradora.value.trim(),
+        empresaSindicos: campos.empresaSindicos.value.trim(),
         status: campos.status.value,
         observacoes: campos.observacoes.value.trim(),
+        locais: JSON.stringify(locais),
+        contatos: JSON.stringify(contatos),
+        // O que existia antes e sumiu da tela foi removido pelo usuário.
+        locaisApagar: idsLocaisOriginais.filter((id) => !locaisAgora.includes(id)).join(","),
+        contatosApagar: idsContatosOriginais.filter((id) => !contatosAgora.includes(id)).join(","),
       });
 
       if (!resposta || !resposta.ok) {
@@ -831,30 +933,17 @@ function montarDetalhe(linha, resumo, dados) {
         return;
       }
 
-      // Guarda o que foi salvo para "Cancelar" não voltar ao valor antigo, e
-      // atualiza a linha da lista sem precisar recarregar tudo do n8n.
-      Object.assign(cadastro, {
+      Object.assign(resumo, {
         documento: digitos,
         razaoSocial: campos.razaoSocial.value.trim(),
         nomeFantasia: campos.nomeFantasia.value.trim(),
-        tipo: campos.tipo.value,
-        exigenciaFiscal: campos.exigenciaFiscal.value,
-        emails: campos.emails.value.trim(),
-        whatsapp: campos.whatsapp.value.trim(),
-        administradora: campos.administradora.value.trim(),
-        status: campos.status.value,
-        observacoes: campos.observacoes.value.trim(),
-      });
-
-      Object.assign(resumo, {
-        documento: cadastro.documento,
-        razaoSocial: cadastro.razaoSocial,
-        nomeFantasia: cadastro.nomeFantasia,
       });
       atualizarResumo(linha, resumo);
 
-      modoEdicao(false);
-      mostrarStatus("ok", resposta.mensagem || "Alterações salvas!");
+      // Relê do n8n: é o que traz os códigos dos endereços e contatos recém
+      // criados. Sem isso, salvar duas vezes seguidas criaria tudo de novo.
+      await abrirLinha(linha, linha.querySelector(".cadastro-detalhe"), resumo,
+        resposta.mensagem || "Alterações salvas!");
     } catch (err) {
       mostrarStatus("error", "Não foi possível falar com o n8n.");
     } finally {
@@ -907,6 +996,10 @@ function montarDetalhe(linha, resumo, dados) {
       botaoExcluir.disabled = false;
     }
   });
+
+  // Nasce travado: o lápis é quem destrava.
+  modoEdicao(false);
+  if (avisoDepois) mostrarStatus("ok", avisoDepois);
 
   return bloco;
 }

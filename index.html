@@ -107,11 +107,14 @@
             <label for="emails">E-mails (financeiro / NF-e)</label>
             <input type="text" id="emails" />
 
-            <label for="whatsapp">WhatsApp financeiro</label>
-            <input type="text" id="whatsapp" />
+            <label for="whatsapp-cnpj">WhatsApp vinculado ao CNPJ</label>
+            <input type="text" id="whatsapp-cnpj" />
 
             <label for="administradora">Administradora</label>
             <input type="text" id="administradora" />
+
+            <label for="empresa-sindicos">Empresa de síndicos</label>
+            <input type="text" id="empresa-sindicos" placeholder="Opcional" />
 
             <div class="grupo">
               <label>Status</label>
@@ -148,6 +151,7 @@
             </div>
 
             <button type="submit" id="salvar-entidade">Salvar cadastro</button>
+            <button type="button" id="cancelar-cadastro" class="botao-secundario">Cancelar</button>
             <div id="salvar-status" class="status"></div>
           </form>
 
@@ -282,11 +286,14 @@
               <label>E-mails (financeiro / NF-e)</label>
               <input type="text" class="d-emails" disabled />
 
-              <label>WhatsApp financeiro</label>
-              <input type="text" class="d-whatsapp" disabled />
+              <label>WhatsApp vinculado ao CNPJ</label>
+              <input type="text" class="d-whatsapp-cnpj" disabled />
 
               <label>Administradora</label>
               <input type="text" class="d-administradora" disabled />
+
+              <label>Empresa de síndicos</label>
+              <input type="text" class="d-empresa-sindicos" disabled />
 
               <label>Status</label>
               <select class="d-status" disabled>
@@ -298,10 +305,16 @@
               <textarea class="d-observacoes" rows="3" disabled></textarea>
 
               <label class="rotulo-espacado">Endereços</label>
-              <div class="d-locais lista-somente-leitura"></div>
+              <div class="d-locais"></div>
+              <button type="button" class="d-adicionar-local botao-secundario hidden">
+                + Adicionar endereço
+              </button>
 
               <label class="rotulo-espacado">Contatos</label>
-              <div class="d-contatos lista-somente-leitura"></div>
+              <div class="d-contatos"></div>
+              <button type="button" class="d-adicionar-contato botao-secundario hidden">
+                + Adicionar contato
+              </button>
             </div>
           </template>
         </div>

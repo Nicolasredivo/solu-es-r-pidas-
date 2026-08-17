@@ -10,7 +10,7 @@
           "allowedOrigins": "*"
         }
       },
-      "id": "e0000000-0000-4000-8000-000000000020",
+      "id": "a0000000-0000-4000-8000-000000000001",
       "name": "Recebe pedido do app",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -18,7 +18,7 @@
         0,
         0
       ],
-      "webhookId": "e0000000-0000-4000-8000-000000000021"
+      "webhookId": "a0000000-0000-4000-8000-000000000002"
     },
     {
       "parameters": {
@@ -31,7 +31,7 @@
           },
           "conditions": [
             {
-              "id": "e0000000-0000-4000-8000-000000000022",
+              "id": "a0000000-0000-4000-8000-000000000003",
               "leftValue": "={{ $json.body.senha }}",
               "rightValue": "TROQUE-ESTA-SENHA",
               "operator": {
@@ -46,7 +46,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "e0000000-0000-4000-8000-000000000023",
+      "id": "a0000000-0000-4000-8000-000000000004",
       "name": "Senha esta correta?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -61,7 +61,7 @@
         "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
         "options": {}
       },
-      "id": "e0000000-0000-4000-8000-000000000024",
+      "id": "a0000000-0000-4000-8000-000000000005",
       "name": "Responde senha incorreta",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -72,10 +72,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// Mesmo cuidado do cadastro novo: listas de escolha recusam texto vazio,\n// entao vazio vira null, que o Airtable entende como 'em branco'.\nconst b = $json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => texto(v) || null;\n\nreturn [{\n  json: {\n    id: texto(b.id),\n    documento: texto(b.documento).replace(/\\D/g, ''),\n    razaoSocial: texto(b.razaoSocial),\n    nomeFantasia: texto(b.nomeFantasia),\n    tipo: lista(b.tipo),\n    exigenciaFiscal: lista(b.exigenciaFiscal),\n    emails: texto(b.emails),\n    whatsapp: texto(b.whatsapp),\n    administradora: texto(b.administradora),\n    status: lista(b.status) || 'Ativo',\n    observacoes: texto(b.observacoes),\n  },\n}];"
+        "jsCode": "// Monta, em ordem, todas as chamadas que o Airtable precisa receber.\n// Um no HTTP so executa todas: o endereco e o metodo mudam por item.\nconst b = $json.body || {};\nconst BASE = 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/';\nconst T = { entidades: 'tbl5Joji6gAir3mNh', locais: 'tblffVczCf1VeNxs7', contatos: 'tblXXOEOCwQnC2qFX' };\n\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => texto(v) || null;\nconst linhas = (v) => (Array.isArray(v) ? v.map(texto).filter(Boolean) : []);\nconst ids = (v) => String(v || '').split(',').map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nconst entidadeId = ids(b.id)[0];\nif (!entidadeId) throw new Error('Pedido sem o codigo do cadastro.');\n\nconst lerJson = (t) => {\n  try { const v = JSON.parse(t || '[]'); return Array.isArray(v) ? v : []; }\n  catch (erro) { return []; }\n};\n\n// O Airtable aceita no maximo 10 registros por chamada.\nconst emLotes = (arr) => {\n  const lotes = [];\n  for (let i = 0; i < arr.length; i += 10) lotes.push(arr.slice(i, i + 10));\n  return lotes;\n};\n\nconst chamadas = [];\nconst gravar = (tabela, registros, novo) => {\n  for (const lote of emLotes(registros)) {\n    chamadas.push({\n      metodo: novo ? 'POST' : 'PATCH',\n      url: BASE + tabela,\n      corpo: { typecast: true, records: lote },\n    });\n  }\n};\nconst apagar = (tabela, lista) => {\n  for (const lote of emLotes(lista)) {\n    chamadas.push({\n      metodo: 'DELETE',\n      url: BASE + tabela + '?' + lote.map((id) => 'records[]=' + id).join('&'),\n      corpo: null,\n    });\n  }\n};\n\n// ---- 1. o cadastro em si ----\nchamadas.push({\n  metodo: 'PATCH',\n  url: BASE + T.entidades,\n  corpo: { typecast: true, records: [{ id: entidadeId, fields: {\n    CPF_CNPJ: texto(b.documento).replace(/\\D/g, ''),\n    Razao_Social_Nome: texto(b.razaoSocial),\n    Nome_Fantasia_Identificador: texto(b.nomeFantasia),\n    Tipo_Documento: lista(b.tipo),\n    Exigencia_Fiscal: lista(b.exigenciaFiscal),\n    Emails_Financeiro_NFE: texto(b.emails),\n    WhatsApp_CNPJ: texto(b.whatsappCnpj),\n    Administradora: texto(b.administradora),\n    Empresa_Sindicos: texto(b.empresaSindicos),\n    Status: lista(b.status) || 'Ativo',\n    Observacoes: texto(b.observacoes),\n  } }] },\n});\n\n// ---- 2. enderecos ----\nconst locais = lerJson(b.locais)\n  .map((l) => ({\n    id: ids(l.id)[0] || null,\n    nome: texto(l.nome), endereco: texto(l.endereco),\n    bairroCidade: texto(l.bairroCidade), acesso: texto(l.acesso),\n  }))\n  .filter((l) => l.nome || l.endereco || l.bairroCidade || l.acesso);\n\nconst camposLocal = (l) => ({\n  Nome_do_Local: l.nome || l.endereco || 'Local sem nome',\n  Endereco_Completo: l.endereco,\n  Bairro_Cidade: l.bairroCidade,\n  Observacoes_Acesso: l.acesso,\n});\n\ngravar(T.locais, locais.filter((l) => l.id).map((l) => ({ id: l.id, fields: camposLocal(l) })), false);\ngravar(T.locais, locais.filter((l) => !l.id).map((l) => ({\n  fields: { ...camposLocal(l), Cliente_Vinculado: [entidadeId], Status: 'Ativo' },\n})), true);\napagar(T.locais, ids(b.locaisApagar));\n\n// ---- 3. contatos ----\nconst contatos = lerJson(b.contatos)\n  .map((c) => ({\n    id: ids(c.id)[0] || null,\n    nome: texto(c.nome), cargo: texto(c.cargo),\n    whatsapps: linhas(c.whatsapps), emails: linhas(c.emails),\n    observacoes: texto(c.observacoes),\n  }))\n  .filter((c) => c.nome || c.whatsapps.length || c.emails.length || c.observacoes);\n\nconst camposContato = (c) => ({\n  Nome_Contato: c.nome || c.whatsapps[0] || c.emails[0] || 'Contato sem nome',\n  Cargo_Funcao: c.cargo || null,\n  WhatsApps: c.whatsapps.join('\\n'),\n  Emails: c.emails.join('\\n'),\n  Observacoes: c.observacoes,\n});\n\ngravar(T.contatos, contatos.filter((c) => c.id).map((c) => ({ id: c.id, fields: camposContato(c) })), false);\ngravar(T.contatos, contatos.filter((c) => !c.id).map((c) => ({\n  fields: { ...camposContato(c), Entidades_Vinculadas: [entidadeId], Status: 'Ativo' },\n})), true);\napagar(T.contatos, ids(b.contatosApagar));\n\nreturn chamadas.map((c) => ({ json: c }));"
       },
-      "id": "e0000000-0000-4000-8000-000000000025",
-      "name": "Prepara alteracao",
+      "id": "a0000000-0000-4000-8000-000000000006",
+      "name": "Monta as alteracoes",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -85,172 +85,21 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "update",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
-        },
-        "table": {
-          "__rl": true,
-          "value": "tbl5Joji6gAir3mNh",
-          "mode": "list",
-          "cachedResultName": "Entidades_Cadastradas"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "matchingColumns": [
-            "id"
-          ],
-          "value": {
-            "id": "={{ $json.id }}",
-            "CPF_CNPJ": "={{ $json.documento }}",
-            "Razao_Social_Nome": "={{ $json.razaoSocial }}",
-            "Nome_Fantasia_Identificador": "={{ $json.nomeFantasia }}",
-            "Tipo_Documento": "={{ $json.tipo }}",
-            "Exigencia_Fiscal": "={{ $json.exigenciaFiscal }}",
-            "Emails_Financeiro_NFE": "={{ $json.emails }}",
-            "WhatsApp_Financeiro": "={{ $json.whatsapp }}",
-            "Administradora": "={{ $json.administradora }}",
-            "Status": "={{ $json.status }}",
-            "Observacoes": "={{ $json.observacoes }}"
-          },
-          "schema": [
-            {
-              "id": "id",
-              "displayName": "id",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "CPF_CNPJ",
-              "displayName": "CPF_CNPJ",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Razao_Social_Nome",
-              "displayName": "Razao_Social_Nome",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Nome_Fantasia_Identificador",
-              "displayName": "Nome_Fantasia_Identificador",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Tipo_Documento",
-              "displayName": "Tipo_Documento",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "options",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Exigencia_Fiscal",
-              "displayName": "Exigencia_Fiscal",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "options",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Emails_Financeiro_NFE",
-              "displayName": "Emails_Financeiro_NFE",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "WhatsApp_Financeiro",
-              "displayName": "WhatsApp_Financeiro",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Administradora",
-              "displayName": "Administradora",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Status",
-              "displayName": "Status",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "options",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Observacoes",
-              "displayName": "Observacoes",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo || {}) }}",
         "options": {
-          "typecast": true
+          "timeout": 20000
         }
       },
-      "id": "e0000000-0000-4000-8000-000000000026",
-      "name": "Atualiza no Airtable",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "id": "a0000000-0000-4000-8000-000000000007",
+      "name": "Aplica no Airtable",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         660,
         -60
@@ -269,7 +118,7 @@
         "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Alterações salvas!\"\n}",
         "options": {}
       },
-      "id": "e0000000-0000-4000-8000-000000000027",
+      "id": "a0000000-0000-4000-8000-000000000008",
       "name": "Responde atualizado",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -281,10 +130,10 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Não consegui salvar as alterações. Tente de novo.\"\n}",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Não consegui salvar tudo. Confira no Airtable antes de tentar de novo.\"\n}",
         "options": {}
       },
-      "id": "e0000000-0000-4000-8000-000000000028",
+      "id": "a0000000-0000-4000-8000-000000000009",
       "name": "Responde erro",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -310,7 +159,7 @@
       "main": [
         [
           {
-            "node": "Prepara alteracao",
+            "node": "Monta as alteracoes",
             "type": "main",
             "index": 0
           }
@@ -324,18 +173,18 @@
         ]
       ]
     },
-    "Prepara alteracao": {
+    "Monta as alteracoes": {
       "main": [
         [
           {
-            "node": "Atualiza no Airtable",
+            "node": "Aplica no Airtable",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Atualiza no Airtable": {
+    "Aplica no Airtable": {
       "main": [
         [
           {

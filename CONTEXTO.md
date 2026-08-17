@@ -139,14 +139,44 @@ Detalhes que custaram tempo:
 - Campo de status na tela **precisa manter a própria classe** ao mudar de cor.
   Reescrever `className` inteiro apagava o nome pelo qual o elemento é achado.
 
+## Rodada de ajustes (17/08/2026)
+
+- **Cancelar no cadastro**, com dois cliques (o segundo confirma), igual ao
+  Excluir. Um toque sem querer apagaria tudo que foi digitado.
+- **`Empresa_Sindicos`**: campo novo, opcional. É diferente de `Administradora`
+  — uma administra o condomínio, a outra fornece o síndico profissional.
+- **`WhatsApp_Financeiro` virou `WhatsApp_CNPJ`.** O número que a Receita
+  devolve nunca foi o do financeiro; agora o nome diz o que ele é. Renomear
+  campo a API permite (trocar o tipo, não).
+- **O endereço da Receita vira o primeiro bloco de endereço, já preenchido.**
+  Continua dando para apagá-lo ou acrescentar outros.
+- **Endereços e contatos agora são editáveis na aba Consultar.**
+
+O que tornou a edição viável: as funções de bloco (`adicionarLocal`,
+`reiniciarLocais`, `locaisPreenchidos` e as equivalentes de contato) **recebem
+a caixa onde os blocos ficam**. As mesmas servem ao formulário de cadastro e à
+edição na consulta — os moldes do HTML são reaproveitados nos dois lugares.
+
+Cada bloco guarda o código do registro em `dataset.id`. Na hora de salvar:
+bloco **com** id vira alteração, **sem** id vira criação, e o que sumiu da tela
+entra em `locaisApagar` / `contatosApagar`. **Depois de salvar, o detalhe é
+relido do n8n** — é o que traz os códigos dos registros recém-criados; sem
+isso, salvar duas vezes seguidas criaria tudo de novo.
+
+O `App - Atualizar cadastro` foi refeito: um nó Code monta a fila de chamadas
+(PATCH, POST e DELETE nas três tabelas) e **um único nó HTTP executa todas** —
+o método e o endereço mudam por item. Muito mais curto do que uma trilha de
+nós do Airtable, e é o mesmo truque já usado no Excluir.
+
+Em modo leitura os botões somem pela classe `somente-leitura` no CSS, não um a
+um: assim a renumeração dos blocos não briga com a visibilidade ao destravar.
+
 ## PENDENTE AGORA (é por aqui que se continua)
 
-- **Apagar na mão, no Airtable, os 8 campos velhos de Contatos_Solicitantes**:
-  `WhatsApp_1` a `WhatsApp_4` e `Email_1` a `Email_4`. Foram substituídos por
-  `WhatsApps` e `Emails`, estão vazios e o app não usa mais. A API do Airtable
-  **não apaga campo** — só dá para fazer pela tela: clicar na setinha do
-  cabeçalho da coluna → "Delete field".
-- Editar endereços e contatos pela aba Consultar (hoje só dá para ver).
+- **`WhatsApp_Financeiro` não existe mais**, mas nada foi perdido: o campo só
+  mudou de nome. Nenhuma limpeza pendente no Airtable desta vez.
+- Nome do responsável por cada número (chegou a ser pedido e foi cancelado).
+- Telefone e e-mail próprios da administradora.
 
 ## Aviso da Receita no cadastro (feito em 12/08/2026)
 

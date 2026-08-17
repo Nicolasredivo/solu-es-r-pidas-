@@ -1,4 +1,4 @@
-const CACHE_NAME = "solucoes-rapidas-v13";
+const CACHE_NAME = "solucoes-rapidas-v14";
 const APP_SHELL = [
   "./",
   "./index.html",
