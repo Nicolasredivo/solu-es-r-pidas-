@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.08.21";
+const APP_VERSION = "2026.08.21b";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -173,6 +173,55 @@ function formatarCNPJ(digitos) {
   if (p[2]) saida += `.${p[2]}`;
   if (p[3]) saida += `/${p[3]}`;
   if (p[4]) saida += `-${p[4]}`;
+  return saida;
+}
+
+// ----- Telefone -----
+//
+// Guardamos sempre com o código do país (55) na frente, porque é o formato que
+// API de mensagem consome direto. Na tela mostramos "+55 (54) 99999-9999".
+
+// Devolve só o DDD + número, sem o código do país.
+function parteLocalTelefone(valor) {
+  const texto = String(valor || "");
+  const digitos = texto.replace(/\D/g, "");
+
+  // O "+" só aparece no formato que o próprio app escreve, e ali os dois
+  // primeiros dígitos são sempre o código do país.
+  if (texto.trim().startsWith("+")) return digitos.slice(2, 13);
+
+  // Sem o "+", quem decide é o tamanho, nunca o prefixo: 55 também é DDD
+  // (Santa Maria/RS), então "55999999999" é DDD 55 com celular — e não um
+  // número que já viesse com o código do país.
+  if (digitos.length === 12 || digitos.length === 13) return digitos.slice(2);
+  return digitos.slice(0, 11);
+}
+
+function normalizarTelefone(valor) {
+  const local = parteLocalTelefone(valor);
+  if (!local) return "";
+
+  // Só acrescenta o país a um número com cara de brasileiro completo. O resto
+  // vai como está: inventar um 55 em cima de algo incompleto seria pior, e o
+  // aviso âmbar já apontou o problema para quem digitou.
+  if (local.length === 10 || local.length === 11) return `55${local}`;
+  return local;
+}
+
+function formatarTelefone(valor) {
+  const local = parteLocalTelefone(valor);
+  if (!local) return "";
+
+  let saida = `+55 (${local.slice(0, 2)}`;
+  if (local.length >= 2) saida += ")";
+
+  const resto = local.slice(2);
+  if (!resto) return saida;
+
+  // Celular tem 9 dígitos depois do DDD; fixo tem 8.
+  const corte = resto.length > 8 ? 5 : 4;
+  saida += ` ${resto.slice(0, corte)}`;
+  if (resto.length > corte) saida += `-${resto.slice(corte)}`;
   return saida;
 }
 
@@ -366,14 +415,15 @@ function adicionarCanal(lista, tipo, comFoco, valor) {
 
   // Teclado do celular já abre no formato certo.
   if (tipo === "whatsapp") {
-    campo.placeholder = "(54) 99999-9999";
+    campo.placeholder = "+55 (54) 99999-9999";
     campo.inputMode = "tel";
   } else {
     campo.placeholder = "nome@empresa.com.br";
     campo.inputMode = "email";
   }
 
-  if (valor) campo.value = valor;
+  // O que vem do Airtable já tem o 55; na tela mostro formatado.
+  if (valor) campo.value = tipo === "whatsapp" ? formatarTelefone(valor) : valor;
 
   linha.querySelector(".remover-canal").addEventListener("click", () => {
     linha.remove();
@@ -392,8 +442,16 @@ function preencherCanais(lista, tipo, valores) {
 }
 
 function valoresDosCanais(lista) {
+  // A mesma lista serve para WhatsApp e e-mail; quem diz qual é dos dois é o
+  // container. Esta função é usada tanto no Adicionar quanto no detalhe da
+  // Consulta, então padronizar aqui cobre as duas telas de uma vez.
+  const ehWhatsapp = lista.classList.contains("contato-whatsapps");
+
   return [...lista.querySelectorAll(".canal-valor")]
-    .map((campo) => campo.value.trim())
+    .map((campo) => {
+      const valor = campo.value.trim();
+      return ehWhatsapp ? normalizarTelefone(valor) : valor;
+    })
     .filter(Boolean);
 }
 
@@ -524,7 +582,7 @@ async function consultarDocumento(digitos) {
       razaoSocialInput.value = dados.receita.razaoSocial || "";
       nomeFantasiaInput.value = dados.receita.nomeFantasia || "";
       emailsInput.value = dados.receita.email || "";
-      whatsappCnpjInput.value = dados.receita.telefone || "";
+      whatsappCnpjInput.value = formatarTelefone(dados.receita.telefone);
       mostrarDica("ok", "Dados encontrados na Receita — confira antes de salvar.");
     } else if (dados.avisoReceita) {
       // A Receita não preencheu e o n8n explicou por quê. Só ofereço tentar de
@@ -599,7 +657,7 @@ formEntidade.addEventListener("submit", async (event) => {
         nomeFantasia: nomeFantasiaInput.value.trim(),
         exigenciaFiscal: escolhaDoGrupo(grupoExigencia),
         emails: emailsInput.value.trim(),
-        whatsappCnpj: whatsappCnpjInput.value.trim(),
+        whatsappCnpj: normalizarTelefone(whatsappCnpjInput.value),
         administradora: administradoraInput.value.trim(),
         empresaSindicos: empresaSindicosInput.value.trim(),
         status: escolhaDoGrupo(grupoStatus),
@@ -813,7 +871,7 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
     campos.tipo.value = cadastro.tipo;
     campos.exigenciaFiscal.value = cadastro.exigenciaFiscal;
     campos.emails.value = cadastro.emails;
-    campos.whatsappCnpj.value = cadastro.whatsappCnpj || "";
+    campos.whatsappCnpj.value = formatarTelefone(cadastro.whatsappCnpj);
     campos.administradora.value = cadastro.administradora;
     campos.empresaSindicos.value = cadastro.empresaSindicos || "";
     campos.status.value = cadastro.status || "Ativo";
@@ -963,7 +1021,7 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
         tipo: campos.tipo.value,
         exigenciaFiscal: campos.exigenciaFiscal.value,
         emails: campos.emails.value.trim(),
-        whatsappCnpj: campos.whatsappCnpj.value.trim(),
+        whatsappCnpj: normalizarTelefone(campos.whatsappCnpj.value),
         administradora: campos.administradora.value.trim(),
         empresaSindicos: campos.empresaSindicos.value.trim(),
         status: campos.status.value,
@@ -1295,7 +1353,10 @@ function pareceEmail(valor) {
 }
 
 function pareceTelefone(valor) {
-  return valor.replace(/\D/g, "").length >= 10;
+  // Conta só o DDD + número: o "+55" que aparece na tela somaria dois dígitos
+  // e deixaria passar um número curto demais.
+  const local = parteLocalTelefone(valor);
+  return local.length === 10 || local.length === 11;
 }
 
 // O que decide a regra é onde o campo está, não o que ele é.
@@ -1358,6 +1419,13 @@ function conferirCampo(campo) {
       : `Não parece e-mail: ${ruins.join(", ")}`
   );
 }
+
+document.addEventListener("input", (event) => {
+  const campo = event.target;
+  if (!(campo instanceof HTMLInputElement)) return;
+  if (tipoDoCampo(campo) !== "telefone") return;
+  campo.value = formatarTelefone(campo.value);
+});
 
 // Um ouvinte só, no documento: os campos de contato nascem depois, clonados
 // dos moldes, e assim não preciso ligar nada em cada um que aparece.
