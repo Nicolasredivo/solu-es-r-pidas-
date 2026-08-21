@@ -225,12 +225,51 @@ escondida, o aviso ainda funciona (exige os dois toques) mas escreve num lugar
 que também está fora da vista naquele momento — funcional, sem feedback visível
 nesse caso bem específico.
 
+## Trava de duplicado ao editar, e Status de endereço/contato (21/08/2026)
+
+Depois de fechar a Consulta, revisão do que faltava em "Cadastro" — duas coisas
+saíram do "seria bom ter" para "vale a pena consertar":
+
+- **Editar o CPF/CNPJ de um cadastro para um valor que já pertence a outro**
+  agora é recusado. Antes, a verificação de duplicado só rodava ao **criar**;
+  editar um cadastro existente não conferia nada. `App - Atualizar cadastro`
+  ganhou uma busca por outro registro com o mesmo CPF_CNPJ (excluindo o próprio
+  registro via `RECORD_ID() != id`, e sem rodar a checagem se o documento vier
+  vazio — senão bateria com o registro em branco de teste que sobrou na base).
+  Achando duplicado, responde `ok:false` com o nome do outro cliente, e **nada**
+  é gravado. O app já mostrava qualquer mensagem de erro do n8n na tela certa,
+  então não precisou mudar nada no front.
+- **Endereços e contatos agora têm Status** (Ativo/Inativo/Arquivado), igual ao
+  que o Airtable sempre teve mas o app nunca expôs. Antes, a única forma de
+  tirar um endereço ou contato de circulação era excluir de vez, perdendo o
+  histórico. Os seletores ficam no fim de cada bloco (`.local-status` /
+  `.contato-status`), reaproveitando o mesmo molde de HTML usado no Adicionar
+  e na edição da Consulta — então apareceram nos dois lugares de graça. Bloco
+  novo nasce "Ativo"; o valor do Status **não conta** para decidir se um bloco
+  está "preenchido" (senão todo endereço em branco viraria registro só por
+  causa do Status).
+
+Um bug que apareceu montando a trava de duplicado, para não repetir: **inserir
+nós novos no meio de uma cadeia muda o `$json` de quem vem depois.** O nó
+`Monta as alteracoes` lia `$json.body` esperando receber direto do webhook,
+mas com a busca de duplicado na frente, `$json` passou a ser a saída do nó
+anterior (`{duplicado, nomeDuplicado}`), sem `.body` nenhum — `entidadeId`
+saía vazio e o nó explodia. Corrigido lendo direto de
+`$('Recebe pedido do app').first().json.body`, o mesmo padrão que
+`Prepara locais`/`Prepara contatos` já usavam em `App - Salvar entidade`
+por este exato motivo.
+
 ## PENDENTE AGORA (é por aqui que se continua)
 
 - **`WhatsApp_Financeiro` não existe mais**, mas nada foi perdido: o campo só
   mudou de nome. Nenhuma limpeza pendente no Airtable desta vez.
 - Nome do responsável por cada número (chegou a ser pedido e foi cancelado).
 - Telefone e e-mail próprios da administradora.
+- A lista da Consulta não mostra nem filtra por Status — cadastros Inativos
+  aparecem misturados com os Ativos, sem diferença visual.
+- Trocar o tamanho do CPF/CNPJ ao editar (corrigir um que na real era do outro
+  tipo) não ajusta o "Tipo" sozinho — quem edita precisa lembrar de mudar os
+  dois.
 - **Duas sessões do Claude podem estar ativas ao mesmo tempo neste projeto**
   (esta conversa + uma sessão `claude rc` pelo celular, mesma pasta/branch,
   modo "same-dir"). Nenhuma vê o que a outra fez até o próximo `git status`/

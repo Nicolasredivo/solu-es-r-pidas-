@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.08.21c";
+const APP_VERSION = "2026.08.21d";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -358,6 +358,7 @@ function adicionarLocal(caixa, comFoco, dados) {
     bloco.querySelector(".local-endereco").value = dados.endereco || "";
     bloco.querySelector(".local-bairro").value = dados.bairroCidade || "";
     bloco.querySelector(".local-acesso").value = dados.acesso || "";
+    bloco.querySelector(".local-status").value = dados.status || "Ativo";
   }
 
   bloco.querySelector(".remover-local").addEventListener("click", () => {
@@ -389,7 +390,11 @@ function locaisPreenchidos(caixa) {
       endereco: bloco.querySelector(".local-endereco").value.trim(),
       bairroCidade: bloco.querySelector(".local-bairro").value.trim(),
       acesso: bloco.querySelector(".local-acesso").value.trim(),
+      status: bloco.querySelector(".local-status").value,
     }))
+    // O Status sozinho não conta como "preenchido": todo bloco em branco já
+    // nasce com "Ativo" selecionado, então incluí-lo aqui faria um endereço
+    // vazio virar registro no Airtable.
     .filter((local) => local.nome || local.endereco || local.bairroCidade || local.acesso);
 }
 
@@ -474,6 +479,7 @@ function adicionarContato(caixa, comFoco, dados) {
     bloco.querySelector(".contato-nome").value = dados.nome || "";
     bloco.querySelector(".contato-cargo").value = dados.cargo || "";
     bloco.querySelector(".contato-obs").value = dados.observacoes || "";
+    bloco.querySelector(".contato-status").value = dados.status || "Ativo";
   }
 
   // Cada contato já nasce com uma linha de cada, senão o campo fica invisível.
@@ -510,6 +516,7 @@ function contatosPreenchidos(caixa) {
       whatsapps: valoresDosCanais(bloco.querySelector(".contato-whatsapps")),
       emails: valoresDosCanais(bloco.querySelector(".contato-emails")),
       observacoes: bloco.querySelector(".contato-obs").value.trim(),
+      status: bloco.querySelector(".contato-status").value,
     }))
     .filter((c) => c.nome || c.whatsapps.length || c.emails.length || c.observacoes);
 }

@@ -72,14 +72,14 @@
     },
     {
       "parameters": {
-        "jsCode": "// Monta, em ordem, todas as chamadas que o Airtable precisa receber.\n// Um no HTTP so executa todas: o endereco e o metodo mudam por item.\nconst b = $json.body || {};\nconst BASE = 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/';\nconst T = { entidades: 'tbl5Joji6gAir3mNh', locais: 'tblffVczCf1VeNxs7', contatos: 'tblXXOEOCwQnC2qFX' };\n\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => texto(v) || null;\nconst linhas = (v) => (Array.isArray(v) ? v.map(texto).filter(Boolean) : []);\nconst ids = (v) => String(v || '').split(',').map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nconst entidadeId = ids(b.id)[0];\nif (!entidadeId) throw new Error('Pedido sem o codigo do cadastro.');\n\nconst lerJson = (t) => {\n  try { const v = JSON.parse(t || '[]'); return Array.isArray(v) ? v : []; }\n  catch (erro) { return []; }\n};\n\n// O Airtable aceita no maximo 10 registros por chamada.\nconst emLotes = (arr) => {\n  const lotes = [];\n  for (let i = 0; i < arr.length; i += 10) lotes.push(arr.slice(i, i + 10));\n  return lotes;\n};\n\nconst chamadas = [];\nconst gravar = (tabela, registros, novo) => {\n  for (const lote of emLotes(registros)) {\n    chamadas.push({\n      metodo: novo ? 'POST' : 'PATCH',\n      url: BASE + tabela,\n      corpo: { typecast: true, records: lote },\n    });\n  }\n};\nconst apagar = (tabela, lista) => {\n  for (const lote of emLotes(lista)) {\n    chamadas.push({\n      metodo: 'DELETE',\n      url: BASE + tabela + '?' + lote.map((id) => 'records[]=' + id).join('&'),\n      corpo: null,\n    });\n  }\n};\n\n// ---- 1. o cadastro em si ----\nchamadas.push({\n  metodo: 'PATCH',\n  url: BASE + T.entidades,\n  corpo: { typecast: true, records: [{ id: entidadeId, fields: {\n    CPF_CNPJ: texto(b.documento).replace(/\\D/g, ''),\n    Razao_Social_Nome: texto(b.razaoSocial),\n    Nome_Fantasia_Identificador: texto(b.nomeFantasia),\n    Tipo_Documento: lista(b.tipo),\n    Exigencia_Fiscal: lista(b.exigenciaFiscal),\n    Emails_Financeiro_NFE: texto(b.emails),\n    WhatsApp_CNPJ: texto(b.whatsappCnpj),\n    Administradora: texto(b.administradora),\n    Empresa_Sindicos: texto(b.empresaSindicos),\n    Status: lista(b.status) || 'Ativo',\n    Observacoes: texto(b.observacoes),\n  } }] },\n});\n\n// ---- 2. enderecos ----\nconst locais = lerJson(b.locais)\n  .map((l) => ({\n    id: ids(l.id)[0] || null,\n    nome: texto(l.nome), endereco: texto(l.endereco),\n    bairroCidade: texto(l.bairroCidade), acesso: texto(l.acesso),\n  }))\n  .filter((l) => l.nome || l.endereco || l.bairroCidade || l.acesso);\n\nconst camposLocal = (l) => ({\n  Nome_do_Local: l.nome || l.endereco || 'Local sem nome',\n  Endereco_Completo: l.endereco,\n  Bairro_Cidade: l.bairroCidade,\n  Observacoes_Acesso: l.acesso,\n});\n\ngravar(T.locais, locais.filter((l) => l.id).map((l) => ({ id: l.id, fields: camposLocal(l) })), false);\ngravar(T.locais, locais.filter((l) => !l.id).map((l) => ({\n  fields: { ...camposLocal(l), Cliente_Vinculado: [entidadeId], Status: 'Ativo' },\n})), true);\napagar(T.locais, ids(b.locaisApagar));\n\n// ---- 3. contatos ----\nconst contatos = lerJson(b.contatos)\n  .map((c) => ({\n    id: ids(c.id)[0] || null,\n    nome: texto(c.nome), cargo: texto(c.cargo),\n    whatsapps: linhas(c.whatsapps), emails: linhas(c.emails),\n    observacoes: texto(c.observacoes),\n  }))\n  .filter((c) => c.nome || c.whatsapps.length || c.emails.length || c.observacoes);\n\nconst camposContato = (c) => ({\n  Nome_Contato: c.nome || c.whatsapps[0] || c.emails[0] || 'Contato sem nome',\n  Cargo_Funcao: c.cargo || null,\n  WhatsApps: c.whatsapps.join('\\n'),\n  Emails: c.emails.join('\\n'),\n  Observacoes: c.observacoes,\n});\n\ngravar(T.contatos, contatos.filter((c) => c.id).map((c) => ({ id: c.id, fields: camposContato(c) })), false);\ngravar(T.contatos, contatos.filter((c) => !c.id).map((c) => ({\n  fields: { ...camposContato(c), Entidades_Vinculadas: [entidadeId], Status: 'Ativo' },\n})), true);\napagar(T.contatos, ids(b.contatosApagar));\n\nreturn chamadas.map((c) => ({ json: c }));"
+        "jsCode": "// Monta, em ordem, todas as chamadas que o Airtable precisa receber.\n// Um no HTTP so executa todas: o endereco e o metodo mudam por item.\nconst b = $('Recebe pedido do app').first().json.body || {};\nconst BASE = 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/';\nconst T = { entidades: 'tbl5Joji6gAir3mNh', locais: 'tblffVczCf1VeNxs7', contatos: 'tblXXOEOCwQnC2qFX' };\n\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => texto(v) || null;\nconst linhas = (v) => (Array.isArray(v) ? v.map(texto).filter(Boolean) : []);\nconst ids = (v) => String(v || '').split(',').map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nconst entidadeId = ids(b.id)[0];\nif (!entidadeId) throw new Error('Pedido sem o codigo do cadastro.');\n\nconst lerJson = (t) => {\n  try { const v = JSON.parse(t || '[]'); return Array.isArray(v) ? v : []; }\n  catch (erro) { return []; }\n};\n\n// O Airtable aceita no maximo 10 registros por chamada.\nconst emLotes = (arr) => {\n  const lotes = [];\n  for (let i = 0; i < arr.length; i += 10) lotes.push(arr.slice(i, i + 10));\n  return lotes;\n};\n\nconst chamadas = [];\nconst gravar = (tabela, registros, novo) => {\n  for (const lote of emLotes(registros)) {\n    chamadas.push({\n      metodo: novo ? 'POST' : 'PATCH',\n      url: BASE + tabela,\n      corpo: { typecast: true, records: lote },\n    });\n  }\n};\nconst apagar = (tabela, lista) => {\n  for (const lote of emLotes(lista)) {\n    chamadas.push({\n      metodo: 'DELETE',\n      url: BASE + tabela + '?' + lote.map((id) => 'records[]=' + id).join('&'),\n      corpo: null,\n    });\n  }\n};\n\n// ---- 1. o cadastro em si ----\nchamadas.push({\n  metodo: 'PATCH',\n  url: BASE + T.entidades,\n  corpo: { typecast: true, records: [{ id: entidadeId, fields: {\n    CPF_CNPJ: texto(b.documento).replace(/\\D/g, ''),\n    Razao_Social_Nome: texto(b.razaoSocial),\n    Nome_Fantasia_Identificador: texto(b.nomeFantasia),\n    Tipo_Documento: lista(b.tipo),\n    Exigencia_Fiscal: lista(b.exigenciaFiscal),\n    Emails_Financeiro_NFE: texto(b.emails),\n    WhatsApp_CNPJ: texto(b.whatsappCnpj),\n    Administradora: texto(b.administradora),\n    Empresa_Sindicos: texto(b.empresaSindicos),\n    Status: lista(b.status) || 'Ativo',\n    Observacoes: texto(b.observacoes),\n  } }] },\n});\n\n// ---- 2. enderecos ----\nconst locais = lerJson(b.locais)\n  .map((l) => ({\n    id: ids(l.id)[0] || null,\n    nome: texto(l.nome), endereco: texto(l.endereco),\n    bairroCidade: texto(l.bairroCidade), acesso: texto(l.acesso),\n    status: lista(l.status) || 'Ativo',\n  }))\n  .filter((l) => l.nome || l.endereco || l.bairroCidade || l.acesso);\n\nconst camposLocal = (l) => ({\n  Nome_do_Local: l.nome || l.endereco || 'Local sem nome',\n  Endereco_Completo: l.endereco,\n  Bairro_Cidade: l.bairroCidade,\n  Observacoes_Acesso: l.acesso,\n  Status: l.status,\n});\n\ngravar(T.locais, locais.filter((l) => l.id).map((l) => ({ id: l.id, fields: camposLocal(l) })), false);\ngravar(T.locais, locais.filter((l) => !l.id).map((l) => ({\n  fields: { ...camposLocal(l), Cliente_Vinculado: [entidadeId] },\n})), true);\napagar(T.locais, ids(b.locaisApagar));\n\n// ---- 3. contatos ----\nconst contatos = lerJson(b.contatos)\n  .map((c) => ({\n    id: ids(c.id)[0] || null,\n    nome: texto(c.nome), cargo: texto(c.cargo),\n    whatsapps: linhas(c.whatsapps), emails: linhas(c.emails),\n    observacoes: texto(c.observacoes),\n    status: lista(c.status) || 'Ativo',\n  }))\n  .filter((c) => c.nome || c.whatsapps.length || c.emails.length || c.observacoes);\n\nconst camposContato = (c) => ({\n  Nome_Contato: c.nome || c.whatsapps[0] || c.emails[0] || 'Contato sem nome',\n  Cargo_Funcao: c.cargo || null,\n  WhatsApps: c.whatsapps.join('\\n'),\n  Emails: c.emails.join('\\n'),\n  Observacoes: c.observacoes,\n  Status: c.status,\n});\n\ngravar(T.contatos, contatos.filter((c) => c.id).map((c) => ({ id: c.id, fields: camposContato(c) })), false);\ngravar(T.contatos, contatos.filter((c) => !c.id).map((c) => ({\n  fields: { ...camposContato(c), Entidades_Vinculadas: [entidadeId] },\n})), true);\napagar(T.contatos, ids(b.contatosApagar));\n\nreturn chamadas.map((c) => ({ json: c }));"
       },
       "id": "a0000000-0000-4000-8000-000000000006",
       "name": "Monta as alteracoes",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        440,
+        880,
         -60
       ]
     },
@@ -101,7 +101,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        660,
+        1100,
         -60
       ],
       "credentials": {
@@ -123,7 +123,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        900,
+        1340,
         -160
       ]
     },
@@ -138,8 +138,108 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        900,
+        1340,
         20
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl5Joji6gAir3mNh",
+          "mode": "list",
+          "cachedResultName": "Entidades_Cadastradas"
+        },
+        "filterByFormula": "={{ (() => { const doc = String($json.body.documento || '').replace(/\\D/g, ''); const id = String($json.body.id || '').replace(/[^a-zA-Z0-9]/g, ''); return doc ? \"AND({CPF_CNPJ} = '\" + doc + \"', RECORD_ID() != '\" + id + \"')\" : 'FALSE()'; })() }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "d0000000-0000-4000-8000-000000000001",
+      "name": "Busca duplicado",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// O no de busca devolve um item vazio (sem .id) quando nao acha nada, ou um\n// item de erro se a busca falhou -- os dois casos contam como 'sem duplicado',\n// para nao travar uma edicao por causa de um problema na checagem em si.\nconst achados = $input.all().filter((item) => item.json && item.json.id && !item.json.error);\nconst encontrado = achados[0];\nreturn [{\n  json: {\n    duplicado: Boolean(encontrado),\n    nomeDuplicado: encontrado ? (encontrado.json.fields?.Razao_Social_Nome || '') : '',\n  },\n}];"
+      },
+      "id": "d0000000-0000-4000-8000-000000000002",
+      "name": "Existe em outro cadastro?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d0000000-0000-4000-8000-000000000003",
+              "leftValue": "={{ $json.duplicado }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "d0000000-0000-4000-8000-000000000004",
+      "name": "Ja existe em outro cadastro?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, mensagem: ($json.nomeDuplicado ? 'Já existe outro cadastro com este CPF/CNPJ: \"' + $json.nomeDuplicado + '\". Confira antes de salvar.' : 'Já existe outro cadastro com este CPF/CNPJ. Confira antes de salvar.') }) }}",
+        "options": {}
+      },
+      "id": "d0000000-0000-4000-8000-000000000005",
+      "name": "Responde duplicado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        -320
       ]
     }
   ],
@@ -159,7 +259,7 @@
       "main": [
         [
           {
-            "node": "Monta as alteracoes",
+            "node": "Busca duplicado",
             "type": "main",
             "index": 0
           }
@@ -196,6 +296,46 @@
         [
           {
             "node": "Responde erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca duplicado": {
+      "main": [
+        [
+          {
+            "node": "Existe em outro cadastro?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Existe em outro cadastro?": {
+      "main": [
+        [
+          {
+            "node": "Ja existe em outro cadastro?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ja existe em outro cadastro?": {
+      "main": [
+        [
+          {
+            "node": "Responde duplicado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta as alteracoes",
             "type": "main",
             "index": 0
           }
