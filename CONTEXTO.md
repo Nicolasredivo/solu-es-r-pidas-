@@ -40,9 +40,18 @@ Quem executa as automações de verdade é o **n8n**, e o app é só a "tela".
 - Depois de entrar: menu lateral (retrátil no celular, fixo no computador)
 - Página **Cadastro**, com abas "Adicionar" e "Consultar"
   - Adicionar: campo de CPF/CNPJ com formatação e validação de dígitos,
-    detecção automática do tipo, consulta de duplicado + dados da Receita,
-    formulário completo da tabela Entidades e botão de salvar
-  - Consultar: ainda vazio
+    detecção automática do tipo, consulta de duplicado + dados da Receita
+    (incluindo endereço, que já vira o primeiro bloco preenchido), formulário
+    completo da tabela Entidades, endereços e contatos sem limite, e botões
+    Salvar/Cancelar
+  - Consultar: lista todos os cadastros, busca, abre/edita/exclui — inclusive
+    endereços e contatos de um cadastro existente
+- Rodapé do menu: **Sair** (dois toques) e versão do app instalada
+- Indicador de conexão com o n8n na barra superior
+- Aviso ao tentar sair (menu, aba, fechar a janela) com algo não salvo —
+  cadastro novo em andamento ou edição aberta na Consulta
+- Botão voltar do celular fecha o menu ou o cadastro aberto, em vez de sair do app
+- Telefone sempre salvo com código do país (55); a tela mostra formatado
 
 ## Airtable
 
@@ -171,12 +180,61 @@ nós do Airtable, e é o mesmo truque já usado no Excluir.
 Em modo leitura os botões somem pela classe `somente-leitura` no CSS, não um a
 um: assim a renumeração dos blocos não briga com a visibilidade ao destravar.
 
+## O básico de sistema: Sair, aviso de perda, versão, conexão, telefone com 55 (21/08/2026)
+
+Feito por outra sessão (`claude rc`, controle remoto) rodando em paralelo a esta
+mesma branch — por isso vale registrar aqui com cuidado, para quem ler depois
+entender o que veio de onde. Revisado nesta sessão em seguida (ver abaixo).
+
+- **Sair** no rodapé do menu, dois toques. Apaga a senha guardada (senão o app
+  entraria sozinho de novo) e preserva o endereço do n8n (é do aparelho, não
+  da sessão).
+- **Indicador de conexão** na barra superior, alimentado pelas chamadas que o
+  app já faz (função única `fetchN8n`), sem ficar testando o servidor à toa.
+- **Versão do app** visível no menu (`APP_VERSION` em `app.js`, sobe junto com
+  `CACHE_NAME` em `service-worker.js` a cada publicação).
+- **Botão voltar do celular** fecha o menu ou o cadastro aberto na Consulta,
+  em vez de sair do app — duas camadas só, via `history.pushState`.
+- **Aviso suave** (não bloqueia) quando e-mail ou telefone não parecem válidos.
+- **Telefone sempre com código do país.** Guardado como `5554999998888`,
+  mostrado como `+55 (54) 99999-8888`. Decisão pelo **tamanho** do número, nunca
+  pelo prefixo — 55 também é DDD (Santa Maria/RS), então só ganha o país quem
+  tem 10 ou 11 dígitos locais. Normaliza na leitura (`valoresDosCanais`), então
+  cobre Adicionar e Consulta de uma vez. Números antigos sem o 55 (o do OPERA,
+  por exemplo) ganham o prefixo sozinhos na próxima vez que o cadastro for salvo.
+
+**Dois bugs encontrados e corrigidos nesta sessão, ao revisar:**
+
+- O **Sair** tinha dois avisos de confirmação empilhados (um de "cadastro em
+  andamento", outro do próprio botão) que brigavam entre si: com algo não
+  salvo, eram necessários **4 toques**, com o menu fechando de novo no meio de
+  forma confusa, em vez dos "dois toques" prometidos. Unificados num ciclo só:
+  `haAlgoParaPerder()` decide se mostra o aviso extra no primeiro toque; o
+  segundo sempre sai.
+- **Editar um cadastro existente na Consulta não avisava nada** ao sair sem
+  salvar — a proteção só cobria o cadastro novo (aba Adicionar). Agora
+  `edicaoDaConsultaAbertaEmEdicao()` cobre também esse caso, e o aviso escreve
+  no lugar certo da tela (a caixa de status do próprio cadastro aberto, não a
+  do formulário de Adicionar, que pode estar fora da vista). Ao confirmar a
+  saída, a edição é revertida de verdade (clica no próprio Cancelar por baixo)
+  — o aviso promete descartar, então precisa descartar mesmo.
+
+Limite conhecido, não corrigido: se o usuário já navegou para uma página bem
+diferente (ex: Início) enquanto uma edição ficou aberta e esquecida numa aba
+escondida, o aviso ainda funciona (exige os dois toques) mas escreve num lugar
+que também está fora da vista naquele momento — funcional, sem feedback visível
+nesse caso bem específico.
+
 ## PENDENTE AGORA (é por aqui que se continua)
 
 - **`WhatsApp_Financeiro` não existe mais**, mas nada foi perdido: o campo só
   mudou de nome. Nenhuma limpeza pendente no Airtable desta vez.
 - Nome do responsável por cada número (chegou a ser pedido e foi cancelado).
 - Telefone e e-mail próprios da administradora.
+- **Duas sessões do Claude podem estar ativas ao mesmo tempo neste projeto**
+  (esta conversa + uma sessão `claude rc` pelo celular, mesma pasta/branch,
+  modo "same-dir"). Nenhuma vê o que a outra fez até o próximo `git status`/
+  `git pull`. Sempre conferir isso no início de uma sessão nova.
 
 ## Aviso da Receita no cadastro (feito em 12/08/2026)
 
@@ -265,7 +323,5 @@ canal em branco no meio da lista é descartada no envio.
 
 ## Próximos passos previstos, depois do pendente
 
-- Aba "Consultar" (buscar cadastros existentes)
-- Cadastro de Locais de Atendimento e Contatos, ligados à Entidade
 - Painel de status das automações
 - Tela de chat/assistente

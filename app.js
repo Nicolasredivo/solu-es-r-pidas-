@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.08.21b";
+const APP_VERSION = "2026.08.21c";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -87,7 +87,7 @@ document.querySelectorAll(".sidebar-item[data-page]").forEach((item) => {
   item.addEventListener("click", () => {
     if (!podeSair(`pagina:${item.dataset.page}`)) {
       closeSidebar();
-      avisarPerda("Você tem um cadastro em andamento. Toque de novo para sair desta tela.");
+      avisarPerda("Você tem alterações não salvas. Toque de novo para sair desta tela.");
       return;
     }
 
@@ -110,7 +110,7 @@ document.querySelectorAll(".sidebar-item[data-page]").forEach((item) => {
 document.querySelectorAll(".subtab").forEach((tab) => {
   tab.addEventListener("click", () => {
     if (!podeSair(`aba:${tab.dataset.subpage}`)) {
-      avisarPerda("Você tem um cadastro em andamento. Toque de novo para sair desta tela.");
+      avisarPerda("Você tem alterações não salvas. Toque de novo para sair desta tela.");
       return;
     }
 
@@ -1233,24 +1233,57 @@ function cadastroEmAndamento() {
     .some((campo) => campo.value.trim());
 }
 
+// A mesma proteção vale para um cadastro existente que está sendo editado na
+// Consulta: o lápis já foi tocado, o Salvar ainda não. Basta um bloco aberto
+// em edição — comparar campo a campo não traz benefício aqui, porque quem
+// tocou no lápis já assumiu o risco de mexer em algo.
+function edicaoDaConsultaAbertaEmEdicao() {
+  const salvar = listaBox.querySelector(".cadastro.aberto .acao-salvar");
+  return Boolean(salvar) && !salvar.classList.contains("hidden");
+}
+
+function haAlgoParaPerder() {
+  return cadastroEmAndamento() || edicaoDaConsultaAbertaEmEdicao();
+}
+
+// Usado quando o usuário confirma que quer sair mesmo assim: devolve o bloco
+// da Consulta ao estado salvo, clicando no próprio Cancelar dele — reaproveita
+// a reversão que já existe, em vez de duplicá-la aqui.
+function descartarEdicaoDaConsulta() {
+  const cancelar = listaBox.querySelector(".cadastro.aberto .acao-cancelar");
+  if (cancelar && !cancelar.classList.contains("hidden")) cancelar.click();
+}
+
 // Mesma ideia do Cancelar e do Excluir: o primeiro toque avisa, o segundo
 // confirma. Uso o padrão daqui em vez do confirm() do navegador, que destoa
 // do resto e no celular aparece como alerta de site.
 let saidaPendente = null;
 
+// O aviso precisa aparecer onde o usuário está olhando: se o risco é um
+// cadastro sendo editado na Consulta, escrever em salvarStatus (que vive na
+// aba Adicionar, hoje fora da tela) passaria batido.
 function avisarPerda(mensagem) {
+  const statusDaConsulta = listaBox.querySelector(".cadastro.aberto .detalhe-status");
+  if (statusDaConsulta && edicaoDaConsultaAbertaEmEdicao()) {
+    statusDaConsulta.textContent = mensagem;
+    statusDaConsulta.className = "detalhe-status status show error";
+    return;
+  }
+
   salvarStatus.textContent = mensagem;
   salvarStatus.className = "status show error";
 }
 
 function podeSair(acao) {
-  if (!cadastroEmAndamento()) {
+  if (!haAlgoParaPerder()) {
     saidaPendente = null;
+    descartarEdicaoDaConsulta();
     return true;
   }
 
   if (saidaPendente === acao) {
     saidaPendente = null;
+    descartarEdicaoDaConsulta();
     return true;
   }
 
@@ -1258,13 +1291,18 @@ function podeSair(acao) {
   return false;
 }
 
-// Digitar de novo no formulário significa que a pessoa desistiu de sair.
-formEntidade.addEventListener("input", () => {
+// Digitar de novo (no cadastro novo ou numa edição aberta na Consulta)
+// significa que a pessoa desistiu de sair.
+function esquecerSaidaPendente() {
   saidaPendente = null;
-});
+  desarmarSaida();
+}
+
+formEntidade.addEventListener("input", esquecerSaidaPendente);
+listaBox.addEventListener("input", esquecerSaidaPendente);
 
 window.addEventListener("beforeunload", (event) => {
-  if (!cadastroEmAndamento()) return;
+  if (!haAlgoParaPerder()) return;
   // Aqui quem decide o texto é o navegador; só sinalizo que há o que perder.
   event.preventDefault();
   event.returnValue = "";
@@ -1279,18 +1317,23 @@ function desarmarSaida() {
   sairBotao.textContent = "Sair";
 }
 
+// Um único ciclo de dois toques, não dois empilhados: o primeiro toque já
+// mostra "Confirmar saída" e, se houver algo em risco, o aviso específico
+// junto. O segundo toque sai — o próprio aviso do primeiro já foi a
+// confirmação de que descartar está tudo bem.
 sairBotao.addEventListener("click", () => {
-  if (!podeSair("sair")) {
-    closeSidebar();
-    avisarPerda("Você tem um cadastro em andamento. Toque em Sair de novo para descartar.");
-    return;
-  }
-
   if (!sairBotao.classList.contains("confirmando")) {
     sairBotao.classList.add("confirmando");
     sairBotao.textContent = "Confirmar saída";
+
+    if (haAlgoParaPerder()) {
+      closeSidebar();
+      avisarPerda("Você tem alterações não salvas. Toque em Sair de novo para descartar e sair.");
+    }
     return;
   }
+
+  descartarEdicaoDaConsulta();
 
   // A senha guardada tem que ir embora, senão o app entraria sozinho de novo
   // e o Sair não teria efeito nenhum. O endereço do n8n fica: é ajuste do
@@ -1305,6 +1348,13 @@ sairBotao.addEventListener("click", () => {
   documentoAtual = "";
   tipoCnpjBox.classList.add("hidden");
   mostrarDica("neutral", "");
+
+  // A lista da Consulta some junto: o próximo login começa com dados
+  // frescos do n8n, em vez do que ficou em memória desta sessão.
+  listaBox.innerHTML = "";
+  listaCarregada = false;
+  buscaInput.value = "";
+  mostrarListaStatus("neutral", "");
 
   desarmarSaida();
   closeSidebar();
