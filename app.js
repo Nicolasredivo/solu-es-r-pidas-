@@ -28,6 +28,30 @@ function urlWebhook(caminho) {
   return `${baseUrlN8n()}/webhook/${caminho}`;
 }
 
+// Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
+// visível no rodapé do menu para dar uma resposta rápida à pergunta
+// "será que a atualização já chegou neste aparelho?".
+const APP_VERSION = "2026.08.21";
+
+// Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
+// as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
+// tempos só para saber se ele está vivo.
+async function fetchN8n(caminho, dados) {
+  try {
+    // Enviado como formulário simples de propósito: assim o navegador não
+    // precisa fazer a verificação extra de segurança (CORS preflight).
+    const resposta = await fetch(urlWebhook(caminho), {
+      method: "POST",
+      body: new URLSearchParams(dados),
+    });
+    marcarConexao(true);
+    return resposta;
+  } catch (err) {
+    marcarConexao(false);
+    throw err;
+  }
+}
+
 const menuButton = document.getElementById("menu-button");
 const sidebar = document.getElementById("sidebar");
 const sidebarOverlay = document.getElementById("sidebar-overlay");
@@ -36,12 +60,21 @@ function openSidebar() {
   sidebar.classList.add("open");
   sidebarOverlay.classList.add("show");
   menuButton.setAttribute("aria-expanded", "true");
+  empilharCamada();
 }
 
-function closeSidebar() {
+// Fecha sem mexer no histórico — usado quando quem mandou fechar foi o próprio
+// botão voltar do aparelho, que já desfez a camada.
+function fecharSidebarSemVoltar() {
   sidebar.classList.remove("open");
   sidebarOverlay.classList.remove("show");
   menuButton.setAttribute("aria-expanded", "false");
+}
+
+function closeSidebar() {
+  const estavaAberta = sidebar.classList.contains("open");
+  fecharSidebarSemVoltar();
+  if (estavaAberta) desempilharCamada();
 }
 
 menuButton.addEventListener("click", () => {
@@ -50,9 +83,17 @@ menuButton.addEventListener("click", () => {
 
 sidebarOverlay.addEventListener("click", closeSidebar);
 
-document.querySelectorAll(".sidebar-item").forEach((item) => {
+document.querySelectorAll(".sidebar-item[data-page]").forEach((item) => {
   item.addEventListener("click", () => {
-    document.querySelectorAll(".sidebar-item").forEach((i) => i.classList.remove("active"));
+    if (!podeSair(`pagina:${item.dataset.page}`)) {
+      closeSidebar();
+      avisarPerda("Você tem um cadastro em andamento. Toque de novo para sair desta tela.");
+      return;
+    }
+
+    document.querySelectorAll(".sidebar-item[data-page]").forEach((i) =>
+      i.classList.remove("active")
+    );
     item.classList.add("active");
 
     const targetId = `page-${item.dataset.page}`;
@@ -68,6 +109,11 @@ document.querySelectorAll(".sidebar-item").forEach((item) => {
 
 document.querySelectorAll(".subtab").forEach((tab) => {
   tab.addEventListener("click", () => {
+    if (!podeSair(`aba:${tab.dataset.subpage}`)) {
+      avisarPerda("Você tem um cadastro em andamento. Toque de novo para sair desta tela.");
+      return;
+    }
+
     document.querySelectorAll(".subtab").forEach((t) => t.classList.remove("active"));
     tab.classList.add("active");
 
@@ -445,12 +491,9 @@ async function consultarDocumento(digitos) {
   mostrarDica("neutral", "Consultando...");
 
   try {
-    const resposta = await fetch(urlWebhook("consultar-documento"), {
-      method: "POST",
-      body: new URLSearchParams({
-        senha: passwordInput.value,
-        documento: digitos,
-      }),
+    const resposta = await fetchN8n("consultar-documento", {
+      senha: passwordInput.value,
+      documento: digitos,
     });
 
     const dados = await resposta.json().catch(() => null);
@@ -609,10 +652,7 @@ function mostrarListaStatus(tipo, mensagem) {
 
 // Toda ação manda a senha junto: o n8n é quem confere, nunca a tela.
 async function pedirAoN8n(caminho, dados) {
-  const resposta = await fetch(urlWebhook(caminho), {
-    method: "POST",
-    body: new URLSearchParams({ senha: passwordInput.value, ...dados }),
-  });
+  const resposta = await fetchN8n(caminho, { senha: passwordInput.value, ...dados });
   return resposta.json();
 }
 
@@ -704,17 +744,24 @@ function montarLinha(cadastro) {
   return linha;
 }
 
-function fecharLinha(linha) {
+function fecharLinhaSemVoltar(linha) {
   linha.classList.remove("aberto");
   const caixa = linha.querySelector(".cadastro-detalhe");
   caixa.classList.add("hidden");
   caixa.innerHTML = "";
 }
 
+function fecharLinha(linha) {
+  fecharLinhaSemVoltar(linha);
+  desempilharCamada();
+}
+
 async function abrirLinha(linha, caixa, cadastro, avisoDepois) {
   // Um aberto por vez: dois cadastros abertos ao mesmo tempo confundem mais do
   // que ajudam, ainda mais no celular.
-  listaBox.querySelectorAll(".cadastro.aberto").forEach(fecharLinha);
+  const jaHaviaAberto = Boolean(listaBox.querySelector(".cadastro.aberto"));
+  listaBox.querySelectorAll(".cadastro.aberto").forEach(fecharLinhaSemVoltar);
+  if (!jaHaviaAberto) empilharCamada();
 
   linha.classList.add("aberto");
   caixa.classList.remove("hidden");
@@ -1032,12 +1079,7 @@ async function entrar(senha) {
   showStatus("loading", "Conectando ao n8n...");
 
   try {
-    // Enviado como formulário simples de propósito: assim o navegador não
-    // precisa fazer a verificação extra de segurança (CORS preflight).
-    const response = await fetch(urlWebhook("testar-conexao"), {
-      method: "POST",
-      body: new URLSearchParams({ senha }),
-    });
+    const response = await fetchN8n("testar-conexao", { senha });
 
     const data = await response.json().catch(() => null);
 
@@ -1098,16 +1140,234 @@ restaurarUrlBotao.addEventListener("click", () => {
   mostrarConfigHint("ok", "Voltou para o endereço padrão.");
 });
 
-// ----- Estado inicial da tela de entrada -----
+// ----- Indicador de conexão -----
 
-n8nUrlInput.value = baseUrlN8n();
+const conexaoBox = document.getElementById("conexao");
+const conexaoTexto = conexaoBox.querySelector(".conexao-texto");
 
-const senhaGuardada = localStorage.getItem(CHAVE_SENHA);
-if (senhaGuardada) {
-  passwordInput.value = senhaGuardada;
-  lembrarSenha.checked = true;
-  entrar(senhaGuardada);
+function marcarConexao(ok) {
+  const online = ok && navigator.onLine;
+  conexaoBox.classList.toggle("offline", !online);
+  conexaoTexto.textContent = online ? "conectado" : "sem conexão";
+  conexaoBox.title = online
+    ? "O app está falando com o n8n"
+    : "Sem resposta do n8n — confira se ele e o túnel estão ligados";
 }
+
+// Ficar sem internet é motivo suficiente para avisar, sem esperar uma chamada
+// falhar. Voltar a ter internet não garante que o n8n subiu, então a volta ao
+// verde só acontece quando uma chamada de verdade dá certo.
+window.addEventListener("offline", () => marcarConexao(false));
+
+// ----- Versão do app -----
+
+document.getElementById("versao-app").textContent = `versão ${APP_VERSION}`;
+
+// ----- Proteger cadastro em andamento -----
+
+// Só vale a pena avisar se há mesmo o que perder — e só quando o formulário
+// está à vista. Voltar para a aba dele não descarta nada, então entrar nunca
+// deve ser barrado; sair, sim.
+function cadastroEmAndamento() {
+  if (formEntidade.closest(".hidden")) return false;
+  if (documentoInput.value.trim()) return true;
+  return Array.from(formEntidade.querySelectorAll("input, textarea, select"))
+    .some((campo) => campo.value.trim());
+}
+
+// Mesma ideia do Cancelar e do Excluir: o primeiro toque avisa, o segundo
+// confirma. Uso o padrão daqui em vez do confirm() do navegador, que destoa
+// do resto e no celular aparece como alerta de site.
+let saidaPendente = null;
+
+function avisarPerda(mensagem) {
+  salvarStatus.textContent = mensagem;
+  salvarStatus.className = "status show error";
+}
+
+function podeSair(acao) {
+  if (!cadastroEmAndamento()) {
+    saidaPendente = null;
+    return true;
+  }
+
+  if (saidaPendente === acao) {
+    saidaPendente = null;
+    return true;
+  }
+
+  saidaPendente = acao;
+  return false;
+}
+
+// Digitar de novo no formulário significa que a pessoa desistiu de sair.
+formEntidade.addEventListener("input", () => {
+  saidaPendente = null;
+});
+
+window.addEventListener("beforeunload", (event) => {
+  if (!cadastroEmAndamento()) return;
+  // Aqui quem decide o texto é o navegador; só sinalizo que há o que perder.
+  event.preventDefault();
+  event.returnValue = "";
+});
+
+// ----- Sair -----
+
+const sairBotao = document.getElementById("sair");
+
+function desarmarSaida() {
+  sairBotao.classList.remove("confirmando");
+  sairBotao.textContent = "Sair";
+}
+
+sairBotao.addEventListener("click", () => {
+  if (!podeSair("sair")) {
+    closeSidebar();
+    avisarPerda("Você tem um cadastro em andamento. Toque em Sair de novo para descartar.");
+    return;
+  }
+
+  if (!sairBotao.classList.contains("confirmando")) {
+    sairBotao.classList.add("confirmando");
+    sairBotao.textContent = "Confirmar saída";
+    return;
+  }
+
+  // A senha guardada tem que ir embora, senão o app entraria sozinho de novo
+  // e o Sair não teria efeito nenhum. O endereço do n8n fica: é ajuste do
+  // aparelho, não da sessão.
+  localStorage.removeItem(CHAVE_SENHA);
+  passwordInput.value = "";
+  lembrarSenha.checked = false;
+
+  limparFormulario();
+  esconderFormulario();
+  documentoInput.value = "";
+  documentoAtual = "";
+  tipoCnpjBox.classList.add("hidden");
+  mostrarDica("neutral", "");
+
+  desarmarSaida();
+  closeSidebar();
+  appView.classList.add("hidden");
+  gateView.classList.remove("hidden");
+  statusBox.className = "status";
+});
+
+// ----- Botão voltar do celular -----
+
+// Duas camadas só: menu lateral e cadastro aberto na Consulta. Roteamento por
+// URL seria mais do que este app precisa e mais fácil de quebrar.
+let voltandoSozinho = false;
+
+function empilharCamada() {
+  history.pushState({ camada: true }, "");
+}
+
+function desempilharCamada() {
+  if (history.state && history.state.camada) {
+    voltandoSozinho = true;
+    history.back();
+  }
+}
+
+window.addEventListener("popstate", () => {
+  // Voltar disparado pelo próprio app ao fechar algo: já está tudo fechado.
+  if (voltandoSozinho) {
+    voltandoSozinho = false;
+    return;
+  }
+
+  if (sidebar.classList.contains("open")) {
+    fecharSidebarSemVoltar();
+    return;
+  }
+
+  const aberto = listaBox.querySelector(".cadastro.aberto");
+  if (aberto) fecharLinhaSemVoltar(aberto);
+});
+
+// ----- Aviso de e-mail e telefone com jeito de errado -----
+
+function pareceEmail(valor) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(valor.trim());
+}
+
+function pareceTelefone(valor) {
+  return valor.replace(/\D/g, "").length >= 10;
+}
+
+// O que decide a regra é onde o campo está, não o que ele é.
+function tipoDoCampo(campo) {
+  if (campo.id === "emails" || campo.classList.contains("d-emails")) return "emails";
+  if (campo.id === "whatsapp-cnpj" || campo.classList.contains("d-whatsapp-cnpj")) {
+    return "telefone";
+  }
+
+  if (campo.classList.contains("canal-valor")) {
+    if (campo.closest(".contato-emails")) return "email";
+    if (campo.closest(".contato-whatsapps")) return "telefone";
+  }
+
+  return null;
+}
+
+function mostrarAvisoCampo(campo, mensagem) {
+  let aviso = campo.nextElementSibling;
+  if (!aviso || !aviso.classList.contains("campo-aviso")) {
+    if (!mensagem) return;
+    aviso = document.createElement("p");
+    aviso.className = "campo-aviso";
+    campo.insertAdjacentElement("afterend", aviso);
+  }
+
+  aviso.textContent = mensagem;
+  aviso.classList.toggle("hidden", !mensagem);
+}
+
+// Avisa, não impede: pode existir um caso legítimo que a regra não prevê, e
+// travar o cadastro por causa disso seria pior que o erro de digitação.
+function conferirCampo(campo) {
+  const tipo = tipoDoCampo(campo);
+  if (!tipo) return;
+
+  const valor = campo.value.trim();
+  if (!valor) {
+    mostrarAvisoCampo(campo, "");
+    return;
+  }
+
+  if (tipo === "telefone") {
+    mostrarAvisoCampo(campo, pareceTelefone(valor) ? "" : "Isso não parece um telefone.");
+    return;
+  }
+
+  if (tipo === "email") {
+    mostrarAvisoCampo(campo, pareceEmail(valor) ? "" : "Isso não parece um e-mail.");
+    return;
+  }
+
+  // Campo de vários e-mails: aponto quais das partes não passaram.
+  const partes = valor.split(/[,;]/).map((parte) => parte.trim()).filter(Boolean);
+  const ruins = partes.filter((parte) => !pareceEmail(parte));
+  mostrarAvisoCampo(
+    campo,
+    ruins.length === 0
+      ? ""
+      : `Não parece e-mail: ${ruins.join(", ")}`
+  );
+}
+
+// Um ouvinte só, no documento: os campos de contato nascem depois, clonados
+// dos moldes, e assim não preciso ligar nada em cada um que aparece.
+document.addEventListener(
+  "focusout",
+  (event) => {
+    if (event.target instanceof HTMLInputElement) conferirCampo(event.target);
+  },
+  true
+);
 
 if ("serviceWorker" in navigator) {
   // Só recarrega quando um service worker ATIVO é substituído por um novo
@@ -1128,4 +1388,15 @@ if ("serviceWorker" in navigator) {
       registration.update();
     });
   });
+}
+
+// ----- Estado inicial da tela de entrada -----
+
+n8nUrlInput.value = baseUrlN8n();
+
+const senhaGuardada = localStorage.getItem(CHAVE_SENHA);
+if (senhaGuardada) {
+  passwordInput.value = senhaGuardada;
+  lembrarSenha.checked = true;
+  entrar(senhaGuardada);
 }

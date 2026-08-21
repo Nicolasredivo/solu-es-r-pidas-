@@ -629,3 +629,66 @@ button:active:not(:disabled) {
   background: rgba(154, 160, 180, 0.15);
   color: var(--muted);
 }
+
+/* ----- Indicador de conexão com o n8n ----- */
+.conexao {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.conexao-ponto {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex-shrink: 0;
+}
+
+.conexao.offline .conexao-ponto {
+  background: var(--error);
+}
+
+.conexao.offline .conexao-texto {
+  color: var(--error);
+}
+
+/* Em tela estreita o texto sai e fica só a bolinha, que já diz o essencial */
+@media (max-width: 420px) {
+  .conexao-texto {
+    display: none;
+  }
+}
+
+/* ----- Rodapé do menu: Sair e versão ----- */
+.sidebar-rodape {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid #2c3153;
+}
+
+.sidebar-item.sair {
+  color: var(--error);
+}
+
+.sidebar-item.sair.confirmando {
+  background: rgba(229, 72, 77, 0.15);
+}
+
+.versao-app {
+  margin: 10px 0 0;
+  padding: 0 12px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+/* ----- Aviso suave de campo (e-mail / telefone com jeito de errado) ----- */
+.campo-aviso {
+  margin: -12px 0 14px;
+  font-size: 0.8rem;
+  color: var(--aviso);
+}

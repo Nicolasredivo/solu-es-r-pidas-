@@ -48,6 +48,10 @@
     <div class="topbar">
       <button type="button" id="menu-button" class="menu-button" aria-label="Abrir menu" aria-expanded="false">☰</button>
       <span class="topbar-title">Soluções Rápidas</span>
+      <span id="conexao" class="conexao" title="Conexão com o n8n">
+        <span class="conexao-ponto"></span>
+        <span class="conexao-texto">conectado</span>
+      </span>
     </div>
 
     <div id="sidebar-overlay" class="sidebar-overlay"></div>
@@ -55,6 +59,11 @@
     <nav id="sidebar" class="sidebar">
       <button type="button" class="sidebar-item active" data-page="inicio">Início</button>
       <button type="button" class="sidebar-item" data-page="cadastro">Cadastro</button>
+
+      <div class="sidebar-rodape">
+        <button type="button" id="sair" class="sidebar-item sair">Sair</button>
+        <p id="versao-app" class="versao-app"></p>
+      </div>
     </nav>
 
     <main class="main-content">
