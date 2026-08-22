@@ -1,0 +1,204 @@
+{
+  "name": "App - Listar despesas",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "listar-despesas",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "f0000000-0000-4000-8000-000000000013",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "f0000000-0000-4000-8000-000000000014"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f0000000-0000-4000-8000-000000000015",
+              "leftValue": "={{ $json.body.senha }}",
+              "rightValue": "TROQUE-ESTA-SENHA",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "f0000000-0000-4000-8000-000000000016",
+      "name": "Senha esta correta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
+        "options": {}
+      },
+      "id": "f0000000-0000-4000-8000-000000000017",
+      "name": "Responde senha incorreta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appjAmWXV7Zr33UqE",
+          "mode": "list",
+          "cachedResultName": "Financeiro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblNduEKl2jY280V0",
+          "mode": "list",
+          "cachedResultName": "Despesas"
+        },
+        "filterByFormula": "",
+        "returnAll": true,
+        "sort": {
+          "property": [
+            {
+              "field": "Vencimento",
+              "direction": "asc"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f0000000-0000-4000-8000-000000000018",
+      "name": "Busca despesas",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Uma linha por despesa. O no de busca devolve item vazio (sem .id) quando\n// a tabela esta vazia, ou item de erro se a busca falhar -- os dois casos\n// ficam de fora da lista em vez de quebrar a resposta.\nconst achadas = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\n\nconst despesas = achadas.map((i) => {\n  const f = i.json.fields || {};\n  return {\n    id: i.json.id,\n    descricao: f.Descricao || '',\n    valor: f.Valor || 0,\n    fornecedor: f.Fornecedor || '',\n    vencimento: f.Vencimento || '',\n    status: f.Status || 'Pendente',\n    categoria: f.Categoria || '',\n    dataPagamento: f.Data_Pagamento || '',\n    observacoes: f.Observacoes || '',\n  };\n});\n\nreturn [{ json: { ok: true, total: despesas.length, despesas } }];"
+      },
+      "id": "f0000000-0000-4000-8000-000000000019",
+      "name": "Monta lista",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "f0000000-0000-4000-8000-000000000020",
+      "name": "Responde ao app",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        -60
+      ]
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Senha esta correta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Senha esta correta?": {
+      "main": [
+        [
+          {
+            "node": "Busca despesas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde senha incorreta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca despesas": {
+      "main": [
+        [
+          {
+            "node": "Monta lista",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta lista": {
+      "main": [
+        [
+          {
+            "node": "Responde ao app",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

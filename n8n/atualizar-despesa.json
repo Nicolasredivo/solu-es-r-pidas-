@@ -1,0 +1,437 @@
+{
+  "name": "App - Atualizar despesa",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "atualizar-despesa",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "f0000000-0000-4000-8000-000000000021",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "f0000000-0000-4000-8000-000000000022"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f0000000-0000-4000-8000-000000000023",
+              "leftValue": "={{ $json.body.senha }}",
+              "rightValue": "TROQUE-ESTA-SENHA",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "f0000000-0000-4000-8000-000000000024",
+      "name": "Senha esta correta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
+        "options": {}
+      },
+      "id": "f0000000-0000-4000-8000-000000000025",
+      "name": "Responde senha incorreta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => texto(v) || null;\nconst numero = (v) => {\n  const n = Number(String(v ?? '').replace(',', '.'));\n  return Number.isFinite(n) ? n : null;\n};\n\nconst id = texto(b.id);\nconst descricao = texto(b.descricao);\nconst valor = numero(b.valor);\n\nif (!id) throw new Error('Pedido sem o codigo da despesa.');\nif (!descricao || valor === null) {\n  return [{ json: { valido: false, mensagem: 'Preencha a descrição e um valor válido.' } }];\n}\n\nreturn [{\n  json: {\n    valido: true,\n    id,\n    descricao,\n    valor,\n    fornecedor: texto(b.fornecedor),\n    vencimento: lista(b.vencimento),\n    status: lista(b.status) || 'Pendente',\n    categoria: lista(b.categoria) || 'Outros',\n    dataPagamento: lista(b.dataPagamento),\n    observacoes: texto(b.observacoes),\n  },\n}];"
+      },
+      "id": "f0000000-0000-4000-8000-000000000026",
+      "name": "Prepara dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f0000000-0000-4000-8000-000000000027",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "f0000000-0000-4000-8000-000000000028",
+      "name": "Dados validos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, mensagem: $json.mensagem }) }}",
+        "options": {}
+      },
+      "id": "f0000000-0000-4000-8000-000000000029",
+      "name": "Responde dados invalidos",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appjAmWXV7Zr33UqE",
+          "mode": "list",
+          "cachedResultName": "Financeiro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblNduEKl2jY280V0",
+          "mode": "list",
+          "cachedResultName": "Despesas"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "id"
+          ],
+          "value": {
+            "id": "={{ $json.id }}",
+            "Descricao": "={{ $json.descricao }}",
+            "Valor": "={{ $json.valor }}",
+            "Fornecedor": "={{ $json.fornecedor }}",
+            "Vencimento": "={{ $json.vencimento }}",
+            "Status": "={{ $json.status }}",
+            "Categoria": "={{ $json.categoria }}",
+            "Data_Pagamento": "={{ $json.dataPagamento }}",
+            "Observacoes": "={{ $json.observacoes }}"
+          },
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Descricao",
+              "displayName": "Descricao",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Valor",
+              "displayName": "Valor",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Fornecedor",
+              "displayName": "Fornecedor",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Vencimento",
+              "displayName": "Vencimento",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "date",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "readOnly": false,
+              "removed": false,
+              "options": [
+                {
+                  "name": "Pendente",
+                  "value": "Pendente"
+                },
+                {
+                  "name": "Pago",
+                  "value": "Pago"
+                }
+              ]
+            },
+            {
+              "id": "Categoria",
+              "displayName": "Categoria",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "readOnly": false,
+              "removed": false,
+              "options": [
+                {
+                  "name": "Material",
+                  "value": "Material"
+                },
+                {
+                  "name": "Veículo",
+                  "value": "Veículo"
+                },
+                {
+                  "name": "Salário",
+                  "value": "Salário"
+                },
+                {
+                  "name": "Aluguel",
+                  "value": "Aluguel"
+                },
+                {
+                  "name": "Outros",
+                  "value": "Outros"
+                }
+              ]
+            },
+            {
+              "id": "Data_Pagamento",
+              "displayName": "Data_Pagamento",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "date",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Observacoes",
+              "displayName": "Observacoes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "f0000000-0000-4000-8000-000000000030",
+      "name": "Atualiza no Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        -160
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Despesa atualizada!\"\n}",
+        "options": {}
+      },
+      "id": "f0000000-0000-4000-8000-000000000031",
+      "name": "Responde atualizado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Não consegui salvar as alterações.\"\n}",
+        "options": {}
+      },
+      "id": "f0000000-0000-4000-8000-000000000032",
+      "name": "Responde erro",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        -60
+      ]
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Senha esta correta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Senha esta correta?": {
+      "main": [
+        [
+          {
+            "node": "Prepara dados",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde senha incorreta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara dados": {
+      "main": [
+        [
+          {
+            "node": "Dados validos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados validos?": {
+      "main": [
+        [
+          {
+            "node": "Atualiza no Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde dados invalidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualiza no Airtable": {
+      "main": [
+        [
+          {
+            "node": "Responde atualizado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.08.21d";
+const APP_VERSION = "2026.08.22";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -1127,6 +1127,362 @@ document.querySelector('.subtab[data-subpage="consultar"]').addEventListener("cl
   if (!listaCarregada) carregarLista();
 });
 
+// ----- Financeiro: despesas (contas a pagar) -----
+
+const despesaForm = document.getElementById("form-despesa");
+const novaDespesaBotao = document.getElementById("nova-despesa");
+const cancelarDespesaBotao = document.getElementById("cancelar-despesa");
+const salvarDespesaBotao = document.getElementById("salvar-despesa");
+const despesaStatusMsg = document.getElementById("despesa-status-msg");
+const buscaDespesa = document.getElementById("busca-despesa");
+const recarregarDespesasBotao = document.getElementById("recarregar-despesas");
+const listaDespesasStatus = document.getElementById("lista-despesas-status");
+const listaDespesasBox = document.getElementById("lista-despesas");
+const modeloDespesa = document.getElementById("modelo-despesa");
+const resumoDespesas = document.getElementById("resumo-despesas");
+const linhaDataPagamento = document.getElementById("linha-data-pagamento");
+
+const despesaCampos = {
+  descricao: document.getElementById("despesa-descricao"),
+  valor: document.getElementById("despesa-valor"),
+  fornecedor: document.getElementById("despesa-fornecedor"),
+  vencimento: document.getElementById("despesa-vencimento"),
+  categoria: document.getElementById("despesa-categoria"),
+  status: document.getElementById("despesa-status"),
+  dataPagamento: document.getElementById("despesa-data-pagamento"),
+  observacoes: document.getElementById("despesa-observacoes"),
+};
+
+let despesas = [];
+let despesasCarregadas = false;
+// Guarda o código quando o formulário está editando uma despesa que já existe;
+// vazio significa que é uma despesa nova.
+let despesaEditando = "";
+
+function dinheiro(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+// Data vem do Airtable como "2026-09-10"; na tela mostramos "10/09/2026".
+function dataBonita(iso) {
+  if (!iso) return "";
+  const [ano, mes, dia] = String(iso).slice(0, 10).split("-");
+  return dia && mes && ano ? `${dia}/${mes}/${ano}` : iso;
+}
+
+function hojeISO() {
+  const agora = new Date();
+  const mes = String(agora.getMonth() + 1).padStart(2, "0");
+  const dia = String(agora.getDate()).padStart(2, "0");
+  return `${agora.getFullYear()}-${mes}-${dia}`;
+}
+
+// Vencida é quem tem data no passado E ainda não foi paga.
+function despesaVencida(despesa) {
+  if (despesa.status === "Pago" || !despesa.vencimento) return false;
+  return String(despesa.vencimento).slice(0, 10) < hojeISO();
+}
+
+function mostrarDespesaStatus(tipo, mensagem) {
+  despesaStatusMsg.textContent = mensagem;
+  despesaStatusMsg.className = `status show ${tipo}`;
+}
+
+function mostrarListaDespesasStatus(tipo, mensagem) {
+  listaDespesasStatus.textContent = mensagem;
+  listaDespesasStatus.className = `doc-hint ${tipo}`;
+}
+
+// Data do pagamento só faz sentido quando a despesa está paga.
+function ajustarLinhaDataPagamento() {
+  const pago = despesaCampos.status.value === "Pago";
+  linhaDataPagamento.classList.toggle("hidden", !pago);
+  if (pago && !despesaCampos.dataPagamento.value) {
+    despesaCampos.dataPagamento.value = hojeISO();
+  }
+}
+
+despesaCampos.status.addEventListener("change", ajustarLinhaDataPagamento);
+
+function limparFormDespesa() {
+  despesaEditando = "";
+  Object.values(despesaCampos).forEach((campo) => (campo.value = ""));
+  despesaCampos.categoria.value = "Outros";
+  despesaCampos.status.value = "Pendente";
+  ajustarLinhaDataPagamento();
+  despesaStatusMsg.className = "status";
+  salvarDespesaBotao.textContent = "Salvar despesa";
+}
+
+function abrirFormDespesa(despesa) {
+  limparFormDespesa();
+
+  if (despesa) {
+    despesaEditando = despesa.id;
+    despesaCampos.descricao.value = despesa.descricao;
+    despesaCampos.valor.value = String(despesa.valor).replace(".", ",");
+    despesaCampos.fornecedor.value = despesa.fornecedor;
+    despesaCampos.vencimento.value = String(despesa.vencimento || "").slice(0, 10);
+    despesaCampos.categoria.value = despesa.categoria || "Outros";
+    despesaCampos.status.value = despesa.status || "Pendente";
+    despesaCampos.dataPagamento.value = String(despesa.dataPagamento || "").slice(0, 10);
+    despesaCampos.observacoes.value = despesa.observacoes;
+    ajustarLinhaDataPagamento();
+    salvarDespesaBotao.textContent = "Salvar alterações";
+  }
+
+  despesaForm.classList.remove("hidden");
+  novaDespesaBotao.classList.add("hidden");
+  despesaCampos.descricao.focus();
+}
+
+function fecharFormDespesa() {
+  despesaForm.classList.add("hidden");
+  novaDespesaBotao.classList.remove("hidden");
+  limparFormDespesa();
+}
+
+novaDespesaBotao.addEventListener("click", () => abrirFormDespesa(null));
+cancelarDespesaBotao.addEventListener("click", fecharFormDespesa);
+
+async function carregarDespesas() {
+  mostrarListaDespesasStatus("neutral", "Carregando...");
+  listaDespesasBox.innerHTML = "";
+
+  try {
+    const dados = await pedirAoN8n("listar-despesas", {});
+
+    if (!dados || !dados.ok) {
+      mostrarListaDespesasStatus("error", (dados && dados.mensagem) || "Não consegui carregar.");
+      return;
+    }
+
+    despesas = dados.despesas || [];
+    despesasCarregadas = true;
+    desenharDespesas();
+  } catch (err) {
+    mostrarListaDespesasStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+  }
+}
+
+function atualizarResumoDespesas() {
+  const emAberto = despesas.filter((d) => d.status !== "Pago");
+  const totalAberto = emAberto.reduce((soma, d) => soma + Number(d.valor || 0), 0);
+  const totalVencidas = emAberto.filter(despesaVencida)
+    .reduce((soma, d) => soma + Number(d.valor || 0), 0);
+
+  // "Pago no mês" olha a data do pagamento, não a do vencimento: o que importa
+  // aqui é quanto de dinheiro saiu neste mês.
+  const mesAtual = hojeISO().slice(0, 7);
+  const totalPago = despesas
+    .filter((d) => d.status === "Pago" && String(d.dataPagamento || "").slice(0, 7) === mesAtual)
+    .reduce((soma, d) => soma + Number(d.valor || 0), 0);
+
+  document.getElementById("resumo-aberto").textContent = dinheiro(totalAberto);
+  document.getElementById("resumo-vencidas").textContent = dinheiro(totalVencidas);
+  document.getElementById("resumo-pago").textContent = dinheiro(totalPago);
+  resumoDespesas.classList.toggle("hidden", despesas.length === 0);
+}
+
+function desenharDespesas() {
+  const termo = buscaDespesa.value.trim().toLowerCase();
+
+  const visiveis = despesas.filter((d) => {
+    if (!termo) return true;
+    return `${d.descricao} ${d.fornecedor}`.toLowerCase().includes(termo);
+  });
+
+  listaDespesasBox.innerHTML = "";
+  atualizarResumoDespesas();
+
+  if (!despesas.length) {
+    mostrarListaDespesasStatus("neutral", "Nenhuma despesa ainda.");
+    return;
+  }
+
+  if (!visiveis.length) {
+    mostrarListaDespesasStatus("neutral", `Nada encontrado para "${buscaDespesa.value.trim()}".`);
+    return;
+  }
+
+  mostrarListaDespesasStatus(
+    "neutral",
+    visiveis.length === despesas.length
+      ? `${despesas.length} despesa${despesas.length > 1 ? "s" : ""}.`
+      : `${visiveis.length} de ${despesas.length} despesas.`
+  );
+
+  visiveis.forEach((despesa) => listaDespesasBox.appendChild(montarLinhaDespesa(despesa)));
+}
+
+function montarLinhaDespesa(despesa) {
+  const linha = modeloDespesa.content.firstElementChild.cloneNode(true);
+  const vencida = despesaVencida(despesa);
+  const paga = despesa.status === "Pago";
+
+  linha.classList.toggle("paga", paga);
+  linha.classList.toggle("vencida", vencida);
+
+  linha.querySelector(".despesa-descricao").textContent = despesa.descricao || "(sem descrição)";
+  linha.querySelector(".despesa-valor").textContent = dinheiro(despesa.valor);
+
+  const partes = [];
+  if (despesa.vencimento) {
+    // "Vence" só faz sentido no futuro: data no passado é "venceu", mesmo que
+    // a despesa já tenha sido paga.
+    const passou = String(despesa.vencimento).slice(0, 10) < hojeISO();
+    partes.push((passou ? "Venceu em " : "Vence em ") + dataBonita(despesa.vencimento));
+  }
+  if (paga) partes.push("Pago" + (despesa.dataPagamento ? " em " + dataBonita(despesa.dataPagamento) : ""));
+  if (despesa.fornecedor) partes.push(despesa.fornecedor);
+  if (despesa.categoria) partes.push(despesa.categoria);
+  linha.querySelector(".despesa-extra").textContent = partes.join(" · ");
+
+  const acoes = linha.querySelector(".despesa-acoes");
+  const botaoPagar = linha.querySelector(".despesa-pagar");
+  const botaoEditar = linha.querySelector(".despesa-editar");
+  const botaoExcluir = linha.querySelector(".despesa-excluir");
+
+  // Despesa já paga não precisa do botão de pagar.
+  botaoPagar.classList.toggle("hidden", paga);
+
+  linha.querySelector(".despesa-resumo").addEventListener("click", () => {
+    const abrindo = acoes.classList.contains("hidden");
+    // Uma aberta por vez: a lista fica curta e sem confusão no celular.
+    listaDespesasBox.querySelectorAll(".despesa").forEach((outra) => {
+      outra.classList.remove("aberta");
+      outra.querySelector(".despesa-acoes").classList.add("hidden");
+      desarmarExclusaoDespesa(outra.querySelector(".despesa-excluir"));
+    });
+    acoes.classList.toggle("hidden", !abrindo);
+    linha.classList.toggle("aberta", abrindo);
+  });
+
+  botaoEditar.addEventListener("click", () => {
+    abrirFormDespesa(despesa);
+    despesaForm.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+
+  botaoPagar.addEventListener("click", async () => {
+    botaoPagar.disabled = true;
+    try {
+      await gravarDespesa({ ...despesa, status: "Pago", dataPagamento: hojeISO() }, despesa.id);
+    } finally {
+      botaoPagar.disabled = false;
+    }
+  });
+
+  botaoExcluir.addEventListener("click", async () => {
+    if (!botaoExcluir.classList.contains("confirmando")) {
+      botaoExcluir.classList.add("confirmando");
+      botaoExcluir.textContent = "Confirmar exclusão";
+      return;
+    }
+
+    botaoExcluir.disabled = true;
+    try {
+      const resposta = await pedirAoN8n("excluir-despesa", { id: despesa.id });
+      if (!resposta || !resposta.ok) {
+        mostrarListaDespesasStatus("error", (resposta && resposta.mensagem) || "Não consegui excluir.");
+        desarmarExclusaoDespesa(botaoExcluir);
+        return;
+      }
+      despesas = despesas.filter((d) => d.id !== despesa.id);
+      desenharDespesas();
+      mostrarListaDespesasStatus("ok", resposta.mensagem || "Despesa excluída.");
+    } catch (err) {
+      mostrarListaDespesasStatus("error", "Não foi possível falar com o n8n.");
+      desarmarExclusaoDespesa(botaoExcluir);
+    } finally {
+      botaoExcluir.disabled = false;
+    }
+  });
+
+  return linha;
+}
+
+function desarmarExclusaoDespesa(botao) {
+  if (!botao) return;
+  botao.classList.remove("confirmando");
+  botao.textContent = "Excluir";
+}
+
+// Serve para salvar nova, editar e marcar como paga — as três terminam em
+// gravar no n8n e recarregar a lista.
+async function gravarDespesa(dados, idExistente) {
+  const rota = idExistente ? "atualizar-despesa" : "salvar-despesa";
+  const corpo = {
+    descricao: dados.descricao,
+    // O n8n aceita vírgula ou ponto; mando como está para não perder centavos.
+    valor: String(dados.valor),
+    fornecedor: dados.fornecedor || "",
+    vencimento: dados.vencimento || "",
+    status: dados.status || "Pendente",
+    categoria: dados.categoria || "Outros",
+    dataPagamento: dados.dataPagamento || "",
+    observacoes: dados.observacoes || "",
+  };
+  if (idExistente) corpo.id = idExistente;
+
+  const resposta = await pedirAoN8n(rota, corpo);
+
+  if (!resposta || !resposta.ok) {
+    throw new Error((resposta && resposta.mensagem) || "Não consegui salvar.");
+  }
+
+  await carregarDespesas();
+  return resposta;
+}
+
+despesaForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!despesaCampos.descricao.value.trim()) {
+    mostrarDespesaStatus("error", "Escreva uma descrição para a despesa.");
+    return;
+  }
+
+  const valor = Number(despesaCampos.valor.value.replace(",", "."));
+  if (!Number.isFinite(valor) || valor <= 0) {
+    mostrarDespesaStatus("error", "Informe um valor válido, maior que zero.");
+    return;
+  }
+
+  salvarDespesaBotao.disabled = true;
+  mostrarDespesaStatus("loading", "Salvando...");
+
+  try {
+    const resposta = await gravarDespesa({
+      descricao: despesaCampos.descricao.value.trim(),
+      valor: despesaCampos.valor.value.replace(",", "."),
+      fornecedor: despesaCampos.fornecedor.value.trim(),
+      vencimento: despesaCampos.vencimento.value,
+      status: despesaCampos.status.value,
+      categoria: despesaCampos.categoria.value,
+      dataPagamento: despesaCampos.dataPagamento.value,
+      observacoes: despesaCampos.observacoes.value.trim(),
+    }, despesaEditando);
+
+    fecharFormDespesa();
+    mostrarListaDespesasStatus("ok", resposta.mensagem || "Despesa salva!");
+  } catch (err) {
+    mostrarDespesaStatus("error", err.message || "Não foi possível falar com o n8n.");
+  } finally {
+    salvarDespesaBotao.disabled = false;
+  }
+});
+
+buscaDespesa.addEventListener("input", () => {
+  if (despesasCarregadas) desenharDespesas();
+});
+
+recarregarDespesasBotao.addEventListener("click", carregarDespesas);
+
+// Carrega sozinho na primeira vez que a página é aberta.
+document.querySelector('.sidebar-item[data-page="financeiro"]').addEventListener("click", () => {
+  if (!despesasCarregadas) carregarDespesas();
+});
+
 // ----- Tela de entrada (senha) -----
 
 function showStatus(kind, message) {
@@ -1249,8 +1605,16 @@ function edicaoDaConsultaAbertaEmEdicao() {
   return Boolean(salvar) && !salvar.classList.contains("hidden");
 }
 
+// Mesma ideia do cadastro: formulário de despesa aberto e com algo digitado
+// é trabalho que se perde ao sair da tela.
+function despesaEmAndamento() {
+  if (despesaForm.classList.contains("hidden")) return false;
+  return Array.from(despesaForm.querySelectorAll("input, textarea"))
+    .some((campo) => campo.value.trim());
+}
+
 function haAlgoParaPerder() {
-  return cadastroEmAndamento() || edicaoDaConsultaAbertaEmEdicao();
+  return cadastroEmAndamento() || edicaoDaConsultaAbertaEmEdicao() || despesaEmAndamento();
 }
 
 // Usado quando o usuário confirma que quer sair mesmo assim: devolve o bloco
@@ -1270,6 +1634,13 @@ let saidaPendente = null;
 // cadastro sendo editado na Consulta, escrever em salvarStatus (que vive na
 // aba Adicionar, hoje fora da tela) passaria batido.
 function avisarPerda(mensagem) {
+  // Despesa em andamento tem prioridade: se o formulário dela está aberto, é
+  // onde o usuário está olhando agora.
+  if (despesaEmAndamento()) {
+    mostrarDespesaStatus("error", mensagem);
+    return;
+  }
+
   const statusDaConsulta = listaBox.querySelector(".cadastro.aberto .detalhe-status");
   if (statusDaConsulta && edicaoDaConsultaAbertaEmEdicao()) {
     statusDaConsulta.textContent = mensagem;
@@ -1307,6 +1678,7 @@ function esquecerSaidaPendente() {
 
 formEntidade.addEventListener("input", esquecerSaidaPendente);
 listaBox.addEventListener("input", esquecerSaidaPendente);
+despesaForm.addEventListener("input", esquecerSaidaPendente);
 
 window.addEventListener("beforeunload", (event) => {
   if (!haAlgoParaPerder()) return;
@@ -1362,6 +1734,16 @@ sairBotao.addEventListener("click", () => {
   listaCarregada = false;
   buscaInput.value = "";
   mostrarListaStatus("neutral", "");
+
+  // O Financeiro também: valores em aberto não devem ficar na tela depois de
+  // sair, nem sobrar em memória para o próximo login.
+  fecharFormDespesa();
+  despesas = [];
+  despesasCarregadas = false;
+  listaDespesasBox.innerHTML = "";
+  buscaDespesa.value = "";
+  resumoDespesas.classList.add("hidden");
+  mostrarListaDespesasStatus("neutral", "");
 
   desarmarSaida();
   closeSidebar();

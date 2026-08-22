@@ -692,3 +692,130 @@ button:active:not(:disabled) {
   font-size: 0.8rem;
   color: var(--aviso);
 }
+
+/* ----- Financeiro: resumo e lista de despesas ----- */
+
+.subtab-fin {
+  flex: 1;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.subtab-fin.active {
+  background: var(--accent);
+  color: white;
+}
+
+/* Três números lado a lado; no celular quebram sozinhos */
+.resumo-financeiro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.resumo-item {
+  flex: 1;
+  min-width: 90px;
+  background: #12162a;
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.resumo-rotulo {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.resumo-valor {
+  display: block;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* Vencida é o número que exige ação hoje, então vem em vermelho */
+.resumo-alerta {
+  color: var(--error);
+}
+
+#nova-despesa {
+  margin-bottom: 18px;
+}
+
+.despesa {
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.despesa-resumo {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 12px 14px;
+  font-weight: 400;
+  font-size: 0.95rem;
+}
+
+.despesa-resumo:hover {
+  background: rgba(91, 141, 239, 0.08);
+}
+
+.despesa.aberta .despesa-resumo {
+  background: rgba(91, 141, 239, 0.12);
+}
+
+.despesa-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.despesa-descricao {
+  font-weight: 600;
+}
+
+.despesa-valor {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.despesa-extra {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* Despesa paga fica apagada: o que importa na lista é o que ainda falta pagar */
+.despesa.paga .despesa-descricao,
+.despesa.paga .despesa-valor {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.despesa.vencida .despesa-extra {
+  color: var(--error);
+}
+
+.despesa-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+
+.despesa-acoes button {
+  width: auto;
+}

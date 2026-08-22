@@ -59,6 +59,7 @@
     <nav id="sidebar" class="sidebar">
       <button type="button" class="sidebar-item active" data-page="inicio">Início</button>
       <button type="button" class="sidebar-item" data-page="cadastro">Cadastro</button>
+      <button type="button" class="sidebar-item" data-page="financeiro">Financeiro</button>
 
       <div class="sidebar-rodape">
         <button type="button" id="sair" class="sidebar-item sair">Sair</button>
@@ -338,6 +339,102 @@
               <button type="button" class="d-adicionar-contato botao-secundario hidden">
                 + Adicionar contato
               </button>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div id="page-financeiro" class="card page hidden">
+        <h1>Financeiro</h1>
+
+        <div class="subtabs">
+          <button type="button" class="subtab-fin active" data-subfin="despesas">Despesas</button>
+        </div>
+
+        <div id="subfin-despesas" class="subpage">
+          <!-- Resumo do que está em aberto, calculado do que já foi carregado -->
+          <div id="resumo-despesas" class="resumo-financeiro hidden">
+            <div class="resumo-item">
+              <span class="resumo-rotulo">Em aberto</span>
+              <strong id="resumo-aberto" class="resumo-valor"></strong>
+            </div>
+            <div class="resumo-item">
+              <span class="resumo-rotulo">Vencidas</span>
+              <strong id="resumo-vencidas" class="resumo-valor resumo-alerta"></strong>
+            </div>
+            <div class="resumo-item">
+              <span class="resumo-rotulo">Pago no mês</span>
+              <strong id="resumo-pago" class="resumo-valor"></strong>
+            </div>
+          </div>
+
+          <button type="button" id="nova-despesa" class="botao-secundario">+ Nova despesa</button>
+
+          <form id="form-despesa" class="hidden">
+            <label for="despesa-descricao">Descrição</label>
+            <input type="text" id="despesa-descricao" placeholder="Ex: Cimento, aluguel de agosto" />
+
+            <label for="despesa-valor">Valor (R$)</label>
+            <input type="text" id="despesa-valor" inputmode="decimal" placeholder="Ex: 150,00" />
+
+            <label for="despesa-fornecedor">Fornecedor</label>
+            <input type="text" id="despesa-fornecedor" placeholder="Opcional" />
+
+            <label for="despesa-vencimento">Vencimento</label>
+            <input type="date" id="despesa-vencimento" />
+
+            <label for="despesa-categoria">Categoria</label>
+            <select id="despesa-categoria">
+              <option>Material</option>
+              <option>Veículo</option>
+              <option>Salário</option>
+              <option>Aluguel</option>
+              <option selected>Outros</option>
+            </select>
+
+            <label for="despesa-status">Status</label>
+            <select id="despesa-status">
+              <option>Pendente</option>
+              <option>Pago</option>
+            </select>
+
+            <div id="linha-data-pagamento" class="hidden">
+              <label for="despesa-data-pagamento">Data do pagamento</label>
+              <input type="date" id="despesa-data-pagamento" />
+            </div>
+
+            <label for="despesa-observacoes">Observações</label>
+            <textarea id="despesa-observacoes" rows="2"></textarea>
+
+            <button type="submit" id="salvar-despesa">Salvar despesa</button>
+            <button type="button" id="cancelar-despesa" class="botao-secundario">Cancelar</button>
+            <div id="despesa-status-msg" class="status"></div>
+          </form>
+
+          <div class="busca-linha">
+            <input type="text" id="busca-despesa" autocomplete="off"
+                   placeholder="Buscar por descrição ou fornecedor" />
+            <button type="button" id="recarregar-despesas" class="botao-secundario">Atualizar</button>
+          </div>
+
+          <p id="lista-despesas-status" class="doc-hint"></p>
+          <div id="lista-despesas"></div>
+
+          <!-- Molde de uma linha da lista de despesas -->
+          <template id="modelo-despesa">
+            <div class="despesa">
+              <button type="button" class="despesa-resumo">
+                <span class="despesa-topo">
+                  <span class="despesa-descricao"></span>
+                  <span class="despesa-valor"></span>
+                </span>
+                <span class="despesa-extra"></span>
+              </button>
+              <div class="despesa-acoes hidden">
+                <button type="button" class="despesa-pagar botao-secundario">Marcar como paga</button>
+                <button type="button" class="despesa-editar botao-secundario">Editar</button>
+                <button type="button" class="despesa-excluir botao-secundario">Excluir</button>
+              </div>
             </div>
           </template>
         </div>

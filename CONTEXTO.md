@@ -61,8 +61,16 @@ Base **"cadastro"** (`app6PyYmtFduIMp7B`), com 3 tabelas ligadas entre si:
 - `Locais_Atendimento` (`tblffVczCf1VeNxs7`) — endereços de cada cliente
 - `Contatos_Solicitantes` (`tblXXOEOCwQnC2qFX`) — pessoas que abrem chamado
 
-Existe também uma base maior, "ERP Soluções Rápidas - Produção", ainda não usada
-pelo app.
+Base **"Financeiro"** (`appjAmWXV7Zr33UqE`), criada em 22/08/2026:
+
+- `Despesas` (`tblNduEKl2jY280V0`) — contas a pagar
+
+Existe também uma base maior, **"ERP Soluções Rápidas - Produção"**
+(`appvRrT2s6rK7jOKh`), com 17 tabelas (Chamados/Work Orders, Técnicos,
+Materiais, Fornecedores, Faturas, Despesas, Veículos…). **Não é usada pelo app
+e não deve ser usada como base para construir** — foi decidido em 22/08/2026
+que ela serve só de referência/inspiração; o ERP é construído do zero, peça por
+peça, conforme a necessidade real aparecer.
 
 ## Workflows do n8n
 
@@ -77,6 +85,10 @@ Todos criados, publicados e testados de ponta a ponta:
 | `App - Detalhe do cadastro` | `/webhook/detalhe-cadastro` | `fknumisB42zBZNjS` |
 | `App - Atualizar cadastro` | `/webhook/atualizar-cadastro` | `1UbdhChF8Pfse0of` |
 | `App - Excluir cadastro` | `/webhook/excluir-cadastro` | `Zeyk3CwEDKeHjf3G` |
+| `App - Salvar despesa` | `/webhook/salvar-despesa` | `srhsmBQE202yhtrU` |
+| `App - Listar despesas` | `/webhook/listar-despesas` | `pvDggp2tA894MToU` |
+| `App - Atualizar despesa` | `/webhook/atualizar-despesa` | `TZ7jynwhg0Al4BCo` |
+| `App - Excluir despesa` | `/webhook/excluir-despesa` | `3dWn81rxmpgb15D6` |
 
 Cada arquivo em `n8n/` tem o nome do caminho do webhook correspondente.
 
@@ -259,6 +271,53 @@ saía vazio e o nó explodia. Corrigido lendo direto de
 `Prepara locais`/`Prepara contatos` já usavam em `App - Salvar entidade`
 por este exato motivo.
 
+## Começo do ERP: Financeiro / Despesas (22/08/2026)
+
+Decisão sobre como construir o ERP, tomada depois de investigar o Base ERP
+(Asaas): **construir do zero, peça por peça, conforme a necessidade real.** As
+bases prontas no Airtable ("ERP Soluções Rápidas - Produção") servem só de
+referência — não são a fundação.
+
+**Sobre o Asaas / Base ERP** (investigado em 22/08/2026, vale registrar para não
+repetir a pesquisa):
+
+- São **dois produtos com APIs separadas**: `docs.asaas.com` (cobrança,
+  pagamento, **nota fiscal de serviço**) e `docs.baseerp.com.br` (o ERP em si).
+- A API do **Base ERP** só expõe Cliente, Produto, Transportadora, Pedido de
+  venda, NF-e (produto) e webhooks disso. **Não tem** endpoint de serviço,
+  ordem de serviço, estoque, financeiro ou técnico — conferido tentando abrir
+  `/docs/servico`, `/docs/estoque` e `/docs/financeiro`, os três dão 404.
+- Como o negócio é 100% serviço, **a chave que importa é a do Asaas**, não a do
+  Base ERP: é o Asaas que emite **NFS-e** (nota de serviço), avulsa ou atrelada
+  a uma cobrança. A chave do Base ERP só faria falta para vender mercadoria.
+- Chave do Asaas guardada em `C:\Users\rediv\chave-asaas.txt` (fora do
+  repositório e fora do OneDrive, mesmo cuidado da chave do n8n). **Ainda não
+  usada por nenhum workflow** — foi guardada para quando chegarmos em cobrança
+  e nota fiscal.
+
+**O que foi construído:** base `Financeiro` com a tabela `Despesas`, quatro
+workflows (salvar/listar/atualizar/excluir) e a página Financeiro no app.
+
+Detalhes da tela que valem saber:
+
+- **Resumo no topo**: Em aberto, Vencidas (em vermelho) e Pago no mês. Tudo
+  calculado no próprio app, a partir da lista que já foi carregada — nenhuma
+  chamada extra ao n8n só para somar.
+- "Pago no mês" olha a **data do pagamento**, não a do vencimento: o que
+  importa ali é quanto dinheiro saiu neste mês.
+- **Vencida** = data no passado **e** ainda não paga. Uma despesa paga com
+  data passada mostra "Venceu em…", mas não entra no vermelho.
+- Botão **"Marcar como paga"** grava o status e a data de hoje de uma vez, sem
+  precisar abrir o formulário — é a ação mais comum do dia a dia.
+- O campo "Data do pagamento" só aparece quando o status é Pago.
+- Valor aceita **vírgula ou ponto** (o brasileiro digita vírgula); o app
+  converte antes de mandar, e o n8n também aceita os dois.
+- O aviso de "alterações não salvas" foi estendido para cobrir o formulário de
+  despesa, e o aviso aparece **na caixa da própria tela de Financeiro** — não
+  na do Cadastro, que estaria fora da vista.
+- Sair do sistema limpa a lista e o resumo do Financeiro, como já fazia com a
+  Consulta: valores em aberto não devem ficar na tela depois do logout.
+
 ## PENDENTE AGORA (é por aqui que se continua)
 
 - **`WhatsApp_Financeiro` não existe mais**, mas nada foi perdido: o campo só
@@ -274,6 +333,20 @@ por este exato motivo.
   (esta conversa + uma sessão `claude rc` pelo celular, mesma pasta/branch,
   modo "same-dir"). Nenhuma vê o que a outra fez até o próximo `git status`/
   `git pull`. Sempre conferir isso no início de uma sessão nova.
+
+**No Financeiro, o que o dono pediu e ainda falta** (ele pediu para ir devagar,
+uma peça por vez, e volta quando precisar):
+
+- **Nota fiscal de serviço (NFS-e) via Asaas** — a chave já está guardada e a
+  configuração fiscal já foi feita por ele no Base ERP. Falta construir.
+- **Cobrança dos clientes (contas a receber)** via Asaas — boleto/PIX e saber
+  quem pagou, por webhook.
+- **Resumo financeiro geral** (quanto entrou × quanto saiu). O resumo de
+  Despesas já existe, mas só olha o que sai.
+- O Financeiro tem só a aba "Despesas" por enquanto; a estrutura de abas já
+  está pronta para receber as próximas.
+- Despesas recorrentes (aluguel todo mês, etc.) não existem — hoje cada mês
+  precisa ser lançado à mão.
 
 ## Aviso da Receita no cadastro (feito em 12/08/2026)
 
