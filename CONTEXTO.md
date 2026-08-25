@@ -38,6 +38,8 @@ Quem executa as automações de verdade é o **n8n**, e o app é só a "tela".
 - Opção "Lembrar neste aparelho" e ajuste do endereço do n8n pela própria tela
   de entrada (salvo no aparelho, tem prioridade sobre `config.js`)
 - Depois de entrar: menu lateral (retrátil no celular, fixo no computador)
+- **Layout responsivo**: mesmas funcionalidades no celular e no computador, só
+  o aproveitamento do espaço muda (ver "Padrão de layout" abaixo)
 - Página **Cadastro**, com abas "Adicionar" e "Consultar"
   - Adicionar: campo de CPF/CNPJ com formatação e validação de dígitos,
     detecção automática do tipo, consulta de duplicado + dados da Receita
@@ -558,6 +560,44 @@ Airtable **não apaga campo nem troca o tipo de um campo**; só cria.
 
 Contato sem nome usa o primeiro WhatsApp (ou e-mail) como título. Linha de
 canal em branco no meio da lista é descartada no envio.
+
+## Padrão de layout: grade no computador, coluna única no celular (24/08/2026)
+
+**Vale para o app inteiro, inclusive telas que ainda não existem.** O pedido do
+dono: mesmas funcionalidades nos dois, mas no computador sobrava espaço vazio
+dos dois lados, e no celular ele quer continuar rolando de cima pra baixo.
+
+Antes, todo conteúdo ficava preso em `.card { max-width: 380px }` — estreito
+até num monitor grande. Agora, dentro do breakpoint que já existia
+(`@media (min-width: 768px)`, em `style.css`):
+
+- **`.page { max-width: 960px }`** — só as páginas do app alargam. A tela de
+  login usa `.card` **sem** `.page`, então continua estreita e centralizada,
+  que é o certo pra uma tela de senha. **Não trocar isso para `.card`**, ou o
+  login estica junto.
+- **`.grade-responsiva`** — classe reutilizável: vira grade de colunas no
+  computador (`repeat(auto-fill, minmax(280px, 1fr))`, o número de colunas se
+  ajusta sozinho à largura), e não faz nada no celular (o container continua
+  `display: block`, empilhado).
+
+**Como usar em tela nova:** é só pôr `class="grade-responsiva"` no container
+que recebe os itens repetidos. Nada de CSS novo, e **nada no `app.js`** — o
+`appendChild` não liga pro `display` do pai, então a lógica de montar as
+linhas continua igual.
+
+Hoje está em seis containers: `#lista-despesas`, `#lista-cadastros`,
+`#locais`, `.d-locais`, `#contatos`, `.d-contatos`.
+
+**Não** aplicar em `.contato-whatsapps` / `.contato-emails` — são um campo de
+texto com um "×" do lado, ficam estranhos em grade.
+
+Uma armadilha que apareceu ao construir: **um item que expande dentro da
+grade fica preso na largura de uma coluna.** O cadastro aberto na Consulta é
+filho de `#lista-cadastros`, então seu detalhe (campos, endereços, contatos)
+saía espremido em ~300px. Resolvido com
+`.grade-responsiva > .aberto { grid-column: 1 / -1 }`, que faz o item aberto
+ocupar a linha inteira. **Se outra lista ganhar um item que expande, ela
+precisa da mesma regra** (ou usar a classe `.aberto`, que já é pega por essa).
 
 ## Decisões já tomadas (não relitigar sem motivo)
 

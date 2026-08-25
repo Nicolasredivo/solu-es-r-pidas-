@@ -146,6 +146,34 @@ body {
   .topbar {
     margin-left: 240px;
   }
+
+  /* Só as páginas do app (não a tela de login, que é só ".card") ganham mais
+     largura — sobrava espaço vazio dos dois lados no computador. */
+  .page {
+    max-width: 960px;
+  }
+
+  /* Padrão do projeto: qualquer lista/coleção repetida vira grade aqui, e
+     continua empilhada (uma coluna, rolando) no celular. auto-fill + minmax
+     ajusta o número de colunas sozinho conforme a largura da tela. */
+  .grade-responsiva {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+    align-items: start;
+  }
+
+  /* O espaçamento entre itens passa a vir do gap, não da margem do item —
+     senão a última linha da grade sobra com espaço embaixo à toa. */
+  .grade-responsiva > * {
+    margin-bottom: 0;
+  }
+
+  /* O cadastro aberto precisa ocupar a largura toda: o detalhe (campos,
+     endereços, contatos) fica espremido numa coluna só, senão. */
+  .grade-responsiva > .aberto {
+    grid-column: 1 / -1;
+  }
 }
 
 .card h1 {

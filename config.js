@@ -5,4 +5,4 @@
 // O que você salvar lá vale só no seu aparelho e tem prioridade sobre isto.
 //
 // Coloque só o endereço base, sem nada depois da barra.
-const N8N_BASE_URL = "https://slim-adelaide-contemporary-illustrations.trycloudflare.com";
+const N8N_BASE_URL = "https://silence-controls-sheets-relation.trycloudflare.com";
