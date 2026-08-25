@@ -318,6 +318,136 @@ Detalhes da tela que valem saber:
 - Sair do sistema limpa a lista e o resumo do Financeiro, como já fazia com a
   Consulta: valores em aberto não devem ficar na tela depois do logout.
 
+## Arquitetura para captura automática de compras (planejada em 24/08/2026 — nada construído ainda)
+
+Só análise e pesquisa até aqui, nenhum código. Registrando pra não perder o
+raciocínio e as fontes verificadas quando formos construir.
+
+**O objetivo do dono:** passar o cartão da empresa e o sistema já saber
+sozinho o quê foi comprado, quantidade, valor de cada item, onde e em quantas
+vezes — sem tirar foto de cupom nem digitar nada, pra alimentar comparação de
+fornecedor, estoque e consumo médio.
+
+**Descoberta central: nenhuma fonte sozinha tem tudo isso.** Item e quantidade
+só existem na **nota fiscal**. Parcelamento só existe na **fatura do
+cartão** — conferido no layout oficial da NF-e 4.0 (grupo `detPag`): tem
+`tPag`, `xPag`, `vPag`, `tBand`, `cAut`, mas **nenhum campo de parcelas**. O
+sistema sempre vai juntar duas fontes.
+
+### Fonte 1 — Nota fiscal por e-mail (fornecedor recorrente)
+
+Cadastrar o CNPJ da empresa como fixo nos fornecedores que se compra sempre,
+com um e-mail dedicado pra receber a nota. O n8n lê a caixa (gatilho IMAP já
+existe no n8n instalado) e extrai o XML anexado (nó de XML nativo já existe
+também) — item, quantidade, valor unitário, fornecedor, tudo automático,
+**esforço zero por compra**.
+
+**Pendência do dono antes disso começar:** criar um Gmail dedicado (ex:
+`notas@...`) e falar uma vez com cada fornecedor recorrente pra mandar nota
+nesse endereço. Gmail comum (não Workspace) resolve. Quando o n8n for
+conectar, é por autorização OAuth (o dono clica "permitir" numa tela do
+Google) — **nunca senha direto**, Google e Microsoft não aceitam mais isso
+pra programa de terceiro.
+
+### Fonte 2 — QR code do cupom (compra avulsa)
+
+Pra compra em lugar sem CNPJ fixo cadastrado: um botão no app pra escanear o
+QR code do cupom, que leva direto pra consulta pública da SEFAZ do estado —
+**confirmado que não exige certificado nem login**, mostra os itens. Esforço:
+apontar a câmera. Mais frágil que a Fonte 1 porque cada estado tem sua
+própria página de consulta (o dono opera em SC e RS).
+
+**Por que não puxar direto da SEFAZ pelo n8n, sem depender de e-mail nem QR:**
+investigado e descartado por enquanto — dois obstáculos reais, testados nesta
+máquina:
+
+- O serviço existe (`NFeDistribuicaoDFe`) e o n8n aceita certificado digital
+  (credencial `httpSslAuth`, testado e confirmado que existe), mas a SEFAZ só
+  entrega o **resumo** (fornecedor, valor total, data) de graça. Os **itens**
+  só vêm depois de "manifestar ciência" — um documento **assinado
+  digitalmente** (assinatura XML, padrão da Receita), bem mais complexo que
+  uma chamada de API comum.
+- Os arquivos da SEFAZ vêm compactados, e testei ao vivo: **o Code node do
+  n8n bloqueia o módulo `zlib`** (`Module 'zlib' is disallowed`). Contornável
+  reiniciando o n8n com uma variável de ambiente a mais, mas é mais uma
+  fricção nesse caminho.
+
+Boa notícia que muda o cenário a favor: desde **janeiro de 2026** (Ajuste
+SINIEF 11/2025), loja **não pode mais emitir cupom (NFC-e) pra CNPJ** — vira
+obrigatório NF-e modelo 55. Ou seja, pedir "põe no CNPJ" hoje já gera o tipo
+de nota que os dois caminhos acima conseguem captar; ano passado nem sempre.
+
+### Fonte 3 — Cartão / fatura (valor, local, data, parcelas)
+
+**Nenhum banco brasileiro expõe fatura de cartão de crédito por API própria**
+— nem Inter, nem Cora, confirmado nos dois portais de desenvolvedor. Não é
+peculiaridade de um banco, é padrão do mercado inteiro.
+
+Três caminhos possíveis, nenhum construído ainda:
+
+- **Importar o arquivo da fatura** (o banco exporta), uma vez por mês. De
+  graça, funciona, esforço é mensal e não por compra.
+- **Conta Simples** — o produto dela é justamente gestão de cartão
+  corporativo. Tem API com sandbox (`api-sandbox.contasimples.com` responde
+  401, confirmado que existe de verdade), mas **não confirmei se ela expõe
+  transação com número de parcelas** — a documentação pública não foi
+  localizada. **Pendência do dono:** perguntar direto no suporte deles se a
+  API lista transações com parcelas, e se é aberta pra qualquer cliente ou só
+  parceiro homologado.
+- **Agregador Open Finance** (Pluggy e afins) — é o mecanismo oficial pra
+  alguém fora do sistema bancário ler dado de outro banco (só instituição
+  autorizada pelo Banco Central pode; por isso banco não te dá direto). Tem
+  mensalidade.
+
+**Descartado, não reconsiderar:** automatizar o app do banco no PC (com ou
+sem IA lendo a tela). Motivos: a senha do banco ficaria guardada num PC com
+túnel aberto pra internet; viola os termos de praticamente todo banco
+(risco de bloqueio de conta); e quebra toda vez que o banco muda a tela —
+proteções que existem justamente pra impedir esse tipo de automação.
+
+**Também avaliado e descartado por enquanto:** "Level 3 data" das bandeiras
+(Visa/Mastercard têm um padrão que carrega item dentro da própria transação
+de cartão corporativo) — existe de verdade, mas quem envia esse dado é o
+**lojista**, e só compensa pra quem vende B2B de alto volume; loja pequena não
+manda. Mesmo se mandasse, a API de bandeira é pra emissor/adquirente, não pro
+portador do cartão.
+
+### Cruzamento nota × fatura
+
+Casar pelo **CNPJ do fornecedor + valor + data** (e pelo `cAut` — código de
+autorização do cartão — quando a nota trouxer, que dá casamento exato; nem
+toda maquininha pequena envia). O que não casar depois de um tempo = despesa
+sem comprovação fiscal, que é justamente o que vale sinalizar (não é
+dedutível).
+
+### Catálogo de produtos / estoque (fase seguinte, ainda mais adiante)
+
+Pra virar estoque de verdade, precisa de um "dicionário" que reconheça que
+"CIMENTO CP-II 50KG VOTORAN" de um fornecedor é o mesmo produto que "CIM
+CPII 50 KG" de outro. Desenho pensado:
+
+- Tabela `Produtos` (catálogo mestre) + `Apelidos` (como cada fornecedor
+  chama cada produto) + `Movimentações` (entrada/saída, com produto,
+  quantidade, valor, fornecedor, data).
+- Casamento em cascata: **código de barras (GTIN)** quando a nota traz →
+  **apelido já visto** desse fornecedor → **IA** (Claude/OpenAI, o dono já
+  tem integração no n8n) compara a descrição nova com o catálogo e devolve
+  confiança; alta confiança casa sozinho, média entra numa fila com a
+  sugestão da IA pronta (confirma com 1 toque), baixa vira produto
+  genuinamente novo (nomeia uma vez).
+- Toda confirmação (IA ou humana) vira um apelido novo salvo — o uso de IA
+  cai com o tempo, porque fornecedor recorrente para de precisar dela.
+- Custo da IA: não é literalmente zero (chamada de API tem custo mínimo),
+  mas irrelevante pro volume esperado — poucos itens realmente novos por mês,
+  o resto casa de graça por GTIN/apelido.
+- Com as movimentações acumulando: fornecedor mais barato por produto,
+  consumo médio mensal, sugestão de estoque mínimo, e custo de material por
+  chamado (quando Chamados existir).
+- **A baixa de estoque (o que foi usado) continua manual, sempre** — o
+  sistema sabe o que entrou pela nota, mas ninguém tem como saber o que foi
+  gasto sem alguém informar. Vale pensar numa tela de baixa rápida (escolher
+  chamado + marcar materiais) quando chegar nessa fase.
+
 ## PENDENTE AGORA (é por aqui que se continua)
 
 - **`WhatsApp_Financeiro` não existe mais**, mas nada foi perdido: o campo só
@@ -347,6 +477,13 @@ uma peça por vez, e volta quando precisar):
   está pronta para receber as próximas.
 - Despesas recorrentes (aluguel todo mês, etc.) não existem — hoje cada mês
   precisa ser lançado à mão.
+- **Captura automática de compras** (nota por e-mail, QR do cupom, cruzamento
+  com a fatura do cartão, catálogo de produtos com IA) — arquitetura inteira
+  já desenhada e com fontes verificadas, ver seção acima. Nada construído.
+  Duas coisas do lado do dono, antes de começar a Fonte 1:
+  - Criar um Gmail dedicado pra receber nota dos fornecedores
+  - Perguntar pro suporte da Conta Simples se a API deles lista transação de
+    cartão com número de parcelas, e se é aberta pra qualquer cliente
 
 ## Aviso da Receita no cadastro (feito em 12/08/2026)
 
