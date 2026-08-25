@@ -1,0 +1,326 @@
+{
+  "name": "App - Gerar despesas recorrentes",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gerar-recorrentes",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000000022",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "c0000000-0000-4000-8000-000000000023"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-000000000024",
+              "leftValue": "={{ $json.body.senha }}",
+              "rightValue": "TROQUE-ESTA-SENHA",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000025",
+      "name": "Senha esta correta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000026",
+      "name": "Responde senha incorreta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appjAmWXV7Zr33UqE",
+          "mode": "list",
+          "cachedResultName": "Financeiro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblb8QplhcGRP6SZ7",
+          "mode": "list",
+          "cachedResultName": "Recorrentes"
+        },
+        "filterByFormula": "",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000027",
+      "name": "Busca as contas fixas",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function diaNoMes(ano, mesIndex, dia) {\n  const base = new Date(Date.UTC(ano, mesIndex, 1));\n  const ultimo = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate();\n  const dd = String(Math.min(Math.max(1, dia), ultimo)).padStart(2, \"0\");\n  const mm = String(base.getUTCMonth() + 1).padStart(2, \"0\");\n  return base.getUTCFullYear() + \"-\" + mm + \"-\" + dd;\n}\n\n// Datas em texto (2026-03-15) comparam certo com < e >, sem virar objeto.\nfunction hojeNoBrasil() {\n  return new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);\n}\n\nconst achados = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\nconst hoje = hojeNoBrasil();\n\nconst novasDespesas = [];\nconst ajustesNaRegra = [];\n\nfor (const item of achados) {\n  const f = item.json.fields || {};\n  if (!f.Ativo) continue;\n\n  const diaDoMes = Math.min(31, Math.max(1, Number(f.Dia_Do_Mes) || 1));\n  const semFim = Boolean(f.Sem_Fim);\n  let vencimento = String(f.Proxima_Geracao || \"\").slice(0, 10);\n  let restantes = semFim ? Infinity : Math.max(0, Number(f.Restantes) || 0);\n\n  if (!vencimento) continue;\n\n  // Gera tudo o que ficou para tras, nao so o mes atual: se o sistema passou\n  // dois meses sem ser aberto, as duas contas aparecem. O limite de 24 e uma\n  // trava contra data cadastrada errada la no passado.\n  let geradas = 0;\n  while (vencimento <= hoje && restantes > 0 && geradas < 24) {\n    const campos = {\n      Descricao: f.Descricao || \"Conta fixa\",\n      Valor: f.Valor || 0,\n      Vencimento: vencimento,\n      Status: \"Pendente\",\n      Categoria: f.Categoria || \"Outros\",\n      Forma_Pagamento: f.Forma_Pagamento || null,\n      Observacoes: f.Observacoes || \"\",\n      Recorrente_Ref: [item.json.id],\n    };\n    if (Array.isArray(f.Fornecedor_Ref) && f.Fornecedor_Ref.length) {\n      campos.Fornecedor_Ref = f.Fornecedor_Ref;\n    }\n    novasDespesas.push({ fields: campos });\n\n    geradas += 1;\n    if (!semFim) restantes -= 1;\n\n    const [ano, mes] = vencimento.split(\"-\").map(Number);\n    vencimento = diaNoMes(ano, mes, diaDoMes);\n  }\n\n  if (!geradas) continue;\n\n  // A regra so volta atualizada depois de gerar: se algo falhar no meio, a\n  // data antiga continua la e a proxima tentativa refaz o que faltou.\n  ajustesNaRegra.push({\n    id: item.json.id,\n    fields: {\n      Proxima_Geracao: vencimento,\n      Restantes: semFim ? 0 : restantes,\n      Ativo: semFim ? true : restantes > 0,\n    },\n  });\n}\n\nif (!novasDespesas.length) {\n  return [{ json: { nada: true, gerou: 0 } }];\n}\n\n// Primeiro as despesas, depois as regras: o no de HTTP segue a ordem dos\n// itens, entao a regra so avanca depois da conta ter sido criada.\nconst chamadas = [];\nfor (let i = 0; i < novasDespesas.length; i += 10) {\n  chamadas.push({\n    metodo: \"POST\", url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: novasDespesas.slice(i, i + 10) },\n  });\n}\nfor (let i = 0; i < ajustesNaRegra.length; i += 10) {\n  chamadas.push({\n    metodo: \"PATCH\", url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblb8QplhcGRP6SZ7\",\n    corpo: { typecast: true, records: ajustesNaRegra.slice(i, i + 10) },\n  });\n}\n\nreturn chamadas.map((c) => ({ json: { ...c, nada: false, gerou: novasDespesas.length } }));"
+      },
+      "id": "c0000000-0000-4000-8000-000000000028",
+      "name": "Monta o que gerar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-000000000029",
+              "leftValue": "={{ $json.nada }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000030",
+      "name": "Tem algo a gerar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": true,\n  \"gerou\": 0\n}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000031",
+      "name": "Responde nada a fazer",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo || {}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000000032",
+      "name": "Grava no Airtable",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -160
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, gerou: $('Monta o que gerar').first().json.gerou }) }}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000033",
+      "name": "Responde gerado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"gerou\": 0,\n  \"mensagem\": \"Não consegui gerar as contas fixas do mês.\"\n}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000034",
+      "name": "Responde erro",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        -60
+      ]
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Senha esta correta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Senha esta correta?": {
+      "main": [
+        [
+          {
+            "node": "Busca as contas fixas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde senha incorreta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca as contas fixas": {
+      "main": [
+        [
+          {
+            "node": "Monta o que gerar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta o que gerar": {
+      "main": [
+        [
+          {
+            "node": "Tem algo a gerar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem algo a gerar?": {
+      "main": [
+        [
+          {
+            "node": "Responde nada a fazer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Grava no Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava no Airtable": {
+      "main": [
+        [
+          {
+            "node": "Responde gerado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

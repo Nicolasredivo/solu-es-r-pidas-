@@ -1,16 +1,16 @@
 {
-  "name": "App - Excluir despesa",
+  "name": "App - Excluir recorrente",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "excluir-despesa",
+        "path": "excluir-recorrente",
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
         }
       },
-      "id": "c0000000-0000-4000-8000-000000000035",
+      "id": "c0000000-0000-4000-8000-000000000013",
       "name": "Recebe pedido do app",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -18,7 +18,7 @@
         0,
         0
       ],
-      "webhookId": "c0000000-0000-4000-8000-000000000036"
+      "webhookId": "c0000000-0000-4000-8000-000000000014"
     },
     {
       "parameters": {
@@ -31,7 +31,7 @@
           },
           "conditions": [
             {
-              "id": "c0000000-0000-4000-8000-000000000037",
+              "id": "c0000000-0000-4000-8000-000000000015",
               "leftValue": "={{ $json.body.senha }}",
               "rightValue": "TROQUE-ESTA-SENHA",
               "operator": {
@@ -46,7 +46,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000038",
+      "id": "c0000000-0000-4000-8000-000000000016",
       "name": "Senha esta correta?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -61,7 +61,7 @@
         "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000039",
+      "id": "c0000000-0000-4000-8000-000000000017",
       "name": "Responde senha incorreta",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -72,10 +72,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// O app manda os codigos: um so, ou todos os de um grupo de parcelas.\n// Ele ja tem a lista carregada, entao o n8n nao precisa procurar de novo.\nconst b = $json.body || {};\nconst ids = String(b.ids || b.id || \"\").split(\",\").map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nif (!ids.length) throw new Error(\"Pedido sem o codigo da despesa.\");\n\n// O Airtable apaga no maximo 10 por chamada.\nconst chamadas = [];\nfor (let i = 0; i < ids.length; i += 10) {\n  const lote = ids.slice(i, i + 10);\n  chamadas.push({\n    metodo: \"DELETE\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0?\" + lote.map((id) => \"records[]=\" + id).join(\"&\"),\n    corpo: null,\n  });\n}\n\nreturn chamadas.map((c) => ({ json: c }));"
+        "jsCode": "// Parar de gerar e diferente de apagar: quem para guarda o historico das\n// contas que ja sairam. Apagar de vez e para quando foi cadastro errado.\nconst b = $json.body || {};\nconst id = String(b.id || \"\").trim();\nif (!/^rec[A-Za-z0-9]{14}$/.test(id)) throw new Error(\"Pedido sem o codigo da conta fixa.\");\n\nconst apagarDeVez = String(b.apagarDeVez || \"\") === \"sim\";\n\nreturn [{\n  json: apagarDeVez\n    ? { metodo: \"DELETE\", url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblb8QplhcGRP6SZ7?records[]=\" + id, corpo: null,\n        mensagem: \"Conta fixa excluída.\" }\n    : { metodo: \"PATCH\", url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblb8QplhcGRP6SZ7\",\n        corpo: { records: [{ id, fields: { Ativo: false } }] },\n        mensagem: \"Conta fixa encerrada — não gera mais.\" },\n}];"
       },
-      "id": "c0000000-0000-4000-8000-000000000040",
-      "name": "Monta o que apagar",
+      "id": "c0000000-0000-4000-8000-000000000018",
+      "name": "Monta a chamada",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -96,8 +96,8 @@
           "timeout": 20000
         }
       },
-      "id": "c0000000-0000-4000-8000-000000000041",
-      "name": "Apaga no Airtable",
+      "id": "c0000000-0000-4000-8000-000000000019",
+      "name": "Grava no Airtable",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -115,11 +115,11 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Despesa excluída.\"\n}",
+        "responseBody": "={{ JSON.stringify({ ok: true, mensagem: $('Monta a chamada').first().json.mensagem }) }}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000042",
-      "name": "Responde excluida",
+      "id": "c0000000-0000-4000-8000-000000000020",
+      "name": "Responde pronto",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
@@ -130,10 +130,10 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Não consegui excluir. Tente de novo.\"\n}",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Não consegui alterar a conta fixa.\"\n}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000043",
+      "id": "c0000000-0000-4000-8000-000000000021",
       "name": "Responde erro",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -159,7 +159,7 @@
       "main": [
         [
           {
-            "node": "Monta o que apagar",
+            "node": "Monta a chamada",
             "type": "main",
             "index": 0
           }
@@ -173,22 +173,22 @@
         ]
       ]
     },
-    "Monta o que apagar": {
+    "Monta a chamada": {
       "main": [
         [
           {
-            "node": "Apaga no Airtable",
+            "node": "Grava no Airtable",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Apaga no Airtable": {
+    "Grava no Airtable": {
       "main": [
         [
           {
-            "node": "Responde excluida",
+            "node": "Responde pronto",
             "type": "main",
             "index": 0
           }

@@ -1,16 +1,16 @@
 {
-  "name": "App - Atualizar despesa",
+  "name": "App - Consultar CNPJ",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "atualizar-despesa",
+        "path": "consultar-cnpj",
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
         }
       },
-      "id": "c0000000-0000-4000-8000-000000000023",
+      "id": "c0000000-0000-4000-8000-000000000001",
       "name": "Recebe pedido do app",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -18,7 +18,7 @@
         0,
         0
       ],
-      "webhookId": "c0000000-0000-4000-8000-000000000024"
+      "webhookId": "c0000000-0000-4000-8000-000000000002"
     },
     {
       "parameters": {
@@ -31,7 +31,7 @@
           },
           "conditions": [
             {
-              "id": "c0000000-0000-4000-8000-000000000025",
+              "id": "c0000000-0000-4000-8000-000000000003",
               "leftValue": "={{ $json.body.senha }}",
               "rightValue": "TROQUE-ESTA-SENHA",
               "operator": {
@@ -46,7 +46,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000026",
+      "id": "c0000000-0000-4000-8000-000000000004",
       "name": "Senha esta correta?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -61,21 +61,21 @@
         "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000027",
+      "id": "c0000000-0000-4000-8000-000000000005",
       "name": "Responde senha incorreta",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
         440,
-        220
+        180
       ]
     },
     {
       "parameters": {
-        "jsCode": "const b = $json.body || {};\nconst texto = (v) => String(v ?? \"\").trim();\nconst lista = (v) => texto(v) || null;\nconst numero = (v) => {\n  const n = Number(String(v ?? \"\").replace(\",\", \".\"));\n  return Number.isFinite(n) ? n : null;\n};\n\nconst id = texto(b.id);\nif (!/^rec[A-Za-z0-9]{14}$/.test(id)) throw new Error(\"Pedido sem o codigo da despesa.\");\n\nconst descricao = texto(b.descricao);\nconst valor = numero(b.valor);\nif (!descricao || valor === null || valor <= 0) {\n  return [{ json: { invalido: true, mensagem: \"Preencha a descrição e um valor válido.\" } }];\n}\n\nconst fields = {\n  Descricao: descricao,\n  Valor: valor,\n  Vencimento: lista(b.vencimento),\n  Status: lista(b.status) || \"Pendente\",\n  Categoria: lista(b.categoria) || \"Outros\",\n  Forma_Pagamento: lista(b.formaPagamento),\n  Data_Pagamento: lista(b.dataPagamento),\n  Observacoes: texto(b.observacoes),\n};\n\n// Lista vazia desliga o vinculo; com codigo, aponta para o fornecedor.\nconst fornecedorId = texto(b.fornecedorId);\nfields.Fornecedor_Ref = /^rec[A-Za-z0-9]{14}$/.test(fornecedorId) ? [fornecedorId] : [];\n\nreturn [{\n  json: {\n    invalido: false,\n    metodo: \"PATCH\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: [{ id, fields }] },\n  },\n}];"
+        "jsCode": "// So consulta a Receita se o numero tiver cara de CNPJ. Assim um digito\n// a menos nao vira uma chamada perdida (e a Receita limita por minuto).\nconst digitos = String($json.body.cnpj || \"\").replace(/\\D/g, \"\");\n\nfunction cnpjValido(cnpj) {\n  if (cnpj.length !== 14 || /^(\\d)\\1{13}$/.test(cnpj)) return false;\n  const dv = (pesos) => {\n    const soma = pesos.reduce((t, p, i) => t + Number(cnpj[i]) * p, 0);\n    const resto = soma % 11;\n    return resto < 2 ? 0 : 11 - resto;\n  };\n  return dv([5,4,3,2,9,8,7,6,5,4,3,2]) === Number(cnpj[12])\n    && dv([6,5,4,3,2,9,8,7,6,5,4,3,2]) === Number(cnpj[13]);\n}\n\nreturn [{ json: { valido: cnpjValido(digitos), documento: digitos } }];"
       },
-      "id": "c0000000-0000-4000-8000-000000000028",
-      "name": "Monta a alteracao",
+      "id": "c0000000-0000-4000-8000-000000000006",
+      "name": "Confere o CNPJ",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -94,8 +94,8 @@
           },
           "conditions": [
             {
-              "id": "c0000000-0000-4000-8000-000000000029",
-              "leftValue": "={{ $json.invalido }}",
+              "id": "c0000000-0000-4000-8000-000000000007",
+              "leftValue": "={{ $json.valido }}",
               "rightValue": "",
               "operator": {
                 "type": "boolean",
@@ -109,8 +109,8 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000030",
-      "name": "Faltou alguma coisa?",
+      "id": "c0000000-0000-4000-8000-000000000008",
+      "name": "CNPJ valido?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
@@ -121,10 +121,10 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, mensagem: $json.mensagem }) }}",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"CNPJ inválido — confira os números.\"\n}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000031",
+      "id": "c0000000-0000-4000-8000-000000000009",
       "name": "Responde invalido",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -135,61 +135,64 @@
     },
     {
       "parameters": {
-        "method": "={{ $json.metodo }}",
-        "url": "={{ $json.url }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "airtableTokenApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.corpo || {}) }}",
+        "url": "={{ 'https://brasilapi.com.br/api/cnpj/v1/' + $json.documento }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "SolucoesRapidas-App/1.0 (n8n)"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
         "options": {
-          "timeout": 20000
+          "timeout": 12000
         }
       },
-      "id": "c0000000-0000-4000-8000-000000000032",
-      "name": "Grava no Airtable",
+      "id": "c0000000-0000-4000-8000-000000000010",
+      "name": "Consulta a Receita",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         880,
         -160
       ],
-      "credentials": {
-        "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
-        }
-      },
-      "onError": "continueErrorOutput"
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Despesa atualizada!\"\n}",
-        "options": {}
+        "jsCode": "// Mesma logica ja usada no cadastro: a Receita limita consultas por minuto\n// e responde 429. Nesse caso vale insistir; CNPJ que nao existe, nao.\nconst receita = $json || {};\nconst achou = Boolean(receita.razao_social);\nconst textoErro = receita.error ? JSON.stringify(receita.error) : \"\";\nconst excedeuLimite = /429|too many requests/i.test(textoErro);\n\nreturn [{\n  json: {\n    ok: true,\n    achou,\n    razaoSocial: receita.razao_social || \"\",\n    nomeFantasia: receita.nome_fantasia || \"\",\n    aviso: achou\n      ? null\n      : excedeuLimite\n        ? \"Muitas consultas seguidas à Receita. Espere um minuto e tente de novo.\"\n        : \"Não encontrei este CNPJ na Receita. Escreva o nome à mão.\",\n    podeTentarDeNovo: !achou && excedeuLimite,\n  },\n}];"
       },
-      "id": "c0000000-0000-4000-8000-000000000033",
-      "name": "Responde atualizado",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "id": "c0000000-0000-4000-8000-000000000011",
+      "name": "Monta resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         1100,
-        -260
+        -160
       ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Não consegui salvar as alterações.\"\n}",
+        "responseBody": "={{ JSON.stringify($json) }}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000034",
-      "name": "Responde erro",
+      "id": "c0000000-0000-4000-8000-000000000012",
+      "name": "Responde ao app",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1100,
-        -60
+        1320,
+        -160
       ]
     }
   ],
@@ -209,7 +212,7 @@
       "main": [
         [
           {
-            "node": "Monta a alteracao",
+            "node": "Confere o CNPJ",
             "type": "main",
             "index": 0
           }
@@ -223,47 +226,51 @@
         ]
       ]
     },
-    "Monta a alteracao": {
+    "Confere o CNPJ": {
       "main": [
         [
           {
-            "node": "Faltou alguma coisa?",
+            "node": "CNPJ valido?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Faltou alguma coisa?": {
+    "CNPJ valido?": {
       "main": [
+        [
+          {
+            "node": "Consulta a Receita",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Responde invalido",
             "type": "main",
             "index": 0
           }
-        ],
+        ]
+      ]
+    },
+    "Consulta a Receita": {
+      "main": [
         [
           {
-            "node": "Grava no Airtable",
+            "node": "Monta resposta",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Grava no Airtable": {
+    "Monta resposta": {
       "main": [
         [
           {
-            "node": "Responde atualizado",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Responde erro",
+            "node": "Responde ao app",
             "type": "main",
             "index": 0
           }

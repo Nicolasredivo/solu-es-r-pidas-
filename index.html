@@ -348,11 +348,20 @@
         <h1>Financeiro</h1>
 
         <div class="subtabs">
-          <button type="button" class="subtab-fin active" data-subfin="despesas">Despesas</button>
+          <button type="button" class="subtab-fin active" data-subfin="despesas">Contas a pagar</button>
+          <button type="button" class="subtab-fin" data-subfin="fixas">Contas fixas</button>
+          <button type="button" class="subtab-fin" data-subfin="resumo">Resumo</button>
         </div>
 
-        <div id="subfin-despesas" class="subpage">
-          <!-- Resumo do que está em aberto, calculado do que já foi carregado -->
+        <!-- Listas que alimentam os campos de digitar: são preenchidas com o que
+             já foi salvo antes, para o mesmo fornecedor/descrição não entrar
+             escrito de dez jeitos diferentes. -->
+        <datalist id="lista-fornecedores"></datalist>
+        <datalist id="lista-descricoes"></datalist>
+        <datalist id="lista-categorias"></datalist>
+
+        <!-- ===================== Contas a pagar ===================== -->
+        <div id="subfin-despesas" class="subpage-fin">
           <div id="resumo-despesas" class="resumo-financeiro hidden">
             <div class="resumo-item">
               <span class="resumo-rotulo">Em aberto</span>
@@ -372,13 +381,17 @@
 
           <form id="form-despesa" class="hidden">
             <label for="despesa-descricao">Descrição</label>
-            <input type="text" id="despesa-descricao" placeholder="Ex: Cimento, aluguel de agosto" />
+            <input type="text" id="despesa-descricao" list="lista-descricoes"
+                   autocomplete="off" placeholder="Ex: Cimento, aluguel de agosto" />
+            <p id="despesa-descricao-hint" class="doc-hint"></p>
 
-            <label for="despesa-valor">Valor (R$)</label>
-            <input type="text" id="despesa-valor" inputmode="decimal" placeholder="Ex: 150,00" />
+            <label for="despesa-valor">Valor</label>
+            <input type="text" id="despesa-valor" inputmode="numeric" placeholder="R$ 0,00" />
 
             <label for="despesa-fornecedor">Fornecedor</label>
-            <input type="text" id="despesa-fornecedor" placeholder="Opcional" />
+            <input type="text" id="despesa-fornecedor" list="lista-fornecedores"
+                   autocomplete="off" placeholder="Nome ou CNPJ (opcional)" />
+            <p id="despesa-fornecedor-hint" class="doc-hint"></p>
 
             <label for="despesa-vencimento">Vencimento</label>
             <input type="date" id="despesa-vencimento" />
@@ -391,6 +404,29 @@
               <option>Aluguel</option>
               <option selected>Outros</option>
             </select>
+
+            <div id="linha-categoria-outra" class="hidden">
+              <label for="despesa-categoria-outra">Qual categoria?</label>
+              <input type="text" id="despesa-categoria-outra" list="lista-categorias"
+                     autocomplete="off" placeholder="Ex: Ferramentas, Impostos" />
+            </div>
+
+            <label for="despesa-forma">Forma de pagamento</label>
+            <select id="despesa-forma">
+              <option value="">Não informado</option>
+              <option>PIX</option>
+              <option>Boleto</option>
+              <option>Dinheiro</option>
+              <option>Depósito</option>
+              <option>Cartão de débito</option>
+              <option>Cartão de crédito</option>
+            </select>
+
+            <div id="linha-parcelas" class="hidden">
+              <label for="despesa-parcelas">Em quantas vezes?</label>
+              <input type="number" id="despesa-parcelas" min="1" max="60" step="1" value="1" />
+              <p id="despesa-parcelas-hint" class="doc-hint"></p>
+            </div>
 
             <label for="despesa-status">Status</label>
             <select id="despesa-status">
@@ -417,10 +453,21 @@
             <button type="button" id="recarregar-despesas" class="botao-secundario">Atualizar</button>
           </div>
 
+          <div class="filtros-linha">
+            <select id="filtro-situacao" aria-label="Situação">
+              <option value="abertas">Em aberto</option>
+              <option value="vencidas">Vencidas</option>
+              <option value="pagas">Pagas</option>
+              <option value="todas">Todas</option>
+            </select>
+            <select id="filtro-mes" aria-label="Mês do vencimento">
+              <option value="">Qualquer mês</option>
+            </select>
+          </div>
+
           <p id="lista-despesas-status" class="doc-hint"></p>
           <div id="lista-despesas" class="grade-responsiva"></div>
 
-          <!-- Molde de uma linha da lista de despesas -->
           <template id="modelo-despesa">
             <div class="despesa">
               <button type="button" class="despesa-resumo">
@@ -432,9 +479,140 @@
               </button>
               <div class="despesa-acoes hidden">
                 <button type="button" class="despesa-pagar botao-secundario">Marcar como paga</button>
-                <button type="button" class="despesa-editar botao-secundario">Editar</button>
+                <button type="button" class="despesa-editar botao-secundario">✏️ Editar</button>
                 <button type="button" class="despesa-excluir botao-secundario">Excluir</button>
+                <button type="button" class="despesa-excluir-grupo botao-secundario hidden">
+                  Excluir todas as parcelas
+                </button>
               </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- ====================== Contas fixas ====================== -->
+        <div id="subfin-fixas" class="subpage-fin hidden">
+          <p class="doc-hint">
+            Cadastre aqui o que se repete todo mês. O sistema lança a conta sozinho
+            no dia certo e já mostra na previsão dos próximos meses.
+          </p>
+
+          <button type="button" id="nova-recorrente" class="botao-secundario">+ Nova conta fixa</button>
+
+          <form id="form-recorrente" class="hidden">
+            <label for="recorrente-descricao">Descrição</label>
+            <input type="text" id="recorrente-descricao" list="lista-descricoes"
+                   autocomplete="off" placeholder="Ex: Aluguel do galpão, internet" />
+
+            <label for="recorrente-valor">Valor por mês</label>
+            <input type="text" id="recorrente-valor" inputmode="numeric" placeholder="R$ 0,00" />
+
+            <label for="recorrente-fornecedor">Fornecedor</label>
+            <input type="text" id="recorrente-fornecedor" list="lista-fornecedores"
+                   autocomplete="off" placeholder="Nome ou CNPJ (opcional)" />
+            <p id="recorrente-fornecedor-hint" class="doc-hint"></p>
+
+            <label for="recorrente-dia">Dia do mês</label>
+            <input type="number" id="recorrente-dia" min="1" max="31" step="1" value="10" />
+            <p class="doc-hint">
+              Se o mês não tiver o dia escolhido (31 em fevereiro, por exemplo),
+              a conta cai no último dia do mês.
+            </p>
+
+            <label class="linha-caixinha">
+              <input type="checkbox" id="recorrente-sem-fim" />
+              <span>Não tem data para acabar</span>
+            </label>
+
+            <div id="linha-restantes">
+              <label for="recorrente-restantes">Quantas ainda faltam?</label>
+              <input type="number" id="recorrente-restantes" min="1" max="600" step="1" value="12" />
+            </div>
+
+            <label for="recorrente-categoria">Categoria</label>
+            <select id="recorrente-categoria">
+              <option>Material</option>
+              <option>Veículo</option>
+              <option>Salário</option>
+              <option selected>Aluguel</option>
+              <option>Outros</option>
+            </select>
+
+            <div id="linha-recorrente-categoria-outra" class="hidden">
+              <label for="recorrente-categoria-outra">Qual categoria?</label>
+              <input type="text" id="recorrente-categoria-outra" list="lista-categorias"
+                     autocomplete="off" />
+            </div>
+
+            <label for="recorrente-forma">Forma de pagamento</label>
+            <select id="recorrente-forma">
+              <option value="">Não informado</option>
+              <option>PIX</option>
+              <option>Boleto</option>
+              <option>Dinheiro</option>
+              <option>Depósito</option>
+              <option>Cartão de débito</option>
+              <option>Cartão de crédito</option>
+            </select>
+
+            <label for="recorrente-observacoes">Observações</label>
+            <textarea id="recorrente-observacoes" rows="2"
+                      placeholder="Ex: chave PIX, número do contrato"></textarea>
+
+            <button type="submit" id="salvar-recorrente">Salvar conta fixa</button>
+            <button type="button" id="cancelar-recorrente" class="botao-secundario">Cancelar</button>
+            <div id="recorrente-status-msg" class="status"></div>
+          </form>
+
+          <p id="lista-recorrentes-status" class="doc-hint"></p>
+          <div id="lista-recorrentes" class="grade-responsiva"></div>
+
+          <template id="modelo-recorrente">
+            <div class="despesa">
+              <button type="button" class="despesa-resumo">
+                <span class="despesa-topo">
+                  <span class="despesa-descricao"></span>
+                  <span class="despesa-valor"></span>
+                </span>
+                <span class="despesa-extra"></span>
+              </button>
+              <div class="despesa-acoes hidden">
+                <button type="button" class="recorrente-editar botao-secundario">✏️ Editar</button>
+                <button type="button" class="recorrente-encerrar botao-secundario">Encerrar</button>
+                <button type="button" class="recorrente-excluir botao-secundario">Excluir</button>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- ========================= Resumo ========================= -->
+        <div id="subfin-resumo" class="subpage-fin hidden">
+          <p id="resumo-vazio" class="doc-hint hidden">
+            Ainda não há contas lançadas para resumir.
+          </p>
+
+          <div id="resumo-conteudo" class="hidden">
+            <h2 class="titulo-bloco">Quanto vai sair por mês</h2>
+            <p class="doc-hint">
+              Soma o que já está lançado e em aberto com o que as contas fixas
+              ainda vão gerar.
+            </p>
+            <div id="grafico-meses"></div>
+
+            <h2 class="titulo-bloco">Em aberto por categoria</h2>
+            <div id="grafico-categorias"></div>
+
+            <h2 class="titulo-bloco">Em aberto por fornecedor</h2>
+            <p id="sem-fornecedores" class="doc-hint hidden">
+              Nenhuma conta em aberto tem fornecedor informado.
+            </p>
+            <div id="grafico-fornecedores"></div>
+          </div>
+
+          <template id="modelo-barra">
+            <div class="barra-linha">
+              <span class="barra-rotulo"></span>
+              <span class="barra-trilho"><span class="barra-cheia"></span></span>
+              <span class="barra-valor"></span>
             </div>
           </template>
         </div>

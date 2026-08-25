@@ -48,6 +48,12 @@ Quem executa as automações de verdade é o **n8n**, e o app é só a "tela".
     Salvar/Cancelar
   - Consultar: lista todos os cadastros, busca, abre/edita/exclui — inclusive
     endereços e contatos de um cadastro existente
+- Página **Financeiro**, com abas "Contas a pagar", "Contas fixas" e "Resumo"
+  - Contas a pagar: lançar (com parcelamento), filtrar por situação e mês,
+    marcar como paga, editar pelo lápis, excluir uma ou o grupo de parcelas
+  - Contas fixas: o que se repete todo mês; o sistema lança sozinho no dia
+  - Resumo: previsão de saída dos próximos 6 meses, por categoria e por
+    fornecedor
 - Rodapé do menu: **Sair** (dois toques) e versão do app instalada
 - Indicador de conexão com o n8n na barra superior
 - Aviso ao tentar sair (menu, aba, fechar a janela) com algo não salvo —
@@ -65,7 +71,15 @@ Base **"cadastro"** (`app6PyYmtFduIMp7B`), com 3 tabelas ligadas entre si:
 
 Base **"Financeiro"** (`appjAmWXV7Zr33UqE`), criada em 22/08/2026:
 
-- `Despesas` (`tblNduEKl2jY280V0`) — contas a pagar
+- `Despesas` (`tblNduEKl2jY280V0`) — contas a pagar. Cada parcela é uma linha
+  própria; o campo `Grupo` liga as parcelas da mesma compra.
+- `Fornecedores` (`tblhsabIIg8SLqMMj`) — nome + CNPJ (criada em 25/08/2026)
+- `Recorrentes` (`tblb8QplhcGRP6SZ7`) — a regra das contas fixas, não as contas
+  em si (criada em 25/08/2026)
+
+Em `Despesas` sobrou o campo antigo `Fornecedor` (texto solto), substituído pelo
+vínculo `Fornecedor_Ref` + o lookup `Fornecedor_Nome`. A API do Airtable não
+apaga campo; ele ficou lá sem uso e só some pela tela do Airtable.
 
 Existe também uma base maior, **"ERP Soluções Rápidas - Produção"**
 (`appvRrT2s6rK7jOKh`), com 17 tabelas (Chamados/Work Orders, Técnicos,
@@ -91,6 +105,13 @@ Todos criados, publicados e testados de ponta a ponta:
 | `App - Listar despesas` | `/webhook/listar-despesas` | `pvDggp2tA894MToU` |
 | `App - Atualizar despesa` | `/webhook/atualizar-despesa` | `TZ7jynwhg0Al4BCo` |
 | `App - Excluir despesa` | `/webhook/excluir-despesa` | `3dWn81rxmpgb15D6` |
+| `App - Consultar CNPJ` | `/webhook/consultar-cnpj` | `RBtMasPgT2AtZKMv` |
+| `App - Salvar fornecedor` | `/webhook/salvar-fornecedor` | `D7Jd1R0AlZ9FBV8w` |
+| `App - Listar fornecedores` | `/webhook/listar-fornecedores` | `WRbYRCTL0pqtFBlB` |
+| `App - Salvar recorrente` | `/webhook/salvar-recorrente` | `kMsLgZxxoOHnR3FB` |
+| `App - Listar recorrentes` | `/webhook/listar-recorrentes` | `ZdfVXhs49hfaP8Ju` |
+| `App - Excluir recorrente` | `/webhook/excluir-recorrente` | `xoFsbiv2DsLrNrU9` |
+| `App - Gerar despesas recorrentes` | `/webhook/gerar-recorrentes` | `1QcqoaGJKuiCTx91` |
 
 Cada arquivo em `n8n/` tem o nome do caminho do webhook correspondente.
 
@@ -128,6 +149,17 @@ Foi a falta disso que travou o projeto antes. Funciona assim:
   "em branco". Sem isso, campo opcional não preenchido quebraria o salvamento.
 - Os nomes das opções no app batem exatamente com os do Airtable. Se mudar um
   lado, tem que mudar o outro.
+- **O n8n executa um nó de cada vez, mesmo em ramos "paralelos".** Testado em
+  25/08/2026: três buscas ao Airtable num workflow só levam ~2s (a soma), e
+  separá-las em ramos paralelos com o nó Merge não mudou nada. Medido: o n8n
+  em si custa ~40ms; cada ida ao Airtable custa ~700ms. Quem paraleliza de
+  verdade é o **navegador** — por isso as leituras do Financeiro são três
+  workflows pequenos que o app dispara juntos (~800ms no total).
+- **O Airtable não devolve caixinha desmarcada** — o campo simplesmente não
+  vem na resposta. Ler `campo === undefined ? true : ...` faz "desmarcado"
+  virar "marcado". Use `Boolean(campo)` direto.
+- O Airtable aceita no máximo **10 registros por chamada** (criar, alterar ou
+  apagar). Os nós que gravam em lote já quebram a lista de 10 em 10.
 
 ## Aba Consultar (feita em 16/08/2026)
 
@@ -320,6 +352,119 @@ Detalhes da tela que valem saber:
 - Sair do sistema limpa a lista e o resumo do Financeiro, como já fazia com a
   Consulta: valores em aberto não devem ficar na tela depois do logout.
 
+## Financeiro completo: parcelas, contas fixas, fornecedores e resumo (25/08/2026)
+
+A aba Financeiro virou três: **Contas a pagar**, **Contas fixas** e **Resumo**.
+
+### Parcelamento — decisão de fundo
+
+Uma compra em N vezes vira **N despesas de verdade**, uma por mês, ligadas pelo
+campo `Grupo`. Não é uma despesa só com "3x" escrito nela.
+
+O motivo: assim cada parcela pode ser marcada como paga sozinha, aparece no mês
+certo da previsão e some da lista quando é quitada — que é como a dívida
+acontece na vida real. O preço é ter mais linhas na tabela, e por isso existe o
+botão **"Excluir todas as parcelas"** dentro de cada parcela.
+
+A divisão é feita **em centavos**: as primeiras ficam com o valor arredondado e
+a última recebe a sobra, então a soma bate exata com o total (R$ 1.000 em 3x =
+333,33 + 333,33 + **333,34**). A mesma conta é feita no app, só para mostrar na
+tela antes de salvar o que vai ser gravado.
+
+Datas de parcela **não estouram o mês**: 31/01 + 1 mês = 28/02, não 03/03.
+
+**Editar não mexe no parcelamento.** O campo "em quantas vezes" some quando o
+formulário está editando: mudar de 3 para 5 exigiria remexer nas outras
+parcelas, e não vale a complicação — para isso, apaga o grupo e lança de novo.
+
+### Contas fixas (recorrentes)
+
+A **regra** fica guardada uma vez na tabela `Recorrentes`; as despesas do mês
+são geradas a partir dela. O campo `Proxima_Geracao` é o que impede duplicar:
+o workflow só gera o que está com data vencida ou de hoje, e já empurra a data
+para o mês seguinte.
+
+**Tem recuperação de atraso**: se o sistema passou dois meses sem ser aberto,
+as duas contas atrasadas aparecem de uma vez (limite de 24 por segurança, para
+o caso de data cadastrada errada no passado). Por isso **não existe agendamento
+no n8n** — quem dispara é o app, toda vez que a aba Financeiro é aberta. Se
+ninguém abre o sistema, nada precisava ser gerado mesmo.
+
+Tem opção **"não tem data para acabar"** (o `Sem_Fim`), para conta que se paga
+para sempre. Sem ela, informa-se quantas ainda faltam, e a regra se encerra
+sozinha quando chega a zero.
+
+**Encerrar ≠ excluir**: encerrar só para de gerar e guarda o histórico do que
+já saiu; excluir apaga a regra, para quando foi cadastro errado.
+
+### Fornecedores
+
+Virou tabela própria, com vínculo (`Fornecedor_Ref`) em vez de texto solto. O
+campo do formulário aceita **nome ou CNPJ**:
+
+- CNPJ já cadastrado → preenche o nome sem nem chamar a Receita
+- CNPJ novo → busca a razão social na Receita e preenche
+- nome digitado torto ("  ferragem   TESTE  ltda ") → casa com o já salvo,
+  comparando sem acento e sem pontuação, e **adota a grafia salva**
+
+Assim o mesmo fornecedor não entra escrito de dez jeitos. `App - Salvar
+fornecedor` é um workflow separado de propósito: salvar despesa e salvar conta
+fixa só recebem o código do fornecedor, e ficam simples.
+
+### Sobre não repetir dados (o pedido do agente de IA)
+
+O pedido era usar IA (Claude/OpenAI no n8n) para descobrir que dois produtos
+descritos diferente são o mesmo. **Ainda não foi feito, e de propósito.**
+
+O que foi feito primeiro é o que resolve o caso comum **sem gastar crédito e
+sem risco de erro**: sugestão do que já foi digitado antes (fornecedores,
+descrições, categorias), normalização de fornecedor pelo CNPJ, e um aviso
+quando a descrição digitada é a mesma coisa escrita de outro jeito ("Você já
+lançou isto como X"). É **aviso, não bloqueio** — quem decide se é o mesmo item
+é o dono, porque "Cimento" e "Cimento CP-II" podem ser produtos diferentes de
+verdade.
+
+A IA entra na fase de **catálogo de produtos / estoque** (ver a seção da
+arquitetura de captura de compras), que é onde a comparação fica realmente
+difícil — e lá vale a regra que o dono deu: **a IA pergunta antes de assumir
+que dois produtos são o mesmo, a não ser que tenha certeza absoluta provada por
+código**, nunca só por descrição parecida.
+
+### Velocidade
+
+As três leituras (despesas, fornecedores, contas fixas) mais a geração das
+contas fixas saem **ao mesmo tempo**, do navegador. Medido: ~870ms para a aba
+inteira, contra ~2s da primeira tentativa que juntava tudo num workflow só
+(ver "Coisas descobertas testando" sobre o n8n não paralelizar).
+
+Depois de salvar, o app relê **só a lista que mudou**, não as três.
+
+### Outros detalhes da tela
+
+- **Valor com máscara**: digita-se só números e o R$, o ponto de milhar e a
+  vírgula aparecem sozinhos, da direita para a esquerda como calculadora.
+- **Categoria "Outros"** abre um campo de texto livre, com sugestão das
+  categorias que já foram digitadas antes. É salvo com `typecast`, então a
+  lista do Airtable cresce sozinha.
+- **Forma de pagamento**: PIX, Boleto, Dinheiro, Depósito, Cartão de débito,
+  Cartão de crédito. O campo de parcelas só aparece em **Cartão de crédito e
+  Boleto** — as duas em que parcelar existe de verdade.
+- **Filtros** de situação (Em aberto / Vencidas / Pagas / Todas) e de mês. O
+  filtro de mês só oferece meses que existem na lista. O rodapé da lista mostra
+  a **soma do que está filtrado**.
+- **Resumo**: previsão de saída dos próximos 6 meses (o que está lançado em
+  aberto **mais** o que as contas fixas ainda vão gerar), em aberto por
+  categoria e por fornecedor. Barras em CSS puro, sem biblioteca de gráfico.
+  Contas atrasadas ou sem data entram no mês corrente, que é quando precisam
+  ser pagas.
+
+### Bug antigo corrigido junto
+
+`#subfin-despesas` tinha a classe `.subpage`, e o clique nas abas do Cadastro
+escondia **todas** as `.subpage` do documento — inclusive a do Financeiro, que
+depois abria em branco. As abas internas agora buscam só dentro da própria
+página (`aba.closest(".page")`), e os blocos do Financeiro usam `.subpage-fin`.
+
 ## Arquitetura para captura automática de compras (planejada em 24/08/2026 — nada construído ainda)
 
 Só análise e pesquisa até aqui, nenhum código. Registrando pra não perder o
@@ -473,12 +618,14 @@ uma peça por vez, e volta quando precisar):
   configuração fiscal já foi feita por ele no Base ERP. Falta construir.
 - **Cobrança dos clientes (contas a receber)** via Asaas — boleto/PIX e saber
   quem pagou, por webhook.
-- **Resumo financeiro geral** (quanto entrou × quanto saiu). O resumo de
-  Despesas já existe, mas só olha o que sai.
-- O Financeiro tem só a aba "Despesas" por enquanto; a estrutura de abas já
-  está pronta para receber as próximas.
-- Despesas recorrentes (aluguel todo mês, etc.) não existem — hoje cada mês
-  precisa ser lançado à mão.
+- **Resumo financeiro geral** (quanto entrou × quanto saiu). O resumo do
+  Financeiro já existe, mas só olha o que sai — falta o lado das entradas.
+- **Cartão de crédito: dia da fatura.** O parcelamento já prevê a saída mês a
+  mês, mas usa a data que foi digitada como vencimento. O dono disse que ia
+  passar os dados dos cartões depois; quando passar, dá para lançar a parcela
+  no **dia real da fatura** de cada cartão, em vez de contar mês a mês a partir
+  da compra. Provavelmente vira uma tabela `Cartoes` (nome, dia do fechamento,
+  dia do vencimento) e um campo de cartão na despesa.
 - **Captura automática de compras** (nota por e-mail, QR do cupom, cruzamento
   com a fatura do cartão, catálogo de produtos com IA) — arquitetura inteira
   já desenhada e com fontes verificadas, ver seção acima. Nada construído.
@@ -598,6 +745,10 @@ saía espremido em ~300px. Resolvido com
 `.grade-responsiva > .aberto { grid-column: 1 / -1 }`, que faz o item aberto
 ocupar a linha inteira. **Se outra lista ganhar um item que expande, ela
 precisa da mesma regra** (ou usar a classe `.aberto`, que já é pega por essa).
+
+Em 25/08/2026 descobriu-se que as despesas usavam `.aberta` (no feminino) e
+por isso não pegavam a regra — o cartão aberto ficava espremido numa coluna. A
+regra agora cobre **as duas grafias**.
 
 ## Decisões já tomadas (não relitigar sem motivo)
 

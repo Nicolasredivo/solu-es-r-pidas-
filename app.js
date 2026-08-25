@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.08.24";
+const APP_VERSION = "2026.08.25";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -105,24 +105,34 @@ document.querySelectorAll(".sidebar-item[data-page]").forEach((item) => {
   });
 });
 
-// ----- Abas internas do Cadastro (Adicionar / Consultar) -----
+// ----- Abas internas de uma página -----
 
-document.querySelectorAll(".subtab").forEach((tab) => {
-  tab.addEventListener("click", () => {
-    if (!podeSair(`aba:${tab.dataset.subpage}`)) {
-      avisarPerda("Você tem alterações não salvas. Toque de novo para sair desta tela.");
-      return;
-    }
+// A busca é feita dentro da página da aba clicada, e não no documento inteiro:
+// sem isso, trocar de aba no Cadastro escondia também os blocos do Financeiro,
+// que ficava em branco quando aberto depois.
+function ligarAbasInternas(classeAba, atributo, prefixoId, classeBloco) {
+  document.querySelectorAll(`.${classeAba}`).forEach((aba) => {
+    aba.addEventListener("click", () => {
+      const alvo = aba.dataset[atributo];
+      if (!podeSair(`aba:${alvo}`)) {
+        avisarPerda("Você tem alterações não salvas. Toque de novo para sair desta tela.");
+        return;
+      }
 
-    document.querySelectorAll(".subtab").forEach((t) => t.classList.remove("active"));
-    tab.classList.add("active");
+      const pagina = aba.closest(".page");
+      pagina.querySelectorAll(`.${classeAba}`).forEach((t) => t.classList.remove("active"));
+      aba.classList.add("active");
 
-    const targetId = `subpage-${tab.dataset.subpage}`;
-    document.querySelectorAll(".subpage").forEach((subpage) => {
-      subpage.classList.toggle("hidden", subpage.id !== targetId);
+      const idAlvo = `${prefixoId}${alvo}`;
+      pagina.querySelectorAll(`.${classeBloco}`).forEach((bloco) => {
+        bloco.classList.toggle("hidden", bloco.id !== idAlvo);
+      });
     });
   });
-});
+}
+
+ligarAbasInternas("subtab", "subpage", "subpage-", "subpage");
+ligarAbasInternas("subtab-fin", "subfin", "subfin-", "subpage-fin");
 
 // ----- Campo de CPF/CNPJ -----
 
@@ -1127,7 +1137,7 @@ document.querySelector('.subtab[data-subpage="consultar"]').addEventListener("cl
   if (!listaCarregada) carregarLista();
 });
 
-// ----- Financeiro: despesas (contas a pagar) -----
+// ----- Financeiro -----
 
 const despesaForm = document.getElementById("form-despesa");
 const novaDespesaBotao = document.getElementById("nova-despesa");
@@ -1135,12 +1145,34 @@ const cancelarDespesaBotao = document.getElementById("cancelar-despesa");
 const salvarDespesaBotao = document.getElementById("salvar-despesa");
 const despesaStatusMsg = document.getElementById("despesa-status-msg");
 const buscaDespesa = document.getElementById("busca-despesa");
+const filtroSituacao = document.getElementById("filtro-situacao");
+const filtroMes = document.getElementById("filtro-mes");
 const recarregarDespesasBotao = document.getElementById("recarregar-despesas");
 const listaDespesasStatus = document.getElementById("lista-despesas-status");
 const listaDespesasBox = document.getElementById("lista-despesas");
 const modeloDespesa = document.getElementById("modelo-despesa");
 const resumoDespesas = document.getElementById("resumo-despesas");
 const linhaDataPagamento = document.getElementById("linha-data-pagamento");
+const linhaCategoriaOutra = document.getElementById("linha-categoria-outra");
+const linhaParcelas = document.getElementById("linha-parcelas");
+const parcelasHint = document.getElementById("despesa-parcelas-hint");
+const descricaoHint = document.getElementById("despesa-descricao-hint");
+
+const recorrenteForm = document.getElementById("form-recorrente");
+const novaRecorrenteBotao = document.getElementById("nova-recorrente");
+const cancelarRecorrenteBotao = document.getElementById("cancelar-recorrente");
+const salvarRecorrenteBotao = document.getElementById("salvar-recorrente");
+const recorrenteStatusMsg = document.getElementById("recorrente-status-msg");
+const listaRecorrentesStatus = document.getElementById("lista-recorrentes-status");
+const listaRecorrentesBox = document.getElementById("lista-recorrentes");
+const modeloRecorrente = document.getElementById("modelo-recorrente");
+const linhaRestantes = document.getElementById("linha-restantes");
+const linhaRecorrenteCategoriaOutra = document.getElementById("linha-recorrente-categoria-outra");
+
+const modeloBarra = document.getElementById("modelo-barra");
+const listaFornecedoresDatalist = document.getElementById("lista-fornecedores");
+const listaDescricoesDatalist = document.getElementById("lista-descricoes");
+const listaCategoriasDatalist = document.getElementById("lista-categorias");
 
 const despesaCampos = {
   descricao: document.getElementById("despesa-descricao"),
@@ -1148,16 +1180,44 @@ const despesaCampos = {
   fornecedor: document.getElementById("despesa-fornecedor"),
   vencimento: document.getElementById("despesa-vencimento"),
   categoria: document.getElementById("despesa-categoria"),
+  categoriaOutra: document.getElementById("despesa-categoria-outra"),
+  forma: document.getElementById("despesa-forma"),
+  parcelas: document.getElementById("despesa-parcelas"),
   status: document.getElementById("despesa-status"),
   dataPagamento: document.getElementById("despesa-data-pagamento"),
   observacoes: document.getElementById("despesa-observacoes"),
 };
 
+const recorrenteCampos = {
+  descricao: document.getElementById("recorrente-descricao"),
+  valor: document.getElementById("recorrente-valor"),
+  fornecedor: document.getElementById("recorrente-fornecedor"),
+  dia: document.getElementById("recorrente-dia"),
+  semFim: document.getElementById("recorrente-sem-fim"),
+  restantes: document.getElementById("recorrente-restantes"),
+  categoria: document.getElementById("recorrente-categoria"),
+  categoriaOutra: document.getElementById("recorrente-categoria-outra"),
+  forma: document.getElementById("recorrente-forma"),
+  observacoes: document.getElementById("recorrente-observacoes"),
+};
+
+// As três listas ficam em memória depois do primeiro carregamento: filtrar,
+// buscar e montar o resumo não custa nenhuma ida ao n8n.
 let despesas = [];
-let despesasCarregadas = false;
-// Guarda o código quando o formulário está editando uma despesa que já existe;
-// vazio significa que é uma despesa nova.
+let fornecedores = [];
+let recorrentes = [];
+let financeiroCarregado = false;
+
+// Guardam o código quando um formulário está editando algo que já existe;
+// vazio significa item novo.
 let despesaEditando = "";
+let recorrenteEditando = "";
+
+// Formas de pagamento que costumam ser parceladas — só nelas o campo de
+// quantidade de vezes aparece, para não poluir um PIX à vista.
+const FORMAS_PARCELAVEIS = ["Cartão de crédito", "Boleto"];
+
+// ----- Números, datas e dinheiro -----
 
 function dinheiro(valor) {
   return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -1177,11 +1237,81 @@ function hojeISO() {
   return `${agora.getFullYear()}-${mes}-${dia}`;
 }
 
+const NOMES_DOS_MESES = ["jan", "fev", "mar", "abr", "mai", "jun",
+  "jul", "ago", "set", "out", "nov", "dez"];
+
+function mesBonito(anoMes) {
+  const [ano, mes] = String(anoMes).split("-");
+  return `${NOMES_DOS_MESES[Number(mes) - 1] || mes}/${String(ano).slice(2)}`;
+}
+
+// Monta uma data escolhendo o dia sem estourar o mês: dia 31 em fevereiro vira
+// 28 (ou 29), não 3 de março. Mesma regra que o n8n usa ao gerar as contas.
+function diaNoMes(ano, mesIndex, dia) {
+  const base = new Date(Date.UTC(ano, mesIndex, 1));
+  const ultimo = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate();
+  const dd = String(Math.min(Math.max(1, dia), ultimo)).padStart(2, "0");
+  const mm = String(base.getUTCMonth() + 1).padStart(2, "0");
+  return `${base.getUTCFullYear()}-${mm}-${dd}`;
+}
+
+function somaUmMes(iso, diaDoMes) {
+  const [ano, mes] = String(iso).slice(0, 10).split("-").map(Number);
+  return diaNoMes(ano, mes, diaDoMes);
+}
+
 // Vencida é quem tem data no passado E ainda não foi paga.
 function despesaVencida(despesa) {
   if (despesa.status === "Pago" || !despesa.vencimento) return false;
   return String(despesa.vencimento).slice(0, 10) < hojeISO();
 }
+
+// Acentuação e pontuação fora, para "Cimento CP-II" e "cimento cp ii" caírem
+// no mesmo texto e a gente conseguir avisar que é a mesma coisa escrita de
+// outro jeito.
+function normalizarTexto(texto) {
+  return String(texto || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+// O campo de valor se comporta como calculadora: os dígitos entram pela
+// direita e o R$, o ponto de milhar e a vírgula aparecem sozinhos.
+function mascaraDinheiro(bruto) {
+  const digitos = String(bruto).replace(/\D/g, "").slice(0, 11);
+  if (!digitos) return "";
+  return (Number(digitos) / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
+
+function ligarMascaraDinheiro(campo) {
+  campo.addEventListener("input", () => {
+    campo.value = mascaraDinheiro(campo.value);
+    // Cursor sempre no fim: como os dígitos entram pela direita, não existe
+    // posição no meio para preservar.
+    campo.setSelectionRange(campo.value.length, campo.value.length);
+  });
+}
+
+function valorDoCampo(campo) {
+  const digitos = String(campo.value).replace(/\D/g, "");
+  return digitos ? Number(digitos) / 100 : 0;
+}
+
+function porValorNoCampo(campo, valor) {
+  const centavos = Math.round(Number(valor || 0) * 100);
+  campo.value = centavos > 0 ? mascaraDinheiro(String(centavos)) : "";
+}
+
+ligarMascaraDinheiro(despesaCampos.valor);
+ligarMascaraDinheiro(recorrenteCampos.valor);
+
+// ----- Avisos das duas telas -----
 
 function mostrarDespesaStatus(tipo, mensagem) {
   despesaStatusMsg.textContent = mensagem;
@@ -1193,6 +1323,217 @@ function mostrarListaDespesasStatus(tipo, mensagem) {
   listaDespesasStatus.className = `doc-hint ${tipo}`;
 }
 
+function mostrarRecorrenteStatus(tipo, mensagem) {
+  recorrenteStatusMsg.textContent = mensagem;
+  recorrenteStatusMsg.className = `status show ${tipo}`;
+}
+
+function mostrarListaRecorrentesStatus(tipo, mensagem) {
+  listaRecorrentesStatus.textContent = mensagem;
+  listaRecorrentesStatus.className = `doc-hint ${tipo}`;
+}
+
+// ----- Campo de fornecedor (aceita nome ou CNPJ) -----
+
+// Os dois formulários têm o mesmo campo, então a lógica mora aqui uma vez só:
+// se o que foi digitado é um CNPJ, busca o nome na Receita; depois confere se
+// esse fornecedor já existe para não cadastrar o mesmo duas vezes.
+function ligarCampoFornecedor(campo, hint) {
+  const estado = { id: "", cnpj: "" };
+
+  function dizer(tipo, texto) {
+    hint.textContent = texto;
+    hint.className = `doc-hint ${tipo}`;
+  }
+
+  function casarComCadastrado() {
+    const alvo = normalizarTexto(campo.value);
+    if (!alvo) {
+      estado.id = "";
+      dizer("", "");
+      return;
+    }
+
+    const achado = fornecedores.find((f) => normalizarTexto(f.nome) === alvo);
+    estado.id = achado ? achado.id : "";
+
+    if (achado) {
+      // Adota a grafia já salva, para a lista não encher de variações.
+      campo.value = achado.nome;
+      dizer("", achado.cnpj ? `Já cadastrado · CNPJ ${achado.cnpj}` : "Já cadastrado.");
+    } else {
+      dizer("", "Fornecedor novo — vou cadastrar junto ao salvar.");
+    }
+  }
+
+  async function resolver() {
+    const texto = campo.value.trim();
+    if (!texto) {
+      estado.id = "";
+      estado.cnpj = "";
+      dizer("", "");
+      return;
+    }
+
+    const digitos = texto.replace(/\D/g, "");
+    // Só trata como CNPJ o que é número puro com 14 dígitos: um nome de
+    // empresa com número no meio continua sendo nome.
+    if (digitos.length === 14 && !/[a-zA-ZÀ-ÿ]/.test(texto)) {
+      // Se esse CNPJ já está salvo, nem precisa incomodar a Receita.
+      const jaSalvo = fornecedores.find((f) => f.cnpj === digitos);
+      if (jaSalvo) {
+        campo.value = jaSalvo.nome;
+        estado.id = jaSalvo.id;
+        estado.cnpj = digitos;
+        dizer("", `Já cadastrado · CNPJ ${digitos}`);
+        return;
+      }
+
+      dizer("", "Procurando na Receita...");
+      try {
+        const r = await pedirAoN8n("consultar-cnpj", { cnpj: digitos });
+        if (r && r.ok && r.achou) {
+          campo.value = r.razaoSocial;
+          estado.cnpj = digitos;
+          casarComCadastrado();
+          return;
+        }
+        dizer("error", (r && (r.aviso || r.mensagem)) || "Não achei este CNPJ. Escreva o nome à mão.");
+      } catch (err) {
+        dizer("error", "Não consegui falar com o n8n para buscar o CNPJ.");
+      }
+      return;
+    }
+
+    estado.cnpj = "";
+    casarComCadastrado();
+  }
+
+  campo.addEventListener("change", resolver);
+  campo.addEventListener("blur", resolver);
+
+  return {
+    limpar() {
+      campo.value = "";
+      estado.id = "";
+      estado.cnpj = "";
+      dizer("", "");
+    },
+    preencher(id, nome) {
+      campo.value = nome || "";
+      estado.id = id || "";
+      estado.cnpj = "";
+      dizer("", nome && id ? "Já cadastrado." : "");
+    },
+    // Garante que o fornecedor digitado existe no Airtable e devolve o código.
+    // Cadastra só quando é mesmo novo, então salvar duas despesas do mesmo
+    // fornecedor não cria dois registros.
+    async garantirId() {
+      // Salvar logo depois de digitar pode chegar aqui antes de o campo ter
+      // sido resolvido; resolver de novo é barato e evita cadastrar um CNPJ
+      // como se fosse o nome da empresa.
+      await resolver();
+
+      const nome = campo.value.trim();
+      if (!nome) return "";
+      if (estado.id) return estado.id;
+
+      const r = await pedirAoN8n("salvar-fornecedor", { nome, cnpj: estado.cnpj });
+      if (!r || !r.ok) throw new Error((r && r.mensagem) || "Não consegui salvar o fornecedor.");
+
+      estado.id = r.fornecedor.id;
+      if (!fornecedores.some((f) => f.id === estado.id)) {
+        fornecedores.push({ id: estado.id, nome: r.fornecedor.nome, cnpj: r.fornecedor.cnpj });
+        atualizarListasDeApoio();
+      }
+      return estado.id;
+    },
+  };
+}
+
+const fornecedorDaDespesa = ligarCampoFornecedor(
+  despesaCampos.fornecedor,
+  document.getElementById("despesa-fornecedor-hint")
+);
+const fornecedorDaRecorrente = ligarCampoFornecedor(
+  recorrenteCampos.fornecedor,
+  document.getElementById("recorrente-fornecedor-hint")
+);
+
+// As despesas já chegam com o nome do fornecedor pronto do Airtable, mas as
+// contas fixas trazem só o código — o cruzamento é feito aqui, com a lista que
+// já está em memória, em vez de custar mais uma ida ao servidor.
+function ligarNomesDosFornecedores() {
+  const nomePorId = {};
+  fornecedores.forEach((f) => (nomePorId[f.id] = f.nome));
+  recorrentes.forEach((r) => (r.fornecedor = nomePorId[r.fornecedorId] || ""));
+}
+
+// ----- Listas de sugestão (evitam o mesmo dado escrito de vários jeitos) -----
+
+function encherDatalist(datalist, valores) {
+  datalist.innerHTML = "";
+  valores.forEach((valor) => {
+    const opcao = document.createElement("option");
+    opcao.value = valor;
+    datalist.appendChild(opcao);
+  });
+}
+
+const CATEGORIAS_FIXAS = ["Material", "Veículo", "Salário", "Aluguel", "Outros"];
+
+function atualizarListasDeApoio() {
+  encherDatalist(
+    listaFornecedoresDatalist,
+    fornecedores.map((f) => f.nome).filter(Boolean).sort((a, b) => a.localeCompare(b, "pt-BR"))
+  );
+
+  // Descrições sem o "(1/3)" das parcelas: sugerir "Compra de material (2/3)"
+  // não ajudaria ninguém a repetir um lançamento.
+  const descricoes = new Set();
+  despesas.forEach((d) => descricoes.add(String(d.descricao || "").replace(/\s*\(\d+\/\d+\)\s*$/, "").trim()));
+  recorrentes.forEach((r) => descricoes.add(String(r.descricao || "").trim()));
+  descricoes.delete("");
+  encherDatalist(listaDescricoesDatalist, Array.from(descricoes).sort((a, b) => a.localeCompare(b, "pt-BR")));
+
+  // Categorias digitadas à mão em "Outros" viram sugestão nas próximas vezes.
+  const categorias = new Set();
+  despesas.forEach((d) => categorias.add(String(d.categoria || "").trim()));
+  recorrentes.forEach((r) => categorias.add(String(r.categoria || "").trim()));
+  CATEGORIAS_FIXAS.forEach((c) => categorias.delete(c));
+  categorias.delete("");
+  encherDatalist(listaCategoriasDatalist, Array.from(categorias).sort((a, b) => a.localeCompare(b, "pt-BR")));
+}
+
+// Avisa quando o que está sendo digitado é a mesma coisa que já existe escrita
+// de outro jeito. Só avisa — quem decide se é o mesmo item é você, porque
+// "Cimento" e "Cimento CP-II" podem ser produtos diferentes de verdade.
+function conferirDescricaoParecida(campo, hint) {
+  const digitado = campo.value.trim();
+  const alvo = normalizarTexto(digitado);
+  if (!alvo || alvo.length < 3) {
+    hint.textContent = "";
+    return;
+  }
+
+  const anteriores = new Set();
+  despesas.forEach((d) => anteriores.add(String(d.descricao || "").replace(/\s*\(\d+\/\d+\)\s*$/, "").trim()));
+  recorrentes.forEach((r) => anteriores.add(String(r.descricao || "").trim()));
+
+  const parecida = Array.from(anteriores).find(
+    (texto) => texto && texto !== digitado && normalizarTexto(texto) === alvo
+  );
+
+  hint.className = "doc-hint";
+  hint.textContent = parecida ? `Você já lançou isto como "${parecida}".` : "";
+}
+
+despesaCampos.descricao.addEventListener("blur", () =>
+  conferirDescricaoParecida(despesaCampos.descricao, descricaoHint)
+);
+
+// ----- Formulário de despesa -----
+
 // Data do pagamento só faz sentido quando a despesa está paga.
 function ajustarLinhaDataPagamento() {
   const pago = despesaCampos.status.value === "Pago";
@@ -1202,14 +1543,74 @@ function ajustarLinhaDataPagamento() {
   }
 }
 
+function ajustarCategoriaOutra(select, linha, campoTexto) {
+  const outros = select.value === "Outros";
+  linha.classList.toggle("hidden", !outros);
+  if (!outros) campoTexto.value = "";
+}
+
+// Parcelamento só aparece nas formas em que ele existe, e some ao editar: cada
+// parcela já é uma conta própria, então mudar o número de vezes depois teria
+// que remexer em todas as outras.
+function ajustarLinhaParcelas() {
+  const podeParcelar =
+    FORMAS_PARCELAVEIS.includes(despesaCampos.forma.value) && !despesaEditando;
+  linhaParcelas.classList.toggle("hidden", !podeParcelar);
+  if (!podeParcelar) {
+    despesaCampos.parcelas.value = "1";
+    parcelasHint.textContent = "";
+    return;
+  }
+  mostrarContaDasParcelas();
+}
+
+function mostrarContaDasParcelas() {
+  const vezes = Math.max(1, Math.min(60, Number(despesaCampos.parcelas.value) || 1));
+  const total = valorDoCampo(despesaCampos.valor);
+
+  if (vezes <= 1 || total <= 0) {
+    parcelasHint.textContent = "";
+    return;
+  }
+
+  // Mesma divisão em centavos que o n8n faz, para a tela mostrar exatamente o
+  // que vai ser salvo.
+  const centavos = Math.round(total * 100);
+  const base = Math.floor(centavos / vezes);
+  const ultima = base + (centavos - base * vezes);
+  const primeira = dataBonita(despesaCampos.vencimento.value);
+
+  parcelasHint.className = "doc-hint";
+  parcelasHint.textContent =
+    base === ultima
+      ? `${vezes}x de ${dinheiro(base / 100)}${primeira ? `, a partir de ${primeira}` : ""}.`
+      : `${vezes - 1}x de ${dinheiro(base / 100)} + ${dinheiro(ultima / 100)}` +
+        `${primeira ? `, a partir de ${primeira}` : ""}.`;
+}
+
 despesaCampos.status.addEventListener("change", ajustarLinhaDataPagamento);
+despesaCampos.categoria.addEventListener("change", () =>
+  ajustarCategoriaOutra(despesaCampos.categoria, linhaCategoriaOutra, despesaCampos.categoriaOutra)
+);
+despesaCampos.forma.addEventListener("change", ajustarLinhaParcelas);
+despesaCampos.parcelas.addEventListener("input", mostrarContaDasParcelas);
+despesaCampos.valor.addEventListener("input", mostrarContaDasParcelas);
+despesaCampos.vencimento.addEventListener("change", mostrarContaDasParcelas);
 
 function limparFormDespesa() {
   despesaEditando = "";
-  Object.values(despesaCampos).forEach((campo) => (campo.value = ""));
+  Object.values(despesaCampos).forEach((campo) => {
+    if (campo.type !== "checkbox") campo.value = "";
+  });
+  fornecedorDaDespesa.limpar();
   despesaCampos.categoria.value = "Outros";
   despesaCampos.status.value = "Pendente";
+  despesaCampos.forma.value = "";
+  despesaCampos.parcelas.value = "1";
+  descricaoHint.textContent = "";
   ajustarLinhaDataPagamento();
+  ajustarCategoriaOutra(despesaCampos.categoria, linhaCategoriaOutra, despesaCampos.categoriaOutra);
+  ajustarLinhaParcelas();
   despesaStatusMsg.className = "status";
   salvarDespesaBotao.textContent = "Salvar despesa";
 }
@@ -1219,15 +1620,28 @@ function abrirFormDespesa(despesa) {
 
   if (despesa) {
     despesaEditando = despesa.id;
-    despesaCampos.descricao.value = despesa.descricao;
-    despesaCampos.valor.value = String(despesa.valor).replace(".", ",");
-    despesaCampos.fornecedor.value = despesa.fornecedor;
+    despesaCampos.descricao.value = despesa.descricao || "";
+    porValorNoCampo(despesaCampos.valor, despesa.valor);
+    fornecedorDaDespesa.preencher(despesa.fornecedorId, despesa.fornecedor);
     despesaCampos.vencimento.value = String(despesa.vencimento || "").slice(0, 10);
-    despesaCampos.categoria.value = despesa.categoria || "Outros";
+    despesaCampos.forma.value = despesa.formaPagamento || "";
     despesaCampos.status.value = despesa.status || "Pendente";
     despesaCampos.dataPagamento.value = String(despesa.dataPagamento || "").slice(0, 10);
-    despesaCampos.observacoes.value = despesa.observacoes;
+    despesaCampos.observacoes.value = despesa.observacoes || "";
+
+    // Categoria fora da lista fixa entrou como texto livre; devolve o campo
+    // "Outros" preenchido, para editar sem perder o que foi escrito.
+    const categoria = despesa.categoria || "Outros";
+    if (CATEGORIAS_FIXAS.includes(categoria)) {
+      despesaCampos.categoria.value = categoria;
+    } else {
+      despesaCampos.categoria.value = "Outros";
+      despesaCampos.categoriaOutra.value = categoria;
+    }
+
     ajustarLinhaDataPagamento();
+    ajustarCategoriaOutra(despesaCampos.categoria, linhaCategoriaOutra, despesaCampos.categoriaOutra);
+    ajustarLinhaParcelas();
     salvarDespesaBotao.textContent = "Salvar alterações";
   }
 
@@ -1245,30 +1659,81 @@ function fecharFormDespesa() {
 novaDespesaBotao.addEventListener("click", () => abrirFormDespesa(null));
 cancelarDespesaBotao.addEventListener("click", fecharFormDespesa);
 
-async function carregarDespesas() {
-  mostrarListaDespesasStatus("neutral", "Carregando...");
-  listaDespesasBox.innerHTML = "";
+function categoriaEscolhida(select, campoTexto) {
+  return select.value === "Outros" && campoTexto.value.trim()
+    ? campoTexto.value.trim()
+    : select.value;
+}
+
+despesaForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!despesaCampos.descricao.value.trim()) {
+    mostrarDespesaStatus("error", "Escreva uma descrição para a despesa.");
+    return;
+  }
+
+  const valor = valorDoCampo(despesaCampos.valor);
+  if (valor <= 0) {
+    mostrarDespesaStatus("error", "Informe um valor maior que zero.");
+    return;
+  }
+
+  const vezes = linhaParcelas.classList.contains("hidden")
+    ? 1
+    : Math.max(1, Math.min(60, Number(despesaCampos.parcelas.value) || 1));
+
+  if (vezes > 1 && !despesaCampos.vencimento.value) {
+    mostrarDespesaStatus("error", "Para parcelar, informe a data da primeira parcela.");
+    return;
+  }
+
+  salvarDespesaBotao.disabled = true;
+  mostrarDespesaStatus("loading", "Salvando...");
 
   try {
-    const dados = await pedirAoN8n("listar-despesas", {});
+    const fornecedorId = await fornecedorDaDespesa.garantirId();
 
-    if (!dados || !dados.ok) {
-      mostrarListaDespesasStatus("error", (dados && dados.mensagem) || "Não consegui carregar.");
-      return;
+    const corpo = {
+      descricao: despesaCampos.descricao.value.trim(),
+      valor: String(valor),
+      fornecedorId,
+      vencimento: despesaCampos.vencimento.value,
+      status: despesaCampos.status.value,
+      categoria: categoriaEscolhida(despesaCampos.categoria, despesaCampos.categoriaOutra),
+      formaPagamento: despesaCampos.forma.value,
+      dataPagamento: despesaCampos.dataPagamento.value,
+      observacoes: despesaCampos.observacoes.value.trim(),
+    };
+    if (despesaEditando) corpo.id = despesaEditando;
+    else corpo.parcelas = String(vezes);
+
+    const resposta = await pedirAoN8n(
+      despesaEditando ? "atualizar-despesa" : "salvar-despesa",
+      corpo
+    );
+
+    if (!resposta || !resposta.ok) {
+      throw new Error((resposta && resposta.mensagem) || "Não consegui salvar.");
     }
 
-    despesas = dados.despesas || [];
-    despesasCarregadas = true;
-    desenharDespesas();
+    fecharFormDespesa();
+    await recarregarDespesas();
+    mostrarListaDespesasStatus("ok", resposta.mensagem || "Despesa salva!");
   } catch (err) {
-    mostrarListaDespesasStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+    mostrarDespesaStatus("error", err.message || "Não foi possível falar com o n8n.");
+  } finally {
+    salvarDespesaBotao.disabled = false;
   }
-}
+});
+
+// ----- Lista de despesas -----
 
 function atualizarResumoDespesas() {
   const emAberto = despesas.filter((d) => d.status !== "Pago");
   const totalAberto = emAberto.reduce((soma, d) => soma + Number(d.valor || 0), 0);
-  const totalVencidas = emAberto.filter(despesaVencida)
+  const totalVencidas = emAberto
+    .filter(despesaVencida)
     .reduce((soma, d) => soma + Number(d.valor || 0), 0);
 
   // "Pago no mês" olha a data do pagamento, não a do vencimento: o que importa
@@ -1284,13 +1749,45 @@ function atualizarResumoDespesas() {
   resumoDespesas.classList.toggle("hidden", despesas.length === 0);
 }
 
+// O filtro de mês só oferece meses que existem na lista, para não virar um
+// menu quilométrico de datas vazias.
+function atualizarFiltroDeMeses() {
+  const escolhido = filtroMes.value;
+  const meses = Array.from(
+    new Set(despesas.map((d) => String(d.vencimento || "").slice(0, 7)).filter(Boolean))
+  ).sort();
+
+  filtroMes.innerHTML = '<option value="">Qualquer mês</option>';
+  meses.forEach((mes) => {
+    const opcao = document.createElement("option");
+    opcao.value = mes;
+    opcao.textContent = mesBonito(mes);
+    filtroMes.appendChild(opcao);
+  });
+
+  filtroMes.value = meses.includes(escolhido) ? escolhido : "";
+}
+
+function despesaPassaNosFiltros(despesa, termo) {
+  if (termo && !`${despesa.descricao} ${despesa.fornecedor} ${despesa.categoria}`
+    .toLowerCase().includes(termo)) {
+    return false;
+  }
+
+  if (filtroMes.value && String(despesa.vencimento || "").slice(0, 7) !== filtroMes.value) {
+    return false;
+  }
+
+  const situacao = filtroSituacao.value;
+  if (situacao === "abertas") return despesa.status !== "Pago";
+  if (situacao === "vencidas") return despesaVencida(despesa);
+  if (situacao === "pagas") return despesa.status === "Pago";
+  return true;
+}
+
 function desenharDespesas() {
   const termo = buscaDespesa.value.trim().toLowerCase();
-
-  const visiveis = despesas.filter((d) => {
-    if (!termo) return true;
-    return `${d.descricao} ${d.fornecedor}`.toLowerCase().includes(termo);
-  });
+  const visiveis = despesas.filter((d) => despesaPassaNosFiltros(d, termo));
 
   listaDespesasBox.innerHTML = "";
   atualizarResumoDespesas();
@@ -1301,15 +1798,14 @@ function desenharDespesas() {
   }
 
   if (!visiveis.length) {
-    mostrarListaDespesasStatus("neutral", `Nada encontrado para "${buscaDespesa.value.trim()}".`);
+    mostrarListaDespesasStatus("neutral", "Nenhuma conta com esses filtros.");
     return;
   }
 
+  const soma = visiveis.reduce((total, d) => total + Number(d.valor || 0), 0);
   mostrarListaDespesasStatus(
     "neutral",
-    visiveis.length === despesas.length
-      ? `${despesas.length} despesa${despesas.length > 1 ? "s" : ""}.`
-      : `${visiveis.length} de ${despesas.length} despesas.`
+    `${visiveis.length} de ${despesas.length} · ${dinheiro(soma)}`
   );
 
   visiveis.forEach((despesa) => listaDespesasBox.appendChild(montarLinhaDespesa(despesa)));
@@ -1336,15 +1832,25 @@ function montarLinhaDespesa(despesa) {
   if (paga) partes.push("Pago" + (despesa.dataPagamento ? " em " + dataBonita(despesa.dataPagamento) : ""));
   if (despesa.fornecedor) partes.push(despesa.fornecedor);
   if (despesa.categoria) partes.push(despesa.categoria);
+  if (despesa.formaPagamento) partes.push(despesa.formaPagamento);
+  if (despesa.recorrenteId) partes.push("conta fixa");
   linha.querySelector(".despesa-extra").textContent = partes.join(" · ");
 
   const acoes = linha.querySelector(".despesa-acoes");
   const botaoPagar = linha.querySelector(".despesa-pagar");
   const botaoEditar = linha.querySelector(".despesa-editar");
   const botaoExcluir = linha.querySelector(".despesa-excluir");
+  const botaoExcluirGrupo = linha.querySelector(".despesa-excluir-grupo");
 
   // Despesa já paga não precisa do botão de pagar.
   botaoPagar.classList.toggle("hidden", paga);
+
+  // Parcelas irmãs: dá para apagar a compra inteira sem caçar uma por uma.
+  const irmas = despesa.grupo ? despesas.filter((d) => d.grupo === despesa.grupo) : [];
+  botaoExcluirGrupo.classList.toggle("hidden", irmas.length < 2);
+  if (irmas.length >= 2) {
+    botaoExcluirGrupo.textContent = `Excluir as ${irmas.length} parcelas`;
+  }
 
   linha.querySelector(".despesa-resumo").addEventListener("click", () => {
     const abrindo = acoes.classList.contains("hidden");
@@ -1352,7 +1858,7 @@ function montarLinhaDespesa(despesa) {
     listaDespesasBox.querySelectorAll(".despesa").forEach((outra) => {
       outra.classList.remove("aberta");
       outra.querySelector(".despesa-acoes").classList.add("hidden");
-      desarmarExclusaoDespesa(outra.querySelector(".despesa-excluir"));
+      desarmarConfirmacao(outra.querySelector(".despesa-excluir"), "Excluir");
     });
     acoes.classList.toggle("hidden", !abrindo);
     linha.classList.toggle("aberta", abrindo);
@@ -1365,122 +1871,508 @@ function montarLinhaDespesa(despesa) {
 
   botaoPagar.addEventListener("click", async () => {
     botaoPagar.disabled = true;
+    mostrarListaDespesasStatus("neutral", "Salvando...");
     try {
-      await gravarDespesa({ ...despesa, status: "Pago", dataPagamento: hojeISO() }, despesa.id);
+      const resposta = await pedirAoN8n("atualizar-despesa", {
+        id: despesa.id,
+        descricao: despesa.descricao,
+        valor: String(despesa.valor),
+        fornecedorId: despesa.fornecedorId || "",
+        vencimento: despesa.vencimento || "",
+        status: "Pago",
+        categoria: despesa.categoria || "Outros",
+        formaPagamento: despesa.formaPagamento || "",
+        dataPagamento: hojeISO(),
+        observacoes: despesa.observacoes || "",
+      });
+
+      if (!resposta || !resposta.ok) {
+        mostrarListaDespesasStatus("error", (resposta && resposta.mensagem) || "Não consegui salvar.");
+        return;
+      }
+      await recarregarDespesas();
+      mostrarListaDespesasStatus("ok", "Marcada como paga.");
+    } catch (err) {
+      mostrarListaDespesasStatus("error", "Não foi possível falar com o n8n.");
     } finally {
       botaoPagar.disabled = false;
     }
   });
 
-  botaoExcluir.addEventListener("click", async () => {
-    if (!botaoExcluir.classList.contains("confirmando")) {
-      botaoExcluir.classList.add("confirmando");
-      botaoExcluir.textContent = "Confirmar exclusão";
-      return;
-    }
+  ligarExclusao(botaoExcluir, "Excluir", "Confirmar exclusão", async () =>
+    excluirDespesas([despesa.id], "Despesa excluída.")
+  );
 
-    botaoExcluir.disabled = true;
-    try {
-      const resposta = await pedirAoN8n("excluir-despesa", { id: despesa.id });
-      if (!resposta || !resposta.ok) {
-        mostrarListaDespesasStatus("error", (resposta && resposta.mensagem) || "Não consegui excluir.");
-        desarmarExclusaoDespesa(botaoExcluir);
-        return;
-      }
-      despesas = despesas.filter((d) => d.id !== despesa.id);
-      desenharDespesas();
-      mostrarListaDespesasStatus("ok", resposta.mensagem || "Despesa excluída.");
-    } catch (err) {
-      mostrarListaDespesasStatus("error", "Não foi possível falar com o n8n.");
-      desarmarExclusaoDespesa(botaoExcluir);
-    } finally {
-      botaoExcluir.disabled = false;
-    }
-  });
+  ligarExclusao(
+    botaoExcluirGrupo,
+    botaoExcluirGrupo.textContent,
+    "Confirmar: apagar todas",
+    async () => excluirDespesas(irmas.map((d) => d.id), "Parcelas excluídas.")
+  );
 
   return linha;
 }
 
-function desarmarExclusaoDespesa(botao) {
+// O primeiro toque avisa, o segundo confirma — mesmo padrão do resto do app,
+// em vez do alerta do navegador.
+function ligarExclusao(botao, textoNormal, textoConfirmar, acao) {
+  botao.addEventListener("click", async () => {
+    if (!botao.classList.contains("confirmando")) {
+      botao.classList.add("confirmando");
+      botao.textContent = textoConfirmar;
+      return;
+    }
+
+    botao.disabled = true;
+    try {
+      await acao();
+    } finally {
+      botao.disabled = false;
+      desarmarConfirmacao(botao, textoNormal);
+    }
+  });
+}
+
+function desarmarConfirmacao(botao, textoNormal) {
   if (!botao) return;
   botao.classList.remove("confirmando");
-  botao.textContent = "Excluir";
+  if (textoNormal) botao.textContent = textoNormal;
 }
 
-// Serve para salvar nova, editar e marcar como paga — as três terminam em
-// gravar no n8n e recarregar a lista.
-async function gravarDespesa(dados, idExistente) {
-  const rota = idExistente ? "atualizar-despesa" : "salvar-despesa";
-  const corpo = {
-    descricao: dados.descricao,
-    // O n8n aceita vírgula ou ponto; mando como está para não perder centavos.
-    valor: String(dados.valor),
-    fornecedor: dados.fornecedor || "",
-    vencimento: dados.vencimento || "",
-    status: dados.status || "Pendente",
-    categoria: dados.categoria || "Outros",
-    dataPagamento: dados.dataPagamento || "",
-    observacoes: dados.observacoes || "",
-  };
-  if (idExistente) corpo.id = idExistente;
+async function excluirDespesas(ids, mensagemOk) {
+  try {
+    const resposta = await pedirAoN8n("excluir-despesa", { ids: ids.join(",") });
+    if (!resposta || !resposta.ok) {
+      mostrarListaDespesasStatus("error", (resposta && resposta.mensagem) || "Não consegui excluir.");
+      return;
+    }
+    despesas = despesas.filter((d) => !ids.includes(d.id));
+    atualizarFiltroDeMeses();
+    atualizarListasDeApoio();
+    desenharDespesas();
+    desenharResumo();
+    mostrarListaDespesasStatus("ok", mensagemOk);
+  } catch (err) {
+    mostrarListaDespesasStatus("error", "Não foi possível falar com o n8n.");
+  }
+}
 
-  const resposta = await pedirAoN8n(rota, corpo);
+// ----- Contas fixas -----
 
-  if (!resposta || !resposta.ok) {
-    throw new Error((resposta && resposta.mensagem) || "Não consegui salvar.");
+function ajustarLinhaRestantes() {
+  linhaRestantes.classList.toggle("hidden", recorrenteCampos.semFim.checked);
+}
+
+recorrenteCampos.semFim.addEventListener("change", ajustarLinhaRestantes);
+recorrenteCampos.categoria.addEventListener("change", () =>
+  ajustarCategoriaOutra(
+    recorrenteCampos.categoria,
+    linhaRecorrenteCategoriaOutra,
+    recorrenteCampos.categoriaOutra
+  )
+);
+
+function limparFormRecorrente() {
+  recorrenteEditando = "";
+  recorrenteCampos.descricao.value = "";
+  recorrenteCampos.valor.value = "";
+  recorrenteCampos.observacoes.value = "";
+  recorrenteCampos.categoriaOutra.value = "";
+  recorrenteCampos.dia.value = "10";
+  recorrenteCampos.restantes.value = "12";
+  recorrenteCampos.semFim.checked = false;
+  recorrenteCampos.categoria.value = "Aluguel";
+  recorrenteCampos.forma.value = "";
+  fornecedorDaRecorrente.limpar();
+  ajustarLinhaRestantes();
+  ajustarCategoriaOutra(
+    recorrenteCampos.categoria,
+    linhaRecorrenteCategoriaOutra,
+    recorrenteCampos.categoriaOutra
+  );
+  recorrenteStatusMsg.className = "status";
+  salvarRecorrenteBotao.textContent = "Salvar conta fixa";
+}
+
+function abrirFormRecorrente(recorrente) {
+  limparFormRecorrente();
+
+  if (recorrente) {
+    recorrenteEditando = recorrente.id;
+    recorrenteCampos.descricao.value = recorrente.descricao || "";
+    porValorNoCampo(recorrenteCampos.valor, recorrente.valor);
+    fornecedorDaRecorrente.preencher(recorrente.fornecedorId, recorrente.fornecedor);
+    recorrenteCampos.dia.value = String(recorrente.diaDoMes || 1);
+    recorrenteCampos.semFim.checked = Boolean(recorrente.semFim);
+    recorrenteCampos.restantes.value = String(recorrente.restantes || 1);
+    recorrenteCampos.forma.value = recorrente.formaPagamento || "";
+    recorrenteCampos.observacoes.value = recorrente.observacoes || "";
+
+    const categoria = recorrente.categoria || "Outros";
+    if (CATEGORIAS_FIXAS.includes(categoria)) {
+      recorrenteCampos.categoria.value = categoria;
+    } else {
+      recorrenteCampos.categoria.value = "Outros";
+      recorrenteCampos.categoriaOutra.value = categoria;
+    }
+
+    ajustarLinhaRestantes();
+    ajustarCategoriaOutra(
+      recorrenteCampos.categoria,
+      linhaRecorrenteCategoriaOutra,
+      recorrenteCampos.categoriaOutra
+    );
+    salvarRecorrenteBotao.textContent = "Salvar alterações";
   }
 
-  await carregarDespesas();
-  return resposta;
+  recorrenteForm.classList.remove("hidden");
+  novaRecorrenteBotao.classList.add("hidden");
+  recorrenteCampos.descricao.focus();
 }
 
-despesaForm.addEventListener("submit", async (event) => {
+function fecharFormRecorrente() {
+  recorrenteForm.classList.add("hidden");
+  novaRecorrenteBotao.classList.remove("hidden");
+  limparFormRecorrente();
+}
+
+novaRecorrenteBotao.addEventListener("click", () => abrirFormRecorrente(null));
+cancelarRecorrenteBotao.addEventListener("click", fecharFormRecorrente);
+
+recorrenteForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  if (!despesaCampos.descricao.value.trim()) {
-    mostrarDespesaStatus("error", "Escreva uma descrição para a despesa.");
+  if (!recorrenteCampos.descricao.value.trim()) {
+    mostrarRecorrenteStatus("error", "Escreva uma descrição para a conta fixa.");
     return;
   }
 
-  const valor = Number(despesaCampos.valor.value.replace(",", "."));
-  if (!Number.isFinite(valor) || valor <= 0) {
-    mostrarDespesaStatus("error", "Informe um valor válido, maior que zero.");
+  const valor = valorDoCampo(recorrenteCampos.valor);
+  if (valor <= 0) {
+    mostrarRecorrenteStatus("error", "Informe um valor maior que zero.");
     return;
   }
 
-  salvarDespesaBotao.disabled = true;
-  mostrarDespesaStatus("loading", "Salvando...");
+  salvarRecorrenteBotao.disabled = true;
+  mostrarRecorrenteStatus("loading", "Salvando...");
 
   try {
-    const resposta = await gravarDespesa({
-      descricao: despesaCampos.descricao.value.trim(),
-      valor: despesaCampos.valor.value.replace(",", "."),
-      fornecedor: despesaCampos.fornecedor.value.trim(),
-      vencimento: despesaCampos.vencimento.value,
-      status: despesaCampos.status.value,
-      categoria: despesaCampos.categoria.value,
-      dataPagamento: despesaCampos.dataPagamento.value,
-      observacoes: despesaCampos.observacoes.value.trim(),
-    }, despesaEditando);
+    const fornecedorId = await fornecedorDaRecorrente.garantirId();
 
-    fecharFormDespesa();
-    mostrarListaDespesasStatus("ok", resposta.mensagem || "Despesa salva!");
+    const corpo = {
+      descricao: recorrenteCampos.descricao.value.trim(),
+      valor: String(valor),
+      fornecedorId,
+      diaDoMes: String(Math.max(1, Math.min(31, Number(recorrenteCampos.dia.value) || 1))),
+      semFim: recorrenteCampos.semFim.checked ? "sim" : "",
+      restantes: recorrenteCampos.semFim.checked ? "" : String(recorrenteCampos.restantes.value || ""),
+      categoria: categoriaEscolhida(recorrenteCampos.categoria, recorrenteCampos.categoriaOutra),
+      formaPagamento: recorrenteCampos.forma.value,
+      observacoes: recorrenteCampos.observacoes.value.trim(),
+    };
+    if (recorrenteEditando) corpo.id = recorrenteEditando;
+
+    const resposta = await pedirAoN8n("salvar-recorrente", corpo);
+    if (!resposta || !resposta.ok) {
+      throw new Error((resposta && resposta.mensagem) || "Não consegui salvar.");
+    }
+
+    fecharFormRecorrente();
+    await recarregarFinanceiro();
+    mostrarListaRecorrentesStatus("ok", resposta.mensagem || "Conta fixa salva!");
   } catch (err) {
-    mostrarDespesaStatus("error", err.message || "Não foi possível falar com o n8n.");
+    mostrarRecorrenteStatus("error", err.message || "Não foi possível falar com o n8n.");
   } finally {
-    salvarDespesaBotao.disabled = false;
+    salvarRecorrenteBotao.disabled = false;
   }
 });
 
+function desenharRecorrentes() {
+  listaRecorrentesBox.innerHTML = "";
+
+  if (!recorrentes.length) {
+    mostrarListaRecorrentesStatus("neutral", "Nenhuma conta fixa cadastrada.");
+    return;
+  }
+
+  const ativas = recorrentes.filter((r) => r.ativo);
+  const porMes = ativas.reduce((soma, r) => soma + Number(r.valor || 0), 0);
+  mostrarListaRecorrentesStatus(
+    "neutral",
+    `${ativas.length} ativa${ativas.length === 1 ? "" : "s"} · ${dinheiro(porMes)} por mês`
+  );
+
+  // Ativas primeiro: as encerradas ficam no fim só como histórico.
+  const ordenadas = [...recorrentes].sort((a, b) => Number(b.ativo) - Number(a.ativo));
+  ordenadas.forEach((r) => listaRecorrentesBox.appendChild(montarLinhaRecorrente(r)));
+}
+
+function montarLinhaRecorrente(recorrente) {
+  const linha = modeloRecorrente.content.firstElementChild.cloneNode(true);
+  linha.classList.toggle("paga", !recorrente.ativo);
+
+  linha.querySelector(".despesa-descricao").textContent = recorrente.descricao || "(sem descrição)";
+  linha.querySelector(".despesa-valor").textContent = dinheiro(recorrente.valor) + "/mês";
+
+  const partes = [`todo dia ${recorrente.diaDoMes}`];
+  if (!recorrente.ativo) partes.push("encerrada");
+  else if (recorrente.semFim) partes.push("sem data para acabar");
+  else partes.push(`faltam ${recorrente.restantes}`);
+  if (recorrente.ativo && recorrente.proximaGeracao) {
+    partes.push("próxima em " + dataBonita(recorrente.proximaGeracao));
+  }
+  if (recorrente.fornecedor) partes.push(recorrente.fornecedor);
+  if (recorrente.formaPagamento) partes.push(recorrente.formaPagamento);
+  linha.querySelector(".despesa-extra").textContent = partes.join(" · ");
+
+  const acoes = linha.querySelector(".despesa-acoes");
+  const botaoEditar = linha.querySelector(".recorrente-editar");
+  const botaoEncerrar = linha.querySelector(".recorrente-encerrar");
+  const botaoExcluir = linha.querySelector(".recorrente-excluir");
+
+  // Encerrar uma que já está encerrada não faria nada.
+  botaoEncerrar.classList.toggle("hidden", !recorrente.ativo);
+
+  linha.querySelector(".despesa-resumo").addEventListener("click", () => {
+    const abrindo = acoes.classList.contains("hidden");
+    listaRecorrentesBox.querySelectorAll(".despesa").forEach((outra) => {
+      outra.classList.remove("aberta");
+      outra.querySelector(".despesa-acoes").classList.add("hidden");
+      desarmarConfirmacao(outra.querySelector(".recorrente-excluir"), "Excluir");
+      desarmarConfirmacao(outra.querySelector(".recorrente-encerrar"), "Encerrar");
+    });
+    acoes.classList.toggle("hidden", !abrindo);
+    linha.classList.toggle("aberta", abrindo);
+  });
+
+  botaoEditar.addEventListener("click", () => {
+    abrirFormRecorrente(recorrente);
+    recorrenteForm.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+
+  // Encerrar guarda o histórico das contas que já saíram; excluir apaga a
+  // regra de vez, para quando foi cadastro errado.
+  ligarExclusao(botaoEncerrar, "Encerrar", "Confirmar: parar de gerar", async () =>
+    mexerNaRecorrente(recorrente.id, "")
+  );
+  ligarExclusao(botaoExcluir, "Excluir", "Confirmar exclusão", async () =>
+    mexerNaRecorrente(recorrente.id, "sim")
+  );
+
+  return linha;
+}
+
+async function mexerNaRecorrente(id, apagarDeVez) {
+  try {
+    const resposta = await pedirAoN8n("excluir-recorrente", { id, apagarDeVez });
+    if (!resposta || !resposta.ok) {
+      mostrarListaRecorrentesStatus("error", (resposta && resposta.mensagem) || "Não consegui alterar.");
+      return;
+    }
+    await recarregarFinanceiro();
+    mostrarListaRecorrentesStatus("ok", resposta.mensagem);
+  } catch (err) {
+    mostrarListaRecorrentesStatus("error", "Não foi possível falar com o n8n.");
+  }
+}
+
+// ----- Resumo -----
+
+function proximosMeses(quantos) {
+  const meses = [];
+  let ano = Number(hojeISO().slice(0, 4));
+  let mes = Number(hojeISO().slice(5, 7));
+  for (let i = 0; i < quantos; i += 1) {
+    meses.push(`${ano}-${String(mes).padStart(2, "0")}`);
+    mes += 1;
+    if (mes > 12) {
+      mes = 1;
+      ano += 1;
+    }
+  }
+  return meses;
+}
+
+// Junta o que já está lançado e em aberto com o que as contas fixas ainda vão
+// gerar. Não conta duas vezes porque "próxima geração" sempre aponta para a
+// primeira conta que ainda não foi lançada.
+function projecaoDosProximosMeses() {
+  const meses = proximosMeses(6);
+  const total = {};
+  meses.forEach((mes) => (total[mes] = 0));
+  const primeiro = meses[0];
+
+  despesas.forEach((despesa) => {
+    if (despesa.status === "Pago") return;
+    const mes = String(despesa.vencimento || "").slice(0, 7);
+    // Atrasada ou sem data entra no mês corrente: é dinheiro que ainda precisa
+    // sair, e o lugar de cobrar isso é agora.
+    const alvo = mes && mes in total ? mes : mes && mes > primeiro ? null : primeiro;
+    if (alvo) total[alvo] += Number(despesa.valor || 0);
+  });
+
+  const ultimo = meses[meses.length - 1];
+  recorrentes.forEach((r) => {
+    if (!r.ativo || !r.proximaGeracao) return;
+    let data = String(r.proximaGeracao).slice(0, 10);
+    let restam = r.semFim ? Infinity : Number(r.restantes || 0);
+    let voltas = 0;
+
+    while (data.slice(0, 7) <= ultimo && restam > 0 && voltas < 120) {
+      const mes = data.slice(0, 7);
+      if (mes in total) total[mes] += Number(r.valor || 0);
+      restam -= 1;
+      voltas += 1;
+      data = somaUmMes(data, r.diaDoMes);
+    }
+  });
+
+  return meses.map((mes) => ({ rotulo: mesBonito(mes), valor: total[mes] }));
+}
+
+function somarPor(chave) {
+  const soma = {};
+  despesas
+    .filter((d) => d.status !== "Pago")
+    .forEach((d) => {
+      const rotulo = String(d[chave] || "").trim();
+      if (!rotulo) return;
+      soma[rotulo] = (soma[rotulo] || 0) + Number(d.valor || 0);
+    });
+
+  return Object.entries(soma)
+    .map(([rotulo, valor]) => ({ rotulo, valor }))
+    .sort((a, b) => b.valor - a.valor);
+}
+
+function desenharBarras(container, itens) {
+  container.innerHTML = "";
+  const maior = itens.reduce((m, i) => Math.max(m, i.valor), 0);
+
+  itens.forEach((item) => {
+    const linha = modeloBarra.content.firstElementChild.cloneNode(true);
+    linha.querySelector(".barra-rotulo").textContent = item.rotulo;
+    linha.querySelector(".barra-valor").textContent = dinheiro(item.valor);
+    // Barra proporcional ao maior valor da lista: o que importa aqui é
+    // comparar entre si, não com um teto fixo.
+    linha.querySelector(".barra-cheia").style.width =
+      maior > 0 ? `${Math.round((item.valor / maior) * 100)}%` : "0%";
+    container.appendChild(linha);
+  });
+}
+
+function desenharResumo() {
+  const temAlgo = despesas.length > 0 || recorrentes.length > 0;
+  document.getElementById("resumo-vazio").classList.toggle("hidden", temAlgo);
+  document.getElementById("resumo-conteudo").classList.toggle("hidden", !temAlgo);
+  if (!temAlgo) return;
+
+  desenharBarras(document.getElementById("grafico-meses"), projecaoDosProximosMeses());
+  desenharBarras(document.getElementById("grafico-categorias"), somarPor("categoria"));
+
+  const porFornecedor = somarPor("fornecedor").slice(0, 8);
+  document.getElementById("sem-fornecedores").classList.toggle("hidden", porFornecedor.length > 0);
+  desenharBarras(document.getElementById("grafico-fornecedores"), porFornecedor);
+}
+
+// ----- Carregar tudo -----
+
+// As três listas saem ao mesmo tempo de propósito: cada ida ao Airtable custa
+// quase um segundo, e o navegador dá conta de esperar as três em paralelo — o
+// n8n, não (ele executa um nó de cada vez).
+async function carregarFinanceiro() {
+  mostrarListaDespesasStatus("neutral", "Carregando...");
+  listaDespesasBox.innerHTML = "";
+
+  try {
+    const [resDespesas, resFornecedores, resRecorrentes, resGeracao] = await Promise.all([
+      pedirAoN8n("listar-despesas", {}),
+      pedirAoN8n("listar-fornecedores", {}),
+      pedirAoN8n("listar-recorrentes", {}),
+      // Lança as contas fixas que já venceram. Se falhar, o resto da tela
+      // carrega do mesmo jeito — é só o lançamento automático que fica para
+      // a próxima abertura.
+      pedirAoN8n("gerar-recorrentes", {}).catch(() => null),
+    ]);
+
+    if (!resDespesas || !resDespesas.ok) {
+      mostrarListaDespesasStatus("error", (resDespesas && resDespesas.mensagem) || "Não consegui carregar.");
+      return;
+    }
+
+    despesas = resDespesas.despesas || [];
+    fornecedores = (resFornecedores && resFornecedores.fornecedores) || [];
+    recorrentes = (resRecorrentes && resRecorrentes.recorrentes) || [];
+
+    // A geração roda junto com a leitura, então o que ela criou não estava na
+    // lista que acabou de chegar. Só quando gerou algo vale a pena reler.
+    if (resGeracao && resGeracao.gerou > 0) {
+      const [novasDespesas, novosRecorrentes] = await Promise.all([
+        pedirAoN8n("listar-despesas", {}),
+        pedirAoN8n("listar-recorrentes", {}),
+      ]);
+      if (novasDespesas && novasDespesas.ok) despesas = novasDespesas.despesas || [];
+      if (novosRecorrentes && novosRecorrentes.ok) recorrentes = novosRecorrentes.recorrentes || [];
+    }
+
+    financeiroCarregado = true;
+    ligarNomesDosFornecedores();
+    atualizarListasDeApoio();
+    atualizarFiltroDeMeses();
+    desenharDespesas();
+    desenharRecorrentes();
+    desenharResumo();
+  } catch (err) {
+    mostrarListaDespesasStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+  }
+}
+
+// Depois de salvar uma despesa não é preciso reler fornecedores nem contas
+// fixas: só a lista que mudou.
+async function recarregarDespesas() {
+  const resposta = await pedirAoN8n("listar-despesas", {});
+  if (!resposta || !resposta.ok) {
+    mostrarListaDespesasStatus("error", (resposta && resposta.mensagem) || "Não consegui recarregar.");
+    return;
+  }
+  despesas = resposta.despesas || [];
+  atualizarListasDeApoio();
+  atualizarFiltroDeMeses();
+  desenharDespesas();
+  desenharResumo();
+}
+
+// Mexer numa conta fixa muda também as despesas que ela gerou.
+async function recarregarFinanceiro() {
+  const [resDespesas, resRecorrentes] = await Promise.all([
+    pedirAoN8n("listar-despesas", {}),
+    pedirAoN8n("listar-recorrentes", {}),
+  ]);
+  if (resDespesas && resDespesas.ok) despesas = resDespesas.despesas || [];
+  if (resRecorrentes && resRecorrentes.ok) recorrentes = resRecorrentes.recorrentes || [];
+  ligarNomesDosFornecedores();
+  atualizarListasDeApoio();
+  atualizarFiltroDeMeses();
+  desenharDespesas();
+  desenharRecorrentes();
+  desenharResumo();
+}
+
 buscaDespesa.addEventListener("input", () => {
-  if (despesasCarregadas) desenharDespesas();
+  if (financeiroCarregado) desenharDespesas();
+});
+filtroSituacao.addEventListener("change", () => {
+  if (financeiroCarregado) desenharDespesas();
+});
+filtroMes.addEventListener("change", () => {
+  if (financeiroCarregado) desenharDespesas();
 });
 
-recarregarDespesasBotao.addEventListener("click", carregarDespesas);
+recarregarDespesasBotao.addEventListener("click", carregarFinanceiro);
 
 // Carrega sozinho na primeira vez que a página é aberta.
 document.querySelector('.sidebar-item[data-page="financeiro"]').addEventListener("click", () => {
-  if (!despesasCarregadas) carregarDespesas();
+  if (!financeiroCarregado) carregarFinanceiro();
 });
 
 // ----- Tela de entrada (senha) -----
@@ -1605,16 +2497,20 @@ function edicaoDaConsultaAbertaEmEdicao() {
   return Boolean(salvar) && !salvar.classList.contains("hidden");
 }
 
-// Mesma ideia do cadastro: formulário de despesa aberto e com algo digitado
-// é trabalho que se perde ao sair da tela.
-function despesaEmAndamento() {
-  if (despesaForm.classList.contains("hidden")) return false;
-  return Array.from(despesaForm.querySelectorAll("input, textarea"))
-    .some((campo) => campo.value.trim());
+// Mesma ideia do cadastro: formulário do Financeiro aberto e com algo digitado
+// é trabalho que se perde ao sair da tela. Os campos numéricos já nascem com
+// valor (dia do mês, quantas faltam), então eles não contam como "digitado" —
+// senão abrir o formulário e não escrever nada já travaria a saída.
+function formularioFinanceiroEmAndamento() {
+  return [despesaForm, recorrenteForm].some((form) => {
+    if (form.classList.contains("hidden")) return false;
+    return Array.from(form.querySelectorAll('input[type="text"], input[type="date"], textarea'))
+      .some((campo) => campo.value.trim());
+  });
 }
 
 function haAlgoParaPerder() {
-  return cadastroEmAndamento() || edicaoDaConsultaAbertaEmEdicao() || despesaEmAndamento();
+  return cadastroEmAndamento() || edicaoDaConsultaAbertaEmEdicao() || formularioFinanceiroEmAndamento();
 }
 
 // Usado quando o usuário confirma que quer sair mesmo assim: devolve o bloco
@@ -1634,10 +2530,13 @@ let saidaPendente = null;
 // cadastro sendo editado na Consulta, escrever em salvarStatus (que vive na
 // aba Adicionar, hoje fora da tela) passaria batido.
 function avisarPerda(mensagem) {
-  // Despesa em andamento tem prioridade: se o formulário dela está aberto, é
-  // onde o usuário está olhando agora.
-  if (despesaEmAndamento()) {
-    mostrarDespesaStatus("error", mensagem);
+  // Formulário do Financeiro em andamento tem prioridade: se ele está aberto,
+  // é onde o usuário está olhando agora.
+  if (formularioFinanceiroEmAndamento()) {
+    const alvo = recorrenteForm.classList.contains("hidden")
+      ? mostrarDespesaStatus
+      : mostrarRecorrenteStatus;
+    alvo("error", mensagem);
     return;
   }
 
@@ -1738,12 +2637,21 @@ sairBotao.addEventListener("click", () => {
   // O Financeiro também: valores em aberto não devem ficar na tela depois de
   // sair, nem sobrar em memória para o próximo login.
   fecharFormDespesa();
+  fecharFormRecorrente();
   despesas = [];
-  despesasCarregadas = false;
+  fornecedores = [];
+  recorrentes = [];
+  financeiroCarregado = false;
   listaDespesasBox.innerHTML = "";
+  listaRecorrentesBox.innerHTML = "";
   buscaDespesa.value = "";
+  filtroSituacao.value = "abertas";
   resumoDespesas.classList.add("hidden");
+  document.getElementById("resumo-conteudo").classList.add("hidden");
+  atualizarListasDeApoio();
+  atualizarFiltroDeMeses();
   mostrarListaDespesasStatus("neutral", "");
+  mostrarListaRecorrentesStatus("neutral", "");
 
   desarmarSaida();
   closeSidebar();

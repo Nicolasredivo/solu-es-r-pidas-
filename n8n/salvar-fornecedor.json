@@ -1,16 +1,16 @@
 {
-  "name": "App - Excluir despesa",
+  "name": "App - Salvar fornecedor",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "excluir-despesa",
+        "path": "salvar-fornecedor",
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
         }
       },
-      "id": "c0000000-0000-4000-8000-000000000035",
+      "id": "c0000000-0000-4000-8000-000000000001",
       "name": "Recebe pedido do app",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -18,7 +18,7 @@
         0,
         0
       ],
-      "webhookId": "c0000000-0000-4000-8000-000000000036"
+      "webhookId": "c0000000-0000-4000-8000-000000000002"
     },
     {
       "parameters": {
@@ -31,7 +31,7 @@
           },
           "conditions": [
             {
-              "id": "c0000000-0000-4000-8000-000000000037",
+              "id": "c0000000-0000-4000-8000-000000000003",
               "leftValue": "={{ $json.body.senha }}",
               "rightValue": "TROQUE-ESTA-SENHA",
               "operator": {
@@ -46,7 +46,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000038",
+      "id": "c0000000-0000-4000-8000-000000000004",
       "name": "Senha esta correta?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -61,7 +61,7 @@
         "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000039",
+      "id": "c0000000-0000-4000-8000-000000000005",
       "name": "Responde senha incorreta",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -72,10 +72,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// O app manda os codigos: um so, ou todos os de um grupo de parcelas.\n// Ele ja tem a lista carregada, entao o n8n nao precisa procurar de novo.\nconst b = $json.body || {};\nconst ids = String(b.ids || b.id || \"\").split(\",\").map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nif (!ids.length) throw new Error(\"Pedido sem o codigo da despesa.\");\n\n// O Airtable apaga no maximo 10 por chamada.\nconst chamadas = [];\nfor (let i = 0; i < ids.length; i += 10) {\n  const lote = ids.slice(i, i + 10);\n  chamadas.push({\n    metodo: \"DELETE\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0?\" + lote.map((id) => \"records[]=\" + id).join(\"&\"),\n    corpo: null,\n  });\n}\n\nreturn chamadas.map((c) => ({ json: c }));"
+        "jsCode": "const b = $json.body || {};\nconst texto = (v) => String(v ?? \"\").trim();\nconst id = texto(b.id);\nconst nome = texto(b.nome);\nif (!nome) throw new Error(\"Fornecedor sem nome.\");\n\nconst fields = { Nome: nome, CNPJ: texto(b.cnpj).replace(/\\D/g, \"\") };\nif (texto(b.observacoes)) fields.Observacoes = texto(b.observacoes);\n\nconst ehExistente = /^rec[A-Za-z0-9]{14}$/.test(id);\nreturn [{\n  json: {\n    metodo: ehExistente ? \"PATCH\" : \"POST\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblhsabIIg8SLqMMj\",\n    corpo: { typecast: true, records: [ehExistente ? { id, fields } : { fields }] },\n  },\n}];"
       },
-      "id": "c0000000-0000-4000-8000-000000000040",
-      "name": "Monta o que apagar",
+      "id": "c0000000-0000-4000-8000-000000000006",
+      "name": "Monta a chamada",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -96,8 +96,8 @@
           "timeout": 20000
         }
       },
-      "id": "c0000000-0000-4000-8000-000000000041",
-      "name": "Apaga no Airtable",
+      "id": "c0000000-0000-4000-8000-000000000007",
+      "name": "Grava no Airtable",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -114,14 +114,12 @@
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Despesa excluída.\"\n}",
-        "options": {}
+        "jsCode": "// O app precisa do codigo do registro para ligar a despesa a ele.\nconst criado = ($json.records || [])[0] || {};\nreturn [{\n  json: {\n    ok: true,\n    mensagem: \"Fornecedor salvo!\",\n    fornecedor: {\n      id: criado.id || \"\",\n      nome: (criado.fields || {}).Nome || \"\",\n      cnpj: (criado.fields || {}).CNPJ || \"\",\n    },\n  },\n}];"
       },
-      "id": "c0000000-0000-4000-8000-000000000042",
-      "name": "Responde excluida",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "id": "c0000000-0000-4000-8000-000000000008",
+      "name": "Devolve o fornecedor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         880,
         -160
@@ -130,10 +128,25 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Não consegui excluir. Tente de novo.\"\n}",
+        "responseBody": "={{ JSON.stringify($json) }}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000043",
+      "id": "c0000000-0000-4000-8000-000000000009",
+      "name": "Responde ao app",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Não consegui salvar o fornecedor.\"\n}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000010",
       "name": "Responde erro",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -159,7 +172,7 @@
       "main": [
         [
           {
-            "node": "Monta o que apagar",
+            "node": "Monta a chamada",
             "type": "main",
             "index": 0
           }
@@ -173,22 +186,22 @@
         ]
       ]
     },
-    "Monta o que apagar": {
+    "Monta a chamada": {
       "main": [
         [
           {
-            "node": "Apaga no Airtable",
+            "node": "Grava no Airtable",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Apaga no Airtable": {
+    "Grava no Airtable": {
       "main": [
         [
           {
-            "node": "Responde excluida",
+            "node": "Devolve o fornecedor",
             "type": "main",
             "index": 0
           }
@@ -196,6 +209,17 @@
         [
           {
             "node": "Responde erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Devolve o fornecedor": {
+      "main": [
+        [
+          {
+            "node": "Responde ao app",
             "type": "main",
             "index": 0
           }

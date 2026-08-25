@@ -169,9 +169,11 @@ body {
     margin-bottom: 0;
   }
 
-  /* O cadastro aberto precisa ocupar a largura toda: o detalhe (campos,
-     endereços, contatos) fica espremido numa coluna só, senão. */
-  .grade-responsiva > .aberto {
+  /* O item aberto precisa ocupar a largura toda: o detalhe (campos, endereços,
+     contatos, ou a fileira de botões da despesa) fica espremido numa coluna só,
+     senão. Cadastro usa "aberto" e despesa usa "aberta" — as duas contam. */
+  .grade-responsiva > .aberto,
+  .grade-responsiva > .aberta {
     grid-column: 1 / -1;
   }
 }
@@ -846,4 +848,89 @@ button:active:not(:disabled) {
 
 .despesa-acoes button {
   width: auto;
+}
+
+/* Filtros de situação e mês, lado a lado acima da lista */
+.filtros-linha {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.filtros-linha select {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+/* Caixinha e texto na mesma linha, em vez do rótulo empilhado por cima */
+.linha-caixinha {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 14px;
+  cursor: pointer;
+}
+
+.linha-caixinha input {
+  width: auto;
+  margin: 0;
+}
+
+.titulo-bloco {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 22px 0 4px;
+}
+
+.titulo-bloco:first-child {
+  margin-top: 0;
+}
+
+/* ----- Resumo: barras de comparação -----
+   Barra proporcional ao maior valor da própria lista. Sem biblioteca de
+   gráfico: são três elementos e uma largura em porcentagem. */
+.barra-linha {
+  display: grid;
+  grid-template-columns: 68px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.barra-rotulo {
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.barra-trilho {
+  height: 10px;
+  border-radius: 5px;
+  background: #12162a;
+  border: 1px solid #2c3153;
+  overflow: hidden;
+}
+
+.barra-cheia {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 5px;
+  /* Anima só a largura ao redesenhar, para a mudança ser percebida */
+  transition: width 0.25s ease;
+}
+
+.barra-valor {
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* No computador sobra largura: o rótulo pode respirar */
+@media (min-width: 768px) {
+  .barra-linha {
+    grid-template-columns: 160px 1fr auto;
+  }
 }
