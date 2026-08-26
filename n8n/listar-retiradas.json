@@ -1,10 +1,10 @@
 {
-  "name": "App - Listar despesas",
+  "name": "App - Listar retiradas",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "listar-despesas",
+        "path": "listar-retiradas",
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
@@ -82,21 +82,13 @@
         },
         "table": {
           "__rl": true,
-          "value": "tblNduEKl2jY280V0",
+          "value": "tblh3m5JB6N2sNs5i",
           "mode": "list",
-          "cachedResultName": "Despesas"
+          "cachedResultName": "Retiradas"
         },
         "filterByFormula": "",
         "returnAll": true,
-        "options": {},
-        "sort": {
-          "property": [
-            {
-              "field": "Vencimento",
-              "direction": "asc"
-            }
-          ]
-        }
+        "options": {}
       },
       "id": "c0000000-0000-4000-8000-000000000006",
       "name": "Busca",
@@ -117,7 +109,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// O no de busca devolve um item vazio quando a tabela esta vazia, ou um item\n// de erro se a busca falhou — os dois ficam de fora em vez de quebrar a lista.\nconst achadas = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\nconst primeiro = (v) => (Array.isArray(v) ? (v[0] || \"\") : (v == null ? \"\" : String(v)));\n\nconst despesas = achadas.map((i) => {\n  const f = i.json.fields || {};\n  return {\n    id: i.json.id,\n    descricao: f.Descricao || \"\",\n    valor: f.Valor || 0,\n    fornecedorId: primeiro(f.Fornecedor_Ref),\n    fornecedor: primeiro(f.Fornecedor_Nome),\n    vencimento: f.Vencimento || \"\",\n    status: f.Status || \"Pendente\",\n    categoria: f.Categoria || \"\",\n    formaPagamento: f.Forma_Pagamento || \"\",\n    parcelaNumero: f.Parcela_Numero || 0,\n    parcelaTotal: f.Parcela_Total || 0,\n    grupo: f.Grupo || \"\",\n    recorrenteId: primeiro(f.Recorrente_Ref),\n    // Compra amarrada a um servico entra no custo dele, e sai do lucro.\n    servicoId: primeiro(f.Servico_Ref),\n    dataPagamento: f.Data_Pagamento || \"\",\n    observacoes: f.Observacoes || \"\",\n  };\n});\n\nreturn [{ json: { ok: true, total: despesas.length, despesas } }];"
+        "jsCode": "const achadas = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\n\nconst retiradas = achadas.map((i) => {\n  const f = i.json.fields || {};\n  return {\n    id: i.json.id,\n    data: f.Data || \"\",\n    socio: f.Socio || \"\",\n    valor: f.Valor || 0,\n    observacoes: f.Observacoes || \"\",\n  };\n});\n\n// Mais recente primeiro; empate no mesmo dia fica com a ultima gravada.\nretiradas.reverse();\nretiradas.sort((a, b) => String(b.data).localeCompare(String(a.data)));\n\nreturn [{ json: { ok: true, retiradas } }];"
       },
       "id": "c0000000-0000-4000-8000-000000000007",
       "name": "Monta lista",

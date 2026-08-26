@@ -353,6 +353,7 @@
           <button type="button" class="subtab-fin" data-subfin="despesas">A pagar</button>
           <button type="button" class="subtab-fin" data-subfin="receber">A receber</button>
           <button type="button" class="subtab-fin" data-subfin="fixas">Contas fixas</button>
+          <button type="button" class="subtab-fin" data-subfin="divisao">Divisão</button>
           <button type="button" class="subtab-fin" data-subfin="ajustes">Ajustes</button>
         </div>
 
@@ -539,6 +540,15 @@
             <input type="text" id="despesa-fornecedor" list="lista-fornecedores"
                    autocomplete="off" placeholder="Nome ou CNPJ (opcional)" />
             <p id="despesa-fornecedor-hint" class="doc-hint"></p>
+
+            <label for="despesa-servico">É material de algum serviço?</label>
+            <select id="despesa-servico">
+              <option value="">Não — é despesa da empresa</option>
+            </select>
+            <p class="doc-hint">
+              Amarrando a compra a um serviço, ela sai do lucro daquele serviço
+              antes da divisão. Deixe em "Não" para as contas da empresa.
+            </p>
 
             <label for="despesa-vencimento">Vencimento</label>
             <input type="date" id="despesa-vencimento" />
@@ -768,6 +778,14 @@
             <datalist id="lista-clientes"></datalist>
             <p id="receita-cliente-hint" class="doc-hint"></p>
 
+            <label for="receita-material">Material gasto neste serviço</label>
+            <input type="text" id="receita-material" inputmode="numeric" placeholder="R$ 0,00" />
+            <p class="doc-hint">
+              Só o que você <strong>não</strong> lançou em "A pagar". Compras
+              lançadas lá e amarradas a este serviço já entram sozinhas — não
+              conte duas vezes. É isto que define o lucro a dividir.
+            </p>
+
             <label for="receita-vencimento">Vencimento</label>
             <input type="date" id="receita-vencimento" />
 
@@ -843,6 +861,121 @@
         <!-- ======================== Ajustes ========================
              O que o painel usa para calcular. Mexe-se aqui de vez em quando,
              não todo dia. -->
+        <!-- ======================== Divisão ========================
+             O lucro de cada serviço (recebido menos material) é repartido
+             entre os sócios e a empresa. Esta tela mostra quanto cabe a cada
+             um, quanto já saiu, e — o mais importante — se o caixa aguenta
+             pagar isso agora sem deixar conta descoberta. -->
+        <div id="subfin-divisao" class="subpage-fin hidden">
+          <p id="divisao-vazio" class="doc-hint hidden">
+            Nenhum serviço recebido ainda. A divisão aparece quando o dinheiro
+            de um serviço entra.
+          </p>
+
+          <div id="divisao-conteudo" class="hidden">
+            <h2 class="titulo-bloco">Quanto cabe a cada um</h2>
+            <div id="divisao-socios"></div>
+
+            <div class="cascata">
+              <div class="cascata-linha cascata-final">
+                <span>O caixa aguenta tirar agora</span>
+                <strong id="d-pode-tirar"></strong>
+              </div>
+            </div>
+            <p id="d-pode-tirar-nota" class="doc-hint"></p>
+
+            <button type="button" id="abrir-retirada" class="botao-secundario">
+              Registrar uma retirada
+            </button>
+
+            <form id="form-retirada" class="hidden">
+              <label for="ret-socio">De quem é a retirada</label>
+              <select id="ret-socio"></select>
+
+              <label for="ret-valor">Valor</label>
+              <input type="text" id="ret-valor" inputmode="numeric" placeholder="R$ 0,00" />
+              <p id="ret-valor-hint" class="doc-hint"></p>
+
+              <label for="ret-data">Data</label>
+              <input type="date" id="ret-data" />
+
+              <label for="ret-observacoes">Observações</label>
+              <textarea id="ret-observacoes" rows="2" placeholder="Ex: PIX, adiantamento"></textarea>
+
+              <button type="submit" id="salvar-retirada">Registrar retirada</button>
+              <button type="button" id="cancelar-retirada" class="botao-secundario">Cancelar</button>
+              <div id="retirada-status-msg" class="status"></div>
+            </form>
+
+            <!-- A parte que costuma passar despercebida: o terço da empresa é
+                 o que banca aluguel, combustível e imposto. Se ele não cobre,
+                 a empresa encolhe mesmo com os serviços dando lucro. -->
+            <h2 class="titulo-bloco">A parte da empresa</h2>
+            <div class="cascata">
+              <div class="cascata-linha cascata-topo">
+                <span>Coube à empresa nos serviços</span>
+                <strong id="d-empresa-coube"></strong>
+              </div>
+              <div class="cascata-linha">
+                <span>− Contas pagas que não são material</span>
+                <span id="d-empresa-gastou"></span>
+              </div>
+              <div class="cascata-linha cascata-final">
+                <span>= Sobrou para a empresa</span>
+                <strong id="d-empresa-sobrou"></strong>
+              </div>
+            </div>
+            <p id="d-empresa-nota" class="doc-hint"></p>
+
+            <h2 class="titulo-bloco">Lucro de cada serviço</h2>
+            <div class="tabela-rolavel">
+              <table class="tabela-fin">
+                <thead>
+                  <tr><th>Serviço</th><th>Recebido</th><th>Material</th><th>Lucro</th><th>Cada sócio</th></tr>
+                </thead>
+                <tbody id="d-servicos"></tbody>
+              </table>
+            </div>
+
+            <h2 class="titulo-bloco">Retiradas já feitas</h2>
+            <p id="lista-retiradas-status" class="doc-hint"></p>
+            <div id="lista-retiradas" class="grade-responsiva"></div>
+
+            <template id="modelo-retirada">
+              <div class="despesa retirada">
+                <button type="button" class="despesa-resumo">
+                  <span class="despesa-topo">
+                    <span class="despesa-descricao"></span>
+                    <span class="despesa-valor"></span>
+                  </span>
+                  <span class="despesa-extra"></span>
+                </button>
+                <div class="despesa-acoes hidden">
+                  <button type="button" class="retirada-excluir botao-secundario">Excluir</button>
+                </div>
+              </div>
+            </template>
+
+            <template id="modelo-socio">
+              <div class="socio-cartao">
+                <div class="socio-nome"></div>
+                <div class="cascata-linha">
+                  <span>Direito acumulado</span>
+                  <span class="socio-direito"></span>
+                </div>
+                <div class="cascata-linha">
+                  <span>Já retirou</span>
+                  <span class="socio-retirado"></span>
+                </div>
+                <div class="cascata-linha cascata-final">
+                  <span>A retirar</span>
+                  <strong class="socio-a-retirar"></strong>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
         <div id="subfin-ajustes" class="subpage-fin hidden">
           <form id="form-ajustes">
             <h2 class="titulo-bloco">Ponto de partida</h2>
@@ -926,6 +1059,25 @@
               Só faz sentido com funcionário registrado. Guarda cerca de 19% a
               mais por mês, para dezembro não dar susto.
             </p>
+
+            <h2 class="titulo-bloco">Divisão do lucro</h2>
+            <p class="doc-hint">
+              O lucro de cada serviço (o que o cliente pagou, menos o material)
+              é repartido. O que sobra depois das duas fatias fica com a
+              empresa, e é o que banca aluguel, combustível e imposto.
+            </p>
+
+            <label for="aj-socio1-nome">Primeiro sócio</label>
+            <input type="text" id="aj-socio1-nome" autocomplete="off" placeholder="Nome" />
+            <label for="aj-socio1-pct">Fatia dele (%)</label>
+            <input type="text" id="aj-socio1-pct" inputmode="decimal" placeholder="33,3333" />
+
+            <label for="aj-socio2-nome">Segundo sócio</label>
+            <input type="text" id="aj-socio2-nome" autocomplete="off" placeholder="Nome" />
+            <label for="aj-socio2-pct">Fatia dele (%)</label>
+            <input type="text" id="aj-socio2-pct" inputmode="decimal" placeholder="33,3333" />
+
+            <p id="aj-empresa-fatia" class="doc-hint"></p>
 
             <button type="submit" id="salvar-ajustes">Salvar ajustes</button>
             <div id="ajustes-status-msg" class="status"></div>

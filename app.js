@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.08.26c";
+const APP_VERSION = "2026.08.26d";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -1248,6 +1248,7 @@ const despesaCampos = {
   status: document.getElementById("despesa-status"),
   dataPagamento: document.getElementById("despesa-data-pagamento"),
   observacoes: document.getElementById("despesa-observacoes"),
+  servico: document.getElementById("despesa-servico"),
 };
 
 const recorrenteCampos = {
@@ -1668,6 +1669,7 @@ function limparFormDespesa() {
   despesaCampos.categoria.value = "Outros";
   despesaCampos.status.value = "Pendente";
   despesaCampos.forma.value = "";
+  despesaCampos.servico.value = "";
   despesaCampos.parcelas.value = "1";
   descricaoHint.textContent = "";
   ajustarLinhaDataPagamento();
@@ -1690,6 +1692,7 @@ function abrirFormDespesa(despesa) {
     despesaCampos.status.value = despesa.status || "Pendente";
     despesaCampos.dataPagamento.value = String(despesa.dataPagamento || "").slice(0, 10);
     despesaCampos.observacoes.value = despesa.observacoes || "";
+    despesaCampos.servico.value = despesa.servicoId || "";
 
     // Categoria fora da lista fixa entrou como texto livre; devolve o campo
     // "Outros" preenchido, para editar sem perder o que foi escrito.
@@ -1766,6 +1769,7 @@ despesaForm.addEventListener("submit", async (event) => {
       formaPagamento: despesaCampos.forma.value,
       dataPagamento: despesaCampos.dataPagamento.value,
       observacoes: despesaCampos.observacoes.value.trim(),
+      servicoId: despesaCampos.servico.value,
     };
     if (despesaEditando) corpo.id = despesaEditando;
     else corpo.parcelas = String(vezes);
@@ -2312,6 +2316,7 @@ const receitaCampos = {
   descricao: document.getElementById("receita-descricao"),
   valor: document.getElementById("receita-valor"),
   cliente: document.getElementById("receita-cliente"),
+  material: document.getElementById("receita-material"),
   vencimento: document.getElementById("receita-vencimento"),
   forma: document.getElementById("receita-forma"),
   status: document.getElementById("receita-status"),
@@ -2424,6 +2429,7 @@ function abrirFormReceita(receita) {
     documentoDoClienteEscolhido = receita.clienteDocumento || "";
     receitaCampos.descricao.value = receita.descricao || "";
     porValorNoCampo(receitaCampos.valor, receita.valor);
+    porValorNoCampo(receitaCampos.material, receita.materialValor);
     receitaCampos.cliente.value = receita.cliente || "";
     receitaCampos.vencimento.value = String(receita.vencimento || "").slice(0, 10);
     receitaCampos.forma.value = receita.forma || "";
@@ -2475,6 +2481,7 @@ receitaForm.addEventListener("submit", async (event) => {
       status: receitaCampos.status.value,
       dataRecebimento: receitaCampos.dataRecebimento.value,
       forma: receitaCampos.forma.value,
+      materialValor: String(valorDoCampo(receitaCampos.material)),
       observacoes: receitaCampos.observacoes.value.trim(),
     };
     if (receitaEditando) corpo.id = receitaEditando;
@@ -2625,6 +2632,7 @@ function montarLinhaReceita(receita) {
         status: "Recebido",
         dataRecebimento: hojeISO(),
         forma: receita.forma || "",
+        materialValor: String(receita.materialValor || 0),
         observacoes: receita.observacoes || "",
       });
       if (!resposta || !resposta.ok) {
@@ -2690,7 +2698,35 @@ const ajustesCampos = {
   aliquota: document.getElementById("aj-aliquota"),
   folha: document.getElementById("aj-folha"),
   provisiona: document.getElementById("aj-provisiona"),
+  socio1Nome: document.getElementById("aj-socio1-nome"),
+  socio1Pct: document.getElementById("aj-socio1-pct"),
+  socio2Nome: document.getElementById("aj-socio2-nome"),
+  socio2Pct: document.getElementById("aj-socio2-pct"),
 };
+
+// O que sobra das duas fatias fica com a empresa. Mostrar a conta enquanto
+// se digita evita passar de 100% sem perceber.
+function mostrarFatiaDaEmpresa() {
+  const porcento = (campo) => Number(String(campo.value).replace(",", ".")) || 0;
+  const usado = porcento(ajustesCampos.socio1Pct) + porcento(ajustesCampos.socio2Pct);
+  const alvo = document.getElementById("aj-empresa-fatia");
+  const comVirgula = (n) => n.toFixed(2).replace(".", ",");
+
+  if (usado > 100) {
+    alvo.className = "doc-hint error";
+    alvo.textContent = "As duas fatias somam " + comVirgula(usado)
+      + "% — passa de 100%. Não sobraria nada para a empresa.";
+    return;
+  }
+
+  alvo.className = "doc-hint";
+  alvo.textContent = "Fica com a empresa: " + comVirgula(100 - usado)
+    + "% do lucro de cada serviço.";
+}
+
+[ajustesCampos.socio1Pct, ajustesCampos.socio2Pct].forEach((campo) =>
+  campo.addEventListener("input", mostrarFatiaDaEmpresa)
+);
 
 // Uma linha só na tabela; guardo o código para o salvar alterar em vez de criar.
 let configFin = null;
@@ -2745,7 +2781,14 @@ function preencherAjustes() {
     : "";
   porValorNoCampo(ajustesCampos.folha, configFin.folhaMensal);
   ajustesCampos.provisiona.checked = Boolean(configFin.provisionaDecimoFerias);
+  ajustesCampos.socio1Nome.value = configFin.socio1Nome || "";
+  ajustesCampos.socio2Nome.value = configFin.socio2Nome || "";
+  // 33.3333 vira "33,3333": vírgula é como o brasileiro lê.
+  const comVirgula = (n) => Number(n || 0).toFixed(4).replace(".", ",");
+  ajustesCampos.socio1Pct.value = comVirgula(configFin.socio1Percentual);
+  ajustesCampos.socio2Pct.value = comVirgula(configFin.socio2Percentual);
   ajustarCamposDoRegime();
+  mostrarFatiaDaEmpresa();
 }
 
 ajustesForm.addEventListener("submit", async (event) => {
@@ -2768,6 +2811,10 @@ ajustesForm.addEventListener("submit", async (event) => {
       aliquotaImposto: ajustesCampos.aliquota.value.replace(",", ".") || "0",
       folhaMensal: String(valorDoCampo(ajustesCampos.folha)),
       provisionaDecimoFerias: ajustesCampos.provisiona.checked ? "sim" : "",
+      socio1Nome: ajustesCampos.socio1Nome.value.trim(),
+      socio2Nome: ajustesCampos.socio2Nome.value.trim(),
+      socio1Percentual: ajustesCampos.socio1Pct.value.replace(",", ".") || "0",
+      socio2Percentual: ajustesCampos.socio2Pct.value.replace(",", ".") || "0",
     });
 
     if (!resposta || !resposta.ok) {
@@ -2777,6 +2824,7 @@ ajustesForm.addEventListener("submit", async (event) => {
     const lido = await pedirAoN8n("listar-config", {});
     if (lido && lido.ok) configFin = lido.config;
     preencherAjustes();
+    desenharDivisao();
     desenharPainel();
     mostrarAjustesStatus("ok", "Ajustes salvos! O painel já está usando eles.");
   } catch (err) {
@@ -2805,7 +2853,13 @@ function saldoEmCaixa() {
     .filter((d) => d.status === "Pago" && String(d.dataPagamento || "").slice(0, 10) >= desde)
     .reduce((s, d) => s + Number(d.valor || 0), 0);
 
-  return Number(configFin.saldoInicial || 0) + entrou - saiu;
+  // A parte que os sócios tiraram também saiu da conta. Sem contar isto, o
+  // saldo mostraria dinheiro que já não está lá.
+  const tirado = retiradas
+    .filter((r) => String(r.data || "").slice(0, 10) >= desde)
+    .reduce((s, r) => s + Number(r.valor || 0), 0);
+
+  return Number(configFin.saldoInicial || 0) + entrou - saiu - tirado;
 }
 
 // MEI paga um boleto fixo por mês. No Simples, a fatia sai de cada recebimento,
@@ -2912,7 +2966,12 @@ function fluxoRealizado(quantosMeses) {
     const saiu = despesas
       .filter((d) => d.status === "Pago" && String(d.dataPagamento || "").slice(0, 7) === m)
       .reduce((s, d) => s + Number(d.valor || 0), 0);
-    return { mes: m, entrou, saiu };
+    // As retiradas entram no "saiu" porque saem da conta como qualquer outra
+    // despesa — o que esta tabela mostra é movimento de dinheiro, não lucro.
+    const tirado = retiradas
+      .filter((r) => String(r.data || "").slice(0, 7) === m)
+      .reduce((s, r) => s + Number(r.valor || 0), 0);
+    return { mes: m, entrou, saiu: saiu + tirado };
   });
 }
 
@@ -3160,6 +3219,403 @@ conferenciaForm.addEventListener("submit", async (event) => {
   }
 });
 
+// ----- Financeiro: divisão do lucro entre os sócios e a empresa -----
+
+// O lucro de cada serviço é o que o cliente pagou menos o material. Cada sócio
+// tem uma fatia; o que sobra fica com a empresa. O direito de cada um é sempre
+// CALCULADO, nunca gravado — assim corrigir um serviço corrige a divisão junto.
+
+const retiradaForm = document.getElementById("form-retirada");
+const listaRetiradasBox = document.getElementById("lista-retiradas");
+const listaRetiradasStatus = document.getElementById("lista-retiradas-status");
+const modeloRetirada = document.getElementById("modelo-retirada");
+const modeloSocio = document.getElementById("modelo-socio");
+const retiradaStatusMsg = document.getElementById("retirada-status-msg");
+const retiradaValor = document.getElementById("ret-valor");
+const retiradaSocio = document.getElementById("ret-socio");
+
+let retiradas = [];
+
+ligarMascaraDinheiro(retiradaValor);
+
+// Quantos dias à frente ainda contam como "conta que não pode esperar".
+const DIAS_DE_COMPROMISSO = 30;
+
+function somaDias(iso, dias) {
+  const [ano, mes, dia] = String(iso).slice(0, 10).split("-").map(Number);
+  const d = new Date(Date.UTC(ano, mes - 1, dia + dias));
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${mm}-${dd}`;
+}
+
+function socios() {
+  if (!configFin) return [];
+  return [
+    { nome: configFin.socio1Nome || "Sócio 1", fatia: Number(configFin.socio1Percentual || 0) / 100 },
+    { nome: configFin.socio2Nome || "Sócio 2", fatia: Number(configFin.socio2Percentual || 0) / 100 },
+  ].filter((s) => s.fatia > 0);
+}
+
+function fatiaDaEmpresa() {
+  return Math.max(0, 1 - socios().reduce((s, x) => s + x.fatia, 0));
+}
+
+// Material do serviço = o que foi digitado nele mais as compras amarradas a ele.
+// São dois caminhos de propósito: o valor rápido para o que não virou despesa,
+// e o vínculo para a compra que foi lançada em "A pagar".
+function materialDoServico(servico) {
+  const vinculado = despesas
+    .filter((d) => d.servicoId === servico.id)
+    .reduce((s, d) => s + Number(d.valor || 0), 0);
+  return Number(servico.materialValor || 0) + vinculado;
+}
+
+function lucroDoServico(servico) {
+  return Number(servico.valor || 0) - materialDoServico(servico);
+}
+
+// Só serviço recebido entra na divisão: não se reparte dinheiro que não entrou.
+function servicosRecebidos() {
+  return recebimentos.filter((r) => r.status === "Recebido");
+}
+
+function direitoAcumulado() {
+  const lista = socios();
+  const porSocio = lista.map(() => 0);
+  let empresa = 0;
+
+  servicosRecebidos().forEach((servico) => {
+    const lucro = lucroDoServico(servico);
+    lista.forEach((s, i) => (porSocio[i] += lucro * s.fatia));
+    empresa += lucro * fatiaDaEmpresa();
+  });
+
+  return {
+    socios: lista.map((s, i) => ({ ...s, direito: porSocio[i] })),
+    empresa,
+  };
+}
+
+function jaRetiradoPor(nome) {
+  return retiradas
+    .filter((r) => normalizarTexto(r.socio) === normalizarTexto(nome))
+    .reduce((s, r) => s + Number(r.valor || 0), 0);
+}
+
+// Contas que não podem esperar: o que já venceu, o que vence nos próximos 30
+// dias, e o imposto e a folha do mês. É o piso que o caixa precisa segurar.
+function compromissosProximos() {
+  const limite = somaDias(hojeISO(), DIAS_DE_COMPROMISSO);
+  const contas = despesas
+    .filter((d) => d.status !== "Pago")
+    .filter((d) => !d.vencimento || String(d.vencimento).slice(0, 10) <= limite)
+    .reduce((s, d) => s + Number(d.valor || 0), 0);
+  return contas + impostosProvisionados() + folhaProvisionada();
+}
+
+// Quanto dá para tirar sem deixar conta descoberta. Nunca negativo: quando o
+// caixa já não cobre os compromissos, a resposta é simplesmente zero.
+function podeTirarAgora() {
+  return Math.max(0, saldoEmCaixa() - compromissosProximos());
+}
+
+// ----- Registrar retirada -----
+
+document.getElementById("abrir-retirada").addEventListener("click", () => {
+  const lista = direitoAcumulado().socios;
+  retiradaSocio.innerHTML = "";
+  lista.forEach((s) => {
+    const opcao = document.createElement("option");
+    opcao.value = s.nome;
+    opcao.textContent = s.nome;
+    retiradaSocio.appendChild(opcao);
+  });
+
+  retiradaValor.value = "";
+  document.getElementById("ret-data").value = hojeISO();
+  document.getElementById("ret-observacoes").value = "";
+  retiradaStatusMsg.className = "status";
+  atualizarDicaDaRetirada();
+
+  retiradaForm.classList.remove("hidden");
+  document.getElementById("abrir-retirada").classList.add("hidden");
+});
+
+document.getElementById("cancelar-retirada").addEventListener("click", () => {
+  retiradaForm.classList.add("hidden");
+  document.getElementById("abrir-retirada").classList.remove("hidden");
+});
+
+// Avisa antes de gravar, sem impedir: o dono pode ter motivo para tirar mesmo
+// assim, e quem decide isso é ele.
+function atualizarDicaDaRetirada() {
+  const hint = document.getElementById("ret-valor-hint");
+  const escolhido = direitoAcumulado().socios.find((s) => s.nome === retiradaSocio.value);
+  if (!escolhido) {
+    hint.textContent = "";
+    return;
+  }
+
+  const aRetirar = escolhido.direito - jaRetiradoPor(escolhido.nome);
+  const valor = valorDoCampo(retiradaValor);
+  const aguenta = podeTirarAgora();
+
+  if (valor <= 0) {
+    hint.className = "doc-hint";
+    hint.textContent = `${escolhido.nome} tem ${dinheiro(aRetirar)} a retirar. O caixa aguenta ${dinheiro(aguenta)}.`;
+    return;
+  }
+
+  if (valor > aguenta) {
+    hint.className = "doc-hint error";
+    hint.textContent = `Isso passa em ${dinheiro(valor - aguenta)} do que o caixa aguenta. Vai faltar para as contas dos próximos 30 dias.`;
+    return;
+  }
+
+  if (valor > aRetirar) {
+    hint.className = "doc-hint aviso";
+    hint.textContent = `Passa em ${dinheiro(valor - aRetirar)} do que ${escolhido.nome} tem direito — vira adiantamento.`;
+    return;
+  }
+
+  hint.className = "doc-hint ok";
+  hint.textContent = `Depois disso sobram ${dinheiro(aRetirar - valor)} a retirar, e o caixa fica com ${dinheiro(aguenta - valor)} de folga.`;
+}
+
+retiradaValor.addEventListener("input", atualizarDicaDaRetirada);
+retiradaSocio.addEventListener("change", atualizarDicaDaRetirada);
+
+retiradaForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const valor = valorDoCampo(retiradaValor);
+  if (valor <= 0) {
+    retiradaStatusMsg.textContent = "Informe um valor maior que zero.";
+    retiradaStatusMsg.className = "status show error";
+    return;
+  }
+
+  const botao = document.getElementById("salvar-retirada");
+  botao.disabled = true;
+  retiradaStatusMsg.textContent = "Salvando...";
+  retiradaStatusMsg.className = "status show loading";
+
+  try {
+    const resposta = await pedirAoN8n("salvar-retirada", {
+      data: document.getElementById("ret-data").value || hojeISO(),
+      socio: retiradaSocio.value,
+      valor: String(valor),
+      observacoes: document.getElementById("ret-observacoes").value.trim(),
+    });
+
+    if (!resposta || !resposta.ok) {
+      throw new Error((resposta && resposta.mensagem) || "Não consegui registrar.");
+    }
+
+    retiradaForm.classList.add("hidden");
+    document.getElementById("abrir-retirada").classList.remove("hidden");
+    await recarregarRetiradas();
+  } catch (err) {
+    retiradaStatusMsg.textContent = err.message || "Não foi possível falar com o n8n.";
+    retiradaStatusMsg.className = "status show error";
+  } finally {
+    botao.disabled = false;
+  }
+});
+
+async function recarregarRetiradas() {
+  const resposta = await pedirAoN8n("listar-retiradas", {});
+  if (resposta && resposta.ok) retiradas = resposta.retiradas || [];
+  desenharDivisao();
+  // Retirada é dinheiro saindo do caixa: o saldo e a previsão mudam junto.
+  desenharPainel();
+}
+
+// ----- Desenhar a tela -----
+
+function desenharDivisao() {
+  const temServico = servicosRecebidos().length > 0;
+  document.getElementById("divisao-vazio").classList.toggle("hidden", temServico);
+  document.getElementById("divisao-conteudo").classList.toggle("hidden", !temServico);
+  if (!temServico) return;
+
+  const { socios: lista, empresa } = direitoAcumulado();
+
+  // --- um cartão por sócio ---
+  const caixaSocios = document.getElementById("divisao-socios");
+  caixaSocios.innerHTML = "";
+  let totalAretirar = 0;
+
+  lista.forEach((s) => {
+    const retirado = jaRetiradoPor(s.nome);
+    const aRetirar = s.direito - retirado;
+    totalAretirar += Math.max(0, aRetirar);
+
+    const cartao = modeloSocio.content.firstElementChild.cloneNode(true);
+    cartao.querySelector(".socio-nome").textContent =
+      `${s.nome} · ${(s.fatia * 100).toFixed(2).replace(".", ",")}% do lucro`;
+    cartao.querySelector(".socio-direito").textContent = dinheiro(s.direito);
+    cartao.querySelector(".socio-retirado").textContent = dinheiro(retirado);
+
+    const alvo = cartao.querySelector(".socio-a-retirar");
+    alvo.textContent = dinheiro(aRetirar);
+    // Negativo aqui quer dizer que já tirou mais do que rendeu — adiantamento.
+    alvo.classList.toggle("valor-negativo", aRetirar < 0);
+    alvo.classList.toggle("valor-positivo", aRetirar > 0);
+
+    caixaSocios.appendChild(cartao);
+  });
+
+  // --- quanto o caixa aguenta pagar disso agora ---
+  const aguenta = podeTirarAgora();
+  const caixaAguenta = document.getElementById("d-pode-tirar");
+  caixaAguenta.textContent = dinheiro(aguenta);
+  caixaAguenta.classList.toggle("valor-negativo", aguenta <= 0);
+  caixaAguenta.classList.toggle("valor-positivo", aguenta > 0);
+
+  const nota = document.getElementById("d-pode-tirar-nota");
+  const compromissos = compromissosProximos();
+  if (aguenta <= 0) {
+    nota.className = "doc-hint error";
+    nota.textContent = `O caixa tem ${dinheiro(saldoEmCaixa())} e ${dinheiro(compromissos)} de contas nos próximos ${DIAS_DE_COMPROMISSO} dias. Tirar agora deixa conta descoberta.`;
+  } else if (aguenta < totalAretirar) {
+    nota.className = "doc-hint aviso";
+    nota.textContent = `Há ${dinheiro(totalAretirar)} a retirar no total, mas só ${dinheiro(aguenta)} sobra depois das contas dos próximos ${DIAS_DE_COMPROMISSO} dias. O resto fica para quando entrar mais dinheiro.`;
+  } else {
+    nota.className = "doc-hint ok";
+    nota.textContent = `Já descontadas as contas dos próximos ${DIAS_DE_COMPROMISSO} dias, o imposto e a folha.`;
+  }
+
+  // --- a parte da empresa: onde o buraco aparece ---
+  // Contas pagas que não são material de serviço são o que o terço da empresa
+  // precisa cobrir. Se não cobre, a empresa encolhe mesmo com serviço dando lucro.
+  const gastouEmpresa = despesas
+    .filter((d) => d.status === "Pago" && !d.servicoId)
+    .reduce((s, d) => s + Number(d.valor || 0), 0);
+  const sobrouEmpresa = empresa - gastouEmpresa;
+
+  document.getElementById("d-empresa-coube").textContent = dinheiro(empresa);
+  document.getElementById("d-empresa-gastou").textContent = dinheiro(gastouEmpresa);
+  const alvoEmpresa = document.getElementById("d-empresa-sobrou");
+  alvoEmpresa.textContent = dinheiro(sobrouEmpresa);
+  alvoEmpresa.classList.toggle("valor-negativo", sobrouEmpresa < 0);
+  alvoEmpresa.classList.toggle("valor-positivo", sobrouEmpresa >= 0);
+
+  const notaEmpresa = document.getElementById("d-empresa-nota");
+  if (sobrouEmpresa < 0) {
+    notaEmpresa.className = "doc-hint error";
+    notaEmpresa.textContent = `A fatia da empresa não cobriu as contas dela em ${dinheiro(-sobrouEmpresa)}. A diferença saiu do caixa — é por isso que sobra menos do que parece.`;
+  } else {
+    notaEmpresa.className = "doc-hint ok";
+    notaEmpresa.textContent = "A fatia da empresa está cobrindo as contas dela.";
+  }
+
+  // --- lucro serviço a serviço ---
+  const corpo = document.getElementById("d-servicos");
+  corpo.innerHTML = "";
+  const porSocio = lista.length ? lista[0].fatia : 0;
+
+  servicosRecebidos().forEach((servico) => {
+    const material = materialDoServico(servico);
+    const lucro = lucroDoServico(servico);
+    const tr = document.createElement("tr");
+    if (lucro < 0) tr.className = "linha-negativa";
+
+    [
+      servico.descricao || "(sem descrição)",
+      dinheiro(servico.valor),
+      dinheiro(material),
+      dinheiro(lucro),
+      dinheiro(lucro * porSocio),
+    ].forEach((texto, i) => {
+      const td = document.createElement("td");
+      td.textContent = texto;
+      if (i === 3) td.className = lucro < 0 ? "valor-negativo" : "valor-positivo";
+      tr.appendChild(td);
+    });
+    corpo.appendChild(tr);
+  });
+
+  desenharRetiradas();
+}
+
+function desenharRetiradas() {
+  listaRetiradasBox.innerHTML = "";
+
+  if (!retiradas.length) {
+    listaRetiradasStatus.className = "doc-hint neutral";
+    listaRetiradasStatus.textContent = "Nenhuma retirada registrada ainda.";
+    return;
+  }
+
+  const total = retiradas.reduce((s, r) => s + Number(r.valor || 0), 0);
+  listaRetiradasStatus.className = "doc-hint neutral";
+  listaRetiradasStatus.textContent = `${retiradas.length} retirada${retiradas.length > 1 ? "s" : ""} · ${dinheiro(total)}`;
+
+  retiradas.forEach((r) => listaRetiradasBox.appendChild(montarLinhaRetirada(r)));
+}
+
+function montarLinhaRetirada(retirada) {
+  const linha = modeloRetirada.content.firstElementChild.cloneNode(true);
+  linha.querySelector(".despesa-descricao").textContent = retirada.socio || "(sem nome)";
+  linha.querySelector(".despesa-valor").textContent = dinheiro(retirada.valor);
+
+  const partes = [dataBonita(retirada.data)];
+  if (retirada.observacoes) partes.push(retirada.observacoes);
+  linha.querySelector(".despesa-extra").textContent = partes.join(" · ");
+
+  const acoes = linha.querySelector(".despesa-acoes");
+  const botaoExcluir = linha.querySelector(".retirada-excluir");
+
+  linha.querySelector(".despesa-resumo").addEventListener("click", () => {
+    const abrindo = acoes.classList.contains("hidden");
+    listaRetiradasBox.querySelectorAll(".despesa").forEach((outra) => {
+      outra.classList.remove("aberta");
+      outra.querySelector(".despesa-acoes").classList.add("hidden");
+      desarmarConfirmacao(outra.querySelector(".retirada-excluir"), "Excluir");
+    });
+    acoes.classList.toggle("hidden", !abrindo);
+    linha.classList.toggle("aberta", abrindo);
+  });
+
+  ligarExclusao(botaoExcluir, "Excluir", "Confirmar exclusão", async () => {
+    try {
+      const resposta = await pedirAoN8n("excluir-retirada", { id: retirada.id });
+      if (!resposta || !resposta.ok) {
+        listaRetiradasStatus.className = "doc-hint error";
+        listaRetiradasStatus.textContent = (resposta && resposta.mensagem) || "Não consegui excluir.";
+        return;
+      }
+      retiradas = retiradas.filter((x) => x.id !== retirada.id);
+      desenharDivisao();
+      desenharPainel();
+    } catch (err) {
+      listaRetiradasStatus.className = "doc-hint error";
+      listaRetiradasStatus.textContent = "Não foi possível falar com o n8n.";
+    }
+  });
+
+  return linha;
+}
+
+// O campo "é material de qual serviço?" da despesa só pode oferecer serviços
+// que existem, então é preenchido depois que a lista chega.
+function atualizarListaDeServicos() {
+  const campo = document.getElementById("despesa-servico");
+  const escolhido = campo.value;
+  campo.innerHTML = '<option value="">Não — é despesa da empresa</option>';
+
+  recebimentos.forEach((r) => {
+    const opcao = document.createElement("option");
+    opcao.value = r.id;
+    opcao.textContent = `${r.descricao}${r.cliente ? " · " + r.cliente : ""}`;
+    campo.appendChild(opcao);
+  });
+
+  campo.value = recebimentos.some((r) => r.id === escolhido) ? escolhido : "";
+}
+
 // ----- Carregar tudo -----
 
 // As três listas saem ao mesmo tempo de propósito: cada ida ao Airtable custa
@@ -3173,13 +3629,13 @@ async function carregarFinanceiro() {
     // Duas ondas de propósito. O navegador só faz cerca de SEIS chamadas ao
     // mesmo tempo; a sétima espera a primeira terminar, e aí o tempo dobra.
     // Então a primeira onda traz só o que a tela precisa para aparecer.
-    const [resDespesas, resRecebimentos, resRecorrentes, resConfig, resCadastros] =
+    const [resDespesas, resRecebimentos, resRecorrentes, resConfig, resRetiradas] =
       await Promise.all([
         pedirAoN8n("listar-despesas", {}),
         pedirAoN8n("listar-recebimentos", {}),
         pedirAoN8n("listar-recorrentes", {}),
         pedirAoN8n("listar-config", {}),
-        pedirAoN8n("listar-cadastros", {}),
+        pedirAoN8n("listar-retiradas", {}),
       ]);
 
     if (!resDespesas || !resDespesas.ok) {
@@ -3191,14 +3647,7 @@ async function carregarFinanceiro() {
     recebimentos = (resRecebimentos && resRecebimentos.recebimentos) || [];
     recorrentes = (resRecorrentes && resRecorrentes.recorrentes) || [];
     configFin = (resConfig && resConfig.config) || null;
-
-    // Sem os cadastros, escolher o cliente numa conta a receber só funcionaria
-    // depois de passar pela aba Consultar. De quebra, a Consulta já abre pronta.
-    if (resCadastros && resCadastros.ok) {
-      cadastros = resCadastros.cadastros || [];
-      listaCarregada = true;
-      desenharLista();
-    }
+    retiradas = (resRetiradas && resRetiradas.retiradas) || [];
 
     financeiroCarregado = true;
     atualizarListasDeApoio();
@@ -3209,6 +3658,8 @@ async function carregarFinanceiro() {
     desenharDespesas();
     desenharReceitas();
     desenharRecorrentes();
+    atualizarListaDeServicos();
+    desenharDivisao();
     desenharPainel();
 
     // Segunda onda, sem segurar a tela: nada aqui muda os números do painel.
@@ -3224,9 +3675,10 @@ async function carregarFinanceiro() {
 // contas fixas vencidas.
 async function segundaOndaDoFinanceiro() {
   try {
-    const [resFornecedores, resConferencias, resGeracao] = await Promise.all([
+    const [resFornecedores, resConferencias, resCadastros, resGeracao] = await Promise.all([
       pedirAoN8n("listar-fornecedores", {}),
       pedirAoN8n("listar-conferencias", {}),
+      pedirAoN8n("listar-cadastros", {}),
       pedirAoN8n("gerar-recorrentes", {}).catch(() => null),
     ]);
 
@@ -3234,6 +3686,15 @@ async function segundaOndaDoFinanceiro() {
     conferencias = (resConferencias && resConferencias.conferencias) || [];
     ligarNomesDosFornecedores();
     atualizarListasDeApoio();
+
+    // Sem os cadastros, escolher o cliente numa conta a receber só funcionaria
+    // depois de passar pela aba Consultar. De quebra, a Consulta já abre pronta.
+    if (resCadastros && resCadastros.ok) {
+      cadastros = resCadastros.cadastros || [];
+      listaCarregada = true;
+      atualizarListaDeClientes();
+      desenharLista();
+    }
 
     // A geração rodou junto com a leitura, então o que ela criou não estava na
     // lista que já chegou. Só quando gerou algo vale a pena reler.
@@ -3268,6 +3729,8 @@ async function recarregarDespesas() {
   atualizarListasDeApoio();
   atualizarFiltroDeMeses();
   desenharDespesas();
+  // Uma despesa pode ser material de um serviço, e aí mexe no lucro dividido.
+  desenharDivisao();
   desenharPainel();
 }
 
@@ -3280,8 +3743,10 @@ async function recarregarReceitas() {
   }
   recebimentos = resposta.recebimentos || [];
   atualizarListaDeClientes();
+  atualizarListaDeServicos();
   atualizarFiltroDeMesesReceita();
   desenharReceitas();
+  desenharDivisao();
   desenharPainel();
 }
 
@@ -3589,6 +4054,7 @@ sairBotao.addEventListener("click", () => {
   recorrentes = [];
   recebimentos = [];
   conferencias = [];
+  retiradas = [];
   configFin = null;
   financeiroCarregado = false;
   listaDespesasBox.innerHTML = "";
@@ -3601,6 +4067,8 @@ sairBotao.addEventListener("click", () => {
   resumoDespesas.classList.add("hidden");
   resumoReceber.classList.add("hidden");
   document.getElementById("painel-conteudo").classList.add("hidden");
+  document.getElementById("divisao-conteudo").classList.add("hidden");
+  listaRetiradasBox.innerHTML = "";
   atualizarListasDeApoio();
   atualizarFiltroDeMeses();
   mostrarListaDespesasStatus("neutral", "");

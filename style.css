@@ -1082,3 +1082,37 @@ button:active:not(:disabled) {
 .despesa.receita.vencida {
   border-left-color: var(--error);
 }
+
+/* ----- Divisão do lucro ----- */
+
+/* Um cartão por sócio: no computador ficam lado a lado, no celular empilham */
+#divisao-socios {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+@media (min-width: 768px) {
+  #divisao-socios {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
+
+.socio-cartao {
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  padding: 4px 14px 8px;
+}
+
+.socio-nome {
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 10px 0 2px;
+}
+
+/* Retirada é dinheiro saindo para os sócios: barra lateral própria, para não
+   se confundir nem com despesa nem com conta a receber */
+.despesa.retirada {
+  border-left: 3px solid var(--accent);
+}

@@ -56,9 +56,13 @@ Quem executa as automações de verdade é o **n8n**, e o app é só a "tela".
     conferência com o banco, e o em aberto por categoria e por fornecedor
   - A pagar: lançar (com parcelamento), filtrar por situação e mês, marcar como
     paga, editar pelo lápis, excluir uma ou o grupo de parcelas
-  - A receber: o que os clientes ainda devem, com o cliente vindo do Cadastro
+  - A receber: o que os clientes ainda devem, com o cliente vindo do Cadastro,
+    e o material gasto no serviço (é ele que define o lucro a dividir)
   - Contas fixas: o que se repete todo mês; o sistema lança sozinho no dia
-  - Ajustes: saldo de partida, metas de reserva e giro, regime e imposto, folha
+  - Divisão: quanto do lucro cabe a cada sócio e à empresa, quanto o caixa
+    aguenta pagar disso agora, e o registro das retiradas
+  - Ajustes: saldo de partida, metas de reserva e giro, regime e imposto,
+    folha, e as fatias da divisão do lucro
 - Rodapé do menu: **Sair** (dois toques) e versão do app instalada
 - Indicador de conexão com o n8n na barra superior
 - Aviso ao tentar sair (menu, aba, fechar a janela) com algo não salvo —
@@ -81,6 +85,11 @@ Base **"Financeiro"** (`appjAmWXV7Zr33UqE`), criada em 22/08/2026:
 - `Fornecedores` (`tblhsabIIg8SLqMMj`) — nome + CNPJ (criada em 25/08/2026)
 - `Recorrentes` (`tblb8QplhcGRP6SZ7`) — a regra das contas fixas, não as contas
   em si (criada em 25/08/2026)
+- `Recebimentos` (`tbl4tMnm3t3peeLYo`) — contas a receber (26/08/2026)
+- `Config_Financeiro` (`tbl3uT9h7ZYXnfR7E`) — **uma linha só**, com os ajustes
+  do painel e as fatias da divisão do lucro (26/08/2026)
+- `Conferencias` (`tblIrMrXYI6FZdKfS`) — conciliação bancária (26/08/2026)
+- `Retiradas` (`tblh3m5JB6N2sNs5i`) — o que cada sócio já tirou (26/08/2026)
 
 Em `Despesas` sobrou o campo antigo `Fornecedor` (texto solto), substituído pelo
 vínculo `Fornecedor_Ref` + o lookup `Fornecedor_Nome`. A API do Airtable não
@@ -126,6 +135,9 @@ Todos criados, publicados e testados de ponta a ponta:
 | `App - Salvar config financeiro` | `/webhook/salvar-config` | `FwwkYrUdHsBpJUhz` |
 | `App - Salvar conferencia` | `/webhook/salvar-conferencia` | `Yxbz5zhzBuNuryBM` |
 | `App - Excluir recebimento` | `/webhook/excluir-recebimento` | `ZVuAGeNmuytxyVQe` |
+| `App - Listar retiradas` | `/webhook/listar-retiradas` | `bdBluhbFStnnbI4j` |
+| `App - Salvar retirada` | `/webhook/salvar-retirada` | `EWAGlYN9Idv5yAKx` |
+| `App - Excluir retirada` | `/webhook/excluir-retirada` | `ihcCLwC35J103Y1v` |
 
 Cada arquivo em `n8n/` tem o nome do caminho do webhook correspondente.
 
@@ -941,6 +953,77 @@ passar pela aba Consultar. De brinde, a Consulta passou a abrir pronta.
 - **Comprovantes**: os campos de anexo existem nas duas tabelas, mas o app
   ainda não envia arquivo. O caminho é o endpoint `uploadAttachment` do
   Airtable (aceita base64, limite de 5MB por arquivo).
+
+## Divisão do lucro entre os sócios e a empresa (26/08/2026)
+
+Como funciona na vida real, segundo o dono: **o lucro de cada serviço (o que o
+cliente pagou menos o material) é dividido em três** — uma parte para ele, uma
+para o pai, uma para a empresa. As duas partes pessoais **saem sempre**; a da
+empresa é que banca as contas, e por isso costuma sobrar menos.
+
+Ele acrescentou uma condição importante: só tirar **"quando entrou, e tem saldo
+suficiente em conta, pois estamos com grande dificuldade financeira no
+momento"**. Isso virou o centro do desenho.
+
+### Como o material chega (ele pediu os dois caminhos)
+
+- **Campo no próprio serviço** (`Recebimentos.Material_Valor`) — para o que não
+  foi lançado como despesa separada. Rápido.
+- **Vínculo na compra** (`Despesas.Servico_Ref`) — ao lançar a despesa, escolhe
+  a qual serviço ela pertence.
+
+**Material total = o campo + as compras vinculadas.** O texto na tela avisa
+para não lançar a mesma compra nos dois lugares, que é o único jeito de errar.
+
+### O número que importa: "o caixa aguenta tirar agora"
+
+```
+saldo em caixa
+ − contas que vencem nos próximos 30 dias (mais as já vencidas)
+ − imposto do mês
+ − folha do mês
+ = o que dá para tirar sem deixar conta descoberta   (nunca negativo)
+```
+
+Isso é mostrado junto do que cada sócio tem a retirar. Quando o direito é maior
+que a folga, a tela diz as duas coisas: *"há R$ 933,33 a retirar, mas só
+R$ 250,00 sobra depois das contas dos próximos 30 dias"*.
+
+O formulário de retirada **avisa mas não impede**. Passar da folga do caixa, ou
+tirar mais do que se tem direito (vira adiantamento), mostra aviso — quem
+decide é o dono, que pode ter motivo.
+
+### O bloco "A parte da empresa"
+
+É a peça que torna visível o que ele já sentia:
+
+```
+Coube à empresa nos serviços
+ − contas pagas que NÃO são material de serviço
+ = sobrou para a empresa      (vermelho quando negativo)
+```
+
+Negativo quer dizer que a fatia da empresa não cobriu as contas dela, e a
+diferença saiu do caixa. É a explicação de por que sobra menos do que parece.
+
+### Decisões que valem lembrar
+
+- **O direito de cada sócio é sempre calculado, nunca gravado.** Corrigir o
+  valor de um serviço ou o material corrige a divisão junto. A tabela
+  `Retiradas` guarda só o que de fato saiu.
+- **Retirada é saída de caixa**, então entra no `saldoEmCaixa` e na coluna
+  "saiu" do fluxo. Sem isso o saldo mostraria dinheiro que já não está lá.
+- **Só serviço com status Recebido divide.** Não se reparte dinheiro que ainda
+  não entrou.
+- **As fatias são configuráveis** (`Config_Financeiro.Socio_N_Percentual`),
+  com 33,3333% cada por padrão. A empresa fica com o que sobrar dos dois. Os
+  Ajustes mostram a conta enquanto se digita, para não passar de 100%.
+- Os nomes dos sócios são gravados como **texto** na retirada, não como
+  vínculo: se o nome mudar nos Ajustes, o histórico antigo continua verdadeiro.
+
+### Tabela nova
+
+`Retiradas` (`tblh3m5JB6N2sNs5i`) — data, sócio, valor, observações.
 
 ## Decisões já tomadas (não relitigar sem motivo)
 
