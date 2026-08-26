@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.08.26";
+const APP_VERSION = "2026.08.26b";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -885,10 +885,28 @@ async function abrirLinha(linha, caixa, cadastro, avisoDepois) {
 
   let dados;
   try {
-    dados = await pedirAoN8n("detalhe-cadastro", {
-      id: cadastro.id,
-      documento: cadastro.documento,
-    });
+    // As três saem ao mesmo tempo de propósito. O n8n executa um nó de cada vez,
+    // então buscar cadastro, endereços e contatos em fila dentro de um workflow
+    // só custava a soma das três (~2s). O navegador espera as três em paralelo,
+    // e o tempo passa a ser o da mais lenta.
+    const [detalhe, deLocais, deContatos] = await Promise.all([
+      pedirAoN8n("detalhe-cadastro", { id: cadastro.id, documento: cadastro.documento }),
+      pedirAoN8n("listar-locais", { documento: cadastro.documento }),
+      pedirAoN8n("listar-contatos", { documento: cadastro.documento }),
+    ]);
+
+    // Se qualquer uma das três falhar, o cadastro não abre. Abrir sem os
+    // endereços que existem seria pior do que não abrir: a tela mostraria o
+    // cadastro como se ele não tivesse nenhum, e quem salvasse assim acharia
+    // que estava tudo certo.
+    if (detalhe && detalhe.ok && (!deLocais || !deLocais.ok || !deContatos || !deContatos.ok)) {
+      dados = { ok: false, mensagem: "Não consegui carregar os endereços e contatos. Tente de novo." };
+    } else {
+      // Remonta o mesmo formato de antes, para o resto da tela não mudar nada.
+      dados = detalhe && detalhe.ok
+        ? { ...detalhe, locais: deLocais.locais || [], contatos: deContatos.contatos || [] }
+        : detalhe;
+    }
   } catch (err) {
     caixa.textContent = "Não consegui abrir. O n8n está ligado?";
     return;

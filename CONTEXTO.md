@@ -99,6 +99,8 @@ Todos criados, publicados e testados de ponta a ponta:
 | `App - Salvar entidade` | `/webhook/salvar-entidade` | `dFV53YYjsktzuEWw` |
 | `App - Listar cadastros` | `/webhook/listar-cadastros` | `cfcdcr5qYWIVtko2` |
 | `App - Detalhe do cadastro` | `/webhook/detalhe-cadastro` | `fknumisB42zBZNjS` |
+| `App - Listar locais` | `/webhook/listar-locais` | `guRASaILS9KHOVpW` |
+| `App - Listar contatos` | `/webhook/listar-contatos` | `Se7DavX4vQrwpmsI` |
 | `App - Atualizar cadastro` | `/webhook/atualizar-cadastro` | `1UbdhChF8Pfse0of` |
 | `App - Excluir cadastro` | `/webhook/excluir-cadastro` | `Zeyk3CwEDKeHjf3G` |
 | `App - Salvar despesa` | `/webhook/salvar-despesa` | `srhsmBQE202yhtrU` |
@@ -792,6 +794,48 @@ Duas armadilhas que custaram tempo:
   Sem conseguir verificar, não vale entregar. Ficaram as chamadas explícitas,
   medidas funcionando uma a uma. Se um dia o campo aparecer por um caminho novo
   e nascer com uma linha só, é aqui que se acrescenta a chamada.
+
+## Velocidade: por que tudo custa ~700ms, e como não custar mais que isso (26/08/2026)
+
+Medido nesta data, com o n8n local (sem o túnel no meio):
+
+| | tempo |
+|---|---|
+| o n8n em si (webhook + confere senha + responde) | **18ms** |
+| **cada ida ao Airtable** | **~700ms** |
+
+Ou seja: o custo do sistema é **o número de idas ao Airtable**, não o n8n e não
+o app. A conta é direta — 1 busca ≈ 700ms, 3 buscas em fila ≈ 2,1s.
+
+E lembre da regra já descoberta antes: **o n8n executa um nó de cada vez, mesmo
+em ramos que parecem paralelos.** Quem paraleliza de verdade é o navegador.
+
+**A regra do projeto, então: um workflow = uma ida ao Airtable.** Quando a tela
+precisa de várias tabelas, são vários workflows pequenos que o app dispara
+juntos com `Promise.all`. Dá o tempo da mais lenta em vez da soma.
+
+Foi assim que o Financeiro nasceu (três listas em paralelo, ~800ms) e foi assim
+que o **abrir um cadastro** caiu de **2057ms para 810ms** em 26/08/2026:
+`detalhe-cadastro` fazia cadastro → locais → contatos em fila dentro de um
+workflow só. As três buscas não dependiam uma da outra (locais e contatos
+filtram pelo CPF/CNPJ que veio no pedido), então viraram três workflows.
+
+**Cuidado que veio junto:** com três respostas em vez de uma, dá para o
+cadastro chegar e os endereços não. Se qualquer uma das três falhar, o cadastro
+**não abre**. Abrir sem os endereços seria pior do que não abrir — a tela
+mostraria o cadastro como se ele não tivesse nenhum, e quem salvasse assim
+acharia que estava tudo certo.
+
+**Onde ainda sobra tempo, se um dia incomodar:** salvar um cadastro faz 1 busca
+de duplicado + uma escrita por registro (entidade, cada endereço, cada
+contato), tudo em fila. Dá para juntar as escritas da mesma tabela (o Airtable
+aceita 10 por chamada), mas mexe na lógica de criar/apagar e não vale o risco
+enquanto salvar for menos frequente que abrir.
+
+**O que não foi feito de propósito:** guardar o cadastro já aberto em memória
+para reabrir instantâneo. Economizaria os 810ms na segunda abertura, mas
+mostraria dado velho se algo mudasse pelo Airtable ou por outra sessão. Preferi
+sempre buscar.
 
 ## Decisões já tomadas (não relitigar sem motivo)
 

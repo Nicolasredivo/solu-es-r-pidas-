@@ -1,16 +1,16 @@
 {
-  "name": "App - Detalhe do cadastro",
+  "name": "App - Listar locais",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "detalhe-cadastro",
+        "path": "listar-locais",
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
         }
       },
-      "id": "c0000000-0000-4000-8000-000000000002",
+      "id": "c0000000-0000-4000-8000-000000000010",
       "name": "Recebe pedido do app",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -18,7 +18,7 @@
         0,
         0
       ],
-      "webhookId": "c0000000-0000-4000-8000-000000000003"
+      "webhookId": "c0000000-0000-4000-8000-000000000011"
     },
     {
       "parameters": {
@@ -31,7 +31,7 @@
           },
           "conditions": [
             {
-              "id": "c0000000-0000-4000-8000-000000000004",
+              "id": "c0000000-0000-4000-8000-000000000012",
               "leftValue": "={{ $json.body.senha }}",
               "rightValue": "TROQUE-ESTA-SENHA",
               "operator": {
@@ -46,7 +46,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000005",
+      "id": "c0000000-0000-4000-8000-000000000013",
       "name": "Senha esta correta?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -61,7 +61,7 @@
         "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000006",
+      "id": "c0000000-0000-4000-8000-000000000014",
       "name": "Responde senha incorreta",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -82,15 +82,15 @@
         },
         "table": {
           "__rl": true,
-          "value": "tbl5Joji6gAir3mNh",
+          "value": "tblffVczCf1VeNxs7",
           "mode": "list",
-          "cachedResultName": "Entidades_Cadastradas"
+          "cachedResultName": "Locais_Atendimento"
         },
-        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($json.body.id || '').replace(/[^a-zA-Z0-9]/g, '') + \"'\" }}",
+        "filterByFormula": "={{ (() => { const d = String($json.body.documento || '').replace(/D/g, ''); return d ? \"FIND('\" + d + \"', {Cliente_Vinculado} & '') > 0\" : 'FALSE()'; })() }}",
         "returnAll": true,
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000001",
+      "id": "c0000000-0000-4000-8000-000000000009",
       "name": "Busca",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
@@ -109,9 +109,9 @@
     },
     {
       "parameters": {
-        "jsCode": "const achado = $input.all().filter((i) => i.json && i.json.id && !i.json.error)[0];\nif (!achado) return [{ json: { ok: false, mensagem: \"Cadastro nao encontrado.\" } }];\n\nconst f = achado.json.fields || {};\nreturn [{\n  json: {\n    ok: true,\n    cadastro: {\n      id: achado.json.id,\n      documento: f.CPF_CNPJ || \"\",\n      razaoSocial: f.Razao_Social_Nome || \"\",\n      nomeFantasia: f.Nome_Fantasia_Identificador || \"\",\n      tipo: f.Tipo_Documento || \"\",\n      exigenciaFiscal: f.Exigencia_Fiscal || \"\",\n      emails: f.Emails_Financeiro_NFE || \"\",\n      whatsappCnpj: f.WhatsApp_CNPJ || \"\",\n      empresaSindicos: f.Empresa_Sindicos || \"\",\n      administradora: f.Administradora || \"\",\n      status: f.Status || \"\",\n      observacoes: f.Observacoes || \"\",\n    },\n  },\n}];"
+        "jsCode": "const achados = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\n\nconst locais = achados.map((i) => {\n  const c = i.json.fields || {};\n  return {\n    id: i.json.id,\n    nome: c.Nome_do_Local || \"\",\n    endereco: c.Endereco_Completo || \"\",\n    bairroCidade: c.Bairro_Cidade || \"\",\n    acesso: c.Observacoes_Acesso || \"\",\n    status: c.Status || \"\",\n  };\n});\n\nreturn [{ json: { ok: true, locais } }];"
       },
-      "id": "c0000000-0000-4000-8000-000000000007",
+      "id": "c0000000-0000-4000-8000-000000000015",
       "name": "Monta resposta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -126,7 +126,7 @@
         "responseBody": "={{ JSON.stringify($json) }}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000008",
+      "id": "c0000000-0000-4000-8000-000000000016",
       "name": "Responde ao app",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
