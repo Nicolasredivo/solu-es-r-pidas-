@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.08.26b";
+const APP_VERSION = "2026.08.26c";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -2012,7 +2012,7 @@ async function excluirDespesas(ids, mensagemOk) {
     atualizarFiltroDeMeses();
     atualizarListasDeApoio();
     desenharDespesas();
-    desenharResumo();
+    desenharPainel();
     mostrarListaDespesasStatus("ok", mensagemOk);
   } catch (err) {
     mostrarListaDespesasStatus("error", "Não foi possível falar com o n8n.");
@@ -2258,40 +2258,6 @@ function proximosMeses(quantos) {
 // Junta o que já está lançado e em aberto com o que as contas fixas ainda vão
 // gerar. Não conta duas vezes porque "próxima geração" sempre aponta para a
 // primeira conta que ainda não foi lançada.
-function projecaoDosProximosMeses() {
-  const meses = proximosMeses(6);
-  const total = {};
-  meses.forEach((mes) => (total[mes] = 0));
-  const primeiro = meses[0];
-
-  despesas.forEach((despesa) => {
-    if (despesa.status === "Pago") return;
-    const mes = String(despesa.vencimento || "").slice(0, 7);
-    // Atrasada ou sem data entra no mês corrente: é dinheiro que ainda precisa
-    // sair, e o lugar de cobrar isso é agora.
-    const alvo = mes && mes in total ? mes : mes && mes > primeiro ? null : primeiro;
-    if (alvo) total[alvo] += Number(despesa.valor || 0);
-  });
-
-  const ultimo = meses[meses.length - 1];
-  recorrentes.forEach((r) => {
-    if (!r.ativo || !r.proximaGeracao) return;
-    let data = String(r.proximaGeracao).slice(0, 10);
-    let restam = r.semFim ? Infinity : Number(r.restantes || 0);
-    let voltas = 0;
-
-    while (data.slice(0, 7) <= ultimo && restam > 0 && voltas < 120) {
-      const mes = data.slice(0, 7);
-      if (mes in total) total[mes] += Number(r.valor || 0);
-      restam -= 1;
-      voltas += 1;
-      data = somaUmMes(data, r.diaDoMes);
-    }
-  });
-
-  return meses.map((mes) => ({ rotulo: mesBonito(mes), valor: total[mes] }));
-}
-
 function somarPor(chave) {
   const soma = {};
   despesas
@@ -2323,19 +2289,876 @@ function desenharBarras(container, itens) {
   });
 }
 
-function desenharResumo() {
-  const temAlgo = despesas.length > 0 || recorrentes.length > 0;
-  document.getElementById("resumo-vazio").classList.toggle("hidden", temAlgo);
-  document.getElementById("resumo-conteudo").classList.toggle("hidden", !temAlgo);
-  if (!temAlgo) return;
+// ----- Financeiro: contas a receber -----
 
-  desenharBarras(document.getElementById("grafico-meses"), projecaoDosProximosMeses());
+const receitaForm = document.getElementById("form-receita");
+const novaReceitaBotao = document.getElementById("nova-receita");
+const cancelarReceitaBotao = document.getElementById("cancelar-receita");
+const salvarReceitaBotao = document.getElementById("salvar-receita");
+const receitaStatusMsg = document.getElementById("receita-status-msg");
+const buscaReceita = document.getElementById("busca-receita");
+const filtroSituacaoReceita = document.getElementById("filtro-situacao-receita");
+const filtroMesReceita = document.getElementById("filtro-mes-receita");
+const recarregarReceitasBotao = document.getElementById("recarregar-receitas");
+const listaReceitasStatus = document.getElementById("lista-receitas-status");
+const listaReceitasBox = document.getElementById("lista-receitas");
+const modeloReceita = document.getElementById("modelo-receita");
+const resumoReceber = document.getElementById("resumo-receber");
+const linhaDataRecebimento = document.getElementById("linha-data-recebimento");
+const listaClientesDatalist = document.getElementById("lista-clientes");
+const listaDescricoesReceitaDatalist = document.getElementById("lista-descricoes-receita");
+
+const receitaCampos = {
+  descricao: document.getElementById("receita-descricao"),
+  valor: document.getElementById("receita-valor"),
+  cliente: document.getElementById("receita-cliente"),
+  vencimento: document.getElementById("receita-vencimento"),
+  forma: document.getElementById("receita-forma"),
+  status: document.getElementById("receita-status"),
+  dataRecebimento: document.getElementById("receita-data-recebimento"),
+  observacoes: document.getElementById("receita-observacoes"),
+};
+
+let recebimentos = [];
+let receitaEditando = "";
+// Guarda o CPF/CNPJ do cliente escolhido: é ele que liga o recebimento ao
+// cadastro, já que as duas tabelas vivem em bases diferentes do Airtable.
+let documentoDoClienteEscolhido = "";
+
+ligarMascaraDinheiro(receitaCampos.valor);
+
+function mostrarReceitaStatus(tipo, mensagem) {
+  receitaStatusMsg.textContent = mensagem;
+  receitaStatusMsg.className = `status show ${tipo}`;
+}
+
+function mostrarListaReceitasStatus(tipo, mensagem) {
+  listaReceitasStatus.textContent = mensagem;
+  listaReceitasStatus.className = `doc-hint ${tipo}`;
+}
+
+// Atrasada é quem venceu e ainda não foi recebida.
+function receitaAtrasada(receita) {
+  if (receita.status !== "Pendente" || !receita.vencimento) return false;
+  return String(receita.vencimento).slice(0, 10) < hojeISO();
+}
+
+// A lista de clientes vem dos cadastros que já foram carregados na aba
+// Consultar. Sem eles, ainda dá para digitar o nome à mão.
+function atualizarListaDeClientes() {
+  const nomes = new Set();
+  cadastros.forEach((c) => nomes.add(String(c.razaoSocial || "").trim()));
+  recebimentos.forEach((r) => nomes.add(String(r.cliente || "").trim()));
+  nomes.delete("");
+  encherDatalist(listaClientesDatalist,
+    Array.from(nomes).sort((a, b) => a.localeCompare(b, "pt-BR")));
+
+  const descricoes = new Set();
+  recebimentos.forEach((r) => descricoes.add(String(r.descricao || "").trim()));
+  descricoes.delete("");
+  encherDatalist(listaDescricoesReceitaDatalist,
+    Array.from(descricoes).sort((a, b) => a.localeCompare(b, "pt-BR")));
+}
+
+// Mesma ideia do campo de fornecedor: aceita nome ou CPF/CNPJ e casa com quem
+// já está cadastrado, para o mesmo cliente não entrar escrito de dois jeitos.
+receitaCampos.cliente.addEventListener("blur", () => {
+  const hint = document.getElementById("receita-cliente-hint");
+  const digitado = receitaCampos.cliente.value.trim();
+  documentoDoClienteEscolhido = "";
+
+  if (!digitado) {
+    hint.textContent = "";
+    return;
+  }
+
+  const digitos = digitado.replace(/[^0-9]/g, "");
+  const porDocumento = digitos.length >= 11
+    ? cadastros.find((c) => String(c.documento || "") === digitos)
+    : null;
+  const porNome = cadastros.find(
+    (c) => normalizarTexto(c.razaoSocial) === normalizarTexto(digitado)
+  );
+  const achado = porDocumento || porNome;
+
+  hint.className = "doc-hint";
+  if (achado) {
+    receitaCampos.cliente.value = achado.razaoSocial;
+    documentoDoClienteEscolhido = achado.documento || "";
+    hint.textContent = "Cliente cadastrado.";
+    return;
+  }
+
+  hint.textContent = cadastros.length
+    ? "Não achei no Cadastro — vou salvar só o nome."
+    : "Abra a aba Cadastro > Consultar uma vez para eu conhecer seus clientes.";
+});
+
+function ajustarLinhaDataRecebimento() {
+  const recebido = receitaCampos.status.value === "Recebido";
+  linhaDataRecebimento.classList.toggle("hidden", !recebido);
+  if (recebido && !receitaCampos.dataRecebimento.value) {
+    receitaCampos.dataRecebimento.value = hojeISO();
+  }
+}
+
+receitaCampos.status.addEventListener("change", ajustarLinhaDataRecebimento);
+
+function limparFormReceita() {
+  receitaEditando = "";
+  documentoDoClienteEscolhido = "";
+  Object.values(receitaCampos).forEach((campo) => (campo.value = ""));
+  receitaCampos.status.value = "Pendente";
+  receitaCampos.forma.value = "";
+  document.getElementById("receita-cliente-hint").textContent = "";
+  ajustarLinhaDataRecebimento();
+  receitaStatusMsg.className = "status";
+  salvarReceitaBotao.textContent = "Salvar";
+}
+
+function abrirFormReceita(receita) {
+  limparFormReceita();
+
+  if (receita) {
+    receitaEditando = receita.id;
+    documentoDoClienteEscolhido = receita.clienteDocumento || "";
+    receitaCampos.descricao.value = receita.descricao || "";
+    porValorNoCampo(receitaCampos.valor, receita.valor);
+    receitaCampos.cliente.value = receita.cliente || "";
+    receitaCampos.vencimento.value = String(receita.vencimento || "").slice(0, 10);
+    receitaCampos.forma.value = receita.forma || "";
+    receitaCampos.status.value = receita.status || "Pendente";
+    receitaCampos.dataRecebimento.value = String(receita.dataRecebimento || "").slice(0, 10);
+    receitaCampos.observacoes.value = receita.observacoes || "";
+    ajustarLinhaDataRecebimento();
+    salvarReceitaBotao.textContent = "Salvar alterações";
+  }
+
+  receitaForm.classList.remove("hidden");
+  novaReceitaBotao.classList.add("hidden");
+  receitaCampos.descricao.focus();
+}
+
+function fecharFormReceita() {
+  receitaForm.classList.add("hidden");
+  novaReceitaBotao.classList.remove("hidden");
+  limparFormReceita();
+}
+
+novaReceitaBotao.addEventListener("click", () => abrirFormReceita(null));
+cancelarReceitaBotao.addEventListener("click", fecharFormReceita);
+
+receitaForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!receitaCampos.descricao.value.trim()) {
+    mostrarReceitaStatus("error", "Escreva uma descrição.");
+    return;
+  }
+
+  const valor = valorDoCampo(receitaCampos.valor);
+  if (valor <= 0) {
+    mostrarReceitaStatus("error", "Informe um valor maior que zero.");
+    return;
+  }
+
+  salvarReceitaBotao.disabled = true;
+  mostrarReceitaStatus("loading", "Salvando...");
+
+  try {
+    const corpo = {
+      descricao: receitaCampos.descricao.value.trim(),
+      valor: String(valor),
+      cliente: receitaCampos.cliente.value.trim(),
+      clienteDocumento: documentoDoClienteEscolhido,
+      vencimento: receitaCampos.vencimento.value,
+      status: receitaCampos.status.value,
+      dataRecebimento: receitaCampos.dataRecebimento.value,
+      forma: receitaCampos.forma.value,
+      observacoes: receitaCampos.observacoes.value.trim(),
+    };
+    if (receitaEditando) corpo.id = receitaEditando;
+
+    const resposta = await pedirAoN8n("salvar-recebimento", corpo);
+    if (!resposta || !resposta.ok) {
+      throw new Error((resposta && resposta.mensagem) || "Não consegui salvar.");
+    }
+
+    fecharFormReceita();
+    await recarregarReceitas();
+    mostrarListaReceitasStatus("ok", resposta.mensagem || "Salvo!");
+  } catch (err) {
+    mostrarReceitaStatus("error", err.message || "Não foi possível falar com o n8n.");
+  } finally {
+    salvarReceitaBotao.disabled = false;
+  }
+});
+
+function atualizarResumoReceber() {
+  const emAberto = recebimentos.filter((r) => r.status === "Pendente");
+  const total = emAberto.reduce((s, r) => s + Number(r.valor || 0), 0);
+  const atrasado = emAberto.filter(receitaAtrasada).reduce((s, r) => s + Number(r.valor || 0), 0);
+
+  const mes = hojeISO().slice(0, 7);
+  const recebidoNoMes = recebimentos
+    .filter((r) => r.status === "Recebido" && String(r.dataRecebimento || "").slice(0, 7) === mes)
+    .reduce((s, r) => s + Number(r.valor || 0), 0);
+
+  document.getElementById("r-aberto").textContent = dinheiro(total);
+  document.getElementById("r-atrasadas").textContent = dinheiro(atrasado);
+  document.getElementById("r-recebido").textContent = dinheiro(recebidoNoMes);
+  resumoReceber.classList.toggle("hidden", recebimentos.length === 0);
+}
+
+function atualizarFiltroDeMesesReceita() {
+  const escolhido = filtroMesReceita.value;
+  const meses = Array.from(
+    new Set(recebimentos.map((r) => String(r.vencimento || "").slice(0, 7)).filter(Boolean))
+  ).sort();
+
+  filtroMesReceita.innerHTML = '<option value="">Qualquer mês</option>';
+  meses.forEach((mes) => {
+    const opcao = document.createElement("option");
+    opcao.value = mes;
+    opcao.textContent = mesBonito(mes);
+    filtroMesReceita.appendChild(opcao);
+  });
+  filtroMesReceita.value = meses.includes(escolhido) ? escolhido : "";
+}
+
+function receitaPassaNosFiltros(receita, termo) {
+  if (termo && !`${receita.descricao} ${receita.cliente}`.toLowerCase().includes(termo)) {
+    return false;
+  }
+  if (filtroMesReceita.value && String(receita.vencimento || "").slice(0, 7) !== filtroMesReceita.value) {
+    return false;
+  }
+
+  const situacao = filtroSituacaoReceita.value;
+  if (situacao === "abertas") return receita.status === "Pendente";
+  if (situacao === "atrasadas") return receitaAtrasada(receita);
+  if (situacao === "recebidas") return receita.status === "Recebido";
+  return true;
+}
+
+function desenharReceitas() {
+  const termo = buscaReceita.value.trim().toLowerCase();
+  const visiveis = recebimentos.filter((r) => receitaPassaNosFiltros(r, termo));
+
+  listaReceitasBox.innerHTML = "";
+  atualizarResumoReceber();
+
+  if (!recebimentos.length) {
+    mostrarListaReceitasStatus("neutral", "Nenhuma conta a receber ainda.");
+    return;
+  }
+  if (!visiveis.length) {
+    mostrarListaReceitasStatus("neutral", "Nenhuma conta com esses filtros.");
+    return;
+  }
+
+  const soma = visiveis.reduce((t, r) => t + Number(r.valor || 0), 0);
+  mostrarListaReceitasStatus("neutral",
+    `${visiveis.length} de ${recebimentos.length} · ${dinheiro(soma)}`);
+
+  visiveis.forEach((r) => listaReceitasBox.appendChild(montarLinhaReceita(r)));
+}
+
+function montarLinhaReceita(receita) {
+  const linha = modeloReceita.content.firstElementChild.cloneNode(true);
+  const atrasada = receitaAtrasada(receita);
+  const recebida = receita.status === "Recebido";
+
+  linha.classList.toggle("paga", recebida || receita.status === "Cancelado");
+  linha.classList.toggle("vencida", atrasada);
+
+  linha.querySelector(".despesa-descricao").textContent = receita.descricao || "(sem descrição)";
+  linha.querySelector(".despesa-valor").textContent = dinheiro(receita.valor);
+
+  const partes = [];
+  if (receita.vencimento) {
+    const passou = String(receita.vencimento).slice(0, 10) < hojeISO();
+    partes.push((passou ? "Venceu em " : "Vence em ") + dataBonita(receita.vencimento));
+  }
+  if (recebida) {
+    partes.push("Recebido" + (receita.dataRecebimento ? " em " + dataBonita(receita.dataRecebimento) : ""));
+  }
+  if (receita.status === "Cancelado") partes.push("Cancelado");
+  if (receita.cliente) partes.push(receita.cliente);
+  if (receita.forma) partes.push(receita.forma);
+  linha.querySelector(".despesa-extra").textContent = partes.join(" · ");
+
+  const acoes = linha.querySelector(".despesa-acoes");
+  const botaoReceber = linha.querySelector(".receita-receber");
+  const botaoEditar = linha.querySelector(".receita-editar");
+  const botaoExcluir = linha.querySelector(".receita-excluir");
+
+  botaoReceber.classList.toggle("hidden", recebida);
+
+  linha.querySelector(".despesa-resumo").addEventListener("click", () => {
+    const abrindo = acoes.classList.contains("hidden");
+    listaReceitasBox.querySelectorAll(".despesa").forEach((outra) => {
+      outra.classList.remove("aberta");
+      outra.querySelector(".despesa-acoes").classList.add("hidden");
+      desarmarConfirmacao(outra.querySelector(".receita-excluir"), "Excluir");
+    });
+    acoes.classList.toggle("hidden", !abrindo);
+    linha.classList.toggle("aberta", abrindo);
+  });
+
+  botaoEditar.addEventListener("click", () => {
+    abrirFormReceita(receita);
+    receitaForm.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+
+  botaoReceber.addEventListener("click", async () => {
+    botaoReceber.disabled = true;
+    mostrarListaReceitasStatus("neutral", "Salvando...");
+    try {
+      const resposta = await pedirAoN8n("salvar-recebimento", {
+        id: receita.id,
+        descricao: receita.descricao,
+        valor: String(receita.valor),
+        cliente: receita.cliente || "",
+        clienteDocumento: receita.clienteDocumento || "",
+        vencimento: receita.vencimento || "",
+        status: "Recebido",
+        dataRecebimento: hojeISO(),
+        forma: receita.forma || "",
+        observacoes: receita.observacoes || "",
+      });
+      if (!resposta || !resposta.ok) {
+        mostrarListaReceitasStatus("error", (resposta && resposta.mensagem) || "Não consegui salvar.");
+        return;
+      }
+      await recarregarReceitas();
+      mostrarListaReceitasStatus("ok", "Marcada como recebida.");
+    } catch (err) {
+      mostrarListaReceitasStatus("error", "Não foi possível falar com o n8n.");
+    } finally {
+      botaoReceber.disabled = false;
+    }
+  });
+
+  ligarExclusao(botaoExcluir, "Excluir", "Confirmar exclusão", async () => {
+    try {
+      const resposta = await pedirAoN8n("excluir-recebimento", { id: receita.id });
+      if (!resposta || !resposta.ok) {
+        mostrarListaReceitasStatus("error", (resposta && resposta.mensagem) || "Não consegui excluir.");
+        return;
+      }
+      recebimentos = recebimentos.filter((r) => r.id !== receita.id);
+      atualizarFiltroDeMesesReceita();
+      atualizarListaDeClientes();
+      desenharReceitas();
+      desenharPainel();
+      mostrarListaReceitasStatus("ok", resposta.mensagem || "Excluída.");
+    } catch (err) {
+      mostrarListaReceitasStatus("error", "Não foi possível falar com o n8n.");
+    }
+  });
+
+  return linha;
+}
+
+buscaReceita.addEventListener("input", () => {
+  if (financeiroCarregado) desenharReceitas();
+});
+filtroSituacaoReceita.addEventListener("change", () => {
+  if (financeiroCarregado) desenharReceitas();
+});
+filtroMesReceita.addEventListener("change", () => {
+  if (financeiroCarregado) desenharReceitas();
+});
+recarregarReceitasBotao.addEventListener("click", () => carregarFinanceiro());
+
+// ----- Financeiro: ajustes do painel -----
+
+const ajustesForm = document.getElementById("form-ajustes");
+const ajustesStatusMsg = document.getElementById("ajustes-status-msg");
+const linhaMei = document.getElementById("linha-mei");
+const linhaSimples = document.getElementById("linha-simples");
+
+const ajustesCampos = {
+  saldoInicial: document.getElementById("aj-saldo-inicial"),
+  dataSaldo: document.getElementById("aj-data-saldo"),
+  reserva: document.getElementById("aj-reserva"),
+  giro: document.getElementById("aj-giro"),
+  regime: document.getElementById("aj-regime"),
+  das: document.getElementById("aj-das"),
+  teto: document.getElementById("aj-teto"),
+  aliquota: document.getElementById("aj-aliquota"),
+  folha: document.getElementById("aj-folha"),
+  provisiona: document.getElementById("aj-provisiona"),
+};
+
+// Uma linha só na tabela; guardo o código para o salvar alterar em vez de criar.
+let configFin = null;
+
+["saldoInicial", "reserva", "giro", "das", "teto", "folha"].forEach((nome) =>
+  ligarMascaraDinheiro(ajustesCampos[nome])
+);
+
+// Regime muda o que faz sentido perguntar: MEI paga valor fixo, Simples paga
+// porcentagem do que fatura.
+function ajustarCamposDoRegime() {
+  const regime = ajustesCampos.regime.value;
+  linhaMei.classList.toggle("hidden", regime !== "MEI");
+  linhaSimples.classList.toggle("hidden", regime !== "Simples Nacional");
+}
+
+ajustesCampos.regime.addEventListener("change", ajustarCamposDoRegime);
+
+// Custo fixo real = as contas fixas ativas. Seis meses disso é a régua mais
+// usada para reserva de emergência.
+document.getElementById("sugerir-reserva").addEventListener("click", () => {
+  const porMes = recorrentes
+    .filter((r) => r.ativo)
+    .reduce((s, r) => s + Number(r.valor || 0), 0);
+
+  if (porMes <= 0) {
+    mostrarAjustesStatus("error", "Cadastre suas contas fixas primeiro, na aba Contas fixas.");
+    return;
+  }
+
+  porValorNoCampo(ajustesCampos.reserva, porMes * 6);
+  mostrarAjustesStatus("ok",
+    `Sugeri 6 meses do seu custo fixo (${dinheiro(porMes)} por mês). Ajuste se quiser.`);
+});
+
+function mostrarAjustesStatus(tipo, mensagem) {
+  ajustesStatusMsg.textContent = mensagem;
+  ajustesStatusMsg.className = `status show ${tipo}`;
+}
+
+function preencherAjustes() {
+  if (!configFin) return;
+  porValorNoCampo(ajustesCampos.saldoInicial, configFin.saldoInicial);
+  ajustesCampos.dataSaldo.value = String(configFin.dataSaldoInicial || "").slice(0, 10);
+  porValorNoCampo(ajustesCampos.reserva, configFin.reservaMeta);
+  porValorNoCampo(ajustesCampos.giro, configFin.giroMeta);
+  ajustesCampos.regime.value = configFin.regime || "MEI";
+  porValorNoCampo(ajustesCampos.das, configFin.impostoFixoMensal);
+  porValorNoCampo(ajustesCampos.teto, configFin.tetoAnual);
+  ajustesCampos.aliquota.value = configFin.aliquotaImposto
+    ? String(configFin.aliquotaImposto).replace(".", ",")
+    : "";
+  porValorNoCampo(ajustesCampos.folha, configFin.folhaMensal);
+  ajustesCampos.provisiona.checked = Boolean(configFin.provisionaDecimoFerias);
+  ajustarCamposDoRegime();
+}
+
+ajustesForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const salvar = document.getElementById("salvar-ajustes");
+  salvar.disabled = true;
+  mostrarAjustesStatus("loading", "Salvando...");
+
+  try {
+    const resposta = await pedirAoN8n("salvar-config", {
+      id: (configFin && configFin.id) || "",
+      saldoInicial: String(valorDoCampo(ajustesCampos.saldoInicial)),
+      dataSaldoInicial: ajustesCampos.dataSaldo.value,
+      reservaMeta: String(valorDoCampo(ajustesCampos.reserva)),
+      giroMeta: String(valorDoCampo(ajustesCampos.giro)),
+      regime: ajustesCampos.regime.value,
+      impostoFixoMensal: String(valorDoCampo(ajustesCampos.das)),
+      tetoAnual: String(valorDoCampo(ajustesCampos.teto)),
+      aliquotaImposto: ajustesCampos.aliquota.value.replace(",", ".") || "0",
+      folhaMensal: String(valorDoCampo(ajustesCampos.folha)),
+      provisionaDecimoFerias: ajustesCampos.provisiona.checked ? "sim" : "",
+    });
+
+    if (!resposta || !resposta.ok) {
+      throw new Error((resposta && resposta.mensagem) || "Não consegui salvar.");
+    }
+
+    const lido = await pedirAoN8n("listar-config", {});
+    if (lido && lido.ok) configFin = lido.config;
+    preencherAjustes();
+    desenharPainel();
+    mostrarAjustesStatus("ok", "Ajustes salvos! O painel já está usando eles.");
+  } catch (err) {
+    mostrarAjustesStatus("error", err.message || "Não foi possível falar com o n8n.");
+  } finally {
+    salvar.disabled = false;
+  }
+});
+
+// ----- Financeiro: o painel -----
+
+let conferencias = [];
+
+// Saldo em caixa: o ponto de partida informado nos Ajustes, mais tudo que foi
+// recebido depois, menos tudo que foi pago depois. É o item 1 da lista.
+function saldoEmCaixa() {
+  if (!configFin) return 0;
+  const desde = String(configFin.dataSaldoInicial || "").slice(0, 10);
+  if (!desde) return 0;
+
+  const entrou = recebimentos
+    .filter((r) => r.status === "Recebido" && String(r.dataRecebimento || "").slice(0, 10) >= desde)
+    .reduce((s, r) => s + Number(r.valor || 0), 0);
+
+  const saiu = despesas
+    .filter((d) => d.status === "Pago" && String(d.dataPagamento || "").slice(0, 10) >= desde)
+    .reduce((s, d) => s + Number(d.valor || 0), 0);
+
+  return Number(configFin.saldoInicial || 0) + entrou - saiu;
+}
+
+// MEI paga um boleto fixo por mês. No Simples, a fatia sai de cada recebimento,
+// então acompanha o faturamento do mês sozinha.
+function impostosProvisionados() {
+  if (!configFin) return 0;
+
+  if (configFin.regime === "Simples Nacional") {
+    const mes = hojeISO().slice(0, 7);
+    const faturado = recebimentos
+      .filter((r) => r.status === "Recebido" && String(r.dataRecebimento || "").slice(0, 7) === mes)
+      .reduce((s, r) => s + Number(r.valor || 0), 0);
+    return faturado * (Number(configFin.aliquotaImposto || 0) / 100);
+  }
+
+  return Number(configFin.impostoFixoMensal || 0);
+}
+
+// Com funcionário registrado, além do salário do mês há o 13º e as férias
+// crescendo por baixo: 1/12 de um salário e 1/12 de um salário e um terço.
+function folhaProvisionada() {
+  if (!configFin) return 0;
+  const base = Number(configFin.folhaMensal || 0);
+  return configFin.provisionaDecimoFerias ? base * (1 + (1 + 4 / 3) / 12) : base;
+}
+
+function faturamentoDoAno() {
+  const ano = hojeISO().slice(0, 4);
+  return recebimentos
+    .filter((r) => r.status === "Recebido" && String(r.dataRecebimento || "").slice(0, 4) === ano)
+    .reduce((s, r) => s + Number(r.valor || 0), 0);
+}
+
+// O que ainda vai sair em cada mês: o que está lançado e em aberto, mais o que
+// as contas fixas ainda vão gerar. Atrasado entra no mês corrente, que é quando
+// precisa ser pago.
+function saidasPorMes(meses) {
+  const total = {};
+  meses.forEach((m) => (total[m] = 0));
+  const primeiro = meses[0];
+  const ultimo = meses[meses.length - 1];
+
+  despesas.forEach((d) => {
+    if (d.status === "Pago") return;
+    const mes = String(d.vencimento || "").slice(0, 7);
+    const alvo = mes && mes in total ? mes : mes && mes > ultimo ? null : primeiro;
+    if (alvo) total[alvo] += Number(d.valor || 0);
+  });
+
+  recorrentes.forEach((r) => {
+    if (!r.ativo || !r.proximaGeracao) return;
+    let data = String(r.proximaGeracao).slice(0, 10);
+    let restam = r.semFim ? Infinity : Number(r.restantes || 0);
+    let voltas = 0;
+
+    while (data.slice(0, 7) <= ultimo && restam > 0 && voltas < 120) {
+      const mes = data.slice(0, 7);
+      if (mes in total) total[mes] += Number(r.valor || 0);
+      restam -= 1;
+      voltas += 1;
+      data = somaUmMes(data, r.diaDoMes);
+    }
+  });
+
+  return total;
+}
+
+// Mesma ideia do lado das entradas, sem contas fixas: recebimento só entra
+// quando existe de verdade.
+function entradasPorMes(meses) {
+  const total = {};
+  meses.forEach((m) => (total[m] = 0));
+  const primeiro = meses[0];
+  const ultimo = meses[meses.length - 1];
+
+  recebimentos.forEach((r) => {
+    if (r.status !== "Pendente") return;
+    const mes = String(r.vencimento || "").slice(0, 7);
+    const alvo = mes && mes in total ? mes : mes && mes > ultimo ? null : primeiro;
+    if (alvo) total[alvo] += Number(r.valor || 0);
+  });
+
+  return total;
+}
+
+// Fluxo de caixa: o que de fato aconteceu, e não o previsto.
+function fluxoRealizado(quantosMeses) {
+  const meses = [];
+  let ano = Number(hojeISO().slice(0, 4));
+  let mes = Number(hojeISO().slice(5, 7));
+  for (let i = 0; i < quantosMeses; i += 1) {
+    meses.unshift(`${ano}-${String(mes).padStart(2, "0")}`);
+    mes -= 1;
+    if (mes < 1) {
+      mes = 12;
+      ano -= 1;
+    }
+  }
+
+  return meses.map((m) => {
+    const entrou = recebimentos
+      .filter((r) => r.status === "Recebido" && String(r.dataRecebimento || "").slice(0, 7) === m)
+      .reduce((s, r) => s + Number(r.valor || 0), 0);
+    const saiu = despesas
+      .filter((d) => d.status === "Pago" && String(d.dataPagamento || "").slice(0, 7) === m)
+      .reduce((s, d) => s + Number(d.valor || 0), 0);
+    return { mes: m, entrou, saiu };
+  });
+}
+
+function pintarValor(elemento, valor, quandoNegativoEBom) {
+  elemento.textContent = dinheiro(valor);
+  elemento.classList.toggle("valor-negativo", quandoNegativoEBom ? false : valor < 0);
+  elemento.classList.toggle("valor-positivo", quandoNegativoEBom ? false : valor > 0);
+}
+
+function desenharPainel() {
+  const configurado = Boolean(configFin && configFin.dataSaldoInicial);
+  document.getElementById("painel-configurar").classList.toggle("hidden", configurado);
+  document.getElementById("painel-conteudo").classList.toggle("hidden", !configurado);
+  document.getElementById("painel-status").textContent = "";
+  if (!configurado) return;
+
+  // --- itens 1, 2, 3, 6 e 7: quanto tem e quanto já tem dono ---
+  const saldo = saldoEmCaixa();
+  const impostos = impostosProvisionados();
+  const folha = folhaProvisionada();
+  const reserva = Number(configFin.reservaMeta || 0);
+  const giro = Number(configFin.giroMeta || 0);
+  const livre = saldo - impostos - folha - reserva - giro;
+
+  document.getElementById("p-saldo").textContent = dinheiro(saldo);
+  document.getElementById("p-impostos").textContent = dinheiro(impostos);
+  document.getElementById("p-folha").textContent = dinheiro(folha);
+  document.getElementById("p-reserva").textContent = dinheiro(reserva);
+  document.getElementById("p-giro").textContent = dinheiro(giro);
+
+  const caixaLivre = document.getElementById("p-livre");
+  caixaLivre.textContent = dinheiro(livre);
+  caixaLivre.classList.toggle("valor-negativo", livre < 0);
+  caixaLivre.classList.toggle("valor-positivo", livre >= 0);
+
+  document.getElementById("p-impostos-nota").textContent =
+    configFin.regime === "Simples Nacional"
+      ? ` (${configFin.aliquotaImposto}% do que entrou este mês)`
+      : " (DAS do mês)";
+
+  // Guardar o suficiente para os imprevistos é meta, não obrigação — vale dizer
+  // o quanto já foi alcançado em vez de só mostrar o número cheio.
+  const custoFixo = recorrentes.filter((r) => r.ativo)
+    .reduce((s, r) => s + Number(r.valor || 0), 0);
+  document.getElementById("p-reserva-nota").textContent =
+    custoFixo > 0 && reserva > 0
+      ? ` (${(reserva / custoFixo).toFixed(1)} meses de custo fixo)`
+      : "";
+
+  const aviso = document.getElementById("p-livre-aviso");
+  if (livre < 0) {
+    aviso.className = "doc-hint error";
+    aviso.textContent = "O caixa não cobre o que já tem destino. Reveja as metas de reserva e giro, ou segure gastos.";
+  } else if (saldo > 0 && livre < saldo * 0.1) {
+    aviso.className = "doc-hint aviso";
+    aviso.textContent = "Sobra pouco livre. Quase tudo que está na conta já tem dono.";
+  } else {
+    aviso.className = "doc-hint ok";
+    aviso.textContent = "Este é o dinheiro que dá para usar sem mexer no que já tem destino.";
+  }
+
+  // --- itens 4 e 5 ---
+  const aReceber = recebimentos.filter((r) => r.status === "Pendente");
+  const aPagar = despesas.filter((d) => d.status !== "Pago");
+  const totalReceber = aReceber.reduce((s, r) => s + Number(r.valor || 0), 0);
+  const totalPagar = aPagar.reduce((s, d) => s + Number(d.valor || 0), 0);
+  const atrasadasReceber = aReceber.filter(receitaAtrasada).length;
+  const vencidasPagar = aPagar.filter(despesaVencida).length;
+
+  document.getElementById("p-receber").textContent = dinheiro(totalReceber);
+  document.getElementById("p-pagar").textContent = dinheiro(totalPagar);
+  document.getElementById("p-receber-atraso").textContent =
+    atrasadasReceber ? `${atrasadasReceber} atrasada${atrasadasReceber > 1 ? "s" : ""}` : "em dia";
+  document.getElementById("p-pagar-atraso").textContent =
+    vencidasPagar ? `${vencidasPagar} vencida${vencidasPagar > 1 ? "s" : ""}` : "em dia";
+
+  const mesAtual = hojeISO().slice(0, 7);
+  const doMes = fluxoRealizado(1)[0];
+  const sobrouNoMes = doMes.entrou - doMes.saiu;
+  const caixaMes = document.getElementById("p-mes");
+  caixaMes.textContent = dinheiro(sobrouNoMes);
+  caixaMes.classList.toggle("valor-negativo", sobrouNoMes < 0);
+  caixaMes.classList.toggle("valor-positivo", sobrouNoMes > 0);
+  document.getElementById("p-mes-nota").textContent =
+    `entrou ${dinheiro(doMes.entrou)} · saiu ${dinheiro(doMes.saiu)}`;
+
+  // --- item 11: onde o dinheiro acaba, se acabar ---
+  const meses = proximosMeses(6);
+  const entradas = entradasPorMes(meses);
+  const saidas = saidasPorMes(meses);
+  const corpoPrevisao = document.getElementById("p-previsao");
+  corpoPrevisao.innerHTML = "";
+
+  let acumulado = saldo;
+  let primeiroMesNegativo = "";
+  meses.forEach((m) => {
+    acumulado += entradas[m] - saidas[m];
+    if (acumulado < 0 && !primeiroMesNegativo) primeiroMesNegativo = mesBonito(m);
+
+    const tr = document.createElement("tr");
+    if (acumulado < 0) tr.className = "linha-negativa";
+    [
+      mesBonito(m) + (m === mesAtual ? " (agora)" : ""),
+      dinheiro(entradas[m]),
+      dinheiro(saidas[m]),
+      dinheiro(acumulado),
+    ].forEach((texto, i) => {
+      const td = document.createElement("td");
+      td.textContent = texto;
+      if (i === 3) td.className = acumulado < 0 ? "valor-negativo" : "valor-positivo";
+      tr.appendChild(td);
+    });
+    corpoPrevisao.appendChild(tr);
+  });
+
+  // --- item 8 ---
+  const corpoFluxo = document.getElementById("p-fluxo");
+  corpoFluxo.innerHTML = "";
+  fluxoRealizado(6).forEach((f) => {
+    const resultado = f.entrou - f.saiu;
+    const tr = document.createElement("tr");
+    [mesBonito(f.mes), dinheiro(f.entrou), dinheiro(f.saiu), dinheiro(resultado)]
+      .forEach((texto, i) => {
+        const td = document.createElement("td");
+        td.textContent = texto;
+        if (i === 3) td.className = resultado < 0 ? "valor-negativo" : "valor-positivo";
+        tr.appendChild(td);
+      });
+    corpoFluxo.appendChild(tr);
+  });
+
+  // --- item 6, parte MEI: o limite do ano ---
+  const teto = Number(configFin.tetoAnual || 0);
+  const blocoTeto = document.getElementById("p-teto-bloco");
+  const mostrarTeto = configFin.regime === "MEI" && teto > 0;
+  blocoTeto.classList.toggle("hidden", !mostrarTeto);
+
+  if (mostrarTeto) {
+    const faturado = faturamentoDoAno();
+    const usado = Math.min(100, Math.round((faturado / teto) * 100));
+    document.getElementById("p-teto-ano").textContent = hojeISO().slice(0, 4);
+    document.getElementById("p-teto-barra").style.width = `${usado}%`;
+    document.getElementById("p-teto-valor").textContent = `${dinheiro(faturado)} de ${dinheiro(teto)}`;
+
+    const notaTeto = document.getElementById("p-teto-nota");
+    if (faturado > teto) {
+      notaTeto.className = "doc-hint error";
+      notaTeto.textContent = "Você passou do limite. Procure seu contador: isso obriga a migrar de regime e cobra imposto para trás.";
+    } else if (usado >= 80) {
+      notaTeto.className = "doc-hint aviso";
+      notaTeto.textContent = `Já usou ${usado}% do limite. Vale conversar com o contador antes de fechar mais serviço este ano.`;
+    } else {
+      notaTeto.className = "doc-hint";
+      notaTeto.textContent = `Usou ${usado}% do limite deste ano.`;
+    }
+  }
+
+  // --- item 9 ---
+  const ultima = conferencias[0];
+  const textoConferencia = document.getElementById("p-conferencia");
+  if (!ultima) {
+    textoConferencia.className = "doc-hint";
+    textoConferencia.textContent = "Você ainda não conferiu com o banco. Vale fazer de vez em quando para achar o que não foi lançado.";
+  } else {
+    const diferente = Math.abs(Number(ultima.diferenca || 0)) >= 0.01;
+    textoConferencia.className = diferente ? "doc-hint aviso" : "doc-hint ok";
+    // O sinal já está na palavra "a mais"/"a menos". Mostrar o número negativo
+    // junto viraria "tinha menos R$ 150,00 a menos".
+    textoConferencia.textContent = diferente
+      ? `Última em ${dataBonita(ultima.data)}: o banco tinha ${dinheiro(Math.abs(Number(ultima.diferenca)))} ${
+          Number(ultima.diferenca) > 0 ? "a mais" : "a menos"
+        } que o sistema.`
+      : `Última em ${dataBonita(ultima.data)}: bateu certinho.`;
+  }
+
+  // --- o que veio da antiga aba Resumo ---
   desenharBarras(document.getElementById("grafico-categorias"), somarPor("categoria"));
-
   const porFornecedor = somarPor("fornecedor").slice(0, 8);
   document.getElementById("sem-fornecedores").classList.toggle("hidden", porFornecedor.length > 0);
   desenharBarras(document.getElementById("grafico-fornecedores"), porFornecedor);
 }
+
+// ----- Conferência com o banco (item 9) -----
+
+const conferenciaForm = document.getElementById("form-conferencia");
+const conferenciaStatusMsg = document.getElementById("conferencia-status-msg");
+const conferenciaInformado = document.getElementById("conf-informado");
+
+ligarMascaraDinheiro(conferenciaInformado);
+
+document.getElementById("abrir-conferencia").addEventListener("click", () => {
+  document.getElementById("conf-calculado").textContent = dinheiro(saldoEmCaixa());
+  conferenciaInformado.value = "";
+  document.getElementById("conf-observacoes").value = "";
+  conferenciaStatusMsg.className = "status";
+  conferenciaForm.classList.remove("hidden");
+  document.getElementById("abrir-conferencia").classList.add("hidden");
+  conferenciaInformado.focus();
+});
+
+document.getElementById("cancelar-conferencia").addEventListener("click", () => {
+  conferenciaForm.classList.add("hidden");
+  document.getElementById("abrir-conferencia").classList.remove("hidden");
+});
+
+conferenciaForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const informado = valorDoCampo(conferenciaInformado);
+  if (informado <= 0) {
+    conferenciaStatusMsg.textContent = "Informe o saldo que o banco mostra.";
+    conferenciaStatusMsg.className = "status show error";
+    return;
+  }
+
+  const botao = document.getElementById("salvar-conferencia");
+  botao.disabled = true;
+  conferenciaStatusMsg.textContent = "Salvando...";
+  conferenciaStatusMsg.className = "status show loading";
+
+  try {
+    const calculado = saldoEmCaixa();
+    const resposta = await pedirAoN8n("salvar-conferencia", {
+      data: hojeISO(),
+      informado: String(informado),
+      calculado: String(calculado),
+      observacoes: document.getElementById("conf-observacoes").value.trim(),
+    });
+
+    if (!resposta || !resposta.ok) {
+      throw new Error((resposta && resposta.mensagem) || "Não consegui registrar.");
+    }
+
+    const lidas = await pedirAoN8n("listar-conferencias", {});
+    if (lidas && lidas.ok) conferencias = lidas.conferencias || [];
+
+    conferenciaForm.classList.add("hidden");
+    document.getElementById("abrir-conferencia").classList.remove("hidden");
+    desenharPainel();
+  } catch (err) {
+    conferenciaStatusMsg.textContent = err.message || "Não foi possível falar com o n8n.";
+    conferenciaStatusMsg.className = "status show error";
+  } finally {
+    botao.disabled = false;
+  }
+});
 
 // ----- Carregar tudo -----
 
@@ -2347,15 +3170,17 @@ async function carregarFinanceiro() {
   listaDespesasBox.innerHTML = "";
 
   try {
-    const [resDespesas, resFornecedores, resRecorrentes, resGeracao] = await Promise.all([
-      pedirAoN8n("listar-despesas", {}),
-      pedirAoN8n("listar-fornecedores", {}),
-      pedirAoN8n("listar-recorrentes", {}),
-      // Lança as contas fixas que já venceram. Se falhar, o resto da tela
-      // carrega do mesmo jeito — é só o lançamento automático que fica para
-      // a próxima abertura.
-      pedirAoN8n("gerar-recorrentes", {}).catch(() => null),
-    ]);
+    // Duas ondas de propósito. O navegador só faz cerca de SEIS chamadas ao
+    // mesmo tempo; a sétima espera a primeira terminar, e aí o tempo dobra.
+    // Então a primeira onda traz só o que a tela precisa para aparecer.
+    const [resDespesas, resRecebimentos, resRecorrentes, resConfig, resCadastros] =
+      await Promise.all([
+        pedirAoN8n("listar-despesas", {}),
+        pedirAoN8n("listar-recebimentos", {}),
+        pedirAoN8n("listar-recorrentes", {}),
+        pedirAoN8n("listar-config", {}),
+        pedirAoN8n("listar-cadastros", {}),
+      ]);
 
     if (!resDespesas || !resDespesas.ok) {
       mostrarListaDespesasStatus("error", (resDespesas && resDespesas.mensagem) || "Não consegui carregar.");
@@ -2363,11 +3188,55 @@ async function carregarFinanceiro() {
     }
 
     despesas = resDespesas.despesas || [];
-    fornecedores = (resFornecedores && resFornecedores.fornecedores) || [];
+    recebimentos = (resRecebimentos && resRecebimentos.recebimentos) || [];
     recorrentes = (resRecorrentes && resRecorrentes.recorrentes) || [];
+    configFin = (resConfig && resConfig.config) || null;
 
-    // A geração roda junto com a leitura, então o que ela criou não estava na
-    // lista que acabou de chegar. Só quando gerou algo vale a pena reler.
+    // Sem os cadastros, escolher o cliente numa conta a receber só funcionaria
+    // depois de passar pela aba Consultar. De quebra, a Consulta já abre pronta.
+    if (resCadastros && resCadastros.ok) {
+      cadastros = resCadastros.cadastros || [];
+      listaCarregada = true;
+      desenharLista();
+    }
+
+    financeiroCarregado = true;
+    atualizarListasDeApoio();
+    atualizarListaDeClientes();
+    atualizarFiltroDeMeses();
+    atualizarFiltroDeMesesReceita();
+    preencherAjustes();
+    desenharDespesas();
+    desenharReceitas();
+    desenharRecorrentes();
+    desenharPainel();
+
+    // Segunda onda, sem segurar a tela: nada aqui muda os números do painel.
+    // Os nomes de fornecedor e a última conferência aparecem um instante depois.
+    segundaOndaDoFinanceiro();
+  } catch (err) {
+    mostrarListaDespesasStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+  }
+}
+
+// O que pode chegar atrasado sem atrapalhar: a lista de fornecedores (só serve
+// para sugerir nomes), a última conferência com o banco, e o lançamento das
+// contas fixas vencidas.
+async function segundaOndaDoFinanceiro() {
+  try {
+    const [resFornecedores, resConferencias, resGeracao] = await Promise.all([
+      pedirAoN8n("listar-fornecedores", {}),
+      pedirAoN8n("listar-conferencias", {}),
+      pedirAoN8n("gerar-recorrentes", {}).catch(() => null),
+    ]);
+
+    fornecedores = (resFornecedores && resFornecedores.fornecedores) || [];
+    conferencias = (resConferencias && resConferencias.conferencias) || [];
+    ligarNomesDosFornecedores();
+    atualizarListasDeApoio();
+
+    // A geração rodou junto com a leitura, então o que ela criou não estava na
+    // lista que já chegou. Só quando gerou algo vale a pena reler.
     if (resGeracao && resGeracao.gerou > 0) {
       const [novasDespesas, novosRecorrentes] = await Promise.all([
         pedirAoN8n("listar-despesas", {}),
@@ -2375,17 +3244,15 @@ async function carregarFinanceiro() {
       ]);
       if (novasDespesas && novasDespesas.ok) despesas = novasDespesas.despesas || [];
       if (novosRecorrentes && novosRecorrentes.ok) recorrentes = novosRecorrentes.recorrentes || [];
+      ligarNomesDosFornecedores();
+      atualizarFiltroDeMeses();
+      desenharDespesas();
     }
 
-    financeiroCarregado = true;
-    ligarNomesDosFornecedores();
-    atualizarListasDeApoio();
-    atualizarFiltroDeMeses();
-    desenharDespesas();
     desenharRecorrentes();
-    desenharResumo();
+    desenharPainel();
   } catch (err) {
-    mostrarListaDespesasStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+    // Falhar aqui não estraga a tela: ela já está montada com o essencial.
   }
 }
 
@@ -2401,7 +3268,21 @@ async function recarregarDespesas() {
   atualizarListasDeApoio();
   atualizarFiltroDeMeses();
   desenharDespesas();
-  desenharResumo();
+  desenharPainel();
+}
+
+// Depois de mexer numa conta a receber, só ela precisa ser relida.
+async function recarregarReceitas() {
+  const resposta = await pedirAoN8n("listar-recebimentos", {});
+  if (!resposta || !resposta.ok) {
+    mostrarListaReceitasStatus("error", (resposta && resposta.mensagem) || "Não consegui recarregar.");
+    return;
+  }
+  recebimentos = resposta.recebimentos || [];
+  atualizarListaDeClientes();
+  atualizarFiltroDeMesesReceita();
+  desenharReceitas();
+  desenharPainel();
 }
 
 // Mexer numa conta fixa muda também as despesas que ela gerou.
@@ -2417,7 +3298,7 @@ async function recarregarFinanceiro() {
   atualizarFiltroDeMeses();
   desenharDespesas();
   desenharRecorrentes();
-  desenharResumo();
+  desenharPainel();
 }
 
 buscaDespesa.addEventListener("input", () => {
@@ -2564,7 +3445,7 @@ function edicaoDaConsultaAbertaEmEdicao() {
 // valor (dia do mês, quantas faltam), então eles não contam como "digitado" —
 // senão abrir o formulário e não escrever nada já travaria a saída.
 function formularioFinanceiroEmAndamento() {
-  return [despesaForm, recorrenteForm].some((form) => {
+  return [despesaForm, recorrenteForm, receitaForm].some((form) => {
     if (form.classList.contains("hidden")) return false;
     return Array.from(form.querySelectorAll('input[type="text"], input[type="date"], textarea'))
       .some((campo) => campo.value.trim());
@@ -2595,9 +3476,11 @@ function avisarPerda(mensagem) {
   // Formulário do Financeiro em andamento tem prioridade: se ele está aberto,
   // é onde o usuário está olhando agora.
   if (formularioFinanceiroEmAndamento()) {
-    const alvo = recorrenteForm.classList.contains("hidden")
-      ? mostrarDespesaStatus
-      : mostrarRecorrenteStatus;
+    const alvo = !receitaForm.classList.contains("hidden")
+      ? mostrarReceitaStatus
+      : recorrenteForm.classList.contains("hidden")
+        ? mostrarDespesaStatus
+        : mostrarRecorrenteStatus;
     alvo("error", mensagem);
     return;
   }
@@ -2700,16 +3583,24 @@ sairBotao.addEventListener("click", () => {
   // sair, nem sobrar em memória para o próximo login.
   fecharFormDespesa();
   fecharFormRecorrente();
+  fecharFormReceita();
   despesas = [];
   fornecedores = [];
   recorrentes = [];
+  recebimentos = [];
+  conferencias = [];
+  configFin = null;
   financeiroCarregado = false;
   listaDespesasBox.innerHTML = "";
   listaRecorrentesBox.innerHTML = "";
+  listaReceitasBox.innerHTML = "";
   buscaDespesa.value = "";
+  buscaReceita.value = "";
   filtroSituacao.value = "abertas";
+  filtroSituacaoReceita.value = "abertas";
   resumoDespesas.classList.add("hidden");
-  document.getElementById("resumo-conteudo").classList.add("hidden");
+  resumoReceber.classList.add("hidden");
+  document.getElementById("painel-conteudo").classList.add("hidden");
   atualizarListasDeApoio();
   atualizarFiltroDeMeses();
   mostrarListaDespesasStatus("neutral", "");

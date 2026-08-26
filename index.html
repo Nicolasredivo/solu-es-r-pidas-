@@ -349,9 +349,11 @@
         <h1>Financeiro</h1>
 
         <div class="subtabs">
-          <button type="button" class="subtab-fin active" data-subfin="despesas">Contas a pagar</button>
+          <button type="button" class="subtab-fin active" data-subfin="painel">Painel</button>
+          <button type="button" class="subtab-fin" data-subfin="despesas">A pagar</button>
+          <button type="button" class="subtab-fin" data-subfin="receber">A receber</button>
           <button type="button" class="subtab-fin" data-subfin="fixas">Contas fixas</button>
-          <button type="button" class="subtab-fin" data-subfin="resumo">Resumo</button>
+          <button type="button" class="subtab-fin" data-subfin="ajustes">Ajustes</button>
         </div>
 
         <!-- Listas que alimentam os campos de digitar: são preenchidas com o que
@@ -362,7 +364,151 @@
         <datalist id="lista-categorias"></datalist>
 
         <!-- ===================== Contas a pagar ===================== -->
-        <div id="subfin-despesas" class="subpage-fin">
+        <!-- ========================= Painel =========================
+             A visão de cima: quanto existe, quanto já tem dono, quanto sobra,
+             e se vai faltar dinheiro nos próximos meses. Tudo calculado a
+             partir do que já está lançado — nada aqui se digita. -->
+        <div id="subfin-painel" class="subpage-fin">
+          <p id="painel-status" class="doc-hint"></p>
+
+          <div id="painel-configurar" class="aviso-caixa hidden">
+            <strong>Falta dizer quanto você tem em caixa.</strong>
+            Sem isso o painel não consegue calcular seu saldo. Vá em
+            <em>Ajustes</em>, informe o saldo de hoje e a data — daí em diante o
+            sistema acompanha sozinho.
+          </div>
+
+          <div id="painel-conteudo" class="hidden">
+            <!-- Itens 1, 2, 3, 6 e 7: o mesmo dinheiro, mostrando quanto já tem dono -->
+            <h2 class="titulo-bloco">O seu dinheiro hoje</h2>
+            <div class="cascata">
+              <div class="cascata-linha cascata-topo">
+                <span>Saldo em caixa</span>
+                <strong id="p-saldo"></strong>
+              </div>
+              <div class="cascata-linha">
+                <span>− Impostos<em id="p-impostos-nota" class="cascata-nota"></em></span>
+                <span id="p-impostos"></span>
+              </div>
+              <div class="cascata-linha">
+                <span>− Folha e encargos</span>
+                <span id="p-folha"></span>
+              </div>
+              <div class="cascata-linha">
+                <span>− Reserva de emergência<em id="p-reserva-nota" class="cascata-nota"></em></span>
+                <span id="p-reserva"></span>
+              </div>
+              <div class="cascata-linha">
+                <span>− Capital de giro</span>
+                <span id="p-giro"></span>
+              </div>
+              <div class="cascata-linha cascata-final">
+                <span>= Livre para usar</span>
+                <strong id="p-livre"></strong>
+              </div>
+            </div>
+            <p id="p-livre-aviso" class="doc-hint"></p>
+
+            <!-- Itens 4 e 5 -->
+            <h2 class="titulo-bloco">Entra e sai</h2>
+            <div class="resumo-financeiro">
+              <div class="resumo-item">
+                <span class="resumo-rotulo">A receber</span>
+                <strong id="p-receber" class="resumo-valor resumo-positivo"></strong>
+                <span id="p-receber-atraso" class="resumo-nota"></span>
+              </div>
+              <div class="resumo-item">
+                <span class="resumo-rotulo">A pagar</span>
+                <strong id="p-pagar" class="resumo-valor resumo-alerta"></strong>
+                <span id="p-pagar-atraso" class="resumo-nota"></span>
+              </div>
+              <div class="resumo-item">
+                <span class="resumo-rotulo">Sobrou no mês</span>
+                <strong id="p-mes" class="resumo-valor"></strong>
+                <span id="p-mes-nota" class="resumo-nota"></span>
+              </div>
+            </div>
+
+            <!-- Item 11: onde o dinheiro acaba, se acabar -->
+            <h2 class="titulo-bloco">Previsão dos próximos meses</h2>
+            <p class="doc-hint">
+              O que ainda vai entrar menos o que vai sair, mês a mês, somando as
+              contas fixas. Vermelho é mês em que o caixa fica negativo.
+            </p>
+            <div class="tabela-rolavel">
+              <table class="tabela-fin">
+                <thead>
+                  <tr><th>Mês</th><th>Entra</th><th>Sai</th><th>Sobra no caixa</th></tr>
+                </thead>
+                <tbody id="p-previsao"></tbody>
+              </table>
+            </div>
+
+            <!-- Item 8 -->
+            <h2 class="titulo-bloco">Fluxo de caixa</h2>
+            <p class="doc-hint">O que de fato entrou e saiu, mês a mês.</p>
+            <div class="tabela-rolavel">
+              <table class="tabela-fin">
+                <thead>
+                  <tr><th>Mês</th><th>Entrou</th><th>Saiu</th><th>Resultado</th></tr>
+                </thead>
+                <tbody id="p-fluxo"></tbody>
+              </table>
+            </div>
+
+            <!-- Item 6, parte MEI: o limite anual -->
+            <div id="p-teto-bloco" class="hidden">
+              <h2 class="titulo-bloco">Limite do MEI neste ano</h2>
+              <div class="barra-linha">
+                <span class="barra-rotulo" id="p-teto-ano"></span>
+                <span class="barra-trilho"><span class="barra-cheia" id="p-teto-barra"></span></span>
+                <span class="barra-valor" id="p-teto-valor"></span>
+              </div>
+              <p id="p-teto-nota" class="doc-hint"></p>
+            </div>
+
+            <!-- Item 9 -->
+            <h2 class="titulo-bloco">Conferência com o banco</h2>
+            <p id="p-conferencia" class="doc-hint"></p>
+            <button type="button" id="abrir-conferencia" class="botao-secundario">
+              Conferir com o banco
+            </button>
+
+            <form id="form-conferencia" class="hidden">
+              <p class="doc-hint">
+                O sistema calculou <strong id="conf-calculado"></strong>. Abra o
+                aplicativo do banco e diga quanto tem lá de verdade.
+              </p>
+              <label for="conf-informado">Saldo que o banco mostra</label>
+              <input type="text" id="conf-informado" inputmode="numeric" placeholder="R$ 0,00" />
+              <label for="conf-observacoes">O que explica a diferença?</label>
+              <textarea id="conf-observacoes" rows="2" placeholder="Ex: tarifa, compra sem lançar"></textarea>
+              <button type="submit" id="salvar-conferencia">Registrar conferência</button>
+              <button type="button" id="cancelar-conferencia" class="botao-secundario">Cancelar</button>
+              <div id="conferencia-status-msg" class="status"></div>
+            </form>
+
+            <!-- Vinham da antiga aba Resumo -->
+            <h2 class="titulo-bloco">Em aberto por categoria</h2>
+            <div id="grafico-categorias"></div>
+
+            <h2 class="titulo-bloco">Em aberto por fornecedor</h2>
+            <p id="sem-fornecedores" class="doc-hint hidden">
+              Nenhuma conta em aberto tem fornecedor informado.
+            </p>
+            <div id="grafico-fornecedores"></div>
+          </div>
+
+          <template id="modelo-barra">
+            <div class="barra-linha">
+              <span class="barra-rotulo"></span>
+              <span class="barra-trilho"><span class="barra-cheia"></span></span>
+              <span class="barra-valor"></span>
+            </div>
+          </template>
+        </div>
+
+        <div id="subfin-despesas" class="subpage-fin hidden">
           <div id="resumo-despesas" class="resumo-financeiro hidden">
             <div class="resumo-item">
               <span class="resumo-rotulo">Em aberto</span>
@@ -586,36 +732,204 @@
         </div>
 
         <!-- ========================= Resumo ========================= -->
-        <div id="subfin-resumo" class="subpage-fin hidden">
-          <p id="resumo-vazio" class="doc-hint hidden">
-            Ainda não há contas lançadas para resumir.
-          </p>
-
-          <div id="resumo-conteudo" class="hidden">
-            <h2 class="titulo-bloco">Quanto vai sair por mês</h2>
-            <p class="doc-hint">
-              Soma o que já está lançado e em aberto com o que as contas fixas
-              ainda vão gerar.
-            </p>
-            <div id="grafico-meses"></div>
-
-            <h2 class="titulo-bloco">Em aberto por categoria</h2>
-            <div id="grafico-categorias"></div>
-
-            <h2 class="titulo-bloco">Em aberto por fornecedor</h2>
-            <p id="sem-fornecedores" class="doc-hint hidden">
-              Nenhuma conta em aberto tem fornecedor informado.
-            </p>
-            <div id="grafico-fornecedores"></div>
+        <!-- ====================== A receber ======================
+             Item 5. Mesma estrutura da aba "A pagar", de propósito: quem
+             aprendeu uma sabe usar a outra. -->
+        <div id="subfin-receber" class="subpage-fin hidden">
+          <div id="resumo-receber" class="resumo-financeiro hidden">
+            <div class="resumo-item">
+              <span class="resumo-rotulo">A receber</span>
+              <strong id="r-aberto" class="resumo-valor resumo-positivo"></strong>
+            </div>
+            <div class="resumo-item">
+              <span class="resumo-rotulo">Atrasadas</span>
+              <strong id="r-atrasadas" class="resumo-valor resumo-alerta"></strong>
+            </div>
+            <div class="resumo-item">
+              <span class="resumo-rotulo">Recebido no mês</span>
+              <strong id="r-recebido" class="resumo-valor"></strong>
+            </div>
           </div>
 
-          <template id="modelo-barra">
-            <div class="barra-linha">
-              <span class="barra-rotulo"></span>
-              <span class="barra-trilho"><span class="barra-cheia"></span></span>
-              <span class="barra-valor"></span>
+          <button type="button" id="nova-receita" class="botao-secundario">+ Nova conta a receber</button>
+
+          <form id="form-receita" class="hidden">
+            <label for="receita-descricao">Descrição</label>
+            <input type="text" id="receita-descricao" list="lista-descricoes-receita"
+                   autocomplete="off" placeholder="Ex: Manutenção do elevador - agosto" />
+            <datalist id="lista-descricoes-receita"></datalist>
+
+            <label for="receita-valor">Valor</label>
+            <input type="text" id="receita-valor" inputmode="numeric" placeholder="R$ 0,00" />
+
+            <label for="receita-cliente">Cliente</label>
+            <input type="text" id="receita-cliente" list="lista-clientes"
+                   autocomplete="off" placeholder="Nome ou CPF/CNPJ" />
+            <datalist id="lista-clientes"></datalist>
+            <p id="receita-cliente-hint" class="doc-hint"></p>
+
+            <label for="receita-vencimento">Vencimento</label>
+            <input type="date" id="receita-vencimento" />
+
+            <label for="receita-forma">Como vai receber</label>
+            <select id="receita-forma">
+              <option value="">Não informado</option>
+              <option>PIX</option>
+              <option>Boleto</option>
+              <option>Dinheiro</option>
+              <option>Transferência</option>
+              <option>Cartão</option>
+            </select>
+
+            <label for="receita-status">Status</label>
+            <select id="receita-status">
+              <option>Pendente</option>
+              <option>Recebido</option>
+              <option>Cancelado</option>
+            </select>
+
+            <div id="linha-data-recebimento" class="hidden">
+              <label for="receita-data-recebimento">Data do recebimento</label>
+              <input type="date" id="receita-data-recebimento" />
+            </div>
+
+            <label for="receita-observacoes">Observações</label>
+            <textarea id="receita-observacoes" rows="2"></textarea>
+
+            <button type="submit" id="salvar-receita">Salvar</button>
+            <button type="button" id="cancelar-receita" class="botao-secundario">Cancelar</button>
+            <div id="receita-status-msg" class="status"></div>
+          </form>
+
+          <div class="busca-linha">
+            <input type="text" id="busca-receita" autocomplete="off"
+                   placeholder="Buscar por descrição ou cliente" />
+            <button type="button" id="recarregar-receitas" class="botao-secundario">Atualizar</button>
+          </div>
+
+          <div class="filtros-linha">
+            <select id="filtro-situacao-receita" aria-label="Situação">
+              <option value="abertas">Em aberto</option>
+              <option value="atrasadas">Atrasadas</option>
+              <option value="recebidas">Recebidas</option>
+              <option value="todas">Todas</option>
+            </select>
+            <select id="filtro-mes-receita" aria-label="Mês do vencimento">
+              <option value="">Qualquer mês</option>
+            </select>
+          </div>
+
+          <p id="lista-receitas-status" class="doc-hint"></p>
+          <div id="lista-receitas" class="grade-responsiva"></div>
+
+          <template id="modelo-receita">
+            <div class="despesa receita">
+              <button type="button" class="despesa-resumo">
+                <span class="despesa-topo">
+                  <span class="despesa-descricao"></span>
+                  <span class="despesa-valor"></span>
+                </span>
+                <span class="despesa-extra"></span>
+              </button>
+              <div class="despesa-acoes hidden">
+                <button type="button" class="receita-receber botao-secundario">Marcar como recebida</button>
+                <button type="button" class="receita-editar botao-secundario">✏️ Editar</button>
+                <button type="button" class="receita-excluir botao-secundario">Excluir</button>
+              </div>
             </div>
           </template>
+        </div>
+
+        <!-- ======================== Ajustes ========================
+             O que o painel usa para calcular. Mexe-se aqui de vez em quando,
+             não todo dia. -->
+        <div id="subfin-ajustes" class="subpage-fin hidden">
+          <form id="form-ajustes">
+            <h2 class="titulo-bloco">Ponto de partida</h2>
+            <p class="doc-hint">
+              Informe uma vez quanto tinha em caixa e em que dia. Daí em diante o
+              sistema soma o que entra e subtrai o que sai sozinho.
+            </p>
+
+            <label for="aj-saldo-inicial">Saldo em caixa naquele dia</label>
+            <input type="text" id="aj-saldo-inicial" inputmode="numeric" placeholder="R$ 0,00" />
+
+            <label for="aj-data-saldo">A partir de que dia</label>
+            <input type="date" id="aj-data-saldo" />
+
+            <h2 class="titulo-bloco">Dinheiro que não pode ser gasto</h2>
+            <p class="doc-hint">
+              É o que separa "tenho dinheiro na conta" de "posso gastar". Deixe
+              zero enquanto não quiser usar.
+            </p>
+
+            <label for="aj-reserva">Reserva de emergência</label>
+            <input type="text" id="aj-reserva" inputmode="numeric" placeholder="R$ 0,00" />
+            <p class="doc-hint">
+              O costume é guardar de 3 a 6 meses de custo fixo. Toque no botão
+              abaixo para usar o seu custo fixo real como base.
+            </p>
+            <button type="button" id="sugerir-reserva" class="botao-secundario">
+              Sugerir a partir das minhas contas fixas
+            </button>
+
+            <label for="aj-giro">Capital de giro</label>
+            <input type="text" id="aj-giro" inputmode="numeric" placeholder="R$ 0,00" />
+            <p class="doc-hint">
+              Quanto precisa ficar parado para bancar material e combustível
+              enquanto o cliente ainda não pagou.
+            </p>
+
+            <h2 class="titulo-bloco">Impostos</h2>
+            <label for="aj-regime">Regime</label>
+            <select id="aj-regime">
+              <option>MEI</option>
+              <option>Simples Nacional</option>
+              <option>Outro</option>
+            </select>
+
+            <div id="linha-mei">
+              <label for="aj-das">DAS por mês</label>
+              <input type="text" id="aj-das" inputmode="numeric" placeholder="R$ 0,00" />
+              <p class="doc-hint">O boleto fixo do MEI. Deixe zero se ainda não paga.</p>
+
+              <label for="aj-teto">Limite de faturamento do ano</label>
+              <input type="text" id="aj-teto" inputmode="numeric" placeholder="R$ 0,00" />
+              <p class="doc-hint">
+                <strong>Confirme o valor vigente</strong> — ele já mudou de tempos
+                em tempos. Passar do limite obriga a virar ME e cobra imposto
+                para trás, então o painel avisa antes de você chegar perto.
+              </p>
+            </div>
+
+            <div id="linha-simples" class="hidden">
+              <label for="aj-aliquota">Quanto sai de imposto sobre o que você fatura (%)</label>
+              <input type="text" id="aj-aliquota" inputmode="decimal" placeholder="Ex: 6" />
+              <p class="doc-hint">
+                O sistema separa essa parte de cada recebimento automaticamente.
+              </p>
+            </div>
+
+            <h2 class="titulo-bloco">Folha e encargos</h2>
+            <label for="aj-folha">Quanto por mês</label>
+            <input type="text" id="aj-folha" inputmode="numeric" placeholder="R$ 0,00" />
+            <p class="doc-hint">
+              Zero quando não há funcionário registrado. Ajudante que vem de vez
+              em quando entra como despesa comum, na aba "A pagar".
+            </p>
+
+            <label class="linha-caixinha">
+              <input type="checkbox" id="aj-provisiona" />
+              <span>Guardar também para 13º e férias</span>
+            </label>
+            <p class="doc-hint">
+              Só faz sentido com funcionário registrado. Guarda cerca de 19% a
+              mais por mês, para dezembro não dar susto.
+            </p>
+
+            <button type="submit" id="salvar-ajustes">Salvar ajustes</button>
+            <div id="ajustes-status-msg" class="status"></div>
+          </form>
         </div>
       </div>
     </main>

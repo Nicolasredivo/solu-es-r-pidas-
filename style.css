@@ -942,3 +942,143 @@ button:active:not(:disabled) {
     grid-template-columns: 160px 1fr auto;
   }
 }
+
+/* ----- Painel do Financeiro ----- */
+
+/* Com cinco abas, no celular elas quebram em duas linhas em vez de espremer */
+.subtabs {
+  flex-wrap: wrap;
+}
+
+.subtab-fin {
+  flex: 1 1 30%;
+}
+
+/* Aviso grande de "falta configurar": é o primeiro contato de quem abre o
+   painel sem ter informado o saldo ainda */
+.aviso-caixa {
+  border: 1px solid var(--aviso);
+  background: rgba(245, 166, 35, 0.12);
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.aviso-caixa strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* A conta de onde o dinheiro está: saldo em cima, o que já tem dono no meio,
+   o que sobra livre embaixo */
+.cascata {
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  padding: 4px 14px;
+  margin-bottom: 8px;
+}
+
+.cascata-linha {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  font-size: 0.92rem;
+}
+
+.cascata-linha + .cascata-linha {
+  border-top: 1px solid #22273f;
+}
+
+.cascata-topo,
+.cascata-final {
+  font-size: 1rem;
+}
+
+.cascata-topo strong,
+.cascata-final strong {
+  font-size: 1.15rem;
+}
+
+/* A linha do resultado é a que importa: separada por uma borda mais forte */
+.cascata-final {
+  border-top: 2px solid #2c3153 !important;
+}
+
+/* Explicação curta ao lado do rótulo, sem virar outra linha */
+.cascata-nota {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: normal;
+}
+
+.valor-positivo {
+  color: var(--ok);
+}
+
+.valor-negativo {
+  color: var(--error);
+}
+
+.resumo-positivo {
+  color: var(--ok);
+}
+
+.resumo-nota {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+/* Tabelas de previsão e fluxo. Rolam sozinhas na horizontal no celular, em vez
+   de empurrar a página inteira para o lado */
+.tabela-rolavel {
+  overflow-x: auto;
+  margin-bottom: 8px;
+}
+
+.tabela-fin {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.tabela-fin th {
+  text-align: right;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 0.75rem;
+  padding: 6px 8px;
+  border-bottom: 1px solid #2c3153;
+}
+
+.tabela-fin th:first-child,
+.tabela-fin td:first-child {
+  text-align: left;
+}
+
+.tabela-fin td {
+  text-align: right;
+  padding: 8px;
+  border-bottom: 1px solid #22273f;
+}
+
+/* Mês em que o caixa fica negativo: o aviso mais importante da tela */
+.tabela-fin .linha-negativa {
+  background: rgba(229, 72, 77, 0.1);
+}
+
+/* A conta a receber é dinheiro entrando: a barra lateral verde diferencia da
+   despesa num relance, sem precisar ler */
+.despesa.receita {
+  border-left: 3px solid var(--ok);
+}
+
+.despesa.receita.vencida {
+  border-left-color: var(--error);
+}

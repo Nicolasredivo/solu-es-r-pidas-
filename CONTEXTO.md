@@ -48,12 +48,17 @@ Quem executa as automações de verdade é o **n8n**, e o app é só a "tela".
     Salvar/Cancelar
   - Consultar: lista todos os cadastros, busca, abre/edita/exclui — inclusive
     endereços e contatos de um cadastro existente
-- Página **Financeiro**, com abas "Contas a pagar", "Contas fixas" e "Resumo"
-  - Contas a pagar: lançar (com parcelamento), filtrar por situação e mês,
-    marcar como paga, editar pelo lápis, excluir uma ou o grupo de parcelas
+- Página **Financeiro**, com abas "Painel", "A pagar", "A receber",
+  "Contas fixas" e "Ajustes"
+  - Painel: saldo em caixa e quanto dele já tem dono (impostos, folha, reserva,
+    capital de giro), o que entra e sai, previsão mês a mês com o mês em que o
+    caixa fica negativo em vermelho, fluxo de caixa realizado, limite do MEI,
+    conferência com o banco, e o em aberto por categoria e por fornecedor
+  - A pagar: lançar (com parcelamento), filtrar por situação e mês, marcar como
+    paga, editar pelo lápis, excluir uma ou o grupo de parcelas
+  - A receber: o que os clientes ainda devem, com o cliente vindo do Cadastro
   - Contas fixas: o que se repete todo mês; o sistema lança sozinho no dia
-  - Resumo: previsão de saída dos próximos 6 meses, por categoria e por
-    fornecedor
+  - Ajustes: saldo de partida, metas de reserva e giro, regime e imposto, folha
 - Rodapé do menu: **Sair** (dois toques) e versão do app instalada
 - Indicador de conexão com o n8n na barra superior
 - Aviso ao tentar sair (menu, aba, fechar a janela) com algo não salvo —
@@ -114,6 +119,13 @@ Todos criados, publicados e testados de ponta a ponta:
 | `App - Listar recorrentes` | `/webhook/listar-recorrentes` | `ZdfVXhs49hfaP8Ju` |
 | `App - Excluir recorrente` | `/webhook/excluir-recorrente` | `xoFsbiv2DsLrNrU9` |
 | `App - Gerar despesas recorrentes` | `/webhook/gerar-recorrentes` | `1QcqoaGJKuiCTx91` |
+| `App - Listar recebimentos` | `/webhook/listar-recebimentos` | `0GeCpXBalEUJkwJz` |
+| `App - Listar config financeiro` | `/webhook/listar-config` | `saK4LysHMYYSi2KM` |
+| `App - Listar conferencias` | `/webhook/listar-conferencias` | `bs7XkyFK4OoejHMp` |
+| `App - Salvar recebimento` | `/webhook/salvar-recebimento` | `PkI7yuIjjrurcXKK` |
+| `App - Salvar config financeiro` | `/webhook/salvar-config` | `FwwkYrUdHsBpJUhz` |
+| `App - Salvar conferencia` | `/webhook/salvar-conferencia` | `Yxbz5zhzBuNuryBM` |
+| `App - Excluir recebimento` | `/webhook/excluir-recebimento` | `ZVuAGeNmuytxyVQe` |
 
 Cada arquivo em `n8n/` tem o nome do caminho do webhook correspondente.
 
@@ -836,6 +848,99 @@ enquanto salvar for menos frequente que abrir.
 para reabrir instantâneo. Economizaria os 810ms na segunda abertura, mas
 mostraria dado velho se algo mudasse pelo Airtable ou por outra sessão. Preferi
 sempre buscar.
+
+## Painel do Financeiro: os 11 itens do caixa (26/08/2026)
+
+O dono pediu uma tela que mostrasse, de forma simples: saldo disponível,
+reserva de emergência, capital de giro, contas a pagar, contas a receber,
+impostos provisionados, folha provisionada, fluxo de caixa, conciliação
+bancária, comprovantes e previsão de caixa.
+
+### O que foi corrigido antes de construir
+
+Ele pediu que os dados viessem "por API dos meus bancos". **Isso não existe
+para ele** — já estava pesquisado neste arquivo (ver "Fonte 3 — Cartão /
+fatura"). Foi repetido para ele, e a arquitetura foi montada em cima do que é
+real:
+
+- **Recebimentos automáticos:** via **Asaas**, que ele já tem chave. É a única
+  automação bancária de verdade disponível.
+- **Saldo:** calculado, não lido do banco. Ponto de partida informado uma vez,
+  e daí em diante entra o que foi recebido e sai o que foi pago.
+- **Conciliação:** ele informa de vez em quando o saldo real, e o sistema
+  guarda a diferença. Nunca vai ler o banco sozinho.
+
+Descoberto de passagem: **o Asaas tem `/finance/balance`**, então o dinheiro
+parado lá dentro é legível por API. A conta é MEI, produção, e a chave é de
+produção — **qualquer cobrança criada com ela é real, com boleto de verdade**.
+Nos testes só foram usadas rotas de leitura.
+
+### A ideia que faz a tela ficar simples
+
+Itens 1, 2, 3, 6 e 7 são **o mesmo dinheiro visto de ângulos diferentes**. O
+dinheiro está numa conta só; o que muda é quanto já tem dono. Daí a "cascata":
+
+```
+Saldo em caixa
+ − impostos − folha − reserva − capital de giro
+ = LIVRE PARA USAR      (verde se sobra, vermelho se não)
+```
+
+### Estrutura
+
+Abas do Financeiro: **Painel · A pagar · A receber · Contas fixas · Ajustes**.
+A antiga aba "Resumo" foi absorvida pelo Painel (por categoria e por
+fornecedor continuam lá).
+
+Tabelas novas na base Financeiro:
+
+- `Recebimentos` (`tbl4tMnm3t3peeLYo`) — contas a receber, com campos do Asaas
+  já prontos (`Asaas_Cobranca_Id`, `Asaas_Link`) e `Comprovantes` (anexo)
+- `Config_Financeiro` (`tbl3uT9h7ZYXnfR7E`) — **uma linha só**: saldo inicial,
+  metas de reserva e giro, regime, imposto, teto do MEI, folha
+- `Conferencias` (`tblIrMrXYI6FZdKfS`) — conciliação bancária
+
+`Despesas` ganhou o campo `Comprovantes` (anexo).
+
+### Contas que o painel faz sozinho
+
+- **Saldo** = saldo inicial + recebido desde a data − pago desde a data
+- **Impostos**: MEI = DAS fixo do mês; Simples = alíquota × o que entrou no mês
+- **Folha**: com 13º e férias marcado, guarda ~19,4% a mais por mês
+  (1/12 de um salário + 1/12 de um salário e um terço)
+- **Previsão**: mês a mês, entra − sai, acumulando sobre o saldo. **A linha
+  fica vermelha no mês em que o caixa vira negativo** — é o aviso mais
+  importante da tela, e aparece meses antes do problema.
+- **Teto do MEI**: barra do faturamento do ano contra o limite. Avisa em 80% e
+  avisa de novo se passar. **O valor do teto é digitado nos Ajustes de
+  propósito** — ele muda de tempos em tempos, e é melhor o dono confirmar o
+  vigente do que o sistema afirmar um número velho.
+
+### Descoberta que muda a regra de velocidade
+
+A regra anterior era "um workflow = uma ida ao Airtable, e o app dispara todas
+juntas". Ela tem um teto: **o navegador só faz cerca de SEIS chamadas ao mesmo
+tempo por servidor.** Com 8, ele faz duas rodadas e o tempo dobra (medido:
+1 chamada 649ms · 4 juntas 757ms · 8 juntas 1442ms).
+
+Por isso `carregarFinanceiro` tem **duas ondas**:
+
+- **Primeira (5 chamadas, ~780ms):** despesas, recebimentos, contas fixas,
+  ajustes e cadastros — o que a tela precisa para aparecer.
+- **Segunda, sem segurar a tela:** fornecedores, última conferência e o
+  lançamento das contas fixas vencidas. Nada aqui muda os números do painel.
+
+Os cadastros entram na primeira onda porque é deles que sai a lista de clientes
+das contas a receber — sem isso, escolher cliente só funcionaria depois de
+passar pela aba Consultar. De brinde, a Consulta passou a abrir pronta.
+
+### Ainda falta (o dono já sabe)
+
+- **Cobrança pelo Asaas**: criar boleto/PIX pelo app e dar baixa sozinho pelo
+  webhook de pagamento. Os campos no Airtable já existem esperando.
+- **Comprovantes**: os campos de anexo existem nas duas tabelas, mas o app
+  ainda não envia arquivo. O caminho é o endpoint `uploadAttachment` do
+  Airtable (aceita base64, limite de 5MB por arquivo).
 
 ## Decisões já tomadas (não relitigar sem motivo)
 
