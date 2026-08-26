@@ -607,6 +607,14 @@ textarea {
   resize: vertical;
 }
 
+/* Cresce conforme o texto, com a altura vinda do app.js. A rolagem interna
+   fica escondida de propósito: campo travado não deixa rolar, então quem cresce
+   é o campo. Sem alça de arrastar, que também não funciona travada. */
+textarea.auto-altura {
+  resize: none;
+  overflow: hidden;
+}
+
 textarea:focus {
   outline: none;
   border-color: var(--accent);

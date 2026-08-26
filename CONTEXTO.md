@@ -750,6 +750,49 @@ Em 25/08/2026 descobriu-se que as despesas usavam `.aberta` (no feminino) e
 por isso não pegavam a regra — o cartão aberto ficava espremido numa coluna. A
 regra agora cobre **as duas grafias**.
 
+## Campo comprido que precisa aparecer inteiro (26/08/2026)
+
+"Endereço completo" era `<input type="text">` e cortava o texto que não cabia
+numa linha. Em modo leitura isso é pior do que parece: campo `disabled` não
+deixa nem rolar por dentro, então o endereço longo ficava **impossível de ler**
+sem clicar no lápis.
+
+Virou `<textarea class="local-endereco auto-altura" rows="1">`, com a altura
+ajustada por `ajustarAlturaAuto`. **Nada mudou para ler nem gravar**: `.value`
+funciona igual em input e textarea. Enter é bloqueado no campo — o textarea
+está ali para *mostrar* em várias linhas, não para guardar `\n` num campo que
+no Airtable é de linha única.
+
+Se outro campo comprido precisar do mesmo: vira `textarea`, ganha a classe
+`auto-altura`, e pronto — a varredura já pega.
+
+**O detalhe que dá trabalho: altura só mede certo com o campo à vista.**
+Escondido, `scrollHeight` devolve zero e o campo fica travado numa linha só.
+Por isso `ajustarAlturasAuto` é chamada em cada momento em que um bloco aparece
+ou muda a largura que sobra para o texto:
+
+- ao entrar na tela (`adicionarLocal`)
+- ao abrir um cadastro na Consulta — `montarDetalhe` monta tudo **solto da
+  página**, então lá dentro qualquer medida daria zero
+- ao revelar o formulário depois da consulta à Receita
+- ao travar/destravar: o CSS zera o espaçamento lateral do campo travado, e a
+  linha passa a quebrar noutro ponto
+- ao trocar de aba interna
+- no `resize` da janela (girar o celular)
+
+Duas armadilhas que custaram tempo:
+
+- **Somar a borda.** O projeto usa `box-sizing: border-box`, então a altura
+  inclui a borda, mas `scrollHeight` conta só conteúdo e espaçamento. Sem
+  `campo.offsetHeight - campo.clientHeight`, sobravam 2px de texto cortado.
+- **`ResizeObserver` foi tentado e descartado.** Seria mais elegante — a altura
+  depende da largura, então observar a largura cobriria todos os casos de uma
+  vez, inclusive os que ninguém previu. Mas **ele nunca dispara no navegador
+  embutido de teste**: existe como função e fica calado, nem no disparo inicial.
+  Sem conseguir verificar, não vale entregar. Ficaram as chamadas explícitas,
+  medidas funcionando uma a uma. Se um dia o campo aparecer por um caminho novo
+  e nascer com uma linha só, é aqui que se acrescenta a chamada.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

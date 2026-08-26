@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.08.25";
+const APP_VERSION = "2026.08.26";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -127,6 +127,10 @@ function ligarAbasInternas(classeAba, atributo, prefixoId, classeBloco) {
       pagina.querySelectorAll(`.${classeBloco}`).forEach((bloco) => {
         bloco.classList.toggle("hidden", bloco.id !== idAlvo);
       });
+
+      // A aba que acabou de aparecer pode ter campos montados enquanto
+      // estava escondida, e altura medida escondido sai zerada.
+      ajustarAlturasAuto(pagina);
     });
   });
 }
@@ -340,6 +344,29 @@ documentoInput.addEventListener("input", () => {
   avaliarDocumento(digitos);
 });
 
+// Textarea não cresce sozinho. Mede o conteúdo e ajusta a altura, para o
+// endereço aparecer inteiro mesmo com o campo travado — travado ele nem deixa
+// rolar por dentro, então quem tem que crescer é o campo.
+function ajustarAlturaAuto(campo) {
+  campo.style.height = "auto";
+  // A altura aqui inclui a borda (box-sizing: border-box no projeto inteiro),
+  // mas scrollHeight conta só conteúdo e espaçamento. Sem somar a borda de
+  // volta, sobrariam 2px de texto cortado embaixo.
+  const borda = campo.offsetHeight - campo.clientHeight;
+  campo.style.height = campo.scrollHeight + borda + "px";
+}
+
+// Só mede certo com o campo à vista: escondido, tudo mede zero. Por isso esta
+// varredura é chamada de novo a cada momento em que um bloco aparece na tela
+// ou muda a largura que sobra para o texto.
+function ajustarAlturasAuto(raiz) {
+  raiz.querySelectorAll("textarea.auto-altura").forEach(ajustarAlturaAuto);
+}
+
+// Girar o celular ou mudar o tamanho da janela muda a largura, e com ela onde a
+// linha quebra. Varrer a página inteira aqui é barato: são poucos campos.
+window.addEventListener("resize", () => ajustarAlturasAuto(document));
+
 // ----- Locais de atendimento (um bloco por endereço) -----
 
 // Todas estas funções recebem a caixa onde os blocos ficam, porque as mesmas
@@ -376,8 +403,17 @@ function adicionarLocal(caixa, comFoco, dados) {
     renumerarLocais(caixa);
   });
 
+  // Endereço é uma informação só: o campo quebra linha para caber na tela, mas
+  // Enter não deve virar quebra de linha guardada no Airtable.
+  const campoEndereco = bloco.querySelector(".local-endereco");
+  campoEndereco.addEventListener("input", () => ajustarAlturaAuto(campoEndereco));
+  campoEndereco.addEventListener("keydown", (evento) => {
+    if (evento.key === "Enter") evento.preventDefault();
+  });
+
   caixa.appendChild(bloco);
   renumerarLocais(caixa);
+  ajustarAlturasAuto(bloco);
 
   // Só puxa o cursor quando foi o usuário que pediu o bloco. Ao limpar o
   // formulário isso roubaria o foco de quem ainda está digitando o CPF/CNPJ.
@@ -541,6 +577,9 @@ function travarBlocos(caixa, travado) {
   caixa.querySelectorAll("input, select, textarea").forEach((campo) => {
     campo.disabled = travado;
   });
+  // Campo travado perde o espaçamento lateral (o CSS o zera para parecer
+  // texto), então a linha passa a quebrar em outro ponto e a altura muda.
+  ajustarAlturasAuto(caixa);
 }
 
 // ----- Consulta ao n8n: já existe? e dados da Receita -----
@@ -612,6 +651,8 @@ async function consultarDocumento(digitos) {
     }
 
     formEntidade.classList.remove("hidden");
+    // O endereço da Receita foi preenchido com o formulário ainda escondido.
+    ajustarAlturasAuto(locaisBox);
   } catch (err) {
     if (documentoAtual !== digitos) return;
     mostrarDica("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
@@ -860,6 +901,9 @@ async function abrirLinha(linha, caixa, cadastro, avisoDepois) {
 
   caixa.textContent = "";
   caixa.appendChild(montarDetalhe(linha, cadastro, dados, avisoDepois));
+  // Só agora o bloco está na tela: montarDetalhe monta tudo solto da página, e
+  // ali qualquer altura medida daria zero.
+  ajustarAlturasAuto(caixa);
 }
 
 function montarDetalhe(linha, resumo, dados, avisoDepois) {
