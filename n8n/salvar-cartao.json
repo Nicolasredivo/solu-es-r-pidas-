@@ -1,16 +1,16 @@
 {
-  "name": "App - Salvar despesa",
+  "name": "App - Salvar cartao",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "salvar-despesa",
+        "path": "salvar-cartao",
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
         }
       },
-      "id": "c0000000-0000-4000-8000-000000000011",
+      "id": "c0000000-0000-4000-8000-000000000001",
       "name": "Recebe pedido do app",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -18,7 +18,7 @@
         0,
         0
       ],
-      "webhookId": "c0000000-0000-4000-8000-000000000012"
+      "webhookId": "c0000000-0000-4000-8000-000000000002"
     },
     {
       "parameters": {
@@ -31,7 +31,7 @@
           },
           "conditions": [
             {
-              "id": "c0000000-0000-4000-8000-000000000013",
+              "id": "c0000000-0000-4000-8000-000000000003",
               "leftValue": "={{ $json.body.senha }}",
               "rightValue": "TROQUE-ESTA-SENHA",
               "operator": {
@@ -46,7 +46,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000014",
+      "id": "c0000000-0000-4000-8000-000000000004",
       "name": "Senha esta correta?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -61,21 +61,21 @@
         "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000015",
+      "id": "c0000000-0000-4000-8000-000000000005",
       "name": "Responde senha incorreta",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
         440,
-        220
+        200
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Uma compra parcelada vira N despesas — uma por mes, cada uma marcavel como\n// paga separadamente, que e como a divida acontece na vida real. O campo Grupo\n// liga todas a mesma compra, para dar para apagar o conjunto depois.\nconst b = $json.body || {};\nconst texto = (v) => String(v ?? \"\").trim();\nconst lista = (v) => texto(v) || null;\nconst numero = (v) => {\n  const n = Number(String(v ?? \"\").replace(\",\", \".\"));\n  return Number.isFinite(n) ? n : null;\n};\n\nconst descricao = texto(b.descricao);\nconst valor = numero(b.valor);\nif (!descricao || valor === null || valor <= 0) {\n  return [{ json: { invalido: true, mensagem: \"Preencha a descrição e um valor válido.\" } }];\n}\n\n// Soma meses sem estourar o dia: 31/01 + 1 mes vira 28/02, nao 03/03.\nfunction somaMeses(iso, meses) {\n  const [a, m, d] = String(iso).slice(0, 10).split(\"-\").map(Number);\n  const alvo = new Date(Date.UTC(a, m - 1 + meses, 1));\n  const ultimoDia = new Date(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 0)).getUTCDate();\n  const dia = String(Math.min(d, ultimoDia)).padStart(2, \"0\");\n  const mes = String(alvo.getUTCMonth() + 1).padStart(2, \"0\");\n  return alvo.getUTCFullYear() + \"-\" + mes + \"-\" + dia;\n}\n\nconst parcelas = Math.max(1, Math.min(60, Number(b.parcelas) || 1));\nconst vencimento = lista(b.vencimento);\nconst fornecedorId = /^rec[A-Za-z0-9]{14}$/.test(texto(b.fornecedorId)) ? texto(b.fornecedorId) : \"\";\nconst servicoId = /^rec[A-Za-z0-9]{14}$/.test(texto(b.servicoId)) ? texto(b.servicoId) : \"\";\nconst cartaoId = /^rec[A-Za-z0-9]{14}$/.test(texto(b.cartaoId)) ? texto(b.cartaoId) : \"\";\n\n// Grupo so faz sentido quando ha mais de uma parcela.\nconst grupo = parcelas > 1\n  ? \"g\" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)\n  : \"\";\n\n// Divide em centavos para nao perder um centavo no arredondamento: a ultima\n// parcela fica com a sobra, e a soma bate exatamente com o total.\nconst centavosTotal = Math.round(valor * 100);\nconst centavosBase = Math.floor(centavosTotal / parcelas);\nconst sobra = centavosTotal - centavosBase * parcelas;\n\nconst registros = [];\nfor (let i = 1; i <= parcelas; i++) {\n  const centavos = centavosBase + (i === parcelas ? sobra : 0);\n  const fields = {\n    Descricao: parcelas > 1 ? descricao + \" (\" + i + \"/\" + parcelas + \")\" : descricao,\n    Valor: centavos / 100,\n    Categoria: lista(b.categoria) || \"Outros\",\n    Forma_Pagamento: lista(b.formaPagamento),\n    Observacoes: texto(b.observacoes),\n    // So a primeira pode ja nascer paga; as futuras sempre pendentes.\n    Status: i === 1 ? (lista(b.status) || \"Pendente\") : \"Pendente\",\n  };\n\n  if (vencimento) fields.Vencimento = somaMeses(vencimento, i - 1);\n  if (parcelas > 1) {\n    fields.Parcela_Numero = i;\n    fields.Parcela_Total = parcelas;\n    fields.Grupo = grupo;\n  }\n  if (fornecedorId) fields.Fornecedor_Ref = [fornecedorId];\n  if (servicoId) fields.Servico_Ref = [servicoId];\n  if (cartaoId) fields.Cartao_Ref = [cartaoId];\n  if (i === 1 && lista(b.dataPagamento)) fields.Data_Pagamento = lista(b.dataPagamento);\n\n  registros.push({ fields });\n}\n\n// O Airtable aceita no maximo 10 registros por chamada.\nconst chamadas = [];\nfor (let i = 0; i < registros.length; i += 10) {\n  chamadas.push({\n    invalido: false,\n    metodo: \"POST\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: registros.slice(i, i + 10) },\n  });\n}\n\nreturn chamadas.map((c) => ({ json: c }));"
+        "jsCode": "const b = $json.body || {};\nconst texto = (v) => String(v == null ? \"\" : v).trim();\nconst lista = (v) => texto(v) || null;\nconst numero = (v) => {\n  const n = Number(String(v == null ? \"\" : v).replace(\",\", \".\"));\n  return Number.isFinite(n) ? n : 0;\n};\nconst diaValido = (v) => Math.min(31, Math.max(1, Math.round(numero(v)) || 1));\n\nconst nome = texto(b.nome);\nif (!nome) {\n  return [{ json: { invalido: true, mensagem: \"Dê um nome ao cartão.\" } }];\n}\n\n// A chave PIX e para onde o dinheiro vai. Sem ela o cartao ate existe,\n// mas o sistema nunca vai conseguir pagar a fatura sozinho.\nconst chavePix = texto(b.chavePix);\nconst tipoChave = texto(b.tipoChavePix);\nif (chavePix && !tipoChave) {\n  return [{ json: { invalido: true, mensagem: \"Diga qual o tipo da chave PIX.\" } }];\n}\n\nconst fields = {\n  Nome: nome,\n  Banco: texto(b.banco),\n  Bandeira: lista(b.bandeira),\n  Final: texto(b.final).replace(/[^0-9]/g, \"\").slice(-4),\n  Chave_PIX: chavePix,\n  Tipo_Chave_PIX: lista(tipoChave),\n  Dia_Fechamento: diaValido(b.diaFechamento),\n  Dia_Vencimento: diaValido(b.diaVencimento),\n  Limite: numero(b.limite),\n  Ativo: texto(b.ativo) !== \"nao\",\n  Observacoes: texto(b.observacoes),\n};\n\nconst id = texto(b.id);\nconst ehExistente = /^rec[A-Za-z0-9]{14}$/.test(id);\nreturn [{\n  json: {\n    invalido: false,\n    metodo: ehExistente ? \"PATCH\" : \"POST\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblzJwNGcTpvGmYiM\",\n    corpo: { typecast: true, records: [ehExistente ? { id, fields } : { fields }] },\n  },\n}];"
       },
-      "id": "c0000000-0000-4000-8000-000000000016",
-      "name": "Monta as despesas",
+      "id": "c0000000-0000-4000-8000-000000000006",
+      "name": "Monta a chamada",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -94,7 +94,7 @@
           },
           "conditions": [
             {
-              "id": "c0000000-0000-4000-8000-000000000017",
+              "id": "c0000000-0000-4000-8000-000000000007",
               "leftValue": "={{ $json.invalido }}",
               "rightValue": "",
               "operator": {
@@ -109,7 +109,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000018",
+      "id": "c0000000-0000-4000-8000-000000000008",
       "name": "Faltou alguma coisa?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -124,7 +124,7 @@
         "responseBody": "={{ JSON.stringify({ ok: false, mensagem: $json.mensagem }) }}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000019",
+      "id": "c0000000-0000-4000-8000-000000000009",
       "name": "Responde invalido",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -146,7 +146,7 @@
           "timeout": 20000
         }
       },
-      "id": "c0000000-0000-4000-8000-000000000020",
+      "id": "c0000000-0000-4000-8000-000000000010",
       "name": "Grava no Airtable",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -165,10 +165,10 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Despesa salva!\"\n}",
+        "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Cartão salvo!\"\n}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000021",
+      "id": "c0000000-0000-4000-8000-000000000011",
       "name": "Responde salvo",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -180,10 +180,10 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Não consegui salvar. Tente de novo.\"\n}",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Não consegui salvar o cartão.\"\n}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000022",
+      "id": "c0000000-0000-4000-8000-000000000012",
       "name": "Responde erro",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -209,7 +209,7 @@
       "main": [
         [
           {
-            "node": "Monta as despesas",
+            "node": "Monta a chamada",
             "type": "main",
             "index": 0
           }
@@ -223,7 +223,7 @@
         ]
       ]
     },
-    "Monta as despesas": {
+    "Monta a chamada": {
       "main": [
         [
           {

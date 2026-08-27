@@ -1,0 +1,752 @@
+{
+  "name": "App - Pagar fatura do cartao",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pagar-fatura",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "c0000000-0000-4000-8000-000000000002"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-000000000003",
+              "leftValue": "={{ $json.body.senha }}",
+              "rightValue": "TROQUE-ESTA-SENHA",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000004",
+      "name": "Senha esta correta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000005",
+      "name": "Responde senha incorreta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appjAmWXV7Zr33UqE",
+          "mode": "list",
+          "cachedResultName": "Financeiro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbldfftPos0qX7nlm",
+          "mode": "list",
+          "cachedResultName": "Pagamentos_Fatura"
+        },
+        "filterByFormula": "{Status} = 'Enviado'",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000006",
+      "name": "Busca pagamento existente",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const achados = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\nconst pedido = $(\"Recebe pedido do app\").first().json.body || {};\nconst cartaoId = String(pedido.cartaoId || \"\").trim();\nconst vencimento = String(pedido.vencimentoFatura || \"\").slice(0, 10);\n\n// O casamento e feito aqui, e nao na busca: no Code node o Cartao_Ref\n// chega como lista de codigos de verdade, que e o que precisamos comparar.\nconst jaPago = achados.some((i) => {\n  const f = i.json.fields || {};\n  const mesmoCartao = (f.Cartao_Ref || []).includes(cartaoId);\n  const mesmaFatura = String(f.Vencimento_Fatura || \"\").slice(0, 10) === vencimento;\n  return mesmoCartao && mesmaFatura;\n});\n\nreturn [{ json: {\n  jaPago,\n  cartaoId,\n  vencimentoFatura: vencimento,\n} }];"
+      },
+      "id": "c0000000-0000-4000-8000-000000000007",
+      "name": "Ja foi pago?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-000000000008",
+              "leftValue": "={{ $json.jaPago }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000009",
+      "name": "Fatura ja paga?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Esta fatura já foi paga. Nenhum PIX foi enviado.\"\n}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000010",
+      "name": "Responde ja pago",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appjAmWXV7Zr33UqE",
+          "mode": "list",
+          "cachedResultName": "Financeiro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblzJwNGcTpvGmYiM",
+          "mode": "list",
+          "cachedResultName": "Cartoes"
+        },
+        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($json.cartaoId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000011",
+      "name": "Busca o cartao",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        -160
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cartao = $input.all().filter((i) => i.json && i.json.id && !i.json.error)[0];\nconst b = $(\"Recebe pedido do app\").first().json.body || {};\n\nconst numero = (v) => {\n  const n = Number(String(v == null ? \"\" : v).replace(\",\", \".\"));\n  return Number.isFinite(n) ? n : 0;\n};\n\nif (!cartao) {\n  return [{ json: { erro: \"Cartão não encontrado.\" } }];\n}\n\nconst f = cartao.json.fields || {};\n// A chave vem SEMPRE do cadastro. O app manda so quanto e de qual cartao.\nconst chave = String(f.Chave_PIX || \"\").trim();\nconst tipo = String(f.Tipo_Chave_PIX || \"\").trim();\n\nif (!chave || !tipo) {\n  return [{ json: { erro: \"Este cartão não tem chave PIX cadastrada. Preencha em Cartões antes de pagar.\" } }];\n}\n\nconst valor = Math.round(numero(b.valor) * 100) / 100;\nif (valor < 0.01) {\n  return [{ json: { erro: \"Informe um valor de pelo menos R$ 0,01.\" } }];\n}\n\n// Trava de bom senso contra dedo errado: valor absurdo nao passa calado.\nif (valor > 100000) {\n  return [{ json: { erro: \"Valor acima de R$ 100.000. Por segurança, pague esse valor direto no banco.\" } }];\n}\n\nconst vencimento = String(b.vencimentoFatura || \"\").slice(0, 10);\nconst ids = String(b.ids || \"\").split(\",\").map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nreturn [{ json: {\n  erro: \"\",\n  valor,\n  valorCalculado: Math.round(numero(b.valorCalculado) * 100) / 100,\n  chave, tipo, vencimento, ids,\n  cartaoId: cartao.json.id,\n  nomeCartao: f.Nome || \"cartão\",\n} }];"
+      },
+      "id": "c0000000-0000-4000-8000-000000000012",
+      "name": "Monta o PIX",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-000000000013",
+              "leftValue": "={{ $json.erro }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000014",
+      "name": "Deu problema?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, mensagem: $json.erro }) }}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000015",
+      "name": "Responde problema",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.asaas.com/v3/finance/balance",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000000016",
+      "name": "Consulta saldo Asaas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        -260
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "99sqJeNJjk6jJRgZ",
+          "name": "Asaas API (producao)"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const saldo = Number(($json || {}).balance);\nconst dados = $(\"Monta o PIX\").first().json;\n\n// Se a consulta falhou, nao inventa: melhor recusar do que mandar as cegas.\nif (!Number.isFinite(saldo)) {\n  return [{ json: { ...dados, semSaldo: true,\n    mensagemSaldo: \"Não consegui conferir o saldo do Asaas. Nenhum PIX foi enviado.\" } }];\n}\n\nif (saldo < dados.valor) {\n  const falta = (dados.valor - saldo).toFixed(2).replace(\".\", \",\");\n  const tem = saldo.toFixed(2).replace(\".\", \",\");\n  return [{ json: { ...dados, semSaldo: true, saldo,\n    mensagemSaldo: \"Saldo no Asaas é de R$ \" + tem + \", faltam R$ \" + falta + \". Nenhum PIX foi enviado.\" } }];\n}\n\nreturn [{ json: { ...dados, semSaldo: false, saldo } }];"
+      },
+      "id": "c0000000-0000-4000-8000-000000000017",
+      "name": "Tem saldo?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-000000000018",
+              "leftValue": "={{ $json.semSaldo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000019",
+      "name": "Falta saldo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2200,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, mensagem: $json.mensagemSaldo }) }}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000020",
+      "name": "Responde sem saldo",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2420,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.asaas.com/v3/transfers",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ value: $json.valor, pixAddressKey: $json.chave, pixAddressKeyType: $json.tipo, description: \"Fatura \" + $json.nomeCartao + \" venc \" + $json.vencimento, externalReference: \"fatura-\" + $json.cartaoId + \"-\" + $json.vencimento }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000000021",
+      "name": "Envia o PIX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        -380
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "99sqJeNJjk6jJRgZ",
+          "name": "Asaas API (producao)"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const resposta = $json || {};\nconst dados = $(\"Tem saldo?\").first().json;\nconst hoje = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);\n\nconst chamadas = [];\n\n// O comprovante vem primeiro de proposito: se a gravacao seguinte falhar,\n// o pior caso e ter o registro do dinheiro que saiu, nunca o contrario.\nchamadas.push({\n  metodo: \"POST\",\n  url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tbldfftPos0qX7nlm\",\n  corpo: { typecast: true, records: [{ fields: {\n    Data: hoje,\n    Cartao_Ref: [dados.cartaoId],\n    Vencimento_Fatura: dados.vencimento || null,\n    Valor: dados.valor,\n    Valor_Calculado: dados.valorCalculado,\n    Status: \"Enviado\",\n    Asaas_Transfer_Id: String(resposta.id || \"\"),\n  } }] },\n});\n\n// As despesas da fatura viram pagas: e isto que tira o dinheiro do caixa.\n// O PIX em si nao vira despesa, senao o mesmo real contaria duas vezes.\nfor (let i = 0; i < dados.ids.length; i += 10) {\n  chamadas.push({\n    metodo: \"PATCH\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: dados.ids.slice(i, i + 10).map((id) => ({\n      id, fields: { Status: \"Pago\", Data_Pagamento: hoje },\n    })) },\n  });\n}\n\n// Pagou diferente do que o sistema somou? A diferenca vira uma despesa\n// propria, senao o caixa ficaria errado pelo tamanho da diferenca.\nconst diferenca = Math.round((dados.valor - dados.valorCalculado) * 100) / 100;\nif (Math.abs(diferenca) >= 0.01) {\n  chamadas.push({\n    metodo: \"POST\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: [{ fields: {\n      Descricao: \"Diferença da fatura \" + dados.nomeCartao,\n      Valor: diferenca,\n      Vencimento: dados.vencimento || hoje,\n      Data_Pagamento: hoje,\n      Status: \"Pago\",\n      Categoria: \"Outros\",\n      Forma_Pagamento: \"PIX\",\n      Cartao_Ref: [dados.cartaoId],\n      Observacoes: \"Lançada sozinha: a fatura foi paga por um valor diferente do que o sistema tinha somado.\",\n    } }] },\n  });\n}\n\nreturn chamadas.map((c) => ({ json: c }));"
+      },
+      "id": "c0000000-0000-4000-8000-000000000022",
+      "name": "Monta as gravacoes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        -480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo || {}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000000023",
+      "name": "Grava no Airtable",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2860,
+        -480
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, mensagem: \"PIX enviado e fatura quitada!\" }) }}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000024",
+      "name": "Responde pago",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3080,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"ATENÇÃO: o PIX foi enviado, mas não consegui atualizar o sistema. Confira no Asaas e marque as despesas como pagas à mão.\"\n}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000025",
+      "name": "Responde erro na gravacao",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3080,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// O PIX nao saiu. Guarda a tentativa para o dono saber o que aconteceu.\nconst erro = $json || {};\nconst dados = $(\"Tem saldo?\").first().json;\nconst hoje = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);\n\nconst motivo = ((erro.error || {}).message)\n  || (((erro.errors || [])[0] || {}).description)\n  || \"O Asaas recusou a transferência.\";\n\nreturn [{ json: {\n  metodo: \"POST\",\n  url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tbldfftPos0qX7nlm\",\n  corpo: { typecast: true, records: [{ fields: {\n    Data: hoje,\n    Cartao_Ref: [dados.cartaoId],\n    Vencimento_Fatura: dados.vencimento || null,\n    Valor: dados.valor,\n    Valor_Calculado: dados.valorCalculado,\n    Status: \"Falhou\",\n    Observacoes: motivo,\n  } }] },\n  motivo,\n} }];"
+      },
+      "id": "c0000000-0000-4000-8000-000000000026",
+      "name": "Monta a falha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo || {}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000000027",
+      "name": "Grava a falha",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2860,
+        -220
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, mensagem: \"Não consegui enviar o PIX: \" + $('Monta a falha').first().json.motivo }) }}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000028",
+      "name": "Responde falhou",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3080,
+        -160
+      ]
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Senha esta correta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Senha esta correta?": {
+      "main": [
+        [
+          {
+            "node": "Busca pagamento existente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde senha incorreta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca pagamento existente": {
+      "main": [
+        [
+          {
+            "node": "Ja foi pago?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ja foi pago?": {
+      "main": [
+        [
+          {
+            "node": "Fatura ja paga?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fatura ja paga?": {
+      "main": [
+        [
+          {
+            "node": "Responde ja pago",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Busca o cartao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca o cartao": {
+      "main": [
+        [
+          {
+            "node": "Monta o PIX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta o PIX": {
+      "main": [
+        [
+          {
+            "node": "Deu problema?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deu problema?": {
+      "main": [
+        [
+          {
+            "node": "Responde problema",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Consulta saldo Asaas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consulta saldo Asaas": {
+      "main": [
+        [
+          {
+            "node": "Tem saldo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem saldo?": {
+      "main": [
+        [
+          {
+            "node": "Falta saldo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Falta saldo?": {
+      "main": [
+        [
+          {
+            "node": "Responde sem saldo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Envia o PIX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia o PIX": {
+      "main": [
+        [
+          {
+            "node": "Monta as gravacoes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta a falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta as gravacoes": {
+      "main": [
+        [
+          {
+            "node": "Grava no Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava no Airtable": {
+      "main": [
+        [
+          {
+            "node": "Responde pago",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde erro na gravacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta a falha": {
+      "main": [
+        [
+          {
+            "node": "Grava a falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava a falha": {
+      "main": [
+        [
+          {
+            "node": "Responde falhou",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde falhou",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

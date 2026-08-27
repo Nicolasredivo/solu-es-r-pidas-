@@ -1,16 +1,16 @@
 {
-  "name": "App - Listar despesas",
+  "name": "App - Listar cartoes",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "listar-despesas",
+        "path": "listar-cartoes",
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
         }
       },
-      "id": "c0000000-0000-4000-8000-000000000001",
+      "id": "c0000000-0000-4000-8000-000000000022",
       "name": "Recebe pedido do app",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -18,7 +18,7 @@
         0,
         0
       ],
-      "webhookId": "c0000000-0000-4000-8000-000000000002"
+      "webhookId": "c0000000-0000-4000-8000-000000000023"
     },
     {
       "parameters": {
@@ -31,7 +31,7 @@
           },
           "conditions": [
             {
-              "id": "c0000000-0000-4000-8000-000000000003",
+              "id": "c0000000-0000-4000-8000-000000000024",
               "leftValue": "={{ $json.body.senha }}",
               "rightValue": "TROQUE-ESTA-SENHA",
               "operator": {
@@ -46,7 +46,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000004",
+      "id": "c0000000-0000-4000-8000-000000000025",
       "name": "Senha esta correta?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -61,7 +61,7 @@
         "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000005",
+      "id": "c0000000-0000-4000-8000-000000000026",
       "name": "Responde senha incorreta",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -82,23 +82,15 @@
         },
         "table": {
           "__rl": true,
-          "value": "tblNduEKl2jY280V0",
+          "value": "tblzJwNGcTpvGmYiM",
           "mode": "list",
-          "cachedResultName": "Despesas"
+          "cachedResultName": "Cartoes"
         },
         "filterByFormula": "",
         "returnAll": true,
-        "options": {},
-        "sort": {
-          "property": [
-            {
-              "field": "Vencimento",
-              "direction": "asc"
-            }
-          ]
-        }
+        "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000006",
+      "id": "c0000000-0000-4000-8000-000000000027",
       "name": "Busca",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
@@ -117,9 +109,9 @@
     },
     {
       "parameters": {
-        "jsCode": "// O no de busca devolve um item vazio quando a tabela esta vazia, ou um item\n// de erro se a busca falhou — os dois ficam de fora em vez de quebrar a lista.\nconst achadas = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\nconst primeiro = (v) => (Array.isArray(v) ? (v[0] || \"\") : (v == null ? \"\" : String(v)));\n\nconst despesas = achadas.map((i) => {\n  const f = i.json.fields || {};\n  return {\n    id: i.json.id,\n    descricao: f.Descricao || \"\",\n    valor: f.Valor || 0,\n    fornecedorId: primeiro(f.Fornecedor_Ref),\n    fornecedor: primeiro(f.Fornecedor_Nome),\n    vencimento: f.Vencimento || \"\",\n    status: f.Status || \"Pendente\",\n    categoria: f.Categoria || \"\",\n    formaPagamento: f.Forma_Pagamento || \"\",\n    parcelaNumero: f.Parcela_Numero || 0,\n    parcelaTotal: f.Parcela_Total || 0,\n    grupo: f.Grupo || \"\",\n    recorrenteId: primeiro(f.Recorrente_Ref),\n    // Compra amarrada a um servico entra no custo dele, e sai do lucro.\n    servicoId: primeiro(f.Servico_Ref),\n    // Em qual cartao a compra caiu — e o que agrupa a fatura no painel.\n    cartaoId: primeiro(f.Cartao_Ref),\n    dataPagamento: f.Data_Pagamento || \"\",\n    observacoes: f.Observacoes || \"\",\n  };\n});\n\nreturn [{ json: { ok: true, total: despesas.length, despesas } }];"
+        "jsCode": "const achados = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\n\nconst cartoes = achados.map((i) => {\n  const f = i.json.fields || {};\n  return {\n    id: i.json.id,\n    nome: f.Nome || \"\",\n    banco: f.Banco || \"\",\n    bandeira: f.Bandeira || \"\",\n    final: f.Final || \"\",\n    chavePix: f.Chave_PIX || \"\",\n    tipoChavePix: f.Tipo_Chave_PIX || \"\",\n    diaFechamento: f.Dia_Fechamento || 1,\n    diaVencimento: f.Dia_Vencimento || 10,\n    limite: f.Limite || 0,\n    // O Airtable nao devolve caixinha desmarcada, entao ausente = desmarcada.\n    ativo: Boolean(f.Ativo),\n    observacoes: f.Observacoes || \"\",\n  };\n});\n\nreturn [{ json: { ok: true, cartoes } }];"
       },
-      "id": "c0000000-0000-4000-8000-000000000007",
+      "id": "c0000000-0000-4000-8000-000000000028",
       "name": "Monta lista",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -134,7 +126,7 @@
         "responseBody": "={{ JSON.stringify($json) }}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000008",
+      "id": "c0000000-0000-4000-8000-000000000029",
       "name": "Responde ao app",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,

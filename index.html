@@ -520,9 +520,22 @@
           <template id="modelo-fatura">
             <div class="aviso-caixa fatura-aviso">
               <strong class="fatura-titulo"></strong>
+              <p class="fatura-subtitulo doc-hint"></p>
               <ul class="fatura-itens"></ul>
+
+              <!-- O valor vem calculado, mas dá para corrigir: a fatura real
+                   pode ter compras que ainda não foram lançadas aqui. -->
+              <div class="fatura-valor-linha">
+                <label class="fatura-valor-rotulo">Valor a pagar</label>
+                <input type="text" class="fatura-valor-campo" inputmode="numeric" />
+              </div>
+              <p class="fatura-diferenca doc-hint"></p>
+
+              <button type="button" class="fatura-pagar">
+                Pagar por PIX agora
+              </button>
               <button type="button" class="fatura-confirmar botao-secundario">
-                Confirmar que a fatura foi paga
+                Já paguei por fora — só marcar como pago
               </button>
               <p class="fatura-status status"></p>
             </div>
@@ -598,6 +611,14 @@
               <option>Cartão de débito</option>
               <option>Cartão de crédito</option>
             </select>
+
+            <div id="linha-cartao" class="hidden">
+              <label for="despesa-cartao">Em qual cartão?</label>
+              <select id="despesa-cartao">
+                <option value="">Não informado</option>
+              </select>
+              <p id="despesa-cartao-hint" class="doc-hint"></p>
+            </div>
 
             <div id="linha-parcelas" class="hidden">
               <label for="despesa-parcelas">Em quantas vezes?</label>
@@ -1079,6 +1100,91 @@
               Só faz sentido com funcionário registrado. Guarda cerca de 19% a
               mais por mês, para dezembro não dar susto.
             </p>
+
+            <h2 class="titulo-bloco">Cartões de crédito</h2>
+            <p class="doc-hint">
+              O sistema usa o fechamento e o vencimento para saber em qual
+              fatura cada compra cai. A chave PIX é <strong>para onde o dinheiro
+              vai</strong> na hora de pagar a fatura — confira com atenção,
+              porque PIX não volta.
+            </p>
+
+            <p id="lista-cartoes-status" class="doc-hint"></p>
+            <div id="lista-cartoes" class="grade-responsiva"></div>
+
+            <button type="button" id="novo-cartao" class="botao-secundario">+ Adicionar cartão</button>
+
+            <div id="form-cartao" class="hidden bloco-cartao">
+              <label for="cartao-nome">Nome do cartão</label>
+              <input type="text" id="cartao-nome" autocomplete="off" placeholder="Ex: Nubank PJ" />
+
+              <label for="cartao-banco">Banco que emitiu</label>
+              <input type="text" id="cartao-banco" autocomplete="off" placeholder="Ex: Nubank" />
+
+              <label for="cartao-bandeira">Bandeira</label>
+              <select id="cartao-bandeira">
+                <option value="">Não informado</option>
+                <option>Visa</option>
+                <option>Mastercard</option>
+                <option>Elo</option>
+                <option>American Express</option>
+                <option>Hipercard</option>
+                <option>Outra</option>
+              </select>
+
+              <label for="cartao-final">Final do cartão</label>
+              <input type="text" id="cartao-final" inputmode="numeric" maxlength="4" placeholder="4 últimos números" />
+
+              <label for="cartao-fechamento">Dia em que a fatura fecha</label>
+              <input type="number" id="cartao-fechamento" min="1" max="31" step="1" value="1" />
+
+              <label for="cartao-vencimento">Dia em que a fatura vence</label>
+              <input type="number" id="cartao-vencimento" min="1" max="31" step="1" value="10" />
+              <p id="cartao-ciclo-hint" class="doc-hint"></p>
+
+              <label for="cartao-chave">Chave PIX da conta do cartão</label>
+              <input type="text" id="cartao-chave" autocomplete="off" placeholder="Para onde o PIX da fatura vai" />
+
+              <label for="cartao-tipo-chave">Tipo da chave</label>
+              <select id="cartao-tipo-chave">
+                <option value="">Não informado</option>
+                <option value="CNPJ">CNPJ</option>
+                <option value="CPF">CPF</option>
+                <option value="EMAIL">E-mail</option>
+                <option value="PHONE">Telefone</option>
+                <option value="EVP">Chave aleatória</option>
+              </select>
+              <p class="doc-hint">
+                Sem a chave PIX o cartão funciona normalmente, mas o sistema não
+                consegue pagar a fatura sozinho — só avisar você.
+              </p>
+
+              <label for="cartao-limite">Limite (opcional)</label>
+              <input type="text" id="cartao-limite" inputmode="numeric" placeholder="R$ 0,00" />
+
+              <label for="cartao-observacoes">Observações</label>
+              <textarea id="cartao-observacoes" rows="2"></textarea>
+
+              <button type="button" id="salvar-cartao">Salvar cartão</button>
+              <button type="button" id="cancelar-cartao" class="botao-secundario">Cancelar</button>
+              <div id="cartao-status-msg" class="status"></div>
+            </div>
+
+            <template id="modelo-cartao">
+              <div class="despesa cartao-item">
+                <button type="button" class="despesa-resumo">
+                  <span class="despesa-topo">
+                    <span class="despesa-descricao"></span>
+                    <span class="despesa-valor"></span>
+                  </span>
+                  <span class="despesa-extra"></span>
+                </button>
+                <div class="despesa-acoes hidden">
+                  <button type="button" class="cartao-editar botao-secundario">✏️ Editar</button>
+                  <button type="button" class="cartao-excluir botao-secundario">Excluir</button>
+                </div>
+              </div>
+            </template>
 
             <h2 class="titulo-bloco">Divisão do lucro</h2>
             <p class="doc-hint">

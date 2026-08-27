@@ -50,8 +50,9 @@ Quem executa as automações de verdade é o **n8n**, e o app é só a "tela".
     endereços e contatos de um cadastro existente
 - Página **Financeiro**, com abas "Painel", "A pagar", "A receber",
   "Contas fixas" e "Ajustes"
-  - Painel: aviso de fatura de cartão vencida/vencendo com confirmação em
-    grupo, saldo em caixa e quanto dele já tem dono (impostos, folha, reserva,
+  - Painel: aviso de fatura de cartão a vencer, com o valor calculado e
+    editável, pagando por PIX direto do Asaas (ou só marcando como paga),
+    saldo em caixa e quanto dele já tem dono (impostos, folha, reserva,
     capital de giro), o que entra e sai, previsão mês a mês com o mês em que o
     caixa fica negativo em vermelho, fluxo de caixa realizado, limite do MEI,
     conferência com o banco, e o em aberto por categoria e por fornecedor
@@ -63,7 +64,7 @@ Quem executa as automações de verdade é o **n8n**, e o app é só a "tela".
   - Divisão: quanto do lucro cabe a cada sócio e à empresa, quanto o caixa
     aguenta pagar disso agora, e o registro das retiradas
   - Ajustes: saldo de partida, metas de reserva e giro, regime e imposto,
-    folha, e as fatias da divisão do lucro
+    folha, as fatias da divisão do lucro, e o cadastro dos cartões de crédito
 - Rodapé do menu: **Sair** (dois toques) e versão do app instalada
 - Indicador de conexão com o n8n na barra superior
 - Aviso ao tentar sair (menu, aba, fechar a janela) com algo não salvo —
@@ -91,6 +92,10 @@ Base **"Financeiro"** (`appjAmWXV7Zr33UqE`), criada em 22/08/2026:
   do painel e as fatias da divisão do lucro (26/08/2026)
 - `Conferencias` (`tblIrMrXYI6FZdKfS`) — conciliação bancária (26/08/2026)
 - `Retiradas` (`tblh3m5JB6N2sNs5i`) — o que cada sócio já tirou (26/08/2026)
+- `Cartoes` (`tblzJwNGcTpvGmYiM`) — cartões de crédito, com o ciclo da fatura e
+  a chave PIX para onde o pagamento vai (27/08/2026)
+- `Pagamentos_Fatura` (`tbldfftPos0qX7nlm`) — comprovante de cada PIX de fatura
+  enviado, e a trava contra pagar duas vezes (27/08/2026)
 
 Em `Despesas` sobrou o campo antigo `Fornecedor` (texto solto), substituído pelo
 vínculo `Fornecedor_Ref` + o lookup `Fornecedor_Nome`. A API do Airtable não
@@ -139,6 +144,11 @@ Todos criados, publicados e testados de ponta a ponta:
 | `App - Listar retiradas` | `/webhook/listar-retiradas` | `bdBluhbFStnnbI4j` |
 | `App - Salvar retirada` | `/webhook/salvar-retirada` | `EWAGlYN9Idv5yAKx` |
 | `App - Excluir retirada` | `/webhook/excluir-retirada` | `ihcCLwC35J103Y1v` |
+| `App - Listar cartoes` | `/webhook/listar-cartoes` | `DBrjXWNhc4UySl9Y` |
+| `App - Salvar cartao` | `/webhook/salvar-cartao` | `aRuPCSPYrof8qHE9` |
+| `App - Excluir cartao` | `/webhook/excluir-cartao` | `ciGFel5tQvtCozGp` |
+| `App - Listar pagamentos de fatura` | `/webhook/listar-pagamentos-fatura` | `Zf321z3EBXjr3PYI` |
+| `App - Pagar fatura do cartao` | `/webhook/pagar-fatura` | `jCimCPy6ICIwOm4q` |
 | `App - Confirmar fatura paga` | `/webhook/confirmar-fatura` | `D5VnSvfkddLSxhNL` |
 
 Cada arquivo em `n8n/` tem o nome do caminho do webhook correspondente.
@@ -1114,6 +1124,95 @@ diferença saiu do caixa. É a explicação de por que sobra menos do que parece
 ### Tabela nova
 
 `Retiradas` (`tblh3m5JB6N2sNs5i`) — data, sócio, valor, observações.
+
+## Cartões de crédito e pagamento da fatura por PIX (27/08/2026)
+
+**Este é o único lugar do projeto que move dinheiro de verdade.** A chave do
+Asaas é de produção e PIX não volta — qualquer mexida aqui merece cuidado
+extra.
+
+### Como o dono descreveu o fluxo
+
+O débito automático da fatura fica na conta do próprio cartão. O sistema deve
+mandar um **PIX do Asaas para a conta do cartão** no valor da fatura. Ele
+alimenta o sistema com as compras, então o sistema sabe o valor
+*indiretamente*. Um dia antes do vencimento, ao abrir a tela, o sistema avisa,
+mostra o valor que calculou, e pede confirmação — se o valor estiver errado,
+ele corrige antes de confirmar.
+
+### Tabelas novas
+
+- `Cartoes` (`tblzJwNGcTpvGmYiM`) — nome, banco, bandeira, final, **chave PIX +
+  tipo** (para onde o dinheiro vai), dia de fechamento, dia de vencimento,
+  limite, ativo.
+- `Pagamentos_Fatura` (`tbldfftPos0qX7nlm`) — comprovante de cada PIX enviado.
+  **Não é movimento de caixa** (quem tira dinheiro do caixa são as despesas
+  marcadas como pagas); serve de auditoria e, principalmente, de trava.
+- `Despesas.Cartao_Ref` — em qual cartão a compra caiu.
+
+### Em qual fatura cada compra cai
+
+Calculado **no app** (`faturaDaCompra`), não no n8n — o app já tem os cartões
+carregados, então não custa nenhuma ida a mais ao servidor:
+
+- comprou até o dia do fechamento → entra na fatura que fecha naquele mês;
+- depois disso → na fatura do mês seguinte;
+- e se o dia de vencimento for **anterior** ao de fechamento, a fatura só vence
+  no mês seguinte ao fechamento.
+
+A tela mostra a conta enquanto se escolhe ("Essa compra entra na fatura que
+vence em 15/10"), então dá para conferir na hora em vez de descobrir depois.
+
+### As seis travas do pagamento (todas testadas)
+
+O workflow `App - Pagar fatura do cartao` (`pagar-fatura`) recusa, nesta ordem:
+
+1. **fatura já paga** — mesmo cartão + mesmo vencimento com Status `Enviado`
+2. **cartão não encontrado**
+3. **cartão sem chave PIX cadastrada**
+4. **valor abaixo de R$ 0,01**
+5. **valor acima de R$ 100.000** — trava de dedo errado; acima disso, banco
+6. **saldo insuficiente no Asaas** — confere antes, e se não conseguir
+   consultar o saldo, também recusa em vez de mandar às cegas
+
+**A chave PIX vem SEMPRE do cadastro do cartão, nunca do pedido do app.** O app
+manda só quanto e de qual cartão. Assim nem um app adulterado consegue
+redirecionar o dinheiro para outro lugar.
+
+### Ordem das gravações depois que o PIX sai
+
+O comprovante em `Pagamentos_Fatura` é gravado **antes** de marcar as despesas.
+Se algo falhar no meio, o pior caso é ter o registro do dinheiro que saiu —
+nunca dinheiro sem rastro. A resposta de erro nesse caso diz explicitamente
+para conferir no Asaas e marcar à mão.
+
+### Valor diferente do calculado
+
+O campo do valor é editável, porque a fatura real pode ter compra que ainda não
+foi lançada. Quando o valor confirmado difere do somado, o sistema **lança a
+diferença como uma despesa própria** ("Diferença da fatura X"), senão o caixa
+ficaria errado exatamente pelo tamanho da diferença.
+
+### O que o PIX NÃO faz
+
+Não vira uma despesa nova. Quem tira o dinheiro do caixa são as despesas da
+fatura sendo marcadas como pagas — a mesma regra travada antes, para o mesmo
+real não contar duas vezes.
+
+### Ainda não testado de ponta a ponta
+
+**Nenhum PIX real foi enviado nos testes** — o saldo do Asaas está em R$ 0,00, e
+foi exatamente essa trava que barrou a tentativa. O endpoint foi conferido
+mandando valor 0 (recusado pelo Asaas, sem chance de transferir), o que provou
+que a chave tem permissão e o formato do pedido está certo. **O primeiro PIX de
+verdade será o do dono** — recomendado começar com um valor pequeno.
+
+### Credencial
+
+A chave do Asaas virou a credencial `Asaas API (producao)` (`httpHeaderAuth`,
+cabeçalho `access_token`) **dentro do n8n**, id `99sqJeNJjk6jJRgZ`. Conferido
+que os arquivos em `n8n/*.json` referenciam só o id e o nome — a chave nunca
+aparece no repositório.
 
 ## Decisões já tomadas (não relitigar sem motivo)
 

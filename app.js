@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.08.27";
+const APP_VERSION = "2026.08.27b";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -1250,6 +1250,7 @@ const despesaCampos = {
   dataPagamento: document.getElementById("despesa-data-pagamento"),
   observacoes: document.getElementById("despesa-observacoes"),
   servico: document.getElementById("despesa-servico"),
+  cartao: document.getElementById("despesa-cartao"),
 };
 
 const recorrenteCampos = {
@@ -1657,6 +1658,9 @@ despesaCampos.categoria.addEventListener("change", () =>
   ajustarCategoriaOutra(despesaCampos.categoria, linhaCategoriaOutra, despesaCampos.categoriaOutra)
 );
 despesaCampos.forma.addEventListener("change", ajustarLinhaParcelas);
+despesaCampos.forma.addEventListener("change", ajustarLinhaCartao);
+// A data também muda em qual fatura a compra cai.
+despesaCampos.vencimento.addEventListener("change", mostrarFaturaDaCompra);
 despesaCampos.parcelas.addEventListener("input", mostrarContaDasParcelas);
 despesaCampos.valor.addEventListener("input", mostrarContaDasParcelas);
 despesaCampos.vencimento.addEventListener("change", mostrarContaDasParcelas);
@@ -1671,11 +1675,13 @@ function limparFormDespesa() {
   despesaCampos.status.value = "Pendente";
   despesaCampos.forma.value = "";
   despesaCampos.servico.value = "";
+  despesaCampos.cartao.value = "";
   despesaCampos.parcelas.value = "1";
   descricaoHint.textContent = "";
   ajustarLinhaDataPagamento();
   ajustarCategoriaOutra(despesaCampos.categoria, linhaCategoriaOutra, despesaCampos.categoriaOutra);
   ajustarLinhaParcelas();
+  ajustarLinhaCartao();
   despesaStatusMsg.className = "status";
   salvarDespesaBotao.textContent = "Salvar despesa";
 }
@@ -1694,6 +1700,7 @@ function abrirFormDespesa(despesa) {
     despesaCampos.dataPagamento.value = String(despesa.dataPagamento || "").slice(0, 10);
     despesaCampos.observacoes.value = despesa.observacoes || "";
     despesaCampos.servico.value = despesa.servicoId || "";
+    despesaCampos.cartao.value = despesa.cartaoId || "";
 
     // Categoria fora da lista fixa entrou como texto livre; devolve o campo
     // "Outros" preenchido, para editar sem perder o que foi escrito.
@@ -1708,6 +1715,7 @@ function abrirFormDespesa(despesa) {
     ajustarLinhaDataPagamento();
     ajustarCategoriaOutra(despesaCampos.categoria, linhaCategoriaOutra, despesaCampos.categoriaOutra);
     ajustarLinhaParcelas();
+    ajustarLinhaCartao();
     salvarDespesaBotao.textContent = "Salvar alterações";
   }
 
@@ -1771,6 +1779,7 @@ despesaForm.addEventListener("submit", async (event) => {
       dataPagamento: despesaCampos.dataPagamento.value,
       observacoes: despesaCampos.observacoes.value.trim(),
       servicoId: despesaCampos.servico.value,
+      cartaoId: despesaCampos.cartao.value,
     };
     if (despesaEditando) corpo.id = despesaEditando;
     else corpo.parcelas = String(vezes);
@@ -3619,47 +3628,383 @@ function atualizarListaDeServicos() {
   campo.value = recebimentos.some((r) => r.id === escolhido) ? escolhido : "";
 }
 
-// ----- Fatura do cartão: confirmar em grupo, no dia do vencimento -----
+// ----- Financeiro: cartões de crédito e pagamento da fatura -----
 
-// Não existe tabela de cartões ainda. Enquanto isso, a DATA DE VENCIMENTO faz
-// esse papel: despesas no cartão que vencem no mesmo dia são tratadas como a
-// mesma fatura, e confirmadas juntas com um clique.
-function despesasDeFaturaPendentes() {
+const listaCartoesBox = document.getElementById("lista-cartoes");
+const listaCartoesStatus = document.getElementById("lista-cartoes-status");
+const modeloCartao = document.getElementById("modelo-cartao");
+const cartaoForm = document.getElementById("form-cartao");
+const cartaoStatusMsg = document.getElementById("cartao-status-msg");
+
+const cartaoCampos = {
+  nome: document.getElementById("cartao-nome"),
+  banco: document.getElementById("cartao-banco"),
+  bandeira: document.getElementById("cartao-bandeira"),
+  final: document.getElementById("cartao-final"),
+  fechamento: document.getElementById("cartao-fechamento"),
+  vencimento: document.getElementById("cartao-vencimento"),
+  chave: document.getElementById("cartao-chave"),
+  tipoChave: document.getElementById("cartao-tipo-chave"),
+  limite: document.getElementById("cartao-limite"),
+  observacoes: document.getElementById("cartao-observacoes"),
+};
+
+let cartoes = [];
+let pagamentosFatura = [];
+let cartaoEditando = "";
+
+ligarMascaraDinheiro(cartaoCampos.limite);
+
+function mostrarCartaoStatus(tipo, mensagem) {
+  cartaoStatusMsg.textContent = mensagem;
+  cartaoStatusMsg.className = `status show ${tipo}`;
+}
+
+// Em qual fatura uma compra cai. Comprou até o dia do fechamento, entra na
+// fatura que fecha neste mês; depois disso, na do mês seguinte. E quando o
+// vencimento é anterior ao fechamento, a fatura só vence no mês seguinte.
+function faturaDaCompra(cartao, dataCompra) {
+  const [ano, mes, dia] = String(dataCompra).slice(0, 10).split("-").map(Number);
+  if (!ano || !mes || !dia) return "";
+
+  let mesFatura = dia <= Number(cartao.diaFechamento) ? mes : mes + 1;
+  let anoFatura = ano;
+
+  if (Number(cartao.diaVencimento) <= Number(cartao.diaFechamento)) mesFatura += 1;
+
+  while (mesFatura > 12) {
+    mesFatura -= 12;
+    anoFatura += 1;
+  }
+
+  return diaNoMes(anoFatura, mesFatura - 1, Number(cartao.diaVencimento));
+}
+
+function cartaoPorId(id) {
+  return cartoes.find((c) => c.id === id) || null;
+}
+
+// ----- Cadastro dos cartões (dentro de Ajustes) -----
+
+function mostrarCicloDoCartao() {
+  const fecha = Number(cartaoCampos.fechamento.value) || 1;
+  const vence = Number(cartaoCampos.vencimento.value) || 1;
+  const hint = document.getElementById("cartao-ciclo-hint");
+
+  const fingido = { diaFechamento: fecha, diaVencimento: vence };
+  const exemplo = faturaDaCompra(fingido, hojeISO());
+  hint.className = "doc-hint";
+  hint.textContent = exemplo
+    ? `Uma compra feita hoje cairia na fatura que vence em ${dataBonita(exemplo)}.`
+    : "";
+}
+
+[cartaoCampos.fechamento, cartaoCampos.vencimento].forEach((campo) =>
+  campo.addEventListener("input", mostrarCicloDoCartao)
+);
+
+function limparFormCartao() {
+  cartaoEditando = "";
+  Object.values(cartaoCampos).forEach((campo) => (campo.value = ""));
+  cartaoCampos.fechamento.value = "1";
+  cartaoCampos.vencimento.value = "10";
+  cartaoStatusMsg.className = "status";
+  document.getElementById("salvar-cartao").textContent = "Salvar cartão";
+  mostrarCicloDoCartao();
+}
+
+function abrirFormCartao(cartao) {
+  limparFormCartao();
+
+  if (cartao) {
+    cartaoEditando = cartao.id;
+    cartaoCampos.nome.value = cartao.nome || "";
+    cartaoCampos.banco.value = cartao.banco || "";
+    cartaoCampos.bandeira.value = cartao.bandeira || "";
+    cartaoCampos.final.value = cartao.final || "";
+    cartaoCampos.fechamento.value = String(cartao.diaFechamento || 1);
+    cartaoCampos.vencimento.value = String(cartao.diaVencimento || 10);
+    cartaoCampos.chave.value = cartao.chavePix || "";
+    cartaoCampos.tipoChave.value = cartao.tipoChavePix || "";
+    porValorNoCampo(cartaoCampos.limite, cartao.limite);
+    cartaoCampos.observacoes.value = cartao.observacoes || "";
+    document.getElementById("salvar-cartao").textContent = "Salvar alterações";
+    mostrarCicloDoCartao();
+  }
+
+  cartaoForm.classList.remove("hidden");
+  document.getElementById("novo-cartao").classList.add("hidden");
+  cartaoCampos.nome.focus();
+}
+
+function fecharFormCartao() {
+  cartaoForm.classList.add("hidden");
+  document.getElementById("novo-cartao").classList.remove("hidden");
+  limparFormCartao();
+}
+
+document.getElementById("novo-cartao").addEventListener("click", () => abrirFormCartao(null));
+document.getElementById("cancelar-cartao").addEventListener("click", fecharFormCartao);
+
+document.getElementById("salvar-cartao").addEventListener("click", async () => {
+  if (!cartaoCampos.nome.value.trim()) {
+    mostrarCartaoStatus("error", "Dê um nome ao cartão.");
+    return;
+  }
+
+  const botao = document.getElementById("salvar-cartao");
+  botao.disabled = true;
+  mostrarCartaoStatus("loading", "Salvando...");
+
+  try {
+    const corpo = {
+      nome: cartaoCampos.nome.value.trim(),
+      banco: cartaoCampos.banco.value.trim(),
+      bandeira: cartaoCampos.bandeira.value,
+      final: cartaoCampos.final.value.trim(),
+      chavePix: cartaoCampos.chave.value.trim(),
+      tipoChavePix: cartaoCampos.tipoChave.value,
+      diaFechamento: cartaoCampos.fechamento.value,
+      diaVencimento: cartaoCampos.vencimento.value,
+      limite: String(valorDoCampo(cartaoCampos.limite)),
+      observacoes: cartaoCampos.observacoes.value.trim(),
+    };
+    if (cartaoEditando) corpo.id = cartaoEditando;
+
+    const resposta = await pedirAoN8n("salvar-cartao", corpo);
+    if (!resposta || !resposta.ok) {
+      throw new Error((resposta && resposta.mensagem) || "Não consegui salvar.");
+    }
+
+    fecharFormCartao();
+    await recarregarCartoes();
+  } catch (err) {
+    mostrarCartaoStatus("error", err.message || "Não foi possível falar com o n8n.");
+  } finally {
+    botao.disabled = false;
+  }
+});
+
+async function recarregarCartoes() {
+  const resposta = await pedirAoN8n("listar-cartoes", {});
+  if (resposta && resposta.ok) cartoes = resposta.cartoes || [];
+  desenharCartoes();
+  atualizarListaDeCartoesNaDespesa();
+  desenharPainel();
+}
+
+function desenharCartoes() {
+  listaCartoesBox.innerHTML = "";
+
+  if (!cartoes.length) {
+    listaCartoesStatus.className = "doc-hint neutral";
+    listaCartoesStatus.textContent = "Nenhum cartão cadastrado ainda.";
+    return;
+  }
+
+  listaCartoesStatus.className = "doc-hint neutral";
+  listaCartoesStatus.textContent = `${cartoes.length} cartão${cartoes.length > 1 ? "ões" : ""}.`;
+  cartoes.forEach((c) => listaCartoesBox.appendChild(montarLinhaCartao(c)));
+}
+
+function montarLinhaCartao(cartao) {
+  const linha = modeloCartao.content.firstElementChild.cloneNode(true);
+  linha.classList.toggle("paga", !cartao.ativo);
+
+  linha.querySelector(".despesa-descricao").textContent =
+    cartao.nome + (cartao.final ? ` ····${cartao.final}` : "");
+  linha.querySelector(".despesa-valor").textContent =
+    cartao.limite > 0 ? dinheiro(cartao.limite) : "";
+
+  const partes = [`fecha dia ${cartao.diaFechamento} · vence dia ${cartao.diaVencimento}`];
+  if (cartao.banco) partes.push(cartao.banco);
+  if (cartao.bandeira) partes.push(cartao.bandeira);
+  // Sem chave PIX o sistema só avisa; não consegue pagar sozinho.
+  partes.push(cartao.chavePix ? "PIX cadastrado" : "sem chave PIX");
+  linha.querySelector(".despesa-extra").textContent = partes.join(" · ");
+
+  const acoes = linha.querySelector(".despesa-acoes");
+  linha.querySelector(".despesa-resumo").addEventListener("click", () => {
+    const abrindo = acoes.classList.contains("hidden");
+    listaCartoesBox.querySelectorAll(".despesa").forEach((outra) => {
+      outra.classList.remove("aberta");
+      outra.querySelector(".despesa-acoes").classList.add("hidden");
+      desarmarConfirmacao(outra.querySelector(".cartao-excluir"), "Excluir");
+    });
+    acoes.classList.toggle("hidden", !abrindo);
+    linha.classList.toggle("aberta", abrindo);
+  });
+
+  linha.querySelector(".cartao-editar").addEventListener("click", () => {
+    abrirFormCartao(cartao);
+    cartaoForm.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+
+  ligarExclusao(linha.querySelector(".cartao-excluir"), "Excluir", "Confirmar exclusão", async () => {
+    try {
+      const resposta = await pedirAoN8n("excluir-cartao", { id: cartao.id });
+      if (!resposta || !resposta.ok) {
+        listaCartoesStatus.className = "doc-hint error";
+        listaCartoesStatus.textContent = (resposta && resposta.mensagem) || "Não consegui excluir.";
+        return;
+      }
+      cartoes = cartoes.filter((c) => c.id !== cartao.id);
+      desenharCartoes();
+      atualizarListaDeCartoesNaDespesa();
+      desenharPainel();
+    } catch (err) {
+      listaCartoesStatus.className = "doc-hint error";
+      listaCartoesStatus.textContent = "Não foi possível falar com o n8n.";
+    }
+  });
+
+  return linha;
+}
+
+// ----- O cartão no formulário de despesa -----
+
+function atualizarListaDeCartoesNaDespesa() {
+  const campo = document.getElementById("despesa-cartao");
+  const escolhido = campo.value;
+  campo.innerHTML = '<option value="">Não informado</option>';
+
+  cartoes.filter((c) => c.ativo).forEach((c) => {
+    const opcao = document.createElement("option");
+    opcao.value = c.id;
+    opcao.textContent = c.nome + (c.final ? ` ····${c.final}` : "");
+    campo.appendChild(opcao);
+  });
+
+  campo.value = cartoes.some((c) => c.id === escolhido) ? escolhido : "";
+}
+
+// O campo de cartão só faz sentido quando a compra foi no cartão de crédito.
+function ajustarLinhaCartao() {
+  const noCartao = despesaCampos.forma.value === "Cartão de crédito";
+  document.getElementById("linha-cartao").classList.toggle("hidden", !noCartao);
+  if (!noCartao) document.getElementById("despesa-cartao").value = "";
+  mostrarFaturaDaCompra();
+}
+
+// Ao escolher cartão e data, o vencimento vira a data da FATURA — é assim que
+// a compra entra no grupo certo, sem o dono ter que calcular de cabeça.
+function mostrarFaturaDaCompra() {
+  const hint = document.getElementById("despesa-cartao-hint");
+  const cartao = cartaoPorId(document.getElementById("despesa-cartao").value);
+  const data = despesaCampos.vencimento.value;
+
+  if (!cartao || !data) {
+    hint.textContent = "";
+    return;
+  }
+
+  const fatura = faturaDaCompra(cartao, data);
+  hint.className = "doc-hint";
+  hint.textContent = fatura
+    ? `Essa compra entra na fatura que vence em ${dataBonita(fatura)}.`
+    : "";
+}
+
+document.getElementById("despesa-cartao").addEventListener("change", mostrarFaturaDaCompra);
+
+// ----- A fatura no Painel -----
+
+// Uma fatura por cartão: as despesas ainda não pagas daquele cartão, agrupadas
+// pela data de vencimento da fatura em que caem.
+function faturasDosCartoes() {
   const hoje = hojeISO();
-  const doCartao = despesas.filter(
+  const grupos = [];
+
+  cartoes.filter((c) => c.ativo).forEach((cartao) => {
+    const doCartao = despesas.filter((d) => d.status !== "Pago" && d.cartaoId === cartao.id);
+
+    const porFatura = {};
+    doCartao.forEach((d) => {
+      // A despesa já foi salva com o vencimento da fatura; se veio sem data,
+      // calcula na hora para não sumir da tela.
+      const dia = String(d.vencimento || "").slice(0, 10) || faturaDaCompra(cartao, hoje);
+      (porFatura[dia] = porFatura[dia] || []).push(d);
+    });
+
+    Object.entries(porFatura).forEach(([dia, itens]) => {
+      // Só entra na tela um dia antes de vencer — antes disso é só previsão.
+      if (somaDias(dia, -1) > hoje) return;
+      grupos.push({
+        cartao,
+        dia,
+        itens,
+        total: itens.reduce((s, i) => s + Number(i.valor || 0), 0),
+      });
+    });
+  });
+
+  return grupos.sort((a, b) => a.dia.localeCompare(b.dia));
+}
+
+// Compras no cartão que não têm cartão escolhido continuam funcionando: viram
+// um grupo pela data, sem PIX — só dá para marcar como pago à mão.
+function faturasSemCartao() {
+  const hoje = hojeISO();
+  const soltas = despesas.filter(
     (d) => d.status !== "Pago" && d.formaPagamento === "Cartão de crédito"
-      && d.vencimento && String(d.vencimento).slice(0, 10) <= hoje
+      && !d.cartaoId && d.vencimento && String(d.vencimento).slice(0, 10) <= hoje
   );
 
   const porData = {};
-  doCartao.forEach((d) => {
+  soltas.forEach((d) => {
     const dia = String(d.vencimento).slice(0, 10);
     (porData[dia] = porData[dia] || []).push(d);
   });
 
   return Object.entries(porData)
-    .map(([dia, itens]) => ({ dia, itens, total: itens.reduce((s, i) => s + Number(i.valor || 0), 0) }))
+    .map(([dia, itens]) => ({
+      cartao: null, dia, itens,
+      total: itens.reduce((s, i) => s + Number(i.valor || 0), 0),
+    }))
     .sort((a, b) => a.dia.localeCompare(b.dia));
 }
 
+function faturaJaPaga(cartaoId, dia) {
+  return pagamentosFatura.some(
+    (p) => p.status === "Enviado" && p.cartaoId === cartaoId
+      && String(p.vencimentoFatura || "").slice(0, 10) === dia
+  );
+}
+
 function desenharFaturas() {
-  const grupos = despesasDeFaturaPendentes();
+  const grupos = [...faturasDosCartoes(), ...faturasSemCartao()];
   const bloco = document.getElementById("faturas-bloco");
   const lista = document.getElementById("faturas-lista");
 
   bloco.classList.toggle("hidden", grupos.length === 0);
-  if (!grupos.length) return;
-
+  // Limpa antes de sair: escondido com conteudo velho dentro reaparece errado
+  // se o bloco voltar a ser mostrado por outro motivo.
   lista.innerHTML = "";
+  if (!grupos.length) return;
   grupos.forEach((grupo) => lista.appendChild(montarLinhaFatura(grupo)));
 }
 
 function montarLinhaFatura(grupo) {
   const bloco = modeloFatura.content.firstElementChild.cloneNode(true);
-  const atrasada = grupo.dia < hojeISO();
+  const hoje = hojeISO();
+  const atrasada = grupo.dia < hoje;
+  const venceHoje = grupo.dia === hoje;
+  const cartao = grupo.cartao;
 
   bloco.querySelector(".fatura-titulo").textContent =
-    `${atrasada ? "Venceu em" : "Vence em"} ${dataBonita(grupo.dia)} · ${dinheiro(grupo.total)}`;
+    `${cartao ? cartao.nome : "Cartão de crédito"} · ${atrasada ? "venceu" : "vence"} em ${dataBonita(grupo.dia)}`;
+
+  const subtitulo = bloco.querySelector(".fatura-subtitulo");
+  if (atrasada) {
+    subtitulo.className = "fatura-subtitulo doc-hint error";
+    subtitulo.textContent = "Já passou do vencimento.";
+  } else if (venceHoje) {
+    subtitulo.className = "fatura-subtitulo doc-hint aviso";
+    subtitulo.textContent = "Vence hoje.";
+  } else {
+    subtitulo.className = "fatura-subtitulo doc-hint aviso";
+    subtitulo.textContent = "Vence amanhã — o PIX precisa sair.";
+  }
 
   const itensBox = bloco.querySelector(".fatura-itens");
   grupo.itens.forEach((item) => {
@@ -3668,20 +4013,106 @@ function montarLinhaFatura(grupo) {
     itensBox.appendChild(li);
   });
 
-  const botao = bloco.querySelector(".fatura-confirmar");
-  const status = bloco.querySelector(".fatura-status");
+  const campoValor = bloco.querySelector(".fatura-valor-campo");
+  ligarMascaraDinheiro(campoValor);
+  porValorNoCampo(campoValor, grupo.total);
 
-  botao.addEventListener("click", async () => {
-    if (!botao.classList.contains("confirmando")) {
-      botao.classList.add("confirmando");
-      botao.textContent = "Confirmar mesmo — vai marcar tudo como pago";
+  const diferenca = bloco.querySelector(".fatura-diferenca");
+  function mostrarDiferenca() {
+    const informado = valorDoCampo(campoValor);
+    const delta = Math.round((informado - grupo.total) * 100) / 100;
+
+    if (Math.abs(delta) < 0.01) {
+      diferenca.className = "fatura-diferenca doc-hint";
+      diferenca.textContent = `Somei ${dinheiro(grupo.total)} das compras lançadas.`;
+      return;
+    }
+    // Diferença é normal: pode haver compra que ainda não foi lançada aqui.
+    diferenca.className = "fatura-diferenca doc-hint aviso";
+    diferenca.textContent = delta > 0
+      ? `${dinheiro(delta)} a mais do que somei — vou lançar a diferença como despesa.`
+      : `${dinheiro(-delta)} a menos do que somei — vou lançar a diferença como despesa.`;
+  }
+  campoValor.addEventListener("input", mostrarDiferenca);
+  mostrarDiferenca();
+
+  const status = bloco.querySelector(".fatura-status");
+  const botaoPagar = bloco.querySelector(".fatura-pagar");
+  const botaoConfirmar = bloco.querySelector(".fatura-confirmar");
+
+  // Sem cartão escolhido ou sem chave PIX, o sistema não tem para onde mandar.
+  const podePagar = Boolean(cartao && cartao.chavePix && cartao.tipoChavePix);
+  botaoPagar.classList.toggle("hidden", !podePagar);
+  bloco.querySelector(".fatura-valor-linha").classList.toggle("hidden", !podePagar);
+  diferenca.classList.toggle("hidden", !podePagar);
+
+  if (cartao && !podePagar) {
+    subtitulo.textContent += " Cadastre a chave PIX do cartão em Ajustes para o sistema pagar sozinho.";
+  }
+
+  function travar(travado, texto) {
+    botaoPagar.disabled = travado;
+    botaoConfirmar.disabled = travado;
+    if (texto) {
+      status.textContent = texto;
+      status.className = "fatura-status status show loading";
+    }
+  }
+
+  // --- pagar por PIX (move dinheiro de verdade) ---
+  botaoPagar.addEventListener("click", async () => {
+    const valor = valorDoCampo(campoValor);
+    if (valor <= 0) {
+      status.textContent = "Informe o valor da fatura.";
+      status.className = "fatura-status status show error";
       return;
     }
 
-    botao.disabled = true;
-    status.textContent = "Confirmando...";
-    status.className = "fatura-status status show loading";
+    // Dois toques, e o segundo diz exatamente o que vai acontecer e para onde.
+    if (!botaoPagar.classList.contains("confirmando")) {
+      botaoPagar.classList.add("confirmando");
+      botaoPagar.textContent = `Confirmar: enviar ${dinheiro(valor)} para ${cartao.chavePix}`;
+      return;
+    }
 
+    travar(true, "Enviando o PIX...");
+    try {
+      const resposta = await pedirAoN8n("pagar-fatura", {
+        cartaoId: cartao.id,
+        vencimentoFatura: grupo.dia,
+        valor: String(valor),
+        valorCalculado: String(grupo.total),
+        ids: grupo.itens.map((i) => i.id).join(","),
+      });
+
+      if (!resposta || !resposta.ok) {
+        status.textContent = (resposta && resposta.mensagem) || "Não consegui pagar.";
+        status.className = "fatura-status status show error";
+        travar(false);
+        botaoPagar.classList.remove("confirmando");
+        botaoPagar.textContent = "Pagar por PIX agora";
+        return;
+      }
+
+      await recarregarAposFatura();
+    } catch (err) {
+      status.textContent = "Não foi possível falar com o n8n. Confira no Asaas se o PIX saiu antes de tentar de novo.";
+      status.className = "fatura-status status show error";
+      travar(false);
+      botaoPagar.classList.remove("confirmando");
+      botaoPagar.textContent = "Pagar por PIX agora";
+    }
+  });
+
+  // --- só marcar como pago, sem mover dinheiro ---
+  botaoConfirmar.addEventListener("click", async () => {
+    if (!botaoConfirmar.classList.contains("confirmando")) {
+      botaoConfirmar.classList.add("confirmando");
+      botaoConfirmar.textContent = "Confirmar — marcar tudo como pago";
+      return;
+    }
+
+    travar(true, "Confirmando...");
     try {
       const resposta = await pedirAoN8n("confirmar-fatura", {
         ids: grupo.itens.map((i) => i.id).join(","),
@@ -3691,9 +4122,9 @@ function montarLinhaFatura(grupo) {
       if (!resposta || !resposta.ok) {
         status.textContent = (resposta && resposta.mensagem) || "Não consegui confirmar.";
         status.className = "fatura-status status show error";
-        botao.disabled = false;
-        botao.classList.remove("confirmando");
-        botao.textContent = "Confirmar que a fatura foi paga";
+        travar(false);
+        botaoConfirmar.classList.remove("confirmando");
+        botaoConfirmar.textContent = "Já paguei por fora — só marcar como pago";
         return;
       }
 
@@ -3701,13 +4132,29 @@ function montarLinhaFatura(grupo) {
     } catch (err) {
       status.textContent = "Não foi possível falar com o n8n.";
       status.className = "fatura-status status show error";
-      botao.disabled = false;
-      botao.classList.remove("confirmando");
-      botao.textContent = "Confirmar que a fatura foi paga";
+      travar(false);
+      botaoConfirmar.classList.remove("confirmando");
+      botaoConfirmar.textContent = "Já paguei por fora — só marcar como pago";
     }
   });
 
   return bloco;
+}
+
+// Depois de pagar uma fatura muda a despesa (virou paga) e o histórico de
+// pagamentos (que é a trava contra pagar duas vezes).
+async function recarregarAposFatura() {
+  const [resDespesas, resPagamentos] = await Promise.all([
+    pedirAoN8n("listar-despesas", {}),
+    pedirAoN8n("listar-pagamentos-fatura", {}),
+  ]);
+  if (resDespesas && resDespesas.ok) despesas = resDespesas.despesas || [];
+  if (resPagamentos && resPagamentos.ok) pagamentosFatura = resPagamentos.pagamentos || [];
+  atualizarListasDeApoio();
+  atualizarFiltroDeMeses();
+  desenharDespesas();
+  desenharDivisao();
+  desenharPainel();
 }
 
 // ----- Carregar tudo -----
@@ -3769,15 +4216,22 @@ async function carregarFinanceiro() {
 // contas fixas vencidas.
 async function segundaOndaDoFinanceiro() {
   try {
-    const [resFornecedores, resConferencias, resCadastros, resGeracao] = await Promise.all([
+    const [resFornecedores, resConferencias, resCadastros, resCartoes,
+           resPagamentosFatura, resGeracao] = await Promise.all([
       pedirAoN8n("listar-fornecedores", {}),
       pedirAoN8n("listar-conferencias", {}),
       pedirAoN8n("listar-cadastros", {}),
+      pedirAoN8n("listar-cartoes", {}),
+      pedirAoN8n("listar-pagamentos-fatura", {}),
       pedirAoN8n("gerar-recorrentes", {}).catch(() => null),
     ]);
 
     fornecedores = (resFornecedores && resFornecedores.fornecedores) || [];
     conferencias = (resConferencias && resConferencias.conferencias) || [];
+    cartoes = (resCartoes && resCartoes.cartoes) || [];
+    pagamentosFatura = (resPagamentosFatura && resPagamentosFatura.pagamentos) || [];
+    desenharCartoes();
+    atualizarListaDeCartoesNaDespesa();
     ligarNomesDosFornecedores();
     atualizarListasDeApoio();
 
@@ -4149,6 +4603,8 @@ sairBotao.addEventListener("click", () => {
   recebimentos = [];
   conferencias = [];
   retiradas = [];
+  cartoes = [];
+  pagamentosFatura = [];
   configFin = null;
   financeiroCarregado = false;
   listaDespesasBox.innerHTML = "";
@@ -4163,6 +4619,7 @@ sairBotao.addEventListener("click", () => {
   document.getElementById("painel-conteudo").classList.add("hidden");
   document.getElementById("divisao-conteudo").classList.add("hidden");
   listaRetiradasBox.innerHTML = "";
+  listaCartoesBox.innerHTML = "";
   atualizarListasDeApoio();
   atualizarFiltroDeMeses();
   mostrarListaDespesasStatus("neutral", "");

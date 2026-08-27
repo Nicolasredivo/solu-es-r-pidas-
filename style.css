@@ -1151,3 +1151,50 @@ button:active:not(:disabled) {
 .fatura-status:empty {
   display: none;
 }
+
+/* ----- Cartões de crédito ----- */
+
+/* O formulário de cartão vive dentro dos Ajustes: a borda separa do resto */
+.bloco-cartao {
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.despesa.cartao-item {
+  border-left: 3px solid var(--aviso);
+}
+
+/* Valor da fatura: editável, porque a fatura real pode ter compra não lançada */
+.fatura-valor-linha {
+  margin-top: 10px;
+}
+
+.fatura-valor-rotulo {
+  margin-bottom: 4px;
+}
+
+.fatura-valor-campo {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.fatura-diferenca {
+  margin-top: -8px;
+}
+
+/* Pagar move dinheiro de verdade: é o único botão cheio deste bloco, e no
+   segundo toque fica vermelho porque aí sim vai sair PIX */
+.fatura-pagar {
+  margin-bottom: 8px;
+}
+
+.fatura-pagar.confirmando {
+  background: var(--error);
+  white-space: normal;
+}
+
+.fatura-subtitulo {
+  margin: 4px 0 8px;
+}

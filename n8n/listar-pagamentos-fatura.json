@@ -1,16 +1,16 @@
 {
-  "name": "App - Listar despesas",
+  "name": "App - Listar pagamentos de fatura",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "listar-despesas",
+        "path": "listar-pagamentos-fatura",
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
         }
       },
-      "id": "c0000000-0000-4000-8000-000000000001",
+      "id": "c0000000-0000-4000-8000-000000000030",
       "name": "Recebe pedido do app",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -18,7 +18,7 @@
         0,
         0
       ],
-      "webhookId": "c0000000-0000-4000-8000-000000000002"
+      "webhookId": "c0000000-0000-4000-8000-000000000031"
     },
     {
       "parameters": {
@@ -31,7 +31,7 @@
           },
           "conditions": [
             {
-              "id": "c0000000-0000-4000-8000-000000000003",
+              "id": "c0000000-0000-4000-8000-000000000032",
               "leftValue": "={{ $json.body.senha }}",
               "rightValue": "TROQUE-ESTA-SENHA",
               "operator": {
@@ -46,7 +46,7 @@
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000004",
+      "id": "c0000000-0000-4000-8000-000000000033",
       "name": "Senha esta correta?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -61,7 +61,7 @@
         "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000005",
+      "id": "c0000000-0000-4000-8000-000000000034",
       "name": "Responde senha incorreta",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -82,23 +82,15 @@
         },
         "table": {
           "__rl": true,
-          "value": "tblNduEKl2jY280V0",
+          "value": "tbldfftPos0qX7nlm",
           "mode": "list",
-          "cachedResultName": "Despesas"
+          "cachedResultName": "Pagamentos_Fatura"
         },
         "filterByFormula": "",
         "returnAll": true,
-        "options": {},
-        "sort": {
-          "property": [
-            {
-              "field": "Vencimento",
-              "direction": "asc"
-            }
-          ]
-        }
+        "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000006",
+      "id": "c0000000-0000-4000-8000-000000000035",
       "name": "Busca",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
@@ -117,9 +109,9 @@
     },
     {
       "parameters": {
-        "jsCode": "// O no de busca devolve um item vazio quando a tabela esta vazia, ou um item\n// de erro se a busca falhou — os dois ficam de fora em vez de quebrar a lista.\nconst achadas = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\nconst primeiro = (v) => (Array.isArray(v) ? (v[0] || \"\") : (v == null ? \"\" : String(v)));\n\nconst despesas = achadas.map((i) => {\n  const f = i.json.fields || {};\n  return {\n    id: i.json.id,\n    descricao: f.Descricao || \"\",\n    valor: f.Valor || 0,\n    fornecedorId: primeiro(f.Fornecedor_Ref),\n    fornecedor: primeiro(f.Fornecedor_Nome),\n    vencimento: f.Vencimento || \"\",\n    status: f.Status || \"Pendente\",\n    categoria: f.Categoria || \"\",\n    formaPagamento: f.Forma_Pagamento || \"\",\n    parcelaNumero: f.Parcela_Numero || 0,\n    parcelaTotal: f.Parcela_Total || 0,\n    grupo: f.Grupo || \"\",\n    recorrenteId: primeiro(f.Recorrente_Ref),\n    // Compra amarrada a um servico entra no custo dele, e sai do lucro.\n    servicoId: primeiro(f.Servico_Ref),\n    // Em qual cartao a compra caiu — e o que agrupa a fatura no painel.\n    cartaoId: primeiro(f.Cartao_Ref),\n    dataPagamento: f.Data_Pagamento || \"\",\n    observacoes: f.Observacoes || \"\",\n  };\n});\n\nreturn [{ json: { ok: true, total: despesas.length, despesas } }];"
+        "jsCode": "const achados = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\nconst primeiro = (v) => (Array.isArray(v) ? (v[0] || \"\") : (v == null ? \"\" : String(v)));\n\nconst pagamentos = achados.map((i) => {\n  const f = i.json.fields || {};\n  return {\n    id: i.json.id,\n    data: f.Data || \"\",\n    cartaoId: primeiro(f.Cartao_Ref),\n    vencimentoFatura: f.Vencimento_Fatura || \"\",\n    valor: f.Valor || 0,\n    valorCalculado: f.Valor_Calculado || 0,\n    status: f.Status || \"\",\n    asaasTransferId: f.Asaas_Transfer_Id || \"\",\n    observacoes: f.Observacoes || \"\",\n  };\n});\n\nreturn [{ json: { ok: true, pagamentos } }];"
       },
-      "id": "c0000000-0000-4000-8000-000000000007",
+      "id": "c0000000-0000-4000-8000-000000000036",
       "name": "Monta lista",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -134,7 +126,7 @@
         "responseBody": "={{ JSON.stringify($json) }}",
         "options": {}
       },
-      "id": "c0000000-0000-4000-8000-000000000008",
+      "id": "c0000000-0000-4000-8000-000000000037",
       "name": "Responde ao app",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
