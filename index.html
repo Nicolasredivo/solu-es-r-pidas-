@@ -380,6 +380,15 @@
           </div>
 
           <div id="painel-conteudo" class="hidden">
+            <!-- Contas no cartão vencendo hoje ou já vencidas: um clique confirma
+                 o grupo inteiro de uma vez, agrupado pela data de vencimento
+                 (ainda não existe uma tabela de cartões, então a data faz esse
+                 papel — despesas do mesmo dia contam como a mesma fatura). -->
+            <div id="faturas-bloco" class="hidden">
+              <h2 class="titulo-bloco">Fatura do cartão venceu</h2>
+              <div id="faturas-lista"></div>
+            </div>
+
             <!-- Itens 1, 2, 3, 6 e 7: o mesmo dinheiro, mostrando quanto já tem dono -->
             <h2 class="titulo-bloco">O seu dinheiro hoje</h2>
             <div class="cascata">
@@ -505,6 +514,17 @@
               <span class="barra-rotulo"></span>
               <span class="barra-trilho"><span class="barra-cheia"></span></span>
               <span class="barra-valor"></span>
+            </div>
+          </template>
+
+          <template id="modelo-fatura">
+            <div class="aviso-caixa fatura-aviso">
+              <strong class="fatura-titulo"></strong>
+              <ul class="fatura-itens"></ul>
+              <button type="button" class="fatura-confirmar botao-secundario">
+                Confirmar que a fatura foi paga
+              </button>
+              <p class="fatura-status status"></p>
             </div>
           </template>
         </div>

@@ -1116,3 +1116,38 @@ button:active:not(:disabled) {
 .despesa.retirada {
   border-left: 3px solid var(--accent);
 }
+
+/* ----- Fatura do cartão vencendo (Painel) ----- */
+
+.fatura-aviso {
+  margin-bottom: 12px;
+}
+
+.fatura-itens {
+  margin: 8px 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+}
+
+.fatura-itens li {
+  margin-bottom: 2px;
+}
+
+.fatura-confirmar {
+  margin-top: 4px;
+}
+
+/* Segundo toque, prestes a marcar tudo como pago: mesmo vermelho usado nas
+   outras confirmações de duas etapas do projeto. */
+.fatura-confirmar.confirmando {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.fatura-status {
+  margin: 8px 0 0;
+}
+
+.fatura-status:empty {
+  display: none;
+}

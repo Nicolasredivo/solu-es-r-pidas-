@@ -50,7 +50,8 @@ Quem executa as automações de verdade é o **n8n**, e o app é só a "tela".
     endereços e contatos de um cadastro existente
 - Página **Financeiro**, com abas "Painel", "A pagar", "A receber",
   "Contas fixas" e "Ajustes"
-  - Painel: saldo em caixa e quanto dele já tem dono (impostos, folha, reserva,
+  - Painel: aviso de fatura de cartão vencida/vencendo com confirmação em
+    grupo, saldo em caixa e quanto dele já tem dono (impostos, folha, reserva,
     capital de giro), o que entra e sai, previsão mês a mês com o mês em que o
     caixa fica negativo em vermelho, fluxo de caixa realizado, limite do MEI,
     conferência com o banco, e o em aberto por categoria e por fornecedor
@@ -138,6 +139,7 @@ Todos criados, publicados e testados de ponta a ponta:
 | `App - Listar retiradas` | `/webhook/listar-retiradas` | `bdBluhbFStnnbI4j` |
 | `App - Salvar retirada` | `/webhook/salvar-retirada` | `EWAGlYN9Idv5yAKx` |
 | `App - Excluir retirada` | `/webhook/excluir-retirada` | `ihcCLwC35J103Y1v` |
+| `App - Confirmar fatura paga` | `/webhook/confirmar-fatura` | `D5VnSvfkddLSxhNL` |
 
 Cada arquivo em `n8n/` tem o nome do caminho do webhook correspondente.
 
@@ -723,6 +725,23 @@ uma peça por vez, e volta quando precisar):
   crédito com essa regra em mente: fica Pendente até ele pagar a fatura de
   verdade, e só aí marca como Paga (na data do pagamento da fatura, não na
   data da cobrança individual).
+
+  **"Confirmar fatura paga" construído em 27/08/2026, provisório até a tabela
+  `Cartoes` existir.** O dono queria que contas fixas no cartão se marcassem
+  sozinhas como pagas no dia da fatura. Ele imaginou o banco avisando por API
+  — **não existe isso pra nenhum banco comum de empresa**, confirmado nesta
+  mesma sessão (ver seção do Asaas/DAS acima). Sem tabela de cartões ainda, o
+  agrupamento é feito pela **data de vencimento**: despesas com
+  `Forma_Pagamento = Cartão de crédito` que vencem no mesmo dia são tratadas
+  como a mesma fatura. No Painel, quando existe alguma vencida ou vencendo
+  hoje, aparece um aviso com a lista e **um botão que confirma o grupo inteiro
+  de uma vez** (dois toques, como o resto do projeto) — nunca marca sozinho
+  sem o dono confirmar; foi decisão dele, não suposição. Workflow
+  `App - Confirmar fatura paga` (`confirmar-fatura`) só mexe em `Status` e
+  `Data_Pagamento`, não reenvia o resto do registro. **Quando a tabela
+  `Cartoes` existir**, trocar o agrupamento por data para agrupamento por
+  cartão — a UI e o workflow já dão para reaproveitar quase inteiros, só muda
+  a função `despesasDeFaturaPendentes()` em `app.js`.
 - **Captura automática de compras** (nota por e-mail, QR do cupom, cruzamento
   com a fatura do cartão, catálogo de produtos com IA) — arquitetura inteira
   já desenhada e com fontes verificadas, ver seção acima. Nada construído.

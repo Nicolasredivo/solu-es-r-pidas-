@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.08.26d";
+const APP_VERSION = "2026.08.27";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -1232,6 +1232,7 @@ const linhaRestantes = document.getElementById("linha-restantes");
 const linhaRecorrenteCategoriaOutra = document.getElementById("linha-recorrente-categoria-outra");
 
 const modeloBarra = document.getElementById("modelo-barra");
+const modeloFatura = document.getElementById("modelo-fatura");
 const listaFornecedoresDatalist = document.getElementById("lista-fornecedores");
 const listaDescricoesDatalist = document.getElementById("lista-descricoes");
 const listaCategoriasDatalist = document.getElementById("lista-categorias");
@@ -2988,6 +2989,8 @@ function desenharPainel() {
   document.getElementById("painel-status").textContent = "";
   if (!configurado) return;
 
+  desenharFaturas();
+
   // --- itens 1, 2, 3, 6 e 7: quanto tem e quanto já tem dono ---
   const saldo = saldoEmCaixa();
   const impostos = impostosProvisionados();
@@ -3614,6 +3617,97 @@ function atualizarListaDeServicos() {
   });
 
   campo.value = recebimentos.some((r) => r.id === escolhido) ? escolhido : "";
+}
+
+// ----- Fatura do cartão: confirmar em grupo, no dia do vencimento -----
+
+// Não existe tabela de cartões ainda. Enquanto isso, a DATA DE VENCIMENTO faz
+// esse papel: despesas no cartão que vencem no mesmo dia são tratadas como a
+// mesma fatura, e confirmadas juntas com um clique.
+function despesasDeFaturaPendentes() {
+  const hoje = hojeISO();
+  const doCartao = despesas.filter(
+    (d) => d.status !== "Pago" && d.formaPagamento === "Cartão de crédito"
+      && d.vencimento && String(d.vencimento).slice(0, 10) <= hoje
+  );
+
+  const porData = {};
+  doCartao.forEach((d) => {
+    const dia = String(d.vencimento).slice(0, 10);
+    (porData[dia] = porData[dia] || []).push(d);
+  });
+
+  return Object.entries(porData)
+    .map(([dia, itens]) => ({ dia, itens, total: itens.reduce((s, i) => s + Number(i.valor || 0), 0) }))
+    .sort((a, b) => a.dia.localeCompare(b.dia));
+}
+
+function desenharFaturas() {
+  const grupos = despesasDeFaturaPendentes();
+  const bloco = document.getElementById("faturas-bloco");
+  const lista = document.getElementById("faturas-lista");
+
+  bloco.classList.toggle("hidden", grupos.length === 0);
+  if (!grupos.length) return;
+
+  lista.innerHTML = "";
+  grupos.forEach((grupo) => lista.appendChild(montarLinhaFatura(grupo)));
+}
+
+function montarLinhaFatura(grupo) {
+  const bloco = modeloFatura.content.firstElementChild.cloneNode(true);
+  const atrasada = grupo.dia < hojeISO();
+
+  bloco.querySelector(".fatura-titulo").textContent =
+    `${atrasada ? "Venceu em" : "Vence em"} ${dataBonita(grupo.dia)} · ${dinheiro(grupo.total)}`;
+
+  const itensBox = bloco.querySelector(".fatura-itens");
+  grupo.itens.forEach((item) => {
+    const li = document.createElement("li");
+    li.textContent = `${item.descricao || "(sem descrição)"} — ${dinheiro(item.valor)}`;
+    itensBox.appendChild(li);
+  });
+
+  const botao = bloco.querySelector(".fatura-confirmar");
+  const status = bloco.querySelector(".fatura-status");
+
+  botao.addEventListener("click", async () => {
+    if (!botao.classList.contains("confirmando")) {
+      botao.classList.add("confirmando");
+      botao.textContent = "Confirmar mesmo — vai marcar tudo como pago";
+      return;
+    }
+
+    botao.disabled = true;
+    status.textContent = "Confirmando...";
+    status.className = "fatura-status status show loading";
+
+    try {
+      const resposta = await pedirAoN8n("confirmar-fatura", {
+        ids: grupo.itens.map((i) => i.id).join(","),
+        dataPagamento: hojeISO(),
+      });
+
+      if (!resposta || !resposta.ok) {
+        status.textContent = (resposta && resposta.mensagem) || "Não consegui confirmar.";
+        status.className = "fatura-status status show error";
+        botao.disabled = false;
+        botao.classList.remove("confirmando");
+        botao.textContent = "Confirmar que a fatura foi paga";
+        return;
+      }
+
+      await recarregarDespesas();
+    } catch (err) {
+      status.textContent = "Não foi possível falar com o n8n.";
+      status.className = "fatura-status status show error";
+      botao.disabled = false;
+      botao.classList.remove("confirmando");
+      botao.textContent = "Confirmar que a fatura foi paga";
+    }
+  });
+
+  return bloco;
 }
 
 // ----- Carregar tudo -----
