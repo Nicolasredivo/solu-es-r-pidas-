@@ -713,6 +713,16 @@ uma peça por vez, e volta quando precisar):
   no **dia real da fatura** de cada cartão, em vez de contar mês a mês a partir
   da compra. Provavelmente vira uma tabela `Cartoes` (nome, dia do fechamento,
   dia do vencimento) e um campo de cartão na despesa.
+  **Regra travada em 27/08/2026, pra não duplicar dinheiro saindo do caixa
+  quando isso for construído:** a fatura tem que ser um jeito de **agrupar**
+  despesas que já existem (pelo cartão + ciclo de fechamento), nunca um lugar
+  novo onde o valor é digitado de novo. O que já sai do caixa hoje é só a
+  despesa marcada como Paga (com `Data_Pagamento`) — a fatura, quando existir,
+  não pode ter seu próprio evento de saída somado por cima disso, senão o
+  mesmo real conta duas vezes. O dono já cadastra contas fixas no cartão de
+  crédito com essa regra em mente: fica Pendente até ele pagar a fatura de
+  verdade, e só aí marca como Paga (na data do pagamento da fatura, não na
+  data da cobrança individual).
 - **Captura automática de compras** (nota por e-mail, QR do cupom, cruzamento
   com a fatura do cartão, catálogo de produtos com IA) — arquitetura inteira
   já desenhada e com fontes verificadas, ver seção acima. Nada construído.
