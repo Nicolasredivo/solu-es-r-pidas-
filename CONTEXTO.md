@@ -560,17 +560,78 @@ Três caminhos possíveis, nenhum construído ainda:
 
 - **Importar o arquivo da fatura** (o banco exporta), uma vez por mês. De
   graça, funciona, esforço é mensal e não por compra.
-- **Conta Simples** — o produto dela é justamente gestão de cartão
-  corporativo. Tem API com sandbox (`api-sandbox.contasimples.com` responde
-  401, confirmado que existe de verdade), mas **não confirmei se ela expõe
-  transação com número de parcelas** — a documentação pública não foi
-  localizada. **Pendência do dono:** perguntar direto no suporte deles se a
-  API lista transações com parcelas, e se é aberta pra qualquer cliente ou só
-  parceiro homologado.
+- **Conta Simples** — **conferido em 27/08/2026 direto em
+  `developers.contasimples.com`, pendência resolvida.** A API é real e
+  self-service (chave gerada no próprio Internet Banking deles, sem precisar
+  virar parceiro homologado). Tem exatamente o que faltava:
+  - `GET /v1/bills?status=OPEN` → a **fatura em aberto de verdade**, com valor
+    total, quanto falta pagar, data de fechamento e vencimento — o que
+    "nenhum banco fornece" (ver acima) a Conta Simples fornece.
+  - `GET /v1/statements/credit-card` → cada compra, com estabelecimento,
+    valor, data, e a parcela atual (`"installment": 1`). **Mas não devolve o
+    total de parcelas** — só sabe "estou na parcela 2", não "2 de 6". Furo
+    real, mas incompleto é bem melhor que nada.
+  - `GET /v1/balance` → saldo, mas é o saldo **da própria conta Conta
+    Simples**, mesmo padrão do Asaas (ver abaixo) — não lê banco externo.
+  - **A pegadinha que muda a decisão:** só funciona pra compra feita em
+    **cartão emitido pela própria Conta Simples**. Não lê o cartão que a
+    empresa já usa — exigiria abrir conta lá e trocar de cartão corporativo,
+    não é só "ligar uma API".
 - **Agregador Open Finance** (Pluggy e afins) — é o mecanismo oficial pra
   alguém fora do sistema bancário ler dado de outro banco (só instituição
   autorizada pelo Banco Central pode; por isso banco não te dá direto). Tem
   mensalidade.
+
+**Conferido em 27/08/2026: o "Open Finance" que aparece no painel do Asaas não
+serve pra isso.** O dono viu o menu Open Finance no Asaas e perguntou se dava
+pra ver o saldo de um banco conectado por ali. Não dá — confirmado direto no
+artigo oficial deles (`central.ajuda.asaas.com`, "Como será a participação do
+Asaas no Open Finance"): **o Asaas participa como *detentora* de dados, não
+como agregadora.** Ou seja, é o Asaas que **compartilha o saldo da própria
+conta Asaas** pra outros bancos/apps usarem (ex: agendar um Pix recorrente no
+app de outro banco usando saldo do Asaas) — o caminho inverso do que
+resolveria o problema. Continua valendo: `/finance/balance` e
+`/financialTransactions` da API do Asaas mostram só o saldo **dentro do
+Asaas**, nunca o de um banco externo.
+
+**Pix pelo Asaas — conferido em 27/08/2026, direto na doc oficial
+(`docs.asaas.com`):**
+
+- `POST /v3/transfers` faz PIX de verdade (chave CPF/CNPJ/e-mail/telefone/EVP)
+  puxando do saldo do Asaas. Tem `scheduleDate` pra agendar uma data futura.
+- **Não é recorrente de verdade** — `scheduleDate` agenda uma transferência,
+  não repete sozinho todo mês. Pra virar "aluguel sai sozinho", o próprio n8n
+  precisaria chamar essa API de novo a cada mês (mesmo padrão do
+  `App - Gerar despesas recorrentes`, que já existe).
+- **Decisão tomada com o dono:** essa automação será construída **com
+  autorização manual antes de cada envio** — o sistema prepara e mostra "vai
+  pagar R$ X pra Y no dia Z, confirma?", nunca 100% sem toque humano de
+  início. Motivo: chave é de produção, PIX é irreversível, e um erro de
+  lógica sai como dinheiro indo pro lugar errado sem chance de desfazer.
+  **Ainda não construído** — combinado pra depois.
+
+**Pague Contas do Asaas aceita DAS — conferido em 27/08/2026.** O saldo motivo
+tira: aceita boleto de cobrança, INSS, DAS, Simples (só não aceita guia DARE).
+Mas o Asaas **não emite nem gera** o DAS — quem gera é sempre o Portal do
+Empreendedor/PGMEI; o Asaas só paga o código de barras que já existe.
+
+**DDA não pega DAS, em nenhum banco — confirmado tecnicamente.** DDA (Débito
+Direto Autorizado) só cobre **boletos de cobrança registrados** (a frase
+oficial é literalmente essa: "o DDA engloba apenas boletos de cobrança
+registrados"). DAS é uma **guia de arrecadação**, categoria diferente, que
+passa pela rede arrecadadora do governo, não pela central de registro que
+alimenta o DDA. Não é limitação do Asaas — nenhum banco mostra DAS via DDA.
+
+**Débito Automático do MEI (o mecanismo certo pra isso) — Asaas não está na
+lista.** Confirmado no manual oficial da Receita
+(`MANUAL_DEBITO_AUTO_MEI.pdf`, versão março/2024): só funciona com conta em
+um dos 14 bancos da rede arrecadadora — Banco do Brasil, Banco da Amazônia,
+Banco do Nordeste, Banestes, Santander, Banrisul, Banese, BRB, Caixa,
+Bradesco, Itaú, Banco Mercantil do Brasil, Sicredi, Sicoob. Todos tradicionais
+— nenhum banco digital/fintech está na lista (nem Asaas, nem Nubank, nem
+Inter). Pra ter DAS debitado sozinho todo mês sem passar pelo app, precisaria
+de conta num desses 14. Fora isso, o caminho é colar o código de barras no
+Pague Contas todo mês, manualmente — ~5 segundos, mas não é automático.
 
 **Descartado, não reconsiderar:** automatizar o app do banco no PC (com ou
 sem IA lendo a tela). Motivos: a senha do banco ficaria guardada num PC com
