@@ -534,6 +534,20 @@
               <button type="button" class="fatura-pagar">
                 Pagar por PIX agora
               </button>
+
+              <!-- Para cartão sem chave PIX fixa (o banco manda um código
+                   diferente por fatura, tipo boleto): cola o código aqui. -->
+              <div class="fatura-boleto-bloco">
+                <label class="fatura-valor-rotulo">
+                  Ou cole o código de barras / linha digitável desta fatura
+                </label>
+                <textarea class="fatura-boleto-campo" rows="2"
+                          placeholder="Copie da fatura do banco (PDF, app ou e-mail)"></textarea>
+                <button type="button" class="fatura-pagar-boleto botao-secundario">
+                  Pagar este boleto agora
+                </button>
+              </div>
+
               <button type="button" class="fatura-confirmar botao-secundario">
                 Já paguei por fora — só marcar como pago
               </button>

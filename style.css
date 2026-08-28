@@ -1198,3 +1198,22 @@ button:active:not(:disabled) {
 .fatura-subtitulo {
   margin: 4px 0 8px;
 }
+
+/* Bloco de pagar por boleto (cartao sem chave PIX fixa) */
+.fatura-boleto-bloco {
+  margin: 6px 0 10px;
+}
+
+.fatura-boleto-campo {
+  width: 100%;
+  min-height: 52px;
+  font-family: monospace;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+.fatura-pagar-boleto.confirmando {
+  border-color: var(--error);
+  color: var(--error);
+  white-space: normal;
+}

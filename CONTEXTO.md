@@ -51,7 +51,8 @@ Quem executa as automações de verdade é o **n8n**, e o app é só a "tela".
 - Página **Financeiro**, com abas "Painel", "A pagar", "A receber",
   "Contas fixas" e "Ajustes"
   - Painel: aviso de fatura de cartão a vencer, com o valor calculado e
-    editável, pagando por PIX direto do Asaas (ou só marcando como paga),
+    editável, pagando por PIX ou por boleto direto do Asaas (ou só marcando
+    como paga),
     saldo em caixa e quanto dele já tem dono (impostos, folha, reserva,
     capital de giro), o que entra e sai, previsão mês a mês com o mês em que o
     caixa fica negativo em vermelho, fluxo de caixa realizado, limite do MEI,
@@ -94,8 +95,9 @@ Base **"Financeiro"** (`appjAmWXV7Zr33UqE`), criada em 22/08/2026:
 - `Retiradas` (`tblh3m5JB6N2sNs5i`) — o que cada sócio já tirou (26/08/2026)
 - `Cartoes` (`tblzJwNGcTpvGmYiM`) — cartões de crédito, com o ciclo da fatura e
   a chave PIX para onde o pagamento vai (27/08/2026)
-- `Pagamentos_Fatura` (`tbldfftPos0qX7nlm`) — comprovante de cada PIX de fatura
-  enviado, e a trava contra pagar duas vezes (27/08/2026)
+- `Pagamentos_Fatura` (`tbldfftPos0qX7nlm`) — comprovante de cada pagamento de
+  fatura (PIX ou boleto, campo `Metodo`), e a trava contra pagar duas vezes
+  (27/08/2026)
 
 Em `Despesas` sobrou o campo antigo `Fornecedor` (texto solto), substituído pelo
 vínculo `Fornecedor_Ref` + o lookup `Fornecedor_Nome`. A API do Airtable não
@@ -149,6 +151,7 @@ Todos criados, publicados e testados de ponta a ponta:
 | `App - Excluir cartao` | `/webhook/excluir-cartao` | `ciGFel5tQvtCozGp` |
 | `App - Listar pagamentos de fatura` | `/webhook/listar-pagamentos-fatura` | `Zf321z3EBXjr3PYI` |
 | `App - Pagar fatura do cartao` | `/webhook/pagar-fatura` | `jCimCPy6ICIwOm4q` |
+| `App - Pagar fatura do cartao por boleto` | `/webhook/pagar-fatura-boleto` | `FayraViYiF44HN6p` |
 | `App - Confirmar fatura paga` | `/webhook/confirmar-fatura` | `D5VnSvfkddLSxhNL` |
 
 Cada arquivo em `n8n/` tem o nome do caminho do webhook correspondente.
@@ -1199,13 +1202,50 @@ Não vira uma despesa nova. Quem tira o dinheiro do caixa são as despesas da
 fatura sendo marcadas como pagas — a mesma regra travada antes, para o mesmo
 real não contar duas vezes.
 
+### Segunda forma de pagar: boleto/linha digitável (28/08/2026)
+
+**Nem todo cartão tem chave PIX fixa pra fatura.** O cartão real do dono (do
+Itaú) manda um **QR code Pix diferente todo mês**, por e-mail — não uma chave
+fixa reutilizável. Pesquisado e confirmado: o **Asaas não paga um Pix Copia e
+Cola de outro banco** por API, só gera o próprio pra receber. A fatura, porém,
+também vem com o boleto tradicional (linha digitável), e isso sim o Asaas paga
+de verdade (`POST /v3/bill`, endpoint do recurso "Pague Contas" deles — já
+confirmado antes que aceita conta de terceiro: INSS, DAS, Simples).
+
+Por isso existe uma **segunda forma de pagar a fatura**, lado a lado com a
+chave PIX:
+
+- **Com chave PIX fixa** (cartão comum): botão "Pagar por PIX agora", como já
+  existia — `App - Pagar fatura do cartao` (`pagar-fatura`).
+- **Sem chave fixa** (caso do Itaú): campo pra colar a linha digitável daquele
+  mês + botão "Pagar este boleto agora" — `App - Pagar fatura do cartao por
+  boleto` (`pagar-fatura-boleto`). Aparece sempre que o cartão existe, mesmo
+  que ele *também* tenha chave PIX (dá pra escolher qualquer um dos dois).
+
+O boleto **continua exigindo um toque manual todo mês** (colar o código) — não
+tem como fugir disso sem o sistema ler o e-mail do banco sozinho, que é um
+projeto bem maior (mesmo tamanho da automação de nota fiscal por e-mail já
+descartada por enquanto). O que se manteve automático foi o resto: o aviso um
+dia antes do vencimento, o valor somado das compras, e a trava contra pagar
+duas vezes.
+
+**Mesmas cinco travas do PIX**, adaptadas: fatura já paga, cartão inexistente,
+valor abaixo de R$ 0,01, valor acima de R$ 100.000, saldo insuficiente no
+Asaas. A única que muda é a validação da chave: como não há chave salva pra
+conferir contra, quem valida o formato da linha digitável é o próprio Asaas
+(testado com `identificationField` inválido → recusa por formato, sem mover
+nada). `Pagamentos_Fatura.Metodo` (novo campo: PIX/Boleto) registra qual
+caminho foi usado.
+
 ### Ainda não testado de ponta a ponta
 
-**Nenhum PIX real foi enviado nos testes** — o saldo do Asaas está em R$ 0,00, e
-foi exatamente essa trava que barrou a tentativa. O endpoint foi conferido
-mandando valor 0 (recusado pelo Asaas, sem chance de transferir), o que provou
-que a chave tem permissão e o formato do pedido está certo. **O primeiro PIX de
-verdade será o do dono** — recomendado começar com um valor pequeno.
+**Nenhum PIX nem boleto real foi enviado nos testes** — o saldo do Asaas está
+em R$ 0,00, e foi exatamente essa trava que barrou as duas tentativas. Os dois
+endpoints foram conferidos com entrada inválida (valor 0 pro PIX, linha
+digitável inválida pro boleto — os dois recusados pelo Asaas antes de mover
+qualquer coisa), o que provou que a chave tem permissão e o formato do pedido
+está certo nos dois casos. **O primeiro pagamento de verdade será o do dono**
+— recomendado começar com um valor pequeno.
 
 ### Credencial
 

@@ -1,10 +1,10 @@
 {
-  "name": "App - Pagar fatura do cartao",
+  "name": "App - Pagar fatura do cartao por boleto",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "pagar-fatura",
+        "path": "pagar-fatura-boleto",
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
@@ -109,7 +109,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const achados = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\nconst pedido = $(\"Recebe pedido do app\").first().json.body || {};\nconst cartaoId = String(pedido.cartaoId || \"\").trim();\nconst vencimento = String(pedido.vencimentoFatura || \"\").slice(0, 10);\n\n// O casamento e feito aqui, e nao na busca: no Code node o Cartao_Ref\n// chega como lista de codigos de verdade, que e o que precisamos comparar.\nconst jaPago = achados.some((i) => {\n  const f = i.json.fields || {};\n  const mesmoCartao = (f.Cartao_Ref || []).includes(cartaoId);\n  const mesmaFatura = String(f.Vencimento_Fatura || \"\").slice(0, 10) === vencimento;\n  return mesmoCartao && mesmaFatura;\n});\n\nreturn [{ json: {\n  jaPago,\n  cartaoId,\n  vencimentoFatura: vencimento,\n} }];"
+        "jsCode": "const achados = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\nconst pedido = $(\"Recebe pedido do app\").first().json.body || {};\nconst cartaoId = String(pedido.cartaoId || \"\").trim();\nconst vencimento = String(pedido.vencimentoFatura || \"\").slice(0, 10);\n\nconst jaPago = achados.some((i) => {\n  const f = i.json.fields || {};\n  const mesmoCartao = (f.Cartao_Ref || []).includes(cartaoId);\n  const mesmaFatura = String(f.Vencimento_Fatura || \"\").slice(0, 10) === vencimento;\n  return mesmoCartao && mesmaFatura;\n});\n\nreturn [{ json: {\n  jaPago,\n  cartaoId,\n  vencimentoFatura: vencimento,\n} }];"
       },
       "id": "c0000000-0000-4000-8000-000000000007",
       "name": "Ja foi pago?",
@@ -158,7 +158,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Esta fatura já foi paga. Nenhum PIX foi enviado.\"\n}",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Esta fatura já foi paga. Nenhum boleto foi pago de novo.\"\n}",
         "options": {}
       },
       "id": "c0000000-0000-4000-8000-000000000010",
@@ -209,10 +209,10 @@
     },
     {
       "parameters": {
-        "jsCode": "const cartao = $input.all().filter((i) => i.json && i.json.id && !i.json.error)[0];\nconst b = $(\"Recebe pedido do app\").first().json.body || {};\n\nconst numero = (v) => {\n  const n = Number(String(v == null ? \"\" : v).replace(\",\", \".\"));\n  return Number.isFinite(n) ? n : 0;\n};\n\nif (!cartao) {\n  return [{ json: { erro: \"Cartão não encontrado.\" } }];\n}\n\nconst f = cartao.json.fields || {};\n// A chave vem SEMPRE do cadastro. O app manda so quanto e de qual cartao.\nconst chave = String(f.Chave_PIX || \"\").trim();\nconst tipo = String(f.Tipo_Chave_PIX || \"\").trim();\n\nif (!chave || !tipo) {\n  return [{ json: { erro: \"Este cartão não tem chave PIX cadastrada. Preencha em Cartões antes de pagar.\" } }];\n}\n\nconst valor = Math.round(numero(b.valor) * 100) / 100;\nif (valor < 0.01) {\n  return [{ json: { erro: \"Informe um valor de pelo menos R$ 0,01.\" } }];\n}\n\n// Trava de bom senso contra dedo errado: valor absurdo nao passa calado.\nif (valor > 100000) {\n  return [{ json: { erro: \"Valor acima de R$ 100.000. Por segurança, pague esse valor direto no banco.\" } }];\n}\n\nconst vencimento = String(b.vencimentoFatura || \"\").slice(0, 10);\nconst ids = String(b.ids || \"\").split(\",\").map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nreturn [{ json: {\n  erro: \"\",\n  valor,\n  valorCalculado: Math.round(numero(b.valorCalculado) * 100) / 100,\n  chave, tipo, vencimento, ids,\n  cartaoId: cartao.json.id,\n  nomeCartao: f.Nome || \"cartão\",\n} }];"
+        "jsCode": "const cartao = $input.all().filter((i) => i.json && i.json.id && !i.json.error)[0];\nconst b = $(\"Recebe pedido do app\").first().json.body || {};\n\nconst numero = (v) => {\n  const n = Number(String(v == null ? \"\" : v).replace(\",\", \".\"));\n  return Number.isFinite(n) ? n : 0;\n};\n\nif (!cartao) {\n  return [{ json: { erro: \"Cartão não encontrado.\" } }];\n}\n\n// Linha digitavel: so numeros, sem espaco nem ponto. O dono cola do jeito\n// que aparece na fatura; aqui e so uma limpeza, quem valida de verdade e\n// o proprio Asaas (confere digito verificador antes de mover dinheiro).\nconst linha = String(b.linhaDigitavel || \"\").replace(/[^0-9]/g, \"\");\nif (linha.length < 40) {\n  return [{ json: { erro: \"Essa linha digitável parece incompleta. Confira e cole de novo.\" } }];\n}\n\nconst valor = Math.round(numero(b.valor) * 100) / 100;\nif (valor < 0.01) {\n  return [{ json: { erro: \"Informe um valor de pelo menos R$ 0,01.\" } }];\n}\n\n// Mesma trava de bom senso do pagamento por PIX.\nif (valor > 100000) {\n  return [{ json: { erro: \"Valor acima de R$ 100.000. Por segurança, pague esse valor direto no banco.\" } }];\n}\n\nconst vencimento = String(b.vencimentoFatura || \"\").slice(0, 10);\nconst ids = String(b.ids || \"\").split(\",\").map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nconst f = cartao.json.fields || {};\nreturn [{ json: {\n  erro: \"\",\n  valor,\n  valorCalculado: Math.round(numero(b.valorCalculado) * 100) / 100,\n  linha, vencimento, ids,\n  cartaoId: cartao.json.id,\n  nomeCartao: f.Nome || \"cartão\",\n} }];"
       },
       "id": "c0000000-0000-4000-8000-000000000012",
-      "name": "Monta o PIX",
+      "name": "Monta o boleto",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -298,7 +298,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const saldo = Number(($json || {}).balance);\nconst dados = $(\"Monta o PIX\").first().json;\n\n// Se a consulta falhou, nao inventa: melhor recusar do que mandar as cegas.\nif (!Number.isFinite(saldo)) {\n  return [{ json: { ...dados, semSaldo: true,\n    mensagemSaldo: \"Não consegui conferir o saldo do Asaas. Nenhum PIX foi enviado.\" } }];\n}\n\nif (saldo < dados.valor) {\n  const falta = (dados.valor - saldo).toFixed(2).replace(\".\", \",\");\n  const tem = saldo.toFixed(2).replace(\".\", \",\");\n  return [{ json: { ...dados, semSaldo: true, saldo,\n    mensagemSaldo: \"Saldo no Asaas é de R$ \" + tem + \", faltam R$ \" + falta + \". Nenhum PIX foi enviado.\" } }];\n}\n\nreturn [{ json: { ...dados, semSaldo: false, saldo } }];"
+        "jsCode": "const saldo = Number(($json || {}).balance);\nconst dados = $(\"Monta o boleto\").first().json;\n\nif (!Number.isFinite(saldo)) {\n  return [{ json: { ...dados, semSaldo: true,\n    mensagemSaldo: \"Não consegui conferir o saldo do Asaas. Nenhum boleto foi pago.\" } }];\n}\n\nif (saldo < dados.valor) {\n  const falta = (dados.valor - saldo).toFixed(2).replace(\".\", \",\");\n  const tem = saldo.toFixed(2).replace(\".\", \",\");\n  return [{ json: { ...dados, semSaldo: true, saldo,\n    mensagemSaldo: \"Saldo no Asaas é de R$ \" + tem + \", faltam R$ \" + falta + \". Nenhum boleto foi pago.\" } }];\n}\n\nreturn [{ json: { ...dados, semSaldo: false, saldo } }];"
       },
       "id": "c0000000-0000-4000-8000-000000000017",
       "name": "Tem saldo?",
@@ -362,18 +362,18 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.asaas.com/v3/transfers",
+        "url": "https://api.asaas.com/v3/bill",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ value: $json.valor, pixAddressKey: $json.chave, pixAddressKeyType: $json.tipo, description: \"Fatura \" + $json.nomeCartao + \" venc \" + $json.vencimento, externalReference: \"fatura-\" + $json.cartaoId + \"-\" + $json.vencimento }) }}",
+        "jsonBody": "={{ JSON.stringify({ identificationField: $json.linha, value: $json.valor, description: \"Fatura \" + $json.nomeCartao + \" venc \" + $json.vencimento, externalReference: \"fatura-\" + $json.cartaoId + \"-\" + $json.vencimento }) }}",
         "options": {
           "timeout": 30000
         }
       },
       "id": "c0000000-0000-4000-8000-000000000021",
-      "name": "Envia o PIX",
+      "name": "Paga o boleto",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -390,7 +390,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const resposta = $json || {};\nconst dados = $(\"Tem saldo?\").first().json;\nconst hoje = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);\n\nconst chamadas = [];\n\n// O comprovante vem primeiro de proposito: se a gravacao seguinte falhar,\n// o pior caso e ter o registro do dinheiro que saiu, nunca o contrario.\nchamadas.push({\n  metodo: \"POST\",\n  url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tbldfftPos0qX7nlm\",\n  corpo: { typecast: true, records: [{ fields: {\n    Data: hoje,\n    Cartao_Ref: [dados.cartaoId],\n    Vencimento_Fatura: dados.vencimento || null,\n    Valor: dados.valor,\n    Valor_Calculado: dados.valorCalculado,\n    Status: \"Enviado\",\n    Metodo: \"PIX\",\n    Asaas_Transfer_Id: String(resposta.id || \"\"),\n  } }] },\n});\n\n// As despesas da fatura viram pagas: e isto que tira o dinheiro do caixa.\n// O PIX em si nao vira despesa, senao o mesmo real contaria duas vezes.\nfor (let i = 0; i < dados.ids.length; i += 10) {\n  chamadas.push({\n    metodo: \"PATCH\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: dados.ids.slice(i, i + 10).map((id) => ({\n      id, fields: { Status: \"Pago\", Data_Pagamento: hoje },\n    })) },\n  });\n}\n\n// Pagou diferente do que o sistema somou? A diferenca vira uma despesa\n// propria, senao o caixa ficaria errado pelo tamanho da diferenca.\nconst diferenca = Math.round((dados.valor - dados.valorCalculado) * 100) / 100;\nif (Math.abs(diferenca) >= 0.01) {\n  chamadas.push({\n    metodo: \"POST\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: [{ fields: {\n      Descricao: \"Diferença da fatura \" + dados.nomeCartao,\n      Valor: diferenca,\n      Vencimento: dados.vencimento || hoje,\n      Data_Pagamento: hoje,\n      Status: \"Pago\",\n      Categoria: \"Outros\",\n      Forma_Pagamento: \"PIX\",\n      Cartao_Ref: [dados.cartaoId],\n      Observacoes: \"Lançada sozinha: a fatura foi paga por um valor diferente do que o sistema tinha somado.\",\n    } }] },\n  });\n}\n\nreturn chamadas.map((c) => ({ json: c }));"
+        "jsCode": "const resposta = $json || {};\nconst dados = $(\"Tem saldo?\").first().json;\nconst hoje = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);\n\nconst chamadas = [];\n\nchamadas.push({\n  metodo: \"POST\",\n  url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tbldfftPos0qX7nlm\",\n  corpo: { typecast: true, records: [{ fields: {\n    Data: hoje,\n    Cartao_Ref: [dados.cartaoId],\n    Vencimento_Fatura: dados.vencimento || null,\n    Valor: dados.valor,\n    Valor_Calculado: dados.valorCalculado,\n    Status: \"Enviado\",\n    Metodo: \"Boleto\",\n    Asaas_Transfer_Id: String(resposta.id || \"\"),\n  } }] },\n});\n\nfor (let i = 0; i < dados.ids.length; i += 10) {\n  chamadas.push({\n    metodo: \"PATCH\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: dados.ids.slice(i, i + 10).map((id) => ({\n      id, fields: { Status: \"Pago\", Data_Pagamento: hoje },\n    })) },\n  });\n}\n\nconst diferenca = Math.round((dados.valor - dados.valorCalculado) * 100) / 100;\nif (Math.abs(diferenca) >= 0.01) {\n  chamadas.push({\n    metodo: \"POST\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: [{ fields: {\n      Descricao: \"Diferença da fatura \" + dados.nomeCartao,\n      Valor: diferenca,\n      Vencimento: dados.vencimento || hoje,\n      Data_Pagamento: hoje,\n      Status: \"Pago\",\n      Categoria: \"Outros\",\n      Forma_Pagamento: \"Boleto\",\n      Cartao_Ref: [dados.cartaoId],\n      Observacoes: \"Lançada sozinha: a fatura foi paga por um valor diferente do que o sistema tinha somado.\",\n    } }] },\n  });\n}\n\nreturn chamadas.map((c) => ({ json: c }));"
       },
       "id": "c0000000-0000-4000-8000-000000000022",
       "name": "Monta as gravacoes",
@@ -433,7 +433,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, mensagem: \"PIX enviado e fatura quitada!\" }) }}",
+        "responseBody": "={{ JSON.stringify({ ok: true, mensagem: \"Boleto pago e fatura quitada!\" }) }}",
         "options": {}
       },
       "id": "c0000000-0000-4000-8000-000000000024",
@@ -448,7 +448,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"ATENÇÃO: o PIX foi enviado, mas não consegui atualizar o sistema. Confira no Asaas e marque as despesas como pagas à mão.\"\n}",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"ATENÇÃO: o boleto foi pago, mas não consegui atualizar o sistema. Confira no Asaas e marque as despesas como pagas à mão.\"\n}",
         "options": {}
       },
       "id": "c0000000-0000-4000-8000-000000000025",
@@ -462,7 +462,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// O PIX nao saiu. Guarda a tentativa para o dono saber o que aconteceu.\nconst erro = $json || {};\nconst dados = $(\"Tem saldo?\").first().json;\nconst hoje = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);\n\nconst motivo = ((erro.error || {}).message)\n  || (((erro.errors || [])[0] || {}).description)\n  || \"O Asaas recusou a transferência.\";\n\nreturn [{ json: {\n  metodo: \"POST\",\n  url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tbldfftPos0qX7nlm\",\n  corpo: { typecast: true, records: [{ fields: {\n    Data: hoje,\n    Cartao_Ref: [dados.cartaoId],\n    Vencimento_Fatura: dados.vencimento || null,\n    Valor: dados.valor,\n    Valor_Calculado: dados.valorCalculado,\n    Status: \"Falhou\",\n    Observacoes: motivo,\n  } }] },\n  motivo,\n} }];"
+        "jsCode": "const erro = $json || {};\nconst dados = $(\"Tem saldo?\").first().json;\nconst hoje = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);\n\nconst motivo = ((erro.error || {}).message)\n  || (((erro.errors || [])[0] || {}).description)\n  || \"O Asaas recusou o pagamento do boleto.\";\n\nreturn [{ json: {\n  metodo: \"POST\",\n  url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tbldfftPos0qX7nlm\",\n  corpo: { typecast: true, records: [{ fields: {\n    Data: hoje,\n    Cartao_Ref: [dados.cartaoId],\n    Vencimento_Fatura: dados.vencimento || null,\n    Valor: dados.valor,\n    Valor_Calculado: dados.valorCalculado,\n    Status: \"Falhou\",\n    Metodo: \"Boleto\",\n    Observacoes: motivo,\n  } }] },\n  motivo,\n} }];"
       },
       "id": "c0000000-0000-4000-8000-000000000026",
       "name": "Monta a falha",
@@ -505,7 +505,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: false, mensagem: \"Não consegui enviar o PIX: \" + $('Monta a falha').first().json.motivo }) }}",
+        "responseBody": "={{ JSON.stringify({ ok: false, mensagem: \"Não consegui pagar o boleto: \" + $('Monta a falha').first().json.motivo }) }}",
         "options": {}
       },
       "id": "c0000000-0000-4000-8000-000000000028",
@@ -592,14 +592,14 @@
       "main": [
         [
           {
-            "node": "Monta o PIX",
+            "node": "Monta o boleto",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Monta o PIX": {
+    "Monta o boleto": {
       "main": [
         [
           {
@@ -661,14 +661,14 @@
         ],
         [
           {
-            "node": "Envia o PIX",
+            "node": "Paga o boleto",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Envia o PIX": {
+    "Paga o boleto": {
       "main": [
         [
           {

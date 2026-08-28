@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.08.27b";
+const APP_VERSION = "2026.08.28";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4038,20 +4038,27 @@ function montarLinhaFatura(grupo) {
 
   const status = bloco.querySelector(".fatura-status");
   const botaoPagar = bloco.querySelector(".fatura-pagar");
+  const botaoPagarBoleto = bloco.querySelector(".fatura-pagar-boleto");
+  const campoBoleto = bloco.querySelector(".fatura-boleto-campo");
   const botaoConfirmar = bloco.querySelector(".fatura-confirmar");
 
-  // Sem cartão escolhido ou sem chave PIX, o sistema não tem para onde mandar.
-  const podePagar = Boolean(cartao && cartao.chavePix && cartao.tipoChavePix);
-  botaoPagar.classList.toggle("hidden", !podePagar);
-  bloco.querySelector(".fatura-valor-linha").classList.toggle("hidden", !podePagar);
-  diferenca.classList.toggle("hidden", !podePagar);
+  // Sem cartão escolhido ou sem chave PIX, o sistema não tem para onde mandar
+  // por PIX — mas o boleto continua disponível, porque o código vem colado
+  // na hora, não precisa de nada salvo.
+  const podePagarPix = Boolean(cartao && cartao.chavePix && cartao.tipoChavePix);
+  const podePagarBoleto = Boolean(cartao);
+  botaoPagar.classList.toggle("hidden", !podePagarPix);
+  bloco.querySelector(".fatura-boleto-bloco").classList.toggle("hidden", !podePagarBoleto);
+  bloco.querySelector(".fatura-valor-linha").classList.toggle("hidden", !podePagarPix && !podePagarBoleto);
+  diferenca.classList.toggle("hidden", !podePagarPix && !podePagarBoleto);
 
-  if (cartao && !podePagar) {
-    subtitulo.textContent += " Cadastre a chave PIX do cartão em Ajustes para o sistema pagar sozinho.";
+  if (cartao && !podePagarPix) {
+    subtitulo.textContent += " Este cartão não tem chave PIX fixa — cole o código da fatura para pagar por boleto.";
   }
 
   function travar(travado, texto) {
     botaoPagar.disabled = travado;
+    botaoPagarBoleto.disabled = travado;
     botaoConfirmar.disabled = travado;
     if (texto) {
       status.textContent = texto;
@@ -4101,6 +4108,59 @@ function montarLinhaFatura(grupo) {
       travar(false);
       botaoPagar.classList.remove("confirmando");
       botaoPagar.textContent = "Pagar por PIX agora";
+    }
+  });
+
+  // --- pagar por boleto (move dinheiro de verdade, para cartão sem chave fixa) ---
+  botaoPagarBoleto.addEventListener("click", async () => {
+    const valor = valorDoCampo(campoValor);
+    if (valor <= 0) {
+      status.textContent = "Informe o valor da fatura.";
+      status.className = "fatura-status status show error";
+      return;
+    }
+
+    const linha = campoBoleto.value.replace(/[^0-9]/g, "");
+    if (linha.length < 40) {
+      status.textContent = "Cole o código de barras ou a linha digitável completa da fatura.";
+      status.className = "fatura-status status show error";
+      return;
+    }
+
+    // Dois toques, e o segundo confirma o valor exato antes de pagar.
+    if (!botaoPagarBoleto.classList.contains("confirmando")) {
+      botaoPagarBoleto.classList.add("confirmando");
+      botaoPagarBoleto.textContent = `Confirmar: pagar ${dinheiro(valor)} deste boleto`;
+      return;
+    }
+
+    travar(true, "Pagando o boleto...");
+    try {
+      const resposta = await pedirAoN8n("pagar-fatura-boleto", {
+        cartaoId: cartao.id,
+        vencimentoFatura: grupo.dia,
+        valor: String(valor),
+        valorCalculado: String(grupo.total),
+        linhaDigitavel: linha,
+        ids: grupo.itens.map((i) => i.id).join(","),
+      });
+
+      if (!resposta || !resposta.ok) {
+        status.textContent = (resposta && resposta.mensagem) || "Não consegui pagar o boleto.";
+        status.className = "fatura-status status show error";
+        travar(false);
+        botaoPagarBoleto.classList.remove("confirmando");
+        botaoPagarBoleto.textContent = "Pagar este boleto agora";
+        return;
+      }
+
+      await recarregarAposFatura();
+    } catch (err) {
+      status.textContent = "Não foi possível falar com o n8n. Confira no Asaas se o boleto saiu antes de tentar de novo.";
+      status.className = "fatura-status status show error";
+      travar(false);
+      botaoPagarBoleto.classList.remove("confirmando");
+      botaoPagarBoleto.textContent = "Pagar este boleto agora";
     }
   });
 
