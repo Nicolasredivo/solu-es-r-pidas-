@@ -1269,6 +1269,119 @@ cabeçalho `access_token`) **dentro do n8n**, id `99sqJeNJjk6jJRgZ`. Conferido
 que os arquivos em `n8n/*.json` referenciam só o id e o nome — a chave nunca
 aparece no repositório.
 
+## Revisão de segurança e de perda de dados (29/08/2026)
+
+Feita depois do incidente de 28/08, a pedido do dono, com quatro princípios
+que valem daqui pra frente: **não perder dado recente; não fazer mudança
+irreversível sozinho e sem avisar; não deixar dado exposto; aguentar ataque
+básico.**
+
+### Backup diário — antes não existia nenhum
+
+`App - Backup de tudo` lê as **13 tabelas das 3 bases** e grava um JSON com os
+registros crus (`id` + `fields`), de onde dá pra reconstruir na mão.
+
+- **Onde**: `C:\Users\rediv\.n8n-files\backups-sistema\` — um arquivo por dia
+  (`2026-08-29.json`) e um `ultimo.json` fixo.
+- **Por que essa pasta e não o OneDrive**: o n8n só grava dentro de
+  `~/.n8n-files`. Ele tem uma lista de pastas permitidas
+  (`restrictFileAccessTo`, padrão `~/.n8n-files`) e qualquer outro caminho dá
+  `The file ... is not writable`. Mudar isso exige a variável
+  `N8N_RESTRICT_FILE_ACCESS_TO` na hora de subir o n8n — e o dono sobe na mão,
+  então não dá pra confiar que vai lembrar. Copiar pro OneDrive por dentro do
+  n8n também não deu: **o nó `executeCommand` não existe nesta instalação**
+  (`Unrecognized node type`), o que aliás é um padrão bom.
+- **Dois gatilhos, de propósito**: agendado às 22h *e* uma chamada do próprio
+  app ao entrar, no máximo uma vez por dia (`backupDoDia`, guardada em
+  `localStorage`). Só o agendamento não bastava — ele só roda se o PC estiver
+  ligado às 22h. O gatilho do app roda quando os dados de fato mudam.
+- Custa ~8s e não trava a tela: falha de backup nunca impede de entrar.
+- **A pasta fica fora do repositório**, que é público e não pode receber dado
+  de cliente.
+
+### Config_Financeiro podia duplicar e sumir — a causa provável do susto
+
+Duas falhas somadas, nas duas pontas:
+
+- `salvar-config` confiava no `id` que o app mandava e, **sem id, criava linha
+  nova** numa tabela que só pode ter uma.
+- `listar-config` buscava **sem filtro nenhum** e pegava `[0]` — a linha que o
+  Airtable devolvesse primeiro, ordem que depende da view.
+
+Junte os dois e o resultado é exatamente o que o dono relatou: salva, fecha,
+abre e está tudo zerado. Agora:
+
+- `salvar-config` **procura a linha ele mesmo** (`{Chave} = 'principal'`) e o
+  app não manda id nenhum. Não existe caminho que crie a segunda linha.
+- Os dois lados escolhem a **mais antiga** por `createdTime` — critério que não
+  muda se alguém reordenar a view.
+- Verificado com quatro pedidos malformados (sem corpo, id vazio, id
+  inventado, id sem formato): nenhuma linha nova, nenhum valor alterado.
+
+**Sobrou uma linha duplicada** (`recV4T0MA60rb5OjW`, só com `Chave`, nenhum
+dado) criada por um teste em 29/08. Está inerte e foi deixada de propósito:
+apagar é irreversível e o dono precisa saber antes.
+
+### Gravação parcial não zera mais o resto
+
+`SALVAR_CONFIG` só grava **os campos que vieram no pedido**
+(`hasOwnProperty`). Antes, um pedido com metade dos campos zerava a outra
+metade — foi assim que os dados de verdade se perderam em 28/08.
+
+### Senha
+
+Trocada: era uma data de nascimento — 8 dígitos, chutável por quem conhece o
+dono, e escrever a antiga aqui neste arquivo entregaria o padrão. Virou uma
+frase de 4 palavras + 3 dígitos, 30 caracteres. 244 palavras disponíveis dão
+~3,2×10¹² combinações: a 1.000 tentativas por segundo, ~51 anos em média.
+
+- Guardada em `C:\Users\rediv\senha-app.txt`.
+- **Trocada nos 37 workflows de uma vez** e conferido que a antiga não entra em
+  nenhuma rota, nem de leitura nem de gravação.
+
+**Armadilha que custou caro:** `scratchpad/fin-comum.js` lia a senha de
+`cgtZoemwpad0tVTN.json`, um export **congelado no tempo**. Republicar qualquer
+workflow o fazia voltar pra senha velha, e a tela parava de salvar sem
+explicação. Agora lê de `senha-app.txt`, a fonte de verdade.
+
+### CORS fechado
+
+Os 38 webhooks estavam com `allowedOrigins: '*'` — qualquer site do mundo
+podia falar com o túnel pelo navegador do dono. Agora só:
+
+```
+https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099
+```
+
+Medido: o navegador libera as duas primeiras e bloqueia as demais. Isso **não**
+substitui a senha (CORS não vale pra `curl`); serve pra impedir que um site
+qualquer use o navegador do dono como ponte pra ficar chutando senha.
+
+**Se o app for aberto de um endereço fora dessa lista, todas as telas param com
+erro de CORS.** Para liberar outro, editar `scratchpad/seguranca5-cors.js` e
+rodar de novo.
+
+Cuidado ao mexer em workflow pela API: **`PUT` despublica**, e `settings` só
+aceita `executionOrder`, `saveDataSuccessExecution` e
+`saveDataErrorExecution` — qualquer outra chave dá HTTP 400 (o
+`App - Testar conexao` tinha `binaryMode` e `availableInMCP` e quebrou por
+isso, duas vezes).
+
+### Endereço do túnel saiu do repositório
+
+`config.js` ia pro GitHub **com o endereço do túnel dentro** — a porta de
+entrada do sistema, num repositório público. Agora `N8N_BASE_URL = ""` e o
+endereço é digitado na tela de entrada, guardado só no aparelho. O app já
+avisava certo quando falta: *"Falta o endereço do n8n"*.
+
+### O que ainda está aberto
+
+- Não há limite de tentativas de senha. Com a senha nova o risco é teórico
+  (~51 anos), mas some se a senha voltar a ser fraca.
+- O backup só existe se o n8n rodar. Não há aviso de "faz X dias sem backup".
+- A cópia pro OneDrive não é automática: hoje o backup mora só neste PC. O
+  Airtable continua sendo a cópia fora do PC.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
@@ -1279,6 +1392,13 @@ aparece no repositório.
   navegador.
 - Hospedagem no GitHub Pages, de graça (por isso o repositório é público).
 - Comprar domínio próprio para o túnel: adiado, sem urgência.
+- **O endereço do túnel não vai para o repositório.** `config.js` fica vazio; o
+  endereço é digitado na tela de entrada de cada aparelho.
+- **Nunca gravar em tabela de configuração de linha única só para testar**, e
+  em teste nenhum escrever na linha real do dono. Foi assim que se perdeu dado
+  em 28/08.
+- **Antes de apagar qualquer coisa do Airtable, avisar o dono** — não existe
+  histórico e não tem volta.
 
 ## Próximos passos previstos, depois do pendente
 

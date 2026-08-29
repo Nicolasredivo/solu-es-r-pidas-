@@ -1,8 +1,14 @@
-// Endereço padrão do seu n8n (gerado pelo Cloudflare Tunnel).
+// Endereço do seu n8n.
 //
-// Você NÃO precisa mais editar este arquivo quando o túnel mudar: dá para
-// trocar o endereço direto no app, em "Endereço do n8n" na tela de entrada.
-// O que você salvar lá vale só no seu aparelho e tem prioridade sobre isto.
+// PROPOSITALMENTE VAZIO. Este arquivo vai para o GitHub, que é público — e o
+// endereço do túnel aqui dentro seria a porta de entrada do sistema para
+// qualquer um que achasse o repositório. Sem ele, quem encontrar o código não
+// sabe onde bater.
 //
-// Coloque só o endereço base, sem nada depois da barra.
-const N8N_BASE_URL = "https://unified-pda-devices-intersection.trycloudflare.com";
+// Onde colocar o endereço: na tela de entrada do app, em "⚙ Endereço do n8n".
+// O que você salvar lá fica guardado só no seu aparelho, e precisa ser
+// informado uma vez em cada aparelho que usar o sistema.
+//
+// Toda vez que o túnel for reiniciado ele ganha um endereço novo, e você
+// precisa colar o novo ali. É o preço de não deixar a porta anunciada.
+const N8N_BASE_URL = "";

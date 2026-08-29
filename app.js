@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.08.28";
+const APP_VERSION = "2026.08.29";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4398,6 +4398,40 @@ function showStatus(kind, message) {
   statusBox.className = `status show ${kind}`;
 }
 
+// Backup: uma cópia de tudo, uma vez por dia.
+//
+// O n8n já roda isso sozinho às 22h, mas só se o computador estiver ligado
+// naquela hora — e não está sempre. Aqui é o contrário: roda quando você abre
+// o sistema, que é justamente quando os dados mudam. Um dos dois pega.
+//
+// Roda solto, sem travar a tela: se falhar, você entra do mesmo jeito. Um
+// backup que atrasa é melhor que um app que não abre.
+const CHAVE_ULTIMO_BACKUP = "solucoes-rapidas:ultimo-backup";
+
+function backupDoDia(senha) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  try {
+    if (localStorage.getItem(CHAVE_ULTIMO_BACKUP) === hoje) return;
+  } catch (e) {
+    // Sem localStorage (aba anônima), faz o backup mesmo. Repetir não estraga.
+  }
+
+  fetchN8n("fazer-backup", { senha })
+    .then((r) => r.json())
+    .then((d) => {
+      if (!d || !d.ok) return;
+      try {
+        localStorage.setItem(CHAVE_ULTIMO_BACKUP, hoje);
+      } catch (e) {
+        /* sem onde anotar; no máximo faz de novo amanhã */
+      }
+    })
+    .catch(() => {
+      // Silencioso de propósito: backup é tarefa de fundo. Se não deu hoje,
+      // não marca a data e a próxima abertura tenta de novo.
+    });
+}
+
 async function entrar(senha) {
   if (!baseUrlN8n()) {
     showStatus("error", "Falta o endereço do n8n — toque em '⚙ Endereço do n8n' abaixo.");
@@ -4422,6 +4456,7 @@ async function entrar(senha) {
       showStatus("ok", data.mensagem || "Conectado com sucesso!");
       gateView.classList.add("hidden");
       appView.classList.remove("hidden");
+      backupDoDia(senha);
     } else {
       // Senha recusada: não adianta manter a que estava guardada.
       localStorage.removeItem(CHAVE_SENHA);
