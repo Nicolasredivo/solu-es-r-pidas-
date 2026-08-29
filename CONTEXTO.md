@@ -1382,6 +1382,54 @@ avisava certo quando falta: *"Falta o endereço do n8n"*.
 - A cópia pro OneDrive não é automática: hoje o backup mora só neste PC. O
   Airtable continua sendo a cópia fora do PC.
 
+## Cliente sincronizado com a Asaas ao cadastrar (29/08/2026)
+
+Todo cadastro (condomínio/empresa/pessoa física) agora vira **cliente na
+Asaas** sozinho, sem digitar de novo lá. Criado e editado no
+`App - Salvar entidade` / `App - Atualizar cadastro`; **nunca excluído por
+ali** (decisão do dono: excluir cliente na Asaas apaga junto qualquer cobrança
+pendente ou vencida dele, e isso não tem volta — exclusão no sistema local
+deixa o cliente órfão na Asaas de propósito, para excluir lá é preciso ser na
+mão).
+
+Campo novo, só aditivo: `Asaas_Customer_Id` em `Entidades_Cadastradas`,
+guardando o id que a Asaas devolve. Sem ele cada edição precisaria procurar o
+cliente na Asaas de novo.
+
+**De onde vem cada campo do cliente na Asaas:**
+
+| Campo Asaas | Vem de |
+|---|---|
+| `name` | `Razao_Social_Nome` |
+| `cpfCnpj` | `CPF_CNPJ`, só dígitos |
+| `email` (principal) | `Emails_Financeiro_NFE` — decisão do dono, é o que ele considera o principal |
+| `additionalEmails` | e-mail do contato (o primeiro), só se for diferente do de cima |
+| `mobilePhone` | primeiro WhatsApp do contato, sem o 55 na frente — **não** o `WhatsApp_CNPJ` (esse é só o telefone da Receita) |
+| `address` / `addressNumber` / `complement` / `postalCode` | separados por regex do `Endereço completo` do primeiro local vinculado (formato `"RUA X, 100, CEP 00000-000"`) |
+| `province` | o bairro, primeira parte de `Bairro_Cidade` |
+| `notificationDisabled` | `true`, **só na criação** |
+| `externalReference` | o id do cadastro no Airtable |
+
+**Hoje sempre 1 local e 1 contato por cadastro, mas o formulário aceita
+vários — usa sempre o primeiro vinculado de cada.** Se um dia isso deixar de
+bastar, é só avisar.
+
+**O endereço é um texto só, não campos separados.** Enquanto seguir o padrão
+de sempre (a consulta à Receita gera assim), a separação funciona. Um endereço
+digitado fora desse padrão manda CEP/número vazios pra Asaas — não trava nada,
+só sincroniza incompleto.
+
+**A notificação nunca é mandada numa edição**, só na criação. Testado de
+verdade: liguei a notificação direto na Asaas, editei o cadastro pelo app
+mudando o e-mail, e a notificação continuou ligada — a chave simplesmente não
+viaja na edição, então nada volta atrás sozinho.
+
+Verificado de ponta a ponta com um CNPJ descartável (criado, editado,
+excluído, cliente de teste removido da Asaas manualmente depois) — nunca na
+linha de um cliente real. **Achado no meio do teste**: meu primeiro gerador de
+dígito verificador de CNPJ tinha os pesos errados; a Asaas recusou
+corretamente ("CPF/CNPJ inválido") — não era bug no fluxo.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
