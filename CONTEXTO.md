@@ -1430,6 +1430,54 @@ linha de um cliente real. **Achado no meio do teste**: meu primeiro gerador de
 dígito verificador de CNPJ tinha os pesos errados; a Asaas recusou
 corretamente ("CPF/CNPJ inválido") — não era bug no fluxo.
 
+**Importante: essa sincronização não cobre cadastro que já existia antes
+dela.** Os 4 cadastros que já estavam no sistema em 29/08 precisaram de uma
+rodada manual à parte (reenviando os mesmos dados de cada um pelo
+`atualizar-cadastro`, só para disparar a criação na Asaas) — documentado
+abaixo. **Se aparecer cadastro novo no futuro que não passe por
+`salvar-entidade`** (importação em lote, por exemplo), vai precisar do mesmo
+tipo de rodada manual.
+
+### Notificação padrão de cobrança para todo cliente (29/08/2026)
+
+A Asaas cria, sozinha, 8 preferências de notificação para cada cliente novo
+(uma por evento) — e o padrão dela manda e-mail **e** SMS pro cliente em quase
+tudo. O dono definiu o padrão dele, evento por evento (só o canal
+"para o cliente"; "para mim" fica como a Asaas já traz, desligado):
+
+| Evento na Asaas | `scheduleOffset` | Regra do dono |
+|---|---|---|
+| `PAYMENT_CREATED` | 0 | só e-mail |
+| `PAYMENT_UPDATED` | 0 | nada |
+| `PAYMENT_DUEDATE_WARNING` | 10 | só e-mail |
+| `PAYMENT_DUEDATE_WARNING` | 0 | nada |
+| `SEND_LINHA_DIGITAVEL` | 0 | nada |
+| `PAYMENT_OVERDUE` | 0 | só e-mail |
+| `PAYMENT_OVERDUE` | 7 | só e-mail |
+| `PAYMENT_RECEIVED` | 0 | nada |
+
+**Aplicado nos 4 clientes já existentes** (uma rodada manual, via
+`GET .../customers/{id}/notifications` + `PUT .../notifications/{id}` por
+evento) e **virou automático para todo cliente novo**: depois que
+`Salvar entidade` (ou a primeira sincronização de um cadastro antigo, dentro
+de `Atualizar cadastro`) cria o cliente na Asaas, o próprio fluxo lê as 8
+notificações que a Asaas acabou de criar e ajusta cada uma para o padrão
+acima, antes de responder ao app.
+
+**Numa edição normal (cliente que já tem `Asaas_Customer_Id`) as notificações
+não são tocadas de novo** — só são configuradas no momento em que o cliente é
+criado. Testado: editar um cadastro já sincronizado não mexeu nas
+notificações dele.
+
+**Achado no caminho, vale registrar**: um workflow de teste com
+`sendBody` calculado por fórmula (`={{ metodo !== "GET" }}`) **respondia
+normalmente mas não mandava o corpo de verdade** — o PUT "funcionava" (a
+Asaas respondia com o objeto) só que nada mudava. Trocado por dois nós fixos
+(um só de leitura, sem corpo; um só de gravação, com corpo sempre ligado) e
+passou a funcionar. Os workflows de produção nunca usaram esse truque —
+o `metodo`/`url` dinâmico neles é só no `{{ }}` do próprio texto, nunca no
+`sendBody`.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
