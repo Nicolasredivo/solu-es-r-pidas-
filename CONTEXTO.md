@@ -177,6 +177,21 @@ Foi a falta disso que travou o projeto antes. Funciona assim:
 
 ## Coisas descobertas testando (não repetir o erro)
 
+- **INCIDENTE REAL em 28/08/2026 — teste apagou dado de verdade do dono, sem
+  querer.** `Config_Financeiro` tem uma linha só, e por isso é tentador usar a
+  linha real pra testar em vez de criar uma linha separada. Fiz isso construindo
+  Cartões e depois o pagamento por boleto: ao "limpar" no fim de cada sessão,
+  zerei `Saldo_Inicial`, `Data_Saldo_Inicial`, `Reserva_Meta`, `Giro_Meta`,
+  `Imposto_Fixo_Mensal`, `Teto_Anual`, `Folha_Mensal` — sem checar se o dono já
+  tinha preenchido aqueles campos de verdade entre uma sessão e outra. Só não
+  perdi `Socio_1_Nome`/`Socio_2_Nome`/percentuais porque, por sorte, fui
+  cuidadoso em ler-e-devolver *esses* campos específicos sem mudar; os outros
+  eu simplesmente sobrescrevi com o valor fixo que usava pra testar. O dono
+  perdeu o que tinha preenchido, sem eu ter como recuperar (não guardo
+  histórico). **Regra: nunca gravar em `Config_Financeiro` (nem em nenhuma
+  tabela de configuração de linha única) só pra testar.** Se precisar testar
+  salvar/ler de novo, criar uma tabela ou linha temporária separada — já está
+  validado que o mecanismo funciona, não precisa retestar tocando no dado real.
 - **Versão do n8n: 2.31.5.** O nó do Airtable é o **2.2**, não o 2.1.
   A diferença importa: no 2.1 os campos do registro vinham soltos na raiz;
   no 2.2 vêm dentro de `.fields`. Ler do lugar errado devolve vazio calado.
