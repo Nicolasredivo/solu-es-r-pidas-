@@ -1478,6 +1478,25 @@ passou a funcionar. Os workflows de produção nunca usaram esse truque —
 o `metodo`/`url` dinâmico neles é só no `{{ }}` do próprio texto, nunca no
 `sendBody`.
 
+### Contato com mais de um e-mail (30/08/2026)
+
+Achado no cadastro `76874528000151` (PANACAT): o contato "camillo" tem 4
+e-mails cadastrados, mas só o primeiro estava indo pra Asaas — os outros 3
+eram descartados sem aviso nenhum. A Asaas aceita mais de um e-mail extra no
+mesmo cliente (`additionalEmails`, separados por vírgula); o código só não
+estava juntando todos.
+
+Corrigido em `Salvar entidade` e `Atualizar cadastro`: agora TODOS os
+e-mails do contato entram (junto com o de Financeiro/NF-e), sem repetir. O
+primeiro vira o principal (`email`), o resto vai todo em `additionalEmails`.
+Continua valendo: o de Financeiro/NF-e é sempre o principal quando existe —
+só muda o que costumava ser jogado fora.
+
+Reaplicado no PANACAT (reenviando os dados sem mudar nada, só pra disparar a
+correção) e conferido direto na Asaas: os 4 e-mails chegaram. Testado também
+que cadastro com um e-mail só (o caso comum) continua saindo exatamente
+igual a antes.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
