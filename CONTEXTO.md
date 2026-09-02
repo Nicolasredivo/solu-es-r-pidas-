@@ -1646,7 +1646,12 @@ dono pediu explicitamente pra abrir a galeria. Virou dois botões
 alimentam a mesma lista de anexos por baixo; o usuário nem percebe a
 diferença, só que agora tem dois toques em vez de um.
 
-### Duração combinada: período + horas extras (03/09/2026)
+### Duração combinada: período + horas extras (03/09/2026) — SUBSTITUÍDO
+
+> Esta abordagem (botões de período + extensão) foi trocada no mesmo dia
+> por algo mais simples — ver "Agendamento livre: só início e fim
+> (03/09/2026)" logo abaixo. Fica registrado aqui só pelo achado do bug em
+> `achaHorarioLivre`, que continua válido.
 
 Pedido: Manhã ou Tarde poder vir combinado com uma extensão — "Manhã + 2h",
 "Tarde + 1h" etc. — pro serviço que passa um pouco do período normal mas não
@@ -1691,6 +1696,50 @@ chamado`, `App - Reagendar chamado`).
 abrir como `file://` faz o navegador embutido renderizar como "static
 snapshot" e não carrega `style.css`/`app.js` (achado ao ver que a segunda
 fileira de duração aparecia sempre visível, sem nenhum CSS aplicado).
+
+### Agendamento livre: só início e fim (03/09/2026)
+
+Depois de entregues os botões de período + extensão, o dono pediu algo
+mais direto: **nada de botão pra escolher duração** — só dois campos de
+horário, "De" e "Até", pra marcar o intervalo que quiser (ex: cliente
+combinou 14h, mas o serviço reserva das 13:30 às 17:30, um intervalo que
+não bate com nenhum período fixo). Substitui de vez o esquema de Manhã/
+Tarde/Dia inteiro/1h/2h/3h e sua extensão — tudo isso saiu.
+
+**Simplificação grande no back-end**: como o bloco reservado agora é
+sempre um "de tal hora até tal hora" escolhido direto, toda a lógica de
+período fixo (`PERIODOS`, `HORAS_FIXAS`, `separaDuracaoExtra`,
+`calculaBloco`) saiu de `chamados-comum.js` — no lugar entrou uma função
+só, `montaBloco(data, inicio, fim)`, que apenas monta o ISO de cada
+horário. `achaHorarioLivre` também simplificou: em vez de receber uma
+string de duração e ter que decifrá-la, agora recebe a duração pronta em
+milissegundos (calculada por quem chama, como `fim - início` do pedido)
+— e de quebra passou a devolver também `fim`/`fimIso` da sugestão (antes
+só devolvia o início), o que sobrou bem útil pro mecanismo de "empurrar"
+abaixo.
+
+**Campo `Duracao_Escolhida` no Airtable parou de ser usado.** Era
+`singleSelect` com `typecast: true` criando opção nova a cada valor —
+funcionava bem quando os valores eram um conjunto pequeno e fixo
+(1h/2h/3h/períodos), mas com início/fim livres cada chamado teria uma
+combinação diferente, o que faria a lista de opções do campo crescer sem
+parar. Decisão: parar de gravar nele (registros antigos mantêm o que já
+tinha; `Reservado_Inicio`/`Reservado_Fim`, que já eram a fonte de verdade
+pro cálculo de conflito, continuam sendo gravados normalmente).
+
+**Mecanismo de "empurrar" ficou mais simples também**: antes, quando um
+chamado precisava ser deslocado por causa de conflito, o app tinha que
+carregar a duração original dele (`conflito.duracao`) pra manter o mesmo
+tamanho no novo horário. Agora a sugestão que vem de `achaHorarioLivre`
+já inclui início **e** fim prontos — o app só repassa os dois direto pro
+`App - Reagendar chamado`, sem precisar saber nada sobre duração.
+
+**Tela**: os dois formulários (criar e editar) trocaram a fileira de
+botões por dois `<input type="time">` lado a lado, "De" e "Até" — layout
+novo `.chamado-horario-intervalo` no `style.css`. Removidas as funções
+`ligarDuracaoPills`/`selecionaDuracaoPill`/`aplicaDuracaoNoHorario`/
+`montaDuracaoFinal`/`separaDuracaoBase` do `app.js` (não sobrou nenhum
+código de botão de duração no app).
 
 ## Decisões já tomadas (não relitigar sem motivo)
 

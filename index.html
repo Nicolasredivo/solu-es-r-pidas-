@@ -1288,26 +1288,17 @@
               <label for="edit-chamado-data">Data</label>
               <input type="date" id="edit-chamado-data" />
 
-              <label>Duração</label>
-              <div id="edit-chamado-duracao-opcoes" class="chamado-duracao-opcoes">
-                <button type="button" class="chamado-duracao-item" data-duracao="1h">1 hora</button>
-                <button type="button" class="chamado-duracao-item" data-duracao="2h">2 horas</button>
-                <button type="button" class="chamado-duracao-item" data-duracao="3h">3 horas</button>
-                <button type="button" class="chamado-duracao-item" data-duracao="Período manhã">Manhã</button>
-                <button type="button" class="chamado-duracao-item" data-duracao="Período tarde">Tarde</button>
-                <button type="button" class="chamado-duracao-item" data-duracao="Dia inteiro">Dia inteiro</button>
+              <label>Reservar o tempo de serviço</label>
+              <div class="chamado-horario-intervalo">
+                <div>
+                  <label for="edit-chamado-reservado-inicio">De</label>
+                  <input type="time" id="edit-chamado-reservado-inicio" />
+                </div>
+                <div>
+                  <label for="edit-chamado-reservado-fim">Até</label>
+                  <input type="time" id="edit-chamado-reservado-fim" />
+                </div>
               </div>
-              <div id="edit-chamado-duracao-extra-opcoes" class="chamado-duracao-opcoes chamado-duracao-extra-opcoes hidden">
-                <button type="button" class="chamado-duracao-extra-item" data-extra="0">Só o período</button>
-                <button type="button" class="chamado-duracao-extra-item" data-extra="1">+ 1 hora</button>
-                <button type="button" class="chamado-duracao-extra-item" data-extra="2">+ 2 horas</button>
-                <button type="button" class="chamado-duracao-extra-item" data-extra="3">+ 3 horas</button>
-              </div>
-              <input type="hidden" id="edit-chamado-duracao" />
-
-              <label for="edit-chamado-reservado-inicio">Reservar a partir de</label>
-              <input type="time" id="edit-chamado-reservado-inicio" />
-              <p id="edit-chamado-reservado-fixo-info" class="doc-hint hidden"></p>
 
               <label for="edit-chamado-horario-combinado">Horário combinado com o cliente (opcional)</label>
               <input type="time" id="edit-chamado-horario-combinado" />
@@ -1368,26 +1359,17 @@
                 <label for="chamado-data">Data</label>
                 <input type="date" id="chamado-data" />
 
-                <label>Duração</label>
-                <div id="chamado-duracao-opcoes" class="chamado-duracao-opcoes">
-                  <button type="button" class="chamado-duracao-item" data-duracao="1h">1 hora</button>
-                  <button type="button" class="chamado-duracao-item" data-duracao="2h">2 horas</button>
-                  <button type="button" class="chamado-duracao-item" data-duracao="3h">3 horas</button>
-                  <button type="button" class="chamado-duracao-item" data-duracao="Período manhã">Manhã</button>
-                  <button type="button" class="chamado-duracao-item" data-duracao="Período tarde">Tarde</button>
-                  <button type="button" class="chamado-duracao-item" data-duracao="Dia inteiro">Dia inteiro</button>
+                <label>Reservar o tempo de serviço</label>
+                <div class="chamado-horario-intervalo">
+                  <div>
+                    <label for="chamado-reservado-inicio">De</label>
+                    <input type="time" id="chamado-reservado-inicio" value="08:00" />
+                  </div>
+                  <div>
+                    <label for="chamado-reservado-fim">Até</label>
+                    <input type="time" id="chamado-reservado-fim" value="09:00" />
+                  </div>
                 </div>
-                <div id="chamado-duracao-extra-opcoes" class="chamado-duracao-opcoes chamado-duracao-extra-opcoes hidden">
-                  <button type="button" class="chamado-duracao-extra-item" data-extra="0">Só o período</button>
-                  <button type="button" class="chamado-duracao-extra-item" data-extra="1">+ 1 hora</button>
-                  <button type="button" class="chamado-duracao-extra-item" data-extra="2">+ 2 horas</button>
-                  <button type="button" class="chamado-duracao-extra-item" data-extra="3">+ 3 horas</button>
-                </div>
-                <input type="hidden" id="chamado-duracao" />
-
-                <label for="chamado-reservado-inicio">Reservar a partir de</label>
-                <input type="time" id="chamado-reservado-inicio" value="08:00" />
-                <p id="chamado-reservado-fixo-info" class="doc-hint hidden"></p>
 
                 <label for="chamado-horario-combinado">Horário combinado com o cliente (opcional)</label>
                 <input type="time" id="chamado-horario-combinado" />

@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03c";
+const APP_VERSION = "2026.09.03d";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4681,10 +4681,7 @@ const editChamadoAnexosLista = document.getElementById("edit-chamado-anexos-list
 const editChamadoData = document.getElementById("edit-chamado-data");
 const editChamadoHorarioCombinado = document.getElementById("edit-chamado-horario-combinado");
 const editChamadoReservadoInicio = document.getElementById("edit-chamado-reservado-inicio");
-const editChamadoReservadoFixoInfo = document.getElementById("edit-chamado-reservado-fixo-info");
-const editChamadoDuracaoOpcoes = document.getElementById("edit-chamado-duracao-opcoes");
-const editChamadoDuracaoExtraOpcoes = document.getElementById("edit-chamado-duracao-extra-opcoes");
-const editChamadoDuracao = document.getElementById("edit-chamado-duracao");
+const editChamadoReservadoFim = document.getElementById("edit-chamado-reservado-fim");
 const editChamadoConflito = document.getElementById("edit-chamado-conflito");
 const editChamadoSalvarBotao = document.getElementById("edit-chamado-salvar");
 const editChamadoCancelarFormBotao = document.getElementById("edit-chamado-cancelar-form");
@@ -4711,10 +4708,7 @@ const chamadoAnexosLista = document.getElementById("chamado-anexos-lista");
 const chamadoDataInput = document.getElementById("chamado-data");
 const chamadoHorarioCombinadoInput = document.getElementById("chamado-horario-combinado");
 const chamadoReservadoInicioInput = document.getElementById("chamado-reservado-inicio");
-const chamadoReservadoFixoInfo = document.getElementById("chamado-reservado-fixo-info");
-const chamadoDuracaoOpcoes = document.getElementById("chamado-duracao-opcoes");
-const chamadoDuracaoExtraOpcoes = document.getElementById("chamado-duracao-extra-opcoes");
-const chamadoDuracaoSelect = document.getElementById("chamado-duracao");
+const chamadoReservadoFimInput = document.getElementById("chamado-reservado-fim");
 const chamadoConflitoBox = document.getElementById("chamado-conflito");
 const chamadoForm = document.getElementById("chamado-form");
 const chamadoSalvarBotao = document.getElementById("chamado-salvar-botao");
@@ -4744,92 +4738,6 @@ function mostrarChamadosListaStatus(tipo, mensagem) {
   chamadosStatusEl.textContent = mensagem;
   chamadosStatusEl.className = `doc-hint ${tipo}`;
 }
-
-// Duração como botões de toque único, em vez de menu suspenso — mais rápido
-// pro dia a dia, principalmente no celular. Período/dia inteiro têm horário
-// fixo (combinado com o dono): nesse caso o campo de hora vira um texto
-// informativo, mais claro do que um campo desabilitado (que em alguns
-// navegadores parece quebrado).
-const DURACAO_HORARIO_FIXO = { "Período manhã": "08:00", "Período tarde": "13:30", "Dia inteiro": "08:00" };
-
-// Só manhã e tarde aceitam a extensão "+ Nh" (dia inteiro já cobre o dia
-// todo, e as durações em hora fixa não têm "período" pra estender).
-const PERIODOS_COM_EXTRA = ["Período manhã", "Período tarde"];
-
-function montaDuracaoFinal(base, extraHoras) {
-  return extraHoras ? `${base} + ${extraHoras}h` : base;
-}
-
-// Espelha, no navegador, o mesmo regex usado no n8n (chamados-comum.js) pra
-// separar duração base + extensão — precisa reconstruir o estado da UI ao
-// abrir a edição de um chamado que já tem uma extensão salva.
-function separaDuracaoBase(duracao) {
-  const m = /^(.*) \+ (\d)h$/.exec(duracao || "");
-  return m ? { base: m[1], extra: Number(m[2]) } : { base: duracao || "", extra: 0 };
-}
-
-function aplicaDuracaoNoHorario(base, inicioEl, fixoInfoEl) {
-  const fixo = DURACAO_HORARIO_FIXO[base];
-  if (fixo) {
-    inicioEl.value = fixo;
-    inicioEl.classList.add("hidden");
-    fixoInfoEl.textContent = `A partir das ${fixo}.`;
-    fixoInfoEl.classList.remove("hidden");
-  } else {
-    inicioEl.classList.remove("hidden");
-    fixoInfoEl.classList.add("hidden");
-  }
-}
-
-function ligarDuracaoPills(containerEl, extraContainerEl, hiddenInputEl, inicioEl, fixoInfoEl) {
-  containerEl.querySelectorAll(".chamado-duracao-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      containerEl.querySelectorAll(".chamado-duracao-item").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      const base = btn.dataset.duracao;
-      aplicaDuracaoNoHorario(base, inicioEl, fixoInfoEl);
-      if (PERIODOS_COM_EXTRA.includes(base)) {
-        extraContainerEl.classList.remove("hidden");
-        extraContainerEl.querySelectorAll(".chamado-duracao-extra-item").forEach((b) => b.classList.toggle("active", b.dataset.extra === "0"));
-        hiddenInputEl.value = montaDuracaoFinal(base, 0);
-      } else {
-        extraContainerEl.classList.add("hidden");
-        extraContainerEl.querySelectorAll(".chamado-duracao-extra-item").forEach((b) => b.classList.remove("active"));
-        hiddenInputEl.value = base;
-      }
-    });
-  });
-  extraContainerEl.querySelectorAll(".chamado-duracao-extra-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const baseAtivo = containerEl.querySelector(".chamado-duracao-item.active");
-      if (!baseAtivo) return;
-      extraContainerEl.querySelectorAll(".chamado-duracao-extra-item").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      hiddenInputEl.value = montaDuracaoFinal(baseAtivo.dataset.duracao, Number(btn.dataset.extra));
-    });
-  });
-}
-
-// Usado ao limpar o formulário e ao abrir a edição de um chamado, pra marcar
-// a opção certa (base + extensão) sem precisar de um clique de verdade.
-function selecionaDuracaoPill(containerEl, extraContainerEl, hiddenInputEl, inicioEl, fixoInfoEl, duracao) {
-  const { base, extra } = separaDuracaoBase(duracao);
-  containerEl.querySelectorAll(".chamado-duracao-item").forEach((b) => b.classList.toggle("active", b.dataset.duracao === base));
-  hiddenInputEl.value = duracao || "";
-  if (base) aplicaDuracaoNoHorario(base, inicioEl, fixoInfoEl);
-  else { inicioEl.classList.remove("hidden"); fixoInfoEl.classList.add("hidden"); }
-
-  if (base && PERIODOS_COM_EXTRA.includes(base)) {
-    extraContainerEl.classList.remove("hidden");
-    extraContainerEl.querySelectorAll(".chamado-duracao-extra-item").forEach((b) => b.classList.toggle("active", Number(b.dataset.extra) === extra));
-  } else {
-    extraContainerEl.classList.add("hidden");
-    extraContainerEl.querySelectorAll(".chamado-duracao-extra-item").forEach((b) => b.classList.remove("active"));
-  }
-}
-
-ligarDuracaoPills(chamadoDuracaoOpcoes, chamadoDuracaoExtraOpcoes, chamadoDuracaoSelect, chamadoReservadoInicioInput, chamadoReservadoFixoInfo);
-ligarDuracaoPills(editChamadoDuracaoOpcoes, editChamadoDuracaoExtraOpcoes, editChamadoDuracao, editChamadoReservadoInicio, editChamadoReservadoFixoInfo);
 
 // ----- passo 1: busca de cliente, 100% no navegador -----
 
@@ -5058,9 +4966,9 @@ function limparConflitoBox(box) {
   box.innerHTML = "";
 }
 
-async function checarConflito(data, reservadoInicio, duracao, ignorarId) {
-  if (!data || !duracao) return { ok: true, temConflito: false };
-  return pedirAoN8n("checar-conflito-chamado", { data, reservadoInicio, duracao, chamadoIdIgnorar: ignorarId || "" });
+async function checarConflito(data, reservadoInicio, reservadoFim, ignorarId) {
+  if (!data || !reservadoInicio || !reservadoFim) return { ok: true, temConflito: false };
+  return pedirAoN8n("checar-conflito-chamado", { data, reservadoInicio, reservadoFim, chamadoIdIgnorar: ignorarId || "" });
 }
 
 // aoUsarSugestao(sugestao) e aoEmpurrar(sugestao, conflito) decidem o que
@@ -5072,7 +4980,7 @@ function mostrarConflitoBox(box, resultado, aoUsarSugestao, aoEmpurrar) {
 
   if (resultado.sugestao) {
     const s = resultado.sugestao;
-    html += `<p>Horário livre mais próximo: ${formatarDataChamado(s.data)} às ${s.inicio}.</p>` +
+    html += `<p>Horário livre mais próximo: ${formatarDataChamado(s.data)}, das ${s.inicio} às ${s.fim}.</p>` +
       `<button type="button" class="botao-secundario botao-usar-sugestao">Usar esse horário</button>` +
       `<button type="button" class="botao-secundario botao-empurrar">Marcar mesmo assim, e mover o Chamado #${c.numero} pra esse horário livre</button>`;
   }
@@ -5102,12 +5010,12 @@ function limparFormularioChamado() {
   chamadoDataInput.value = "";
   chamadoHorarioCombinadoInput.value = "";
   chamadoReservadoInicioInput.value = "08:00";
-  selecionaDuracaoPill(chamadoDuracaoOpcoes, chamadoDuracaoExtraOpcoes, chamadoDuracaoSelect, chamadoReservadoInicioInput, chamadoReservadoFixoInfo, "");
+  chamadoReservadoFimInput.value = "09:00";
   limparConflitoBox(chamadoConflitoBox);
   mostrarChamadoStatus("neutral", "");
 }
 
-async function criarChamadoDeVerdade(chamadoEmpurradoId, sugestaoParaEmpurrado, duracaoEmpurrado) {
+async function criarChamadoDeVerdade(chamadoEmpurradoId, sugestaoParaEmpurrado) {
   chamadoSalvarBotao.disabled = true;
   mostrarChamadoStatus("neutral", "Salvando...");
 
@@ -5119,7 +5027,7 @@ async function criarChamadoDeVerdade(chamadoEmpurradoId, sugestaoParaEmpurrado, 
     observacoesServico: chamadoObservacoesInput.value.trim(),
     data: chamadoDataInput.value,
     reservadoInicio: chamadoReservadoInicioInput.value,
-    duracao: chamadoDuracaoSelect.value,
+    reservadoFim: chamadoReservadoFimInput.value,
     horarioCombinadoCliente: chamadoHorarioCombinadoInput.value,
     // Viaja como texto JSON num campo só, mesmo padrão de "locais"/"contatos"
     // no Cadastro: URLSearchParams não sabe serializar um array de verdade.
@@ -5138,7 +5046,7 @@ async function criarChamadoDeVerdade(chamadoEmpurradoId, sugestaoParaEmpurrado, 
   if (resposta && resposta.ok && chamadoEmpurradoId && sugestaoParaEmpurrado) {
     await pedirAoN8n("reagendar-chamado", {
       chamadoId: chamadoEmpurradoId, data: sugestaoParaEmpurrado.data,
-      reservadoInicio: sugestaoParaEmpurrado.inicio, duracao: duracaoEmpurrado,
+      reservadoInicio: sugestaoParaEmpurrado.inicio, reservadoFim: sugestaoParaEmpurrado.fim,
     });
   }
 
@@ -5163,24 +5071,29 @@ chamadoForm.addEventListener("submit", async (evento) => {
   }
 
   const temData = Boolean(chamadoDataInput.value);
-  if (temData && !chamadoDuracaoSelect.value) {
-    mostrarChamadoStatus("error", "Escolha a duração do agendamento.");
+  if (temData && (!chamadoReservadoInicioInput.value || !chamadoReservadoFimInput.value)) {
+    mostrarChamadoStatus("error", "Preencha o horário de início e fim do serviço.");
+    return;
+  }
+  if (temData && chamadoReservadoFimInput.value <= chamadoReservadoInicioInput.value) {
+    mostrarChamadoStatus("error", "O horário final precisa ser depois do início.");
     return;
   }
 
   if (temData) {
-    const resultado = await checarConflito(chamadoDataInput.value, chamadoReservadoInicioInput.value, chamadoDuracaoSelect.value);
+    const resultado = await checarConflito(chamadoDataInput.value, chamadoReservadoInicioInput.value, chamadoReservadoFimInput.value);
     if (resultado && resultado.temConflito) {
       mostrarConflitoBox(chamadoConflitoBox, resultado,
         (sugestao) => {
           chamadoDataInput.value = sugestao.data;
           chamadoReservadoInicioInput.value = sugestao.inicio;
+          chamadoReservadoFimInput.value = sugestao.fim;
           limparConflitoBox(chamadoConflitoBox);
           criarChamadoDeVerdade();
         },
         (sugestao, conflito) => {
           limparConflitoBox(chamadoConflitoBox);
-          criarChamadoDeVerdade(conflito.id, sugestao, conflito.duracao);
+          criarChamadoDeVerdade(conflito.id, sugestao);
         });
       return;
     }
@@ -5307,12 +5220,18 @@ async function abrirEdicaoChamado(chamado) {
     const d = new Date(chamado.reservadoInicio);
     editChamadoData.value = dataLocalISO(d);
     editChamadoReservadoInicio.value = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    if (chamado.reservadoFim) {
+      const f = new Date(chamado.reservadoFim);
+      editChamadoReservadoFim.value = `${String(f.getHours()).padStart(2, "0")}:${String(f.getMinutes()).padStart(2, "0")}`;
+    } else {
+      editChamadoReservadoFim.value = "";
+    }
   } else {
     editChamadoData.value = "";
     editChamadoReservadoInicio.value = "08:00";
+    editChamadoReservadoFim.value = "09:00";
   }
   editChamadoHorarioCombinado.value = chamado.horarioCombinadoCliente || "";
-  selecionaDuracaoPill(editChamadoDuracaoOpcoes, editChamadoDuracaoExtraOpcoes, editChamadoDuracao, editChamadoReservadoInicio, editChamadoReservadoFixoInfo, chamado.duracaoEscolhida || "");
   limparConflitoBox(editChamadoConflito);
   mostrarEditChamadoStatus("neutral", "");
 
@@ -5352,7 +5271,7 @@ editChamadoCancelarFormBotao.addEventListener("click", () => {
   chamadoEditandoAtual = null;
 });
 
-async function salvarEdicaoChamado(chamadoEmpurradoId, sugestaoParaEmpurrado, duracaoEmpurrado) {
+async function salvarEdicaoChamado(chamadoEmpurradoId, sugestaoParaEmpurrado) {
   editChamadoSalvarBotao.disabled = true;
   mostrarEditChamadoStatus("neutral", "Salvando...");
 
@@ -5379,18 +5298,18 @@ async function salvarEdicaoChamado(chamadoEmpurradoId, sugestaoParaEmpurrado, du
     return;
   }
 
-  // O agendamento só muda se data e duração estiverem preenchidos — editar
+  // O agendamento só muda se data e horário estiverem preenchidos — editar
   // só os outros campos, sem mexer na data, não toca nisso.
-  if (editChamadoData.value && editChamadoDuracao.value) {
+  if (editChamadoData.value && editChamadoReservadoInicio.value && editChamadoReservadoFim.value) {
     const respostaAgenda = await pedirAoN8n("reagendar-chamado", {
       chamadoId: chamadoEditandoAtual.id,
       data: editChamadoData.value, reservadoInicio: editChamadoReservadoInicio.value,
-      duracao: editChamadoDuracao.value, horarioCombinadoCliente: editChamadoHorarioCombinado.value,
+      reservadoFim: editChamadoReservadoFim.value, horarioCombinadoCliente: editChamadoHorarioCombinado.value,
     });
     if (respostaAgenda && respostaAgenda.ok && chamadoEmpurradoId && sugestaoParaEmpurrado) {
       await pedirAoN8n("reagendar-chamado", {
         chamadoId: chamadoEmpurradoId, data: sugestaoParaEmpurrado.data,
-        reservadoInicio: sugestaoParaEmpurrado.inicio, duracao: duracaoEmpurrado,
+        reservadoInicio: sugestaoParaEmpurrado.inicio, reservadoFim: sugestaoParaEmpurrado.fim,
       });
     }
     if (!respostaAgenda || !respostaAgenda.ok) {
@@ -5409,24 +5328,29 @@ async function salvarEdicaoChamado(chamadoEmpurradoId, sugestaoParaEmpurrado, du
 editChamadoSalvarBotao.addEventListener("click", async () => {
   limparConflitoBox(editChamadoConflito);
 
-  if (editChamadoData.value && !editChamadoDuracao.value) {
-    mostrarEditChamadoStatus("error", "Escolha a duração do agendamento.");
+  if (editChamadoData.value && (!editChamadoReservadoInicio.value || !editChamadoReservadoFim.value)) {
+    mostrarEditChamadoStatus("error", "Preencha o horário de início e fim do serviço.");
+    return;
+  }
+  if (editChamadoData.value && editChamadoReservadoFim.value <= editChamadoReservadoInicio.value) {
+    mostrarEditChamadoStatus("error", "O horário final precisa ser depois do início.");
     return;
   }
 
-  if (editChamadoData.value && editChamadoDuracao.value) {
-    const resultado = await checarConflito(editChamadoData.value, editChamadoReservadoInicio.value, editChamadoDuracao.value, chamadoEditandoAtual.id);
+  if (editChamadoData.value && editChamadoReservadoInicio.value && editChamadoReservadoFim.value) {
+    const resultado = await checarConflito(editChamadoData.value, editChamadoReservadoInicio.value, editChamadoReservadoFim.value, chamadoEditandoAtual.id);
     if (resultado && resultado.temConflito) {
       mostrarConflitoBox(editChamadoConflito, resultado,
         (sugestao) => {
           editChamadoData.value = sugestao.data;
           editChamadoReservadoInicio.value = sugestao.inicio;
+          editChamadoReservadoFim.value = sugestao.fim;
           limparConflitoBox(editChamadoConflito);
           salvarEdicaoChamado();
         },
         (sugestao, conflito) => {
           limparConflitoBox(editChamadoConflito);
-          salvarEdicaoChamado(conflito.id, sugestao, conflito.duracao);
+          salvarEdicaoChamado(conflito.id, sugestao);
         });
       return;
     }
