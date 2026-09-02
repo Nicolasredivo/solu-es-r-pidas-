@@ -1497,6 +1497,109 @@ correção) e conferido direto na Asaas: os 4 e-mails chegaram. Testado também
 que cadastro com um e-mail só (o caso comum) continua saindo exatamente
 igual a antes.
 
+## Chamados: criação e agendamento inicial (02/09/2026)
+
+Área nova, planejada numa conversa longa com o dono antes de construir
+(vários rounds de perguntas/decisões, incluindo um documento formal que ele
+trouxe). Esta primeira etapa cobre **só** abrir e agendar um chamado —
+atendimento/execução, materiais usados, conclusão, cobrança e nota fiscal
+ficam para uma rodada futura, decisão deliberada dele.
+
+### Onde vive
+
+Tabela nova **`Chamados`** (`tbltipxOIw8F96QHO`), na base **`cadastro`**
+(`app6PyYmtFduIMp7B`) — não numa base própria, porque vínculo
+(`multipleRecordLinks`) do Airtable só liga registro dentro da mesma base, e
+todo chamado se liga a um cadastro de `Entidades_Cadastradas`.
+
+Campos principais: `Numero_Chamado` (sequencial, calculado pelo n8n — o
+Airtable não cria autonumber por API), `Cliente_Ref` (o vínculo) mais uma
+**cópia** de nome/documento/endereço/contato no momento da criação (decisão
+do dono: vínculo *e* cópia, para o chamado continuar legível mesmo que o
+cadastro mude ou seja excluído depois), `Local_Exato` (texto livre, tipo
+"teto da garagem"), `Descricao_Solicitacao`, `Anexos` (nativo do Airtable),
+`Observacoes_Servico` (interna, nunca visível pro cliente — o app é 100%
+interno), `Status`, `Horario_Combinado_Cliente` (só informativo),
+`Reservado_Inicio`/`Reservado_Fim`/`Duracao_Escolhida` (o bloco real que
+conta pra conflito) e `Historico` (uma linha por mudança importante,
+escrita automaticamente).
+
+### Dois horários, não um só
+
+Ponto que o dono corrigiu durante o planejamento: o horário combinado com o
+cliente **não é** o que deve bloquear a agenda, porque o bloco reservado
+precisa ser maior — inclui sair de casa, parar pra comprar material, etc.
+`Reservado_Inicio` + `Duracao_Escolhida` é o que entra na conta de conflito;
+`Horario_Combinado_Cliente` é só uma anotação dentro desse bloco.
+
+Duração: 1h/2h/3h com horário livre, ou período fixo — **Manhã 8h-12h,
+Tarde 13h30-18h, Dia inteiro 8h-18h** (`LOGICA_BLOCO` em
+`chamados-comum.js`). São *defaults* ajustáveis, não regra gravada — o
+horário de funcionamento pode variar por demanda.
+
+### Status
+
+`Aberto` (que eu tinha proposto) e `Aguardando confirmação de data` (do
+documento do dono) descreviam a mesma coisa — viraram um status só, com o
+nome mais descritivo. Conjunto final: **Aguardando confirmação de data →
+Agendado → Em andamento → Concluído**, mais **Cancelado** (só marca, sem
+exigir motivo).
+
+### Conflito de horário, com "empurrar"
+
+Fluxo combinado com o dono, mais rico que um simples avisa/bloqueia:
+
+1. Ao marcar uma data que bate com outro chamado, mostra o que já está lá.
+2. Sugere o próximo horário livre com duração suficiente (procura no dia
+   pedido, e se não couber, nos dias seguintes).
+3. O dono escolhe: usar o horário livre sugerido, **ou** marcar mesmo assim
+   e empurrar o chamado antigo pro horário livre — as duas gravações
+   acontecem juntas, cada uma com sua própria linha no `Historico`.
+
+### Workflows
+
+`App - Checar conflito de chamado` (só lê, chamado toda vez que o app mexe
+nos campos de data/horário, antes de confirmar), `App - Criar chamado`
+(relê os dados do cliente no Airtable em vez de confiar no que o app
+mandou, calcula o número sequencial, sobe anexos depois de criar o
+registro), `App - Reagendar chamado` (data/horário/duração, o mecanismo de
+empurrar, e — extensão pequena, não estava no plano original mas fechava
+uma lacuna real — cancelamento: `{chamadoId, cancelar: "true"}` só muda o
+status, sem mexer em agendamento), `App - Listar chamados` (chamados
+ativos, já separados em "sem data" e "com data").
+
+**Anexos: 5MB por arquivo, não 10MB.** O plano original tinha 10MB
+(aprovado pelo dono), mas o endpoint de upload direto do Airtable
+(`content.airtable.com/.../uploadAttachment`, base64, sem precisar de URL
+pública) tem limite próprio de 5MB — descoberto na implementação, ajustado
+e avisado.
+
+**Erro real encontrado e corrigido durante o teste**: o campo `anexos`
+viajava do app pro n8n como array de verdade, mas o formulário é enviado
+como `URLSearchParams` (pra não pedir a verificação extra de CORS) — que
+não sabe serializar array nenhum, só vira texto tosco. A submissão
+quebrava silenciosamente sempre que havia agendamento envolvido. Corrigido
+seguindo o mesmo padrão que "locais"/"contatos" já usam no Cadastro:
+`anexos` viaja como **texto JSON num campo só**, e o workflow faz
+`JSON.parse` do outro lado.
+
+### App
+
+Aba nova "Chamados", com "Agenda" (tela inicial: seção "Aguardando data" no
+topo + lista de hoje/próximos dias) e "Criar chamado". Busca de cliente
+**100% no navegador** — sem chamada nova a cada letra, reaproveitando o que
+`listar-cadastros` já devolve hoje (razão social, nome fantasia, CPF/CNPJ,
+nomes dos contatos via o lookup `Contatos_Nomes`, que já existia
+justamente pra isso). Ao escolher, `listar-locais`/`listar-contatos` (já
+existiam, já aceitam `{documento}`) trazem endereço/telefone/e-mail — o
+mesmo mecanismo que a aba Consultar já usa.
+
+Testado de ponta a ponta no navegador de verdade (não só por chamada
+direta): busca, autopreenchimento, escolha de contato quando há mais de
+um, criação sem e com data, o aviso de conflito completo (mostra → sugere
+→ empurra), cancelar com dois toques, e o layout no celular (~375px) —
+tudo com um cadastro descartável, nunca num cliente real.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

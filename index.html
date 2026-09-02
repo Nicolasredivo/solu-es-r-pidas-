@@ -60,6 +60,7 @@
       <button type="button" class="sidebar-item active" data-page="inicio">Início</button>
       <button type="button" class="sidebar-item" data-page="cadastro">Cadastro</button>
       <button type="button" class="sidebar-item" data-page="financeiro">Financeiro</button>
+      <button type="button" class="sidebar-item" data-page="chamados">Chamados</button>
 
       <div class="sidebar-rodape">
         <button type="button" id="sair" class="sidebar-item sair">Sair</button>
@@ -1221,6 +1222,130 @@
 
             <button type="submit" id="salvar-ajustes">Salvar ajustes</button>
             <div id="ajustes-status-msg" class="status"></div>
+          </form>
+        </div>
+      </div>
+
+      <!-- ===================== Chamados ===================== -->
+      <div id="page-chamados" class="card page hidden">
+        <h1>Chamados</h1>
+
+        <div class="subtabs">
+          <button type="button" class="subtab active" data-subpage="agenda">Agenda</button>
+          <button type="button" class="subtab" data-subpage="criar">Criar chamado</button>
+        </div>
+
+        <!-- ===================== Agenda ===================== -->
+        <div id="subpage-agenda" class="subpage">
+          <p id="chamados-status" class="doc-hint"></p>
+          <button type="button" id="recarregar-chamados" class="link-button">↻ Atualizar</button>
+
+          <div id="chamados-sem-data-bloco" class="hidden">
+            <h2 class="titulo-bloco">Aguardando confirmação de data</h2>
+            <div id="lista-chamados-sem-data"></div>
+          </div>
+
+          <h2 class="titulo-bloco">Agenda</h2>
+          <div id="lista-chamados-com-data"></div>
+
+          <!-- Um formulário só, reaproveitado por qualquer card ao clicar em
+               "Editar agendamento" — evita duplicar os mesmos campos em
+               cada item da lista. -->
+          <div id="chamado-editar-box" class="chamado-editar-box hidden">
+            <h2 class="titulo-bloco" id="chamado-editar-titulo">Editar agendamento</h2>
+
+            <label for="edit-chamado-data">Data</label>
+            <input type="date" id="edit-chamado-data" />
+
+            <label for="edit-chamado-horario-combinado">Horário combinado com o cliente</label>
+            <input type="time" id="edit-chamado-horario-combinado" />
+
+            <label for="edit-chamado-reservado-inicio">Reservar a partir de</label>
+            <input type="time" id="edit-chamado-reservado-inicio" />
+
+            <label for="edit-chamado-duracao">Duração</label>
+            <select id="edit-chamado-duracao">
+              <option value="">Selecione</option>
+              <option value="1h">1 hora</option>
+              <option value="2h">2 horas</option>
+              <option value="3h">3 horas</option>
+              <option value="Período manhã">Período da manhã</option>
+              <option value="Período tarde">Período da tarde</option>
+              <option value="Dia inteiro">Dia inteiro</option>
+            </select>
+
+            <div id="edit-chamado-conflito" class="aviso-caixa hidden"></div>
+
+            <button type="button" id="edit-chamado-salvar">Salvar agendamento</button>
+            <button type="button" id="edit-chamado-cancelar-form" class="botao-secundario">Fechar</button>
+            <div id="edit-chamado-status" class="status"></div>
+          </div>
+        </div>
+
+        <!-- ===================== Criar chamado ===================== -->
+        <div id="subpage-criar" class="subpage hidden">
+          <form id="chamado-form">
+            <div id="chamado-passo-cliente">
+              <label for="chamado-busca-cliente">Cliente</label>
+              <input type="text" id="chamado-busca-cliente" placeholder="Nome, CNPJ/CPF ou contato" autocomplete="off" />
+              <div id="chamado-lista-clientes" class="chamado-resultados"></div>
+              <p id="chamado-cliente-status" class="doc-hint"></p>
+            </div>
+
+            <div id="chamado-cliente-escolhido" class="hidden">
+              <div class="chamado-cliente-card">
+                <strong id="chamado-cliente-nome"></strong>
+                <p id="chamado-cliente-endereco" class="doc-hint"></p>
+                <button type="button" id="chamado-trocar-cliente" class="link-button">Trocar cliente</button>
+              </div>
+
+              <div id="chamado-contato-escolha" class="hidden">
+                <label>Quem pediu o serviço desta vez?</label>
+                <div id="chamado-lista-contatos"></div>
+              </div>
+
+              <label for="chamado-local-exato">Local exato (opcional)</label>
+              <input type="text" id="chamado-local-exato" placeholder="Ex: teto da garagem, subsolo" autocomplete="off" />
+
+              <label for="chamado-descricao">O que precisa ser feito</label>
+              <textarea id="chamado-descricao" rows="3" placeholder="Resumo do pedido do cliente"></textarea>
+
+              <label for="chamado-observacoes">Observações do serviço (interno)</label>
+              <textarea id="chamado-observacoes" rows="2" placeholder="Material a comprar, ferramenta a alugar, restrição de acesso..."></textarea>
+
+              <label for="chamado-anexos">Fotos ou documentos (opcional, até 5MB cada)</label>
+              <input type="file" id="chamado-anexos" accept="image/*,.pdf" multiple />
+              <div id="chamado-anexos-lista"></div>
+
+              <h2 class="titulo-bloco">Agendamento (opcional)</h2>
+              <p class="doc-hint">Pode deixar em branco e marcar depois.</p>
+
+              <label for="chamado-data">Data</label>
+              <input type="date" id="chamado-data" />
+
+              <label for="chamado-horario-combinado">Horário combinado com o cliente</label>
+              <input type="time" id="chamado-horario-combinado" />
+
+              <label for="chamado-reservado-inicio">Reservar a partir de</label>
+              <input type="time" id="chamado-reservado-inicio" value="08:00" />
+
+              <label for="chamado-duracao">Duração</label>
+              <select id="chamado-duracao">
+                <option value="">Selecione</option>
+                <option value="1h">1 hora</option>
+                <option value="2h">2 horas</option>
+                <option value="3h">3 horas</option>
+                <option value="Período manhã">Período da manhã</option>
+                <option value="Período tarde">Período da tarde</option>
+                <option value="Dia inteiro">Dia inteiro</option>
+              </select>
+
+              <div id="chamado-conflito" class="aviso-caixa hidden"></div>
+
+              <button type="submit" id="chamado-salvar-botao">Criar chamado</button>
+              <button type="button" id="chamado-cancelar-botao" class="botao-secundario hidden">Cancelar</button>
+              <div id="chamado-status" class="status"></div>
+            </div>
           </form>
         </div>
       </div>

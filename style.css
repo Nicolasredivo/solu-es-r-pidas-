@@ -1217,3 +1217,182 @@ button:active:not(:disabled) {
   color: var(--error);
   white-space: normal;
 }
+
+/* ===================== Chamados ===================== */
+
+/* Resultados da busca de cliente, um botão por linha */
+.chamado-resultados {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.chamado-resultado-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid #2c3153;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.chamado-resultado-item span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.chamado-cliente-card {
+  background: var(--card);
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+
+.chamado-cliente-card strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+/* Lista de contatos pra escolher, quando o cadastro tem mais de um */
+#chamado-lista-contatos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 14px;
+}
+
+.chamado-contato-item {
+  background: transparent;
+  border: 1px solid #2c3153;
+  color: var(--muted);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+
+.chamado-contato-item.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+/* Anexos: miniatura + nome + remover, um por linha */
+#chamado-anexos-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 16px;
+}
+
+.chamado-anexo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid #2c3153;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.chamado-anexo-item img {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.chamado-anexo-icone {
+  font-size: 1.4rem;
+}
+
+.chamado-anexo-nome {
+  flex: 1;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chamado-anexo-remover {
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 4px 8px;
+}
+
+/* Cartão de um chamado na Agenda */
+.chamado-card {
+  background: var(--card);
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.chamado-card-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.chamado-numero {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.chamado-status-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: #2c3153;
+  color: var(--muted);
+}
+
+.chamado-status-aguardando {
+  background: rgba(245, 166, 35, 0.18);
+  color: var(--aviso);
+}
+
+.chamado-status-agendado {
+  background: rgba(91, 141, 239, 0.18);
+  color: var(--accent);
+}
+
+.chamado-status-andamento {
+  background: rgba(62, 207, 142, 0.18);
+  color: var(--ok);
+}
+
+.chamado-card-horario {
+  font-weight: 600;
+  margin: 6px 0 0;
+}
+
+.chamado-card-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.botao-cancelar-chamado.confirmando {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+/* Formulário de reagendar/cancelar, aberto a partir de um cartão da lista */
+.chamado-editar-box {
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 14px;
+  margin-top: 16px;
+}

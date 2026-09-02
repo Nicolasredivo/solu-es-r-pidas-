@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.08.29";
+const APP_VERSION = "2026.09.02";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4639,6 +4639,593 @@ window.addEventListener("beforeunload", (event) => {
   event.returnValue = "";
 });
 
+// ===================== Chamados =====================
+//
+// Criação e agendamento inicial: escolher o cliente, descrever o pedido,
+// marcar (ou não) uma data, e o sistema avisar quando dois chamados batem
+// horário. Atendimento/execução, materiais, conclusão e cobrança ficam para
+// uma etapa futura — decisão do dono, para não inchar o escopo agora.
+
+function escapeHtml(texto) {
+  return String(texto ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[c]);
+}
+
+// YYYY-MM-DD a partir dos componentes LOCAIS do Date, não de toISOString()
+// (que é UTC e viraria o dia errado perto da meia-noite).
+function dataLocalISO(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+const chamadosStatusEl = document.getElementById("chamados-status");
+const chamadosSemDataBloco = document.getElementById("chamados-sem-data-bloco");
+const listaChamadosSemData = document.getElementById("lista-chamados-sem-data");
+const listaChamadosComData = document.getElementById("lista-chamados-com-data");
+const recarregarChamadosBotao = document.getElementById("recarregar-chamados");
+
+const chamadoEditarBox = document.getElementById("chamado-editar-box");
+const chamadoEditarTitulo = document.getElementById("chamado-editar-titulo");
+const editChamadoData = document.getElementById("edit-chamado-data");
+const editChamadoHorarioCombinado = document.getElementById("edit-chamado-horario-combinado");
+const editChamadoReservadoInicio = document.getElementById("edit-chamado-reservado-inicio");
+const editChamadoDuracao = document.getElementById("edit-chamado-duracao");
+const editChamadoConflito = document.getElementById("edit-chamado-conflito");
+const editChamadoSalvarBotao = document.getElementById("edit-chamado-salvar");
+const editChamadoCancelarFormBotao = document.getElementById("edit-chamado-cancelar-form");
+const editChamadoStatus = document.getElementById("edit-chamado-status");
+
+const chamadosBusca = document.getElementById("chamado-busca-cliente");
+const chamadosListaClientes = document.getElementById("chamado-lista-clientes");
+const chamadoClienteStatus = document.getElementById("chamado-cliente-status");
+const chamadoPassoCliente = document.getElementById("chamado-passo-cliente");
+const chamadoClienteEscolhidoBox = document.getElementById("chamado-cliente-escolhido");
+const chamadoClienteNomeEl = document.getElementById("chamado-cliente-nome");
+const chamadoClienteEnderecoEl = document.getElementById("chamado-cliente-endereco");
+const chamadoTrocarClienteBotao = document.getElementById("chamado-trocar-cliente");
+const chamadoContatoEscolhaBox = document.getElementById("chamado-contato-escolha");
+const chamadoListaContatos = document.getElementById("chamado-lista-contatos");
+const chamadoLocalExatoInput = document.getElementById("chamado-local-exato");
+const chamadoDescricaoInput = document.getElementById("chamado-descricao");
+const chamadoObservacoesInput = document.getElementById("chamado-observacoes");
+const chamadoAnexosInput = document.getElementById("chamado-anexos");
+const chamadoAnexosLista = document.getElementById("chamado-anexos-lista");
+const chamadoDataInput = document.getElementById("chamado-data");
+const chamadoHorarioCombinadoInput = document.getElementById("chamado-horario-combinado");
+const chamadoReservadoInicioInput = document.getElementById("chamado-reservado-inicio");
+const chamadoDuracaoSelect = document.getElementById("chamado-duracao");
+const chamadoConflitoBox = document.getElementById("chamado-conflito");
+const chamadoForm = document.getElementById("chamado-form");
+const chamadoSalvarBotao = document.getElementById("chamado-salvar-botao");
+const chamadoStatus = document.getElementById("chamado-status");
+
+let chamadosCadastros = [];
+let chamadosCadastrosCarregados = false;
+let chamadosPaginaCarregada = false;
+let chamadoClienteEscolhido = null;
+let chamadoContatoEscolhidoId = "";
+let chamadosAnexosArquivos = [];
+let chamadosSemData = [];
+let chamadosComData = [];
+let chamadoEditandoAtual = null;
+
+function mostrarChamadoStatus(tipo, mensagem) {
+  chamadoStatus.textContent = mensagem;
+  chamadoStatus.className = `status show ${tipo}`;
+}
+function mostrarEditChamadoStatus(tipo, mensagem) {
+  editChamadoStatus.textContent = mensagem;
+  editChamadoStatus.className = `status show ${tipo}`;
+}
+function mostrarChamadosListaStatus(tipo, mensagem) {
+  chamadosStatusEl.textContent = mensagem;
+  chamadosStatusEl.className = `doc-hint ${tipo}`;
+}
+
+// Período/dia inteiro têm horário fixo (combinado com o dono): trava o
+// campo "reservar a partir de" pra refletir isso quando escolhido.
+const DURACAO_HORARIO_FIXO = { "Período manhã": "08:00", "Período tarde": "13:30", "Dia inteiro": "08:00" };
+function ligarDuracaoFixa(selectEl, inicioEl) {
+  selectEl.addEventListener("change", () => {
+    const fixo = DURACAO_HORARIO_FIXO[selectEl.value];
+    inicioEl.disabled = Boolean(fixo);
+    if (fixo) inicioEl.value = fixo;
+  });
+}
+ligarDuracaoFixa(chamadoDuracaoSelect, chamadoReservadoInicioInput);
+ligarDuracaoFixa(editChamadoDuracao, editChamadoReservadoInicio);
+
+// ----- passo 1: busca de cliente, 100% no navegador -----
+
+function pontuaTexto(termo, alvo) {
+  const t = termo.toLowerCase();
+  const a = String(alvo || "").toLowerCase();
+  if (!t || !a) return 0;
+  if (a === t) return 100;
+  if (a.startsWith(t)) return 80;
+  if (a.includes(t)) return 50;
+  return 0;
+}
+
+function pontuaCadastroChamado(c, termo) {
+  return Math.max(
+    pontuaTexto(termo, c.razaoSocial), pontuaTexto(termo, c.nomeFantasia),
+    pontuaTexto(termo, c.documento), pontuaTexto(termo, c.contato)
+  );
+}
+
+async function carregarCadastrosParaChamados() {
+  if (chamadosCadastrosCarregados) return;
+  const dados = await pedirAoN8n("listar-cadastros", {});
+  if (dados && dados.ok) {
+    chamadosCadastros = dados.cadastros || [];
+    chamadosCadastrosCarregados = true;
+  }
+}
+
+function desenharResultadosBuscaChamado(termo) {
+  chamadosListaClientes.innerHTML = "";
+  if (!termo) return;
+
+  const encontrados = chamadosCadastros
+    .map((c) => ({ c, pontos: pontuaCadastroChamado(c, termo) }))
+    .filter((x) => x.pontos > 0)
+    .sort((a, b) => b.pontos - a.pontos)
+    .slice(0, 15);
+
+  if (!encontrados.length) {
+    chamadosListaClientes.innerHTML = `<p class="doc-hint">Nenhum cliente encontrado.</p>`;
+    return;
+  }
+
+  encontrados.forEach(({ c }) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "chamado-resultado-item";
+    item.innerHTML = `<strong>${escapeHtml(c.razaoSocial || c.nomeFantasia)}</strong>` +
+      `<span>${escapeHtml(c.documento)}${c.contato ? " · " + escapeHtml(c.contato) : ""}</span>`;
+    item.addEventListener("click", () => escolherClienteChamado(c.id));
+    chamadosListaClientes.appendChild(item);
+  });
+}
+
+chamadosBusca.addEventListener("focus", carregarCadastrosParaChamados);
+chamadosBusca.addEventListener("input", () => desenharResultadosBuscaChamado(chamadosBusca.value.trim()));
+
+async function escolherClienteChamado(entidadeId) {
+  chamadoClienteStatus.textContent = "Carregando dados do cliente...";
+  chamadosBusca.value = "";
+  chamadosListaClientes.innerHTML = "";
+
+  const cad = chamadosCadastros.find((c) => c.id === entidadeId);
+  const documento = cad ? cad.documento : "";
+
+  const [locaisResp, contatosResp] = await Promise.all([
+    pedirAoN8n("listar-locais", { documento }),
+    pedirAoN8n("listar-contatos", { documento }),
+  ]);
+
+  const local0 = (locaisResp && locaisResp.locais && locaisResp.locais[0]) || {};
+  const listaContatos = (contatosResp && contatosResp.contatos) || [];
+
+  chamadoClienteEscolhido = {
+    id: entidadeId,
+    nome: cad ? (cad.razaoSocial || cad.nomeFantasia) : "",
+    endereco: local0.endereco || "",
+  };
+
+  chamadoClienteNomeEl.textContent = chamadoClienteEscolhido.nome;
+  chamadoClienteEnderecoEl.textContent = chamadoClienteEscolhido.endereco || "Sem endereço cadastrado.";
+
+  chamadoListaContatos.innerHTML = "";
+  if (listaContatos.length > 1) {
+    chamadoContatoEscolhaBox.classList.remove("hidden");
+    listaContatos.forEach((ct, i) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chamado-contato-item" + (i === 0 ? " active" : "");
+      btn.textContent = ct.nome || ct.whatsapps[0] || ct.emails[0] || "Sem nome";
+      btn.addEventListener("click", () => {
+        chamadoContatoEscolhidoId = ct.id;
+        chamadoListaContatos.querySelectorAll(".chamado-contato-item").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+      });
+      chamadoListaContatos.appendChild(btn);
+    });
+    chamadoContatoEscolhidoId = listaContatos[0].id;
+  } else {
+    chamadoContatoEscolhaBox.classList.add("hidden");
+    chamadoContatoEscolhidoId = listaContatos[0] ? listaContatos[0].id : "";
+  }
+
+  chamadoClienteStatus.textContent = "";
+  chamadoPassoCliente.classList.add("hidden");
+  chamadoClienteEscolhidoBox.classList.remove("hidden");
+  ajustarAlturasAuto(chamadoForm.closest(".page"));
+}
+
+chamadoTrocarClienteBotao.addEventListener("click", () => {
+  chamadoClienteEscolhido = null;
+  chamadoContatoEscolhidoId = "";
+  chamadoClienteEscolhidoBox.classList.add("hidden");
+  chamadoPassoCliente.classList.remove("hidden");
+  chamadosBusca.value = "";
+  chamadosBusca.focus();
+});
+
+// ----- anexos -----
+
+function arquivoParaBase64(arquivo) {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onload = () => resolve(String(leitor.result).split(",")[1] || "");
+    leitor.onerror = () => reject(new Error("Não consegui ler o arquivo."));
+    leitor.readAsDataURL(arquivo);
+  });
+}
+
+function desenharAnexosChamado() {
+  chamadoAnexosLista.innerHTML = "";
+  chamadosAnexosArquivos.forEach((a, i) => {
+    const item = document.createElement("div");
+    item.className = "chamado-anexo-item";
+    const ehImagem = a.contentType.startsWith("image/");
+    item.innerHTML = (ehImagem ? `<img src="${a.url}" alt="" />` : `<span class="chamado-anexo-icone">📄</span>`) +
+      `<span class="chamado-anexo-nome">${escapeHtml(a.filename)}</span>` +
+      `<button type="button" class="chamado-anexo-remover" aria-label="Remover">×</button>`;
+    item.querySelector(".chamado-anexo-remover").addEventListener("click", () => {
+      chamadosAnexosArquivos.splice(i, 1);
+      desenharAnexosChamado();
+    });
+    chamadoAnexosLista.appendChild(item);
+  });
+}
+
+chamadoAnexosInput.addEventListener("change", async () => {
+  const arquivos = Array.from(chamadoAnexosInput.files || []);
+  for (const arquivo of arquivos) {
+    if (arquivo.size > 5 * 1024 * 1024) {
+      mostrarChamadoStatus("error", `"${arquivo.name}" passa de 5MB e não foi adicionado.`);
+      continue;
+    }
+    try {
+      const base64 = await arquivoParaBase64(arquivo);
+      chamadosAnexosArquivos.push({
+        filename: arquivo.name, contentType: arquivo.type || "application/octet-stream",
+        base64, url: URL.createObjectURL(arquivo),
+      });
+    } catch (err) {
+      mostrarChamadoStatus("error", `Não consegui ler "${arquivo.name}".`);
+    }
+  }
+  chamadoAnexosInput.value = "";
+  desenharAnexosChamado();
+});
+
+// ----- conflito de horário -----
+
+function formatarHoraIso(iso) {
+  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+function formatarDataChamado(dataStr) {
+  return new Date(`${dataStr}T00:00:00`).toLocaleDateString("pt-BR");
+}
+function limparConflitoBox(box) {
+  box.classList.add("hidden");
+  box.innerHTML = "";
+}
+
+async function checarConflito(data, reservadoInicio, duracao, ignorarId) {
+  if (!data || !duracao) return { ok: true, temConflito: false };
+  return pedirAoN8n("checar-conflito-chamado", { data, reservadoInicio, duracao, chamadoIdIgnorar: ignorarId || "" });
+}
+
+// aoUsarSugestao(sugestao) e aoEmpurrar(sugestao, conflito) decidem o que
+// fazer -- criação e edição de agendamento reusam esta mesma caixa.
+function mostrarConflitoBox(box, resultado, aoUsarSugestao, aoEmpurrar) {
+  const c = resultado.conflitos[0];
+  let html = `<strong>Choque de horário</strong>` +
+    `<p>Já tem o Chamado #${c.numero} (${escapeHtml(c.cliente)}) marcado das ${formatarHoraIso(c.inicio)} às ${formatarHoraIso(c.fim)} nesse dia.</p>`;
+
+  if (resultado.sugestao) {
+    const s = resultado.sugestao;
+    html += `<p>Horário livre mais próximo: ${formatarDataChamado(s.data)} às ${s.inicio}.</p>` +
+      `<button type="button" class="botao-secundario botao-usar-sugestao">Usar esse horário</button>` +
+      `<button type="button" class="botao-secundario botao-empurrar">Marcar mesmo assim, e mover o Chamado #${c.numero} pra esse horário livre</button>`;
+  }
+
+  box.innerHTML = html;
+  box.classList.remove("hidden");
+
+  if (resultado.sugestao) {
+    box.querySelector(".botao-usar-sugestao").addEventListener("click", () => aoUsarSugestao(resultado.sugestao));
+    box.querySelector(".botao-empurrar").addEventListener("click", () => aoEmpurrar(resultado.sugestao, c));
+  }
+}
+
+// ----- criar chamado -----
+
+function limparFormularioChamado() {
+  chamadoClienteEscolhido = null;
+  chamadoContatoEscolhidoId = "";
+  chamadosAnexosArquivos = [];
+  chamadoClienteEscolhidoBox.classList.add("hidden");
+  chamadoPassoCliente.classList.remove("hidden");
+  chamadosBusca.value = "";
+  chamadoLocalExatoInput.value = "";
+  chamadoDescricaoInput.value = "";
+  chamadoObservacoesInput.value = "";
+  chamadoAnexosLista.innerHTML = "";
+  chamadoDataInput.value = "";
+  chamadoHorarioCombinadoInput.value = "";
+  chamadoReservadoInicioInput.value = "08:00";
+  chamadoReservadoInicioInput.disabled = false;
+  chamadoDuracaoSelect.value = "";
+  limparConflitoBox(chamadoConflitoBox);
+  mostrarChamadoStatus("neutral", "");
+}
+
+async function criarChamadoDeVerdade(chamadoEmpurradoId, sugestaoParaEmpurrado, duracaoEmpurrado) {
+  chamadoSalvarBotao.disabled = true;
+  mostrarChamadoStatus("neutral", "Salvando...");
+
+  const corpo = {
+    clienteId: chamadoClienteEscolhido.id,
+    contatoId: chamadoContatoEscolhidoId,
+    localExato: chamadoLocalExatoInput.value.trim(),
+    descricaoSolicitacao: chamadoDescricaoInput.value.trim(),
+    observacoesServico: chamadoObservacoesInput.value.trim(),
+    data: chamadoDataInput.value,
+    reservadoInicio: chamadoReservadoInicioInput.value,
+    duracao: chamadoDuracaoSelect.value,
+    horarioCombinadoCliente: chamadoHorarioCombinadoInput.value,
+    // Viaja como texto JSON num campo só, mesmo padrão de "locais"/"contatos"
+    // no Cadastro: URLSearchParams não sabe serializar um array de verdade.
+    anexos: JSON.stringify(chamadosAnexosArquivos.map((a) => ({ filename: a.filename, contentType: a.contentType, base64: a.base64 }))),
+  };
+
+  let resposta;
+  try {
+    resposta = await pedirAoN8n("criar-chamado", corpo);
+  } catch (err) {
+    chamadoSalvarBotao.disabled = false;
+    mostrarChamadoStatus("error", "Não consegui falar com o servidor.");
+    return;
+  }
+
+  if (resposta && resposta.ok && chamadoEmpurradoId && sugestaoParaEmpurrado) {
+    await pedirAoN8n("reagendar-chamado", {
+      chamadoId: chamadoEmpurradoId, data: sugestaoParaEmpurrado.data,
+      reservadoInicio: sugestaoParaEmpurrado.inicio, duracao: duracaoEmpurrado,
+    });
+  }
+
+  chamadoSalvarBotao.disabled = false;
+  if (!resposta || !resposta.ok) {
+    mostrarChamadoStatus("error", (resposta && resposta.mensagem) || "Não consegui criar o chamado.");
+    return;
+  }
+
+  mostrarChamadoStatus("ok", resposta.mensagem);
+  limparFormularioChamado();
+  await carregarChamados();
+}
+
+chamadoForm.addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  limparConflitoBox(chamadoConflitoBox);
+
+  if (!chamadoClienteEscolhido) {
+    mostrarChamadoStatus("error", "Escolha um cliente primeiro.");
+    return;
+  }
+
+  const temData = Boolean(chamadoDataInput.value);
+  if (temData && !chamadoDuracaoSelect.value) {
+    mostrarChamadoStatus("error", "Escolha a duração do agendamento.");
+    return;
+  }
+
+  if (temData) {
+    const resultado = await checarConflito(chamadoDataInput.value, chamadoReservadoInicioInput.value, chamadoDuracaoSelect.value);
+    if (resultado && resultado.temConflito) {
+      mostrarConflitoBox(chamadoConflitoBox, resultado,
+        (sugestao) => {
+          chamadoDataInput.value = sugestao.data;
+          chamadoReservadoInicioInput.value = sugestao.inicio;
+          limparConflitoBox(chamadoConflitoBox);
+          criarChamadoDeVerdade();
+        },
+        (sugestao, conflito) => {
+          limparConflitoBox(chamadoConflitoBox);
+          criarChamadoDeVerdade(conflito.id, sugestao, conflito.duracao);
+        });
+      return;
+    }
+  }
+
+  await criarChamadoDeVerdade();
+});
+
+// ----- lista da Agenda -----
+
+function statusClasseChamado(status) {
+  if (status === "Aguardando confirmação de data") return "chamado-status-aguardando";
+  if (status === "Agendado") return "chamado-status-agendado";
+  if (status === "Em andamento") return "chamado-status-andamento";
+  return "";
+}
+
+function montarCardChamado(c, comData) {
+  const card = document.createElement("div");
+  card.className = "chamado-card";
+
+  let horarioTexto = "";
+  if (comData) {
+    const dataFmt = new Date(c.reservadoInicio).toLocaleDateString("pt-BR");
+    horarioTexto = `<p class="chamado-card-horario">${dataFmt} · ${formatarHoraIso(c.reservadoInicio)} às ${formatarHoraIso(c.reservadoFim)}` +
+      `${c.horarioCombinadoCliente ? ` (combinado ${escapeHtml(c.horarioCombinadoCliente)})` : ""}</p>`;
+  }
+
+  card.innerHTML = `
+    <div class="chamado-card-topo">
+      <span class="chamado-numero">#${c.numero}</span>
+      <span class="chamado-status-badge ${statusClasseChamado(c.status)}">${escapeHtml(c.status)}</span>
+    </div>
+    <strong>${escapeHtml(c.clienteNome)}</strong>
+    <p class="doc-hint">${escapeHtml(c.enderecoCopia)}${c.localExato ? " · " + escapeHtml(c.localExato) : ""}</p>
+    <p>${escapeHtml(c.descricaoSolicitacao)}</p>
+    ${c.contatoNome ? `<p class="doc-hint">Contato: ${escapeHtml(c.contatoNome)}${c.contatoWhatsApp ? " · " + escapeHtml(c.contatoWhatsApp) : ""}</p>` : ""}
+    ${horarioTexto}
+    <div class="chamado-card-acoes">
+      <button type="button" class="botao-secundario botao-editar-agendamento">${comData ? "Reagendar" : "Marcar data"}</button>
+      <button type="button" class="botao-secundario botao-cancelar-chamado">Cancelar chamado</button>
+    </div>
+  `;
+
+  card.querySelector(".botao-editar-agendamento").addEventListener("click", () => abrirEdicaoAgendamento(c));
+
+  const cancelarBotao = card.querySelector(".botao-cancelar-chamado");
+  cancelarBotao.addEventListener("click", () => {
+    if (!cancelarBotao.classList.contains("confirmando")) {
+      cancelarBotao.classList.add("confirmando");
+      cancelarBotao.textContent = "Confirmar cancelamento";
+      return;
+    }
+    cancelarChamado(c.id);
+  });
+
+  return card;
+}
+
+async function cancelarChamado(id) {
+  const resposta = await pedirAoN8n("reagendar-chamado", { chamadoId: id, cancelar: "true" });
+  if (resposta && resposta.ok) {
+    await carregarChamados();
+  } else {
+    mostrarChamadosListaStatus("error", (resposta && resposta.mensagem) || "Não consegui cancelar.");
+  }
+}
+
+function desenharListaChamados() {
+  chamadosSemDataBloco.classList.toggle("hidden", chamadosSemData.length === 0);
+  listaChamadosSemData.innerHTML = "";
+  chamadosSemData.forEach((c) => listaChamadosSemData.appendChild(montarCardChamado(c, false)));
+
+  listaChamadosComData.innerHTML = "";
+  if (!chamadosComData.length) {
+    listaChamadosComData.innerHTML = `<p class="doc-hint">Nenhum chamado agendado.</p>`;
+  } else {
+    chamadosComData.forEach((c) => listaChamadosComData.appendChild(montarCardChamado(c, true)));
+  }
+}
+
+async function carregarChamados() {
+  mostrarChamadosListaStatus("neutral", "Carregando...");
+  const dados = await pedirAoN8n("listar-chamados", {});
+  if (!dados || !dados.ok) {
+    mostrarChamadosListaStatus("error", (dados && dados.mensagem) || "Não consegui carregar os chamados.");
+    return;
+  }
+  chamadosSemData = dados.semData || [];
+  chamadosComData = dados.comData || [];
+  desenharListaChamados();
+  mostrarChamadosListaStatus("neutral", "");
+}
+
+recarregarChamadosBotao.addEventListener("click", carregarChamados);
+
+// ----- editar agendamento (reagendar) -----
+
+function abrirEdicaoAgendamento(chamado) {
+  chamadoEditandoAtual = chamado;
+  chamadoEditarTitulo.textContent = `Chamado #${chamado.numero} — ${chamado.clienteNome}`;
+
+  if (chamado.reservadoInicio) {
+    const d = new Date(chamado.reservadoInicio);
+    editChamadoData.value = dataLocalISO(d);
+    editChamadoReservadoInicio.value = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  } else {
+    editChamadoData.value = "";
+    editChamadoReservadoInicio.value = "08:00";
+  }
+  editChamadoHorarioCombinado.value = chamado.horarioCombinadoCliente || "";
+  editChamadoDuracao.value = chamado.duracaoEscolhida || "";
+  editChamadoReservadoInicio.disabled = Boolean(DURACAO_HORARIO_FIXO[chamado.duracaoEscolhida]);
+  limparConflitoBox(editChamadoConflito);
+  mostrarEditChamadoStatus("neutral", "");
+
+  chamadoEditarBox.classList.remove("hidden");
+  chamadoEditarBox.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+editChamadoCancelarFormBotao.addEventListener("click", () => {
+  chamadoEditarBox.classList.add("hidden");
+  chamadoEditandoAtual = null;
+});
+
+async function salvarEdicaoAgendamento(chamadoEmpurradoId, sugestaoParaEmpurrado, duracaoEmpurrado) {
+  editChamadoSalvarBotao.disabled = true;
+  mostrarEditChamadoStatus("neutral", "Salvando...");
+
+  const resposta = await pedirAoN8n("reagendar-chamado", {
+    chamadoId: chamadoEditandoAtual.id,
+    data: editChamadoData.value, reservadoInicio: editChamadoReservadoInicio.value,
+    duracao: editChamadoDuracao.value, horarioCombinadoCliente: editChamadoHorarioCombinado.value,
+  });
+
+  if (resposta && resposta.ok && chamadoEmpurradoId && sugestaoParaEmpurrado) {
+    await pedirAoN8n("reagendar-chamado", {
+      chamadoId: chamadoEmpurradoId, data: sugestaoParaEmpurrado.data,
+      reservadoInicio: sugestaoParaEmpurrado.inicio, duracao: duracaoEmpurrado,
+    });
+  }
+
+  editChamadoSalvarBotao.disabled = false;
+  if (!resposta || !resposta.ok) {
+    mostrarEditChamadoStatus("error", (resposta && resposta.mensagem) || "Não consegui salvar.");
+    return;
+  }
+
+  chamadoEditarBox.classList.add("hidden");
+  chamadoEditandoAtual = null;
+  await carregarChamados();
+}
+
+editChamadoSalvarBotao.addEventListener("click", async () => {
+  limparConflitoBox(editChamadoConflito);
+
+  if (!editChamadoData.value || !editChamadoDuracao.value) {
+    mostrarEditChamadoStatus("error", "Escolha data e duração.");
+    return;
+  }
+
+  const resultado = await checarConflito(editChamadoData.value, editChamadoReservadoInicio.value, editChamadoDuracao.value, chamadoEditandoAtual.id);
+  if (resultado && resultado.temConflito) {
+    mostrarConflitoBox(editChamadoConflito, resultado,
+      (sugestao) => {
+        editChamadoData.value = sugestao.data;
+        editChamadoReservadoInicio.value = sugestao.inicio;
+        limparConflitoBox(editChamadoConflito);
+        salvarEdicaoAgendamento();
+      },
+      (sugestao, conflito) => {
+        limparConflitoBox(editChamadoConflito);
+        salvarEdicaoAgendamento(conflito.id, sugestao, conflito.duracao);
+      });
+    return;
+  }
+
+  await salvarEdicaoAgendamento();
+});
+
+document.querySelector('.sidebar-item[data-page="chamados"]').addEventListener("click", () => {
+  if (!chamadosPaginaCarregada) {
+    chamadosPaginaCarregada = true;
+    carregarChamados();
+  }
+});
+
 // ----- Sair -----
 
 const sairBotao = document.getElementById("sair");
@@ -4719,6 +5306,21 @@ sairBotao.addEventListener("click", () => {
   atualizarFiltroDeMeses();
   mostrarListaDespesasStatus("neutral", "");
   mostrarListaRecorrentesStatus("neutral", "");
+
+  // Chamados também: dados de um dono não devem sobrar em memória pro
+  // próximo login neste aparelho.
+  chamadosCadastros = [];
+  chamadosCadastrosCarregados = false;
+  chamadosPaginaCarregada = false;
+  chamadosSemData = [];
+  chamadosComData = [];
+  chamadoEditandoAtual = null;
+  listaChamadosSemData.innerHTML = "";
+  listaChamadosComData.innerHTML = "";
+  chamadosListaClientes.innerHTML = "";
+  chamadoEditarBox.classList.add("hidden");
+  mostrarChamadosListaStatus("neutral", "");
+  limparFormularioChamado();
 
   desarmarSaida();
   closeSidebar();
