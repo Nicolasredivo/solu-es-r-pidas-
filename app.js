@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03";
+const APP_VERSION = "2026.09.03b";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4673,7 +4673,10 @@ const editChamadoDescricao = document.getElementById("edit-chamado-descricao");
 const editChamadoObservacoes = document.getElementById("edit-chamado-observacoes");
 const editChamadoAnexosAtuaisBloco = document.getElementById("edit-chamado-anexos-atuais-bloco");
 const editChamadoAnexosAtuais = document.getElementById("edit-chamado-anexos-atuais");
-const editChamadoAnexosInput = document.getElementById("edit-chamado-anexos");
+const editChamadoAnexosFotoInput = document.getElementById("edit-chamado-anexos-foto");
+const editChamadoAnexosDocInput = document.getElementById("edit-chamado-anexos-doc");
+const editChamadoAnexosFotoBotao = document.getElementById("edit-chamado-anexos-foto-botao");
+const editChamadoAnexosDocBotao = document.getElementById("edit-chamado-anexos-doc-botao");
 const editChamadoAnexosLista = document.getElementById("edit-chamado-anexos-lista");
 const editChamadoData = document.getElementById("edit-chamado-data");
 const editChamadoHorarioCombinado = document.getElementById("edit-chamado-horario-combinado");
@@ -4699,7 +4702,10 @@ const chamadoListaContatos = document.getElementById("chamado-lista-contatos");
 const chamadoLocalExatoInput = document.getElementById("chamado-local-exato");
 const chamadoDescricaoInput = document.getElementById("chamado-descricao");
 const chamadoObservacoesInput = document.getElementById("chamado-observacoes");
-const chamadoAnexosInput = document.getElementById("chamado-anexos");
+const chamadoAnexosFotoInput = document.getElementById("chamado-anexos-foto");
+const chamadoAnexosDocInput = document.getElementById("chamado-anexos-doc");
+const chamadoAnexosFotoBotao = document.getElementById("chamado-anexos-foto-botao");
+const chamadoAnexosDocBotao = document.getElementById("chamado-anexos-doc-botao");
 const chamadoAnexosLista = document.getElementById("chamado-anexos-lista");
 const chamadoDataInput = document.getElementById("chamado-data");
 const chamadoHorarioCombinadoInput = document.getElementById("chamado-horario-combinado");
@@ -4926,27 +4932,6 @@ function desenharAnexosChamado() {
   });
 }
 
-chamadoAnexosInput.addEventListener("change", async () => {
-  const arquivos = Array.from(chamadoAnexosInput.files || []);
-  for (const arquivo of arquivos) {
-    if (arquivo.size > 5 * 1024 * 1024) {
-      mostrarChamadoStatus("error", `"${arquivo.name}" passa de 5MB e não foi adicionado.`);
-      continue;
-    }
-    try {
-      const base64 = await arquivoParaBase64(arquivo);
-      chamadosAnexosArquivos.push({
-        filename: arquivo.name, contentType: arquivo.type || "application/octet-stream",
-        base64, url: URL.createObjectURL(arquivo),
-      });
-    } catch (err) {
-      mostrarChamadoStatus("error", `Não consegui ler "${arquivo.name}".`);
-    }
-  }
-  chamadoAnexosInput.value = "";
-  desenharAnexosChamado();
-});
-
 // Mesma ideia, pro formulário de edição — anexos que já estavam salvos só
 // são mostrados (nome do arquivo), sem opção de excluir por enquanto; o que
 // esta tela adiciona são anexos novos, que se juntam aos existentes.
@@ -4967,26 +4952,53 @@ function desenharAnexosNovosEdicao() {
   });
 }
 
-editChamadoAnexosInput.addEventListener("change", async () => {
-  const arquivos = Array.from(editChamadoAnexosInput.files || []);
+// Um input pra foto (accept="image/*") e outro pra PDF (accept="application/
+// pdf"), em vez de um só misturando os dois tipos: no celular, um "accept"
+// puro de imagem é o que faz o navegador abrir a galeria de fotos direto,
+// em vez do gerenciador de arquivos genérico.
+async function processaArquivosSelecionados(inputEl, listaArquivos, statusFn, redesenhaFn) {
+  const arquivos = Array.from(inputEl.files || []);
   for (const arquivo of arquivos) {
     if (arquivo.size > 5 * 1024 * 1024) {
-      mostrarEditChamadoStatus("error", `"${arquivo.name}" passa de 5MB e não foi adicionado.`);
+      statusFn("error", `"${arquivo.name}" passa de 5MB e não foi adicionado.`);
       continue;
     }
     try {
       const base64 = await arquivoParaBase64(arquivo);
-      chamadoEditAnexosNovos.push({
+      listaArquivos.push({
         filename: arquivo.name, contentType: arquivo.type || "application/octet-stream",
         base64, url: URL.createObjectURL(arquivo),
       });
     } catch (err) {
-      mostrarEditChamadoStatus("error", `Não consegui ler "${arquivo.name}".`);
+      statusFn("error", `Não consegui ler "${arquivo.name}".`);
     }
   }
-  editChamadoAnexosInput.value = "";
-  desenharAnexosNovosEdicao();
-});
+  inputEl.value = "";
+  redesenhaFn();
+}
+
+// O botão de anexo é um <label> disfarçado (o input de arquivo de verdade
+// fica escondido) — <label> não entra na navegação por Tab nem responde a
+// Enter/Espaço sozinho, então isso completa manualmente.
+function ligarBotaoAnexoTeclado(labelEl) {
+  labelEl.addEventListener("keydown", (evento) => {
+    if (evento.key === "Enter" || evento.key === " ") {
+      evento.preventDefault();
+      labelEl.click();
+    }
+  });
+}
+[chamadoAnexosFotoBotao, chamadoAnexosDocBotao, editChamadoAnexosFotoBotao, editChamadoAnexosDocBotao].forEach(ligarBotaoAnexoTeclado);
+
+chamadoAnexosFotoInput.addEventListener("change", () =>
+  processaArquivosSelecionados(chamadoAnexosFotoInput, chamadosAnexosArquivos, mostrarChamadoStatus, desenharAnexosChamado));
+chamadoAnexosDocInput.addEventListener("change", () =>
+  processaArquivosSelecionados(chamadoAnexosDocInput, chamadosAnexosArquivos, mostrarChamadoStatus, desenharAnexosChamado));
+
+editChamadoAnexosFotoInput.addEventListener("change", () =>
+  processaArquivosSelecionados(editChamadoAnexosFotoInput, chamadoEditAnexosNovos, mostrarEditChamadoStatus, desenharAnexosNovosEdicao));
+editChamadoAnexosDocInput.addEventListener("change", () =>
+  processaArquivosSelecionados(editChamadoAnexosDocInput, chamadoEditAnexosNovos, mostrarEditChamadoStatus, desenharAnexosNovosEdicao));
 
 // ----- conflito de horário -----
 

@@ -1273,8 +1273,13 @@
               <div id="edit-chamado-anexos-atuais"></div>
             </div>
 
-            <label for="edit-chamado-anexos">Adicionar mais fotos/documentos (opcional, até 5MB cada)</label>
-            <input type="file" id="edit-chamado-anexos" accept="image/*,.pdf" multiple />
+            <label>Adicionar mais fotos/documentos (opcional, até 5MB cada)</label>
+            <div class="chamado-anexos-botoes">
+              <label id="edit-chamado-anexos-foto-botao" for="edit-chamado-anexos-foto" class="botao-secundario chamado-anexo-botao" tabindex="0">📷 Adicionar foto</label>
+              <input type="file" id="edit-chamado-anexos-foto" accept="image/*" multiple class="hidden" />
+              <label id="edit-chamado-anexos-doc-botao" for="edit-chamado-anexos-doc" class="botao-secundario chamado-anexo-botao" tabindex="0">📄 Adicionar PDF</label>
+              <input type="file" id="edit-chamado-anexos-doc" accept="application/pdf" multiple class="hidden" />
+            </div>
             <div id="edit-chamado-anexos-lista"></div>
 
             <div class="chamado-agendamento-caixa">
@@ -1341,8 +1346,13 @@
               <label for="chamado-observacoes">Observações do serviço (interno)</label>
               <textarea id="chamado-observacoes" rows="2" placeholder="Material a comprar, ferramenta a alugar, restrição de acesso..."></textarea>
 
-              <label for="chamado-anexos">Fotos ou documentos (opcional, até 5MB cada)</label>
-              <input type="file" id="chamado-anexos" accept="image/*,.pdf" multiple />
+              <label>Fotos ou documentos (opcional, até 5MB cada)</label>
+              <div class="chamado-anexos-botoes">
+                <label id="chamado-anexos-foto-botao" for="chamado-anexos-foto" class="botao-secundario chamado-anexo-botao" tabindex="0">📷 Adicionar foto</label>
+                <input type="file" id="chamado-anexos-foto" accept="image/*" multiple class="hidden" />
+                <label id="chamado-anexos-doc-botao" for="chamado-anexos-doc" class="botao-secundario chamado-anexo-botao" tabindex="0">📄 Adicionar PDF</label>
+                <input type="file" id="chamado-anexos-doc" accept="application/pdf" multiple class="hidden" />
+              </div>
               <div id="chamado-anexos-lista"></div>
 
               <div class="chamado-agendamento-caixa">

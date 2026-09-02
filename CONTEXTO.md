@@ -1634,6 +1634,18 @@ MICHEL`) — o dono já tinha usado a tela assim que foi entregue. Cuidado
 tomado: abri a edição dele sem querer, fechei sem salvar nada, e testei
 tudo de novo só no cadastro descartável, deixando o chamado real intocado.
 
+### Anexo: foto e PDF em botões separados (03/09/2026)
+
+O campo de anexo misturava `accept="image/*,.pdf"` num input só. No
+celular, misturar tipos assim costuma fazer o navegador abrir o
+gerenciador de arquivos genérico em vez da galeria de fotos direto — o
+dono pediu explicitamente pra abrir a galeria. Virou dois botões
+("📷 Adicionar foto" / "📄 Adicionar PDF"), cada um com seu próprio
+`<input type="file">` escondido com `accept` puro de um tipo só — é o
+`accept` puro de imagem que faz o celular priorizar a galeria. Os dois
+alimentam a mesma lista de anexos por baixo; o usuário nem percebe a
+diferença, só que agora tem dois toques em vez de um.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

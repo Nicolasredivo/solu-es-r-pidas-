@@ -1281,6 +1281,22 @@ button:active:not(:disabled) {
   color: white;
 }
 
+/* Botões de anexo (rótulo disfarçado de botão, ligado a um input de
+   arquivo escondido) -- separar foto de PDF em campos diferentes faz o
+   celular abrir a galeria de fotos direto, em vez do gerenciador de
+   arquivos genérico que aparece quando o "accept" mistura os dois tipos. */
+.chamado-anexos-botoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0 4px;
+}
+
+.chamado-anexo-botao {
+  cursor: pointer;
+  display: inline-block;
+}
+
 /* Anexos: miniatura + nome + remover, um por linha */
 #chamado-anexos-lista {
   display: flex;

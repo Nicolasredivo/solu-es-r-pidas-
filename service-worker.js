@@ -1,5 +1,5 @@
 // Sobe junto com o APP_VERSION do app.js a cada publicação.
-const CACHE_NAME = "solucoes-rapidas-2026.09.03";
+const CACHE_NAME = "solucoes-rapidas-2026.09.03b";
 const APP_SHELL = [
   "./",
   "./index.html",
