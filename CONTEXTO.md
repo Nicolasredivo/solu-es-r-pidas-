@@ -1741,6 +1741,67 @@ novo `.chamado-horario-intervalo` no `style.css`. Removidas as funções
 `montaDuracaoFinal`/`separaDuracaoBase` do `app.js` (não sobrou nenhum
 código de botão de duração no app).
 
+### Sugestão de "empurrar" com a duração errada, e linha do tempo arrastável (03/09/2026)
+
+**Bug achado pelo dono usando de verdade**: ao marcar um chamado que batia
+com o Chamado #2 (OPERA, 2h30 de duração), a opção "mover o Chamado #2 pra
+esse horário livre" sugeria um horário de só 1h — a duração do chamado
+**novo** sendo criado, não a do OPERA que ia ser movido. Causa: só existia
+uma sugestão (`resultado.sugestao`), calculada com a duração do pedido, e
+o botão de empurrar reusava ela pro chamado errado. Corrigido em
+`chamados1-checar-conflito.js`: agora cada chamado conflitante ganha sua
+própria sugestão (`conflitos[].sugestaoEmpurrar`), calculada com a
+duração **dele mesmo**, e a busca por horário livre pra ele considera o
+pedido novo como ocupado (já que é ele quem vai ficar ali) e o próprio
+conflitante como livre (é ele que está saindo dali) — sem isso a primeira
+sugestão que aparecia era o próprio horário que ele já ocupava.
+
+**Caixa de conflito reorganizada**: virou dois cartões lado a lado, cada
+um com seu próprio horário sugerido e botão — "Usar outro horário pro seu
+chamado" (botão cheio, cor de destaque) e "Manter seu horário e mover o
+Chamado #N" (botão contornado) — em vez de duas frases corridas com botões
+soltos, mais fácil de diferenciar rápido qual ação faz o quê.
+
+**Linha do tempo do dia, com arrastar pra reagendar**: pedido do dono foi
+poder "visualizar bem a agenda como um todo" em vez de só uma lista de
+cards. Nova seção no topo da aba Agenda: um dia por vez (setas
+`‹`/`›` + campo de data + atalho "Ir pra hoje"), mostrando os chamados
+daquele dia como blocos coloridos por status, posicionados pela hora real
+(grade de 07h-19h, que se estica sozinha se algum chamado começar antes
+ou terminar depois). Embaixo, uma linha de "conselho" com as folgas livres
+do dia (`calculaFolgasLivres`), pra ver de relance onde ainda cabe algo
+sem comparar cartão por cartão.
+
+- **Arrastar** um bloco (vertical, dentro do mesmo dia) muda o horário
+  reservado, mantendo a duração original — solta e o app já confere
+  conflito (`checarConflito`) e, se estiver livre, reagenda de verdade
+  (`reagendar-chamado`) e recarrega a lista. Se bater com outro chamado,
+  o bloco volta pro lugar e mostra qual chamado atrapalhou, sem gravar
+  nada.
+- **Tocar sem arrastar** (menos de ~2px de movimento) abre a edição
+  completa do chamado, igual ao botão "Editar" do card — mesmo bloco,
+  dois gestos diferentes.
+- Implementado com Pointer Events (`pointerdown`/`pointermove`/
+  `pointerup`), não HTML5 drag-and-drop nativo — funciona igual com mouse
+  e toque, importante pro uso no celular.
+- **Achado testando** (`ligarArrastarBlocoTimeline` em `app.js`): a
+  primeira versão chamava `bloco.setPointerCapture(...)` **antes** de
+  guardar a duração original do bloco (`duracaoMin`). Em qualquer caso
+  onde `setPointerCapture` falhasse (achado simulando o arrastar via
+  eventos sintéticos pra testar sem mexer em dado real — o Chrome recusa
+  `setPointerCapture` de um pointerId que não veio de um evento de
+  hardware de verdade), o restante do `pointerdown` não rodava e a
+  duração ficava com o valor inicial (0), fazendo o reagendamento sair
+  com início = fim. Corrigido guardando todo o estado necessário **antes**
+  da chamada de `setPointerCapture`, e essa chamada agora está em
+  `try/catch` (o arrastar continua funcionando mesmo se a captura formal
+  falhar, só perde a garantia extra de receber os eventos fora do
+  elemento). Testado de novo depois com eventos de ponteiro simulados e
+  espionando `checarConflito`/`pedirAoN8n` (sem deixar nenhuma chamada
+  real sair) pra confirmar que a duração agora é preservada corretamente
+  — e confirmado por leitura direta no Airtable que o Chamado #2 real
+  nunca foi alterado durante os testes.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

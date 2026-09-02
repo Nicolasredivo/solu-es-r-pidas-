@@ -1240,6 +1240,22 @@
           <p id="chamados-status" class="doc-hint"></p>
           <button type="button" id="recarregar-chamados" class="link-button">↻ Atualizar</button>
 
+          <div class="chamado-timeline-caixa">
+            <div class="chamado-timeline-nav">
+              <button type="button" id="chamado-timeline-anterior" class="botao-secundario">‹ Dia anterior</button>
+              <div class="chamado-timeline-data-wrap">
+                <strong id="chamado-timeline-data-texto">—</strong>
+                <input type="date" id="chamado-timeline-data-input" />
+              </div>
+              <button type="button" id="chamado-timeline-proximo" class="botao-secundario">Próximo dia ›</button>
+            </div>
+            <button type="button" id="chamado-timeline-hoje" class="link-button">Ir pra hoje</button>
+            <p class="doc-hint">Arraste um chamado pra mudar o horário nesse dia. Toque sem arrastar pra abrir e editar.</p>
+            <div id="chamado-timeline" class="chamado-timeline"></div>
+            <p id="chamado-timeline-livres" class="doc-hint"></p>
+            <p id="chamado-timeline-status" class="doc-hint"></p>
+          </div>
+
           <div id="chamados-sem-data-bloco" class="hidden">
             <h2 class="titulo-bloco">Aguardando confirmação de data</h2>
             <div id="lista-chamados-sem-data"></div>

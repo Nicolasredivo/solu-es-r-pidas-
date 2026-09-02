@@ -1343,6 +1343,124 @@ button:active:not(:disabled) {
 }
 
 /* Cartão de um chamado na Agenda */
+/* Linha do tempo do dia: ve tudo que esta marcado de uma vez, e da pra
+   arrastar um bloco pra outro horario no mesmo dia (solta e ja verifica
+   conflito e reagenda). Altura fixa (sem scroll interno) pra nao brigar
+   com o arrastar -- o intervalo de horas se ajusta sozinho se algum
+   chamado comecar antes ou terminar depois do padrao. */
+.chamado-timeline-caixa {
+  background: #12162a;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 10px 0 20px;
+}
+
+.chamado-timeline-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chamado-timeline-nav .botao-secundario {
+  width: auto;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+}
+
+.chamado-timeline-data-wrap {
+  position: relative;
+  text-align: center;
+  flex: 1;
+}
+
+.chamado-timeline-data-wrap input[type="date"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.chamado-timeline {
+  position: relative;
+  margin: 8px 0 18px;
+  border-top: 1px solid #2c3153;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.chamado-timeline-hora {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed #232842;
+  font-size: 0.7rem;
+  color: var(--muted);
+  padding-left: 4px;
+}
+
+.chamado-timeline-vazio {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  text-align: center;
+}
+
+.chamado-timeline-bloco {
+  position: absolute;
+  left: 58px;
+  right: 6px;
+  border-radius: 8px;
+  padding: 4px 8px;
+  overflow: hidden;
+  cursor: grab;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: white;
+  background: #2c3153;
+  touch-action: none;
+}
+
+.chamado-timeline-bloco.arrastando {
+  cursor: grabbing;
+  opacity: 0.88;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  z-index: 5;
+}
+
+.chamado-timeline-bloco .nome {
+  display: block;
+  font-weight: 600;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chamado-timeline-bloco .hora {
+  display: block;
+  font-size: 0.72rem;
+  opacity: 0.9;
+}
+
+.chamado-timeline-bloco.chamado-timeline-cor-agendado {
+  background: var(--accent);
+  color: white;
+}
+
+.chamado-timeline-bloco.chamado-timeline-cor-andamento {
+  background: var(--ok);
+  color: #08130d;
+}
+
+.chamado-timeline-bloco.chamado-timeline-cor-aguardando {
+  background: var(--aviso);
+  color: #2a1900;
+}
+
 .chamado-card {
   background: var(--card);
   border: 1px solid #2c3153;
@@ -1442,5 +1560,38 @@ button:active:not(:disabled) {
 }
 
 .chamado-horario-intervalo input[type="time"] {
+  width: 100%;
+}
+
+/* Caixa de choque de horário: as duas opções (usar outro horário pro seu
+   chamado / empurrar o chamado que já estava marcado) lado a lado, bem
+   separadas visualmente uma da outra pra não confundir qual botão faz o quê */
+.chamado-opcoes-conflito {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.chamado-opcao-conflito {
+  flex: 1 1 220px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.chamado-opcao-titulo {
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.chamado-opcao-horario {
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+
+.chamado-opcao-conflito .botao-usar-sugestao,
+.chamado-opcao-conflito .botao-secundario {
   width: 100%;
 }

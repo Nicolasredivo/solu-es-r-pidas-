@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03d";
+const APP_VERSION = "2026.09.03e";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4664,6 +4664,15 @@ const listaChamadosSemData = document.getElementById("lista-chamados-sem-data");
 const listaChamadosComData = document.getElementById("lista-chamados-com-data");
 const recarregarChamadosBotao = document.getElementById("recarregar-chamados");
 
+const chamadoTimelineAnterior = document.getElementById("chamado-timeline-anterior");
+const chamadoTimelineProximo = document.getElementById("chamado-timeline-proximo");
+const chamadoTimelineHoje = document.getElementById("chamado-timeline-hoje");
+const chamadoTimelineDataTexto = document.getElementById("chamado-timeline-data-texto");
+const chamadoTimelineDataInput = document.getElementById("chamado-timeline-data-input");
+const chamadoTimelineEl = document.getElementById("chamado-timeline");
+const chamadoTimelineLivres = document.getElementById("chamado-timeline-livres");
+const chamadoTimelineStatus = document.getElementById("chamado-timeline-status");
+
 const chamadoEditarBox = document.getElementById("chamado-editar-box");
 const chamadoEditarTitulo = document.getElementById("chamado-editar-titulo");
 const editChamadoContatoEscolhaBox = document.getElementById("edit-chamado-contato-escolha");
@@ -4722,6 +4731,7 @@ let chamadoContatoEscolhidoId = "";
 let chamadosAnexosArquivos = [];
 let chamadosSemData = [];
 let chamadosComData = [];
+let timelineDataAtual = dataLocalISO(new Date());
 let chamadoEditandoAtual = null;
 let chamadoEditContatoEscolhidoId = "";
 let chamadoEditAnexosNovos = [];
@@ -4973,25 +4983,43 @@ async function checarConflito(data, reservadoInicio, reservadoFim, ignorarId) {
 
 // aoUsarSugestao(sugestao) e aoEmpurrar(sugestao, conflito) decidem o que
 // fazer -- criação e edição de agendamento reusam esta mesma caixa.
+// A sugestão de "usar esse horário" (pro que está sendo criado/editado
+// agora) e a de "empurrar o Chamado #X" (pra ELE) são calculadas com
+// durações diferentes lá no n8n — cada uma leva em conta a duração de quem
+// vai ocupar o horário sugerido — por isso vêm em campos separados
+// (resultado.sugestao e c.sugestaoEmpurrar), nunca reaproveitadas uma pela
+// outra.
 function mostrarConflitoBox(box, resultado, aoUsarSugestao, aoEmpurrar) {
   const c = resultado.conflitos[0];
   let html = `<strong>Choque de horário</strong>` +
-    `<p>Já tem o Chamado #${c.numero} (${escapeHtml(c.cliente)}) marcado das ${formatarHoraIso(c.inicio)} às ${formatarHoraIso(c.fim)} nesse dia.</p>`;
+    `<p>Já tem o Chamado #${c.numero} (${escapeHtml(c.cliente)}) marcado das ${formatarHoraIso(c.inicio)} às ${formatarHoraIso(c.fim)} nesse dia.</p>` +
+    `<div class="chamado-opcoes-conflito">`;
 
   if (resultado.sugestao) {
     const s = resultado.sugestao;
-    html += `<p>Horário livre mais próximo: ${formatarDataChamado(s.data)}, das ${s.inicio} às ${s.fim}.</p>` +
-      `<button type="button" class="botao-secundario botao-usar-sugestao">Usar esse horário</button>` +
-      `<button type="button" class="botao-secundario botao-empurrar">Marcar mesmo assim, e mover o Chamado #${c.numero} pra esse horário livre</button>`;
+    html += `<div class="chamado-opcao-conflito">` +
+      `<p class="chamado-opcao-titulo">Usar outro horário pro seu chamado</p>` +
+      `<p class="chamado-opcao-horario">${formatarDataChamado(s.data)}, das ${s.inicio} às ${s.fim}</p>` +
+      `<button type="button" class="botao-usar-sugestao">Usar esse horário</button>` +
+      `</div>`;
   }
+
+  if (c.sugestaoEmpurrar) {
+    const se = c.sugestaoEmpurrar;
+    html += `<div class="chamado-opcao-conflito">` +
+      `<p class="chamado-opcao-titulo">Manter seu horário e mover o Chamado #${c.numero}</p>` +
+      `<p class="chamado-opcao-horario">Chamado #${c.numero} vai pra ${formatarDataChamado(se.data)}, das ${se.inicio} às ${se.fim}</p>` +
+      `<button type="button" class="botao-secundario botao-empurrar">Marcar mesmo assim</button>` +
+      `</div>`;
+  }
+
+  html += `</div>`;
 
   box.innerHTML = html;
   box.classList.remove("hidden");
 
-  if (resultado.sugestao) {
-    box.querySelector(".botao-usar-sugestao").addEventListener("click", () => aoUsarSugestao(resultado.sugestao));
-    box.querySelector(".botao-empurrar").addEventListener("click", () => aoEmpurrar(resultado.sugestao, c));
-  }
+  if (resultado.sugestao) box.querySelector(".botao-usar-sugestao").addEventListener("click", () => aoUsarSugestao(resultado.sugestao));
+  if (c.sugestaoEmpurrar) box.querySelector(".botao-empurrar").addEventListener("click", () => aoEmpurrar(c.sugestaoEmpurrar, c));
 }
 
 // ----- criar chamado -----
@@ -5111,6 +5139,17 @@ function statusClasseChamado(status) {
   return "";
 }
 
+// Cores do bloco na linha do tempo -- classe própria (em vez de reusar
+// statusClasseChamado) porque as classes do "badge" já definem `color`
+// pra combinar com o fundo claro/transparente delas, o que deixaria o
+// texto branco do bloco ilegível por cima da cor sólida daqui.
+function statusClasseTimeline(status) {
+  if (status === "Aguardando confirmação de data") return "chamado-timeline-cor-aguardando";
+  if (status === "Agendado") return "chamado-timeline-cor-agendado";
+  if (status === "Em andamento") return "chamado-timeline-cor-andamento";
+  return "";
+}
+
 function montarCardChamado(c, comData) {
   const card = document.createElement("div");
   card.className = "chamado-card";
@@ -5175,6 +5214,209 @@ function desenharListaChamados() {
   }
 }
 
+// ----- linha do tempo do dia (ver tudo de uma vez, arrastar pra reagendar) -----
+
+const TIMELINE_HORA_INICIO_PADRAO = 7;
+const TIMELINE_HORA_FIM_PADRAO = 19;
+const TIMELINE_PX_POR_MINUTO = 1;
+const TIMELINE_PASSO_MINUTOS = 5;
+
+function minutosDoDiaIso(iso) {
+  const d = new Date(iso);
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+function minutosParaHHMM(min) {
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+// Frestas livres no dia, dentro do intervalo mostrado -- é o "conselho"
+// rápido de onde ainda cabe algo, sem ter que ficar comparando os cards.
+function calculaFolgasLivres(doDia, minInicio, minFim) {
+  const blocos = doDia
+    .map((c) => [minutosDoDiaIso(c.reservadoInicio), minutosDoDiaIso(c.reservadoFim)])
+    .sort((a, b) => a[0] - b[0]);
+  const folgas = [];
+  let cursor = minInicio;
+  blocos.forEach(([ini, fim]) => {
+    if (ini > cursor) folgas.push([cursor, ini]);
+    if (fim > cursor) cursor = fim;
+  });
+  if (cursor < minFim) folgas.push([cursor, minFim]);
+  return folgas.filter(([a, b]) => b - a >= 15);
+}
+
+function renderizarTimeline() {
+  chamadoTimelineDataInput.value = timelineDataAtual;
+  chamadoTimelineDataTexto.textContent = formatarDataChamado(timelineDataAtual);
+
+  const doDia = chamadosComData.filter((c) => dataLocalISO(new Date(c.reservadoInicio)) === timelineDataAtual);
+
+  // O intervalo padrão (7h-19h) cobre o horário comercial comum, mas se
+  // algum chamado nesse dia começar antes ou terminar depois, a linha do
+  // tempo se estica pra caber ele inteiro em vez de cortar.
+  let horaMin = TIMELINE_HORA_INICIO_PADRAO;
+  let horaMax = TIMELINE_HORA_FIM_PADRAO;
+  doDia.forEach((c) => {
+    const ini = new Date(c.reservadoInicio);
+    const fim = new Date(c.reservadoFim);
+    if (ini.getHours() < horaMin) horaMin = ini.getHours();
+    const horaFimArredondada = fim.getMinutes() > 0 ? fim.getHours() + 1 : fim.getHours();
+    if (horaFimArredondada > horaMax) horaMax = horaFimArredondada;
+  });
+
+  const minInicio = horaMin * 60;
+  const minFim = horaMax * 60;
+  const alturaTotal = (minFim - minInicio) * TIMELINE_PX_POR_MINUTO;
+
+  chamadoTimelineEl.style.height = `${alturaTotal}px`;
+  chamadoTimelineEl.innerHTML = "";
+
+  for (let h = horaMin; h <= horaMax; h++) {
+    const linha = document.createElement("div");
+    linha.className = "chamado-timeline-hora";
+    linha.style.top = `${(h * 60 - minInicio) * TIMELINE_PX_POR_MINUTO}px`;
+    linha.textContent = `${String(h).padStart(2, "0")}:00`;
+    chamadoTimelineEl.appendChild(linha);
+  }
+
+  if (!doDia.length) {
+    const vazio = document.createElement("p");
+    vazio.className = "doc-hint chamado-timeline-vazio";
+    vazio.textContent = "Nenhum chamado nesse dia.";
+    chamadoTimelineEl.appendChild(vazio);
+  }
+
+  doDia.forEach((c) => {
+    const bloco = document.createElement("div");
+    bloco.className = `chamado-timeline-bloco ${statusClasseTimeline(c.status)}`;
+    const inicioMin = minutosDoDiaIso(c.reservadoInicio);
+    const duracaoMin = Math.max(minutosDoDiaIso(c.reservadoFim) - inicioMin, TIMELINE_PASSO_MINUTOS);
+    bloco.style.top = `${(inicioMin - minInicio) * TIMELINE_PX_POR_MINUTO}px`;
+    bloco.style.height = `${duracaoMin * TIMELINE_PX_POR_MINUTO}px`;
+    bloco.innerHTML = `<span class="nome">#${c.numero} ${escapeHtml(c.clienteNome)}</span>` +
+      `<span class="hora">${formatarHoraIso(c.reservadoInicio)}–${formatarHoraIso(c.reservadoFim)}</span>`;
+    ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim);
+    chamadoTimelineEl.appendChild(bloco);
+  });
+
+  const folgas = calculaFolgasLivres(doDia, minInicio, minFim);
+  chamadoTimelineLivres.textContent = folgas.length
+    ? `Livre nesse dia: ${folgas.map(([a, b]) => `${minutosParaHHMM(a)}–${minutosParaHHMM(b)}`).join(", ")}`
+    : "Sem folga livre nesse intervalo do dia.";
+}
+
+function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
+  let arrastando = false;
+  let moveuBastante = false;
+  let offsetY = 0;
+  let topOriginal = 0;
+  let duracaoMin = 0;
+
+  bloco.addEventListener("pointerdown", (evento) => {
+    // Captura tudo que o solto vai precisar ANTES do setPointerCapture --
+    // se ele falhar (o navegador pode recusar em algum caso raro), o
+    // arrastar não pode ficar com a duração zerada por causa disso.
+    arrastando = true;
+    moveuBastante = false;
+    offsetY = evento.clientY - bloco.getBoundingClientRect().top;
+    topOriginal = parseFloat(bloco.style.top);
+    duracaoMin = parseFloat(bloco.style.height) / TIMELINE_PX_POR_MINUTO;
+    try { bloco.setPointerCapture(evento.pointerId); } catch (e) { /* segue sem captura formal */ }
+    bloco.classList.add("arrastando");
+  });
+
+  bloco.addEventListener("pointermove", (evento) => {
+    if (!arrastando) return;
+    const containerTop = chamadoTimelineEl.getBoundingClientRect().top;
+    let novoTop = evento.clientY - containerTop - offsetY;
+    const alturaTotal = (minFim - minInicio) * TIMELINE_PX_POR_MINUTO;
+    novoTop = Math.max(0, Math.min(novoTop, alturaTotal - parseFloat(bloco.style.height)));
+    const passoPx = TIMELINE_PASSO_MINUTOS * TIMELINE_PX_POR_MINUTO;
+    novoTop = Math.round(novoTop / passoPx) * passoPx;
+    if (Math.abs(novoTop - topOriginal) > 2) moveuBastante = true;
+    bloco.style.top = `${novoTop}px`;
+  });
+
+  async function soltar(evento) {
+    if (!arrastando) return;
+    arrastando = false;
+    bloco.classList.remove("arrastando");
+
+    if (!moveuBastante) {
+      // Toque sem arrastar de verdade: abre pra editar, como clicar em
+      // "Editar" no card da lista.
+      bloco.style.top = `${topOriginal}px`;
+      abrirEdicaoChamado(c);
+      chamadoEditarBox.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    const novoTop = parseFloat(bloco.style.top);
+    const novoInicioMin = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
+    const novoFimMin = novoInicioMin + duracaoMin;
+    const novoInicio = minutosParaHHMM(novoInicioMin);
+    const novoFim = minutosParaHHMM(novoFimMin);
+
+    chamadoTimelineStatus.textContent = "Verificando horário...";
+    chamadoTimelineStatus.className = "doc-hint";
+
+    const resultado = await checarConflito(timelineDataAtual, novoInicio, novoFim, c.id);
+    if (resultado && resultado.temConflito) {
+      bloco.style.top = `${topOriginal}px`;
+      const conf = resultado.conflitos[0];
+      chamadoTimelineStatus.textContent = `Bate com o Chamado #${conf.numero} (${formatarHoraIso(conf.inicio)}–${formatarHoraIso(conf.fim)}). Horário não mudou.`;
+      chamadoTimelineStatus.className = "doc-hint error";
+      return;
+    }
+
+    const resposta = await pedirAoN8n("reagendar-chamado", {
+      chamadoId: c.id, data: timelineDataAtual, reservadoInicio: novoInicio, reservadoFim: novoFim,
+      horarioCombinadoCliente: c.horarioCombinadoCliente || "",
+    });
+    if (!resposta || !resposta.ok) {
+      bloco.style.top = `${topOriginal}px`;
+      chamadoTimelineStatus.textContent = (resposta && resposta.mensagem) || "Não consegui mudar o horário.";
+      chamadoTimelineStatus.className = "doc-hint error";
+      return;
+    }
+
+    chamadoTimelineStatus.textContent = `Chamado #${c.numero} movido pra ${novoInicio} às ${novoFim}.`;
+    chamadoTimelineStatus.className = "doc-hint ok";
+    await carregarChamados();
+  }
+
+  bloco.addEventListener("pointerup", soltar);
+  bloco.addEventListener("pointercancel", () => {
+    if (!arrastando) return;
+    arrastando = false;
+    bloco.classList.remove("arrastando");
+    bloco.style.top = `${topOriginal}px`;
+  });
+}
+
+function mudaDiaTimeline(deltaDias) {
+  const d = new Date(`${timelineDataAtual}T00:00:00`);
+  d.setDate(d.getDate() + deltaDias);
+  timelineDataAtual = dataLocalISO(d);
+  renderizarTimeline();
+}
+
+chamadoTimelineAnterior.addEventListener("click", () => mudaDiaTimeline(-1));
+chamadoTimelineProximo.addEventListener("click", () => mudaDiaTimeline(1));
+chamadoTimelineHoje.addEventListener("click", () => {
+  timelineDataAtual = dataLocalISO(new Date());
+  renderizarTimeline();
+});
+chamadoTimelineDataInput.addEventListener("change", () => {
+  if (chamadoTimelineDataInput.value) {
+    timelineDataAtual = chamadoTimelineDataInput.value;
+    renderizarTimeline();
+  }
+});
+
 async function carregarChamados() {
   mostrarChamadosListaStatus("neutral", "Carregando...");
   const dados = await pedirAoN8n("listar-chamados", {});
@@ -5185,6 +5427,7 @@ async function carregarChamados() {
   chamadosSemData = dados.semData || [];
   chamadosComData = dados.comData || [];
   desenharListaChamados();
+  renderizarTimeline();
   mostrarChamadosListaStatus("neutral", "");
 }
 
