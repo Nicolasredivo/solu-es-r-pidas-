@@ -1600,6 +1600,40 @@ um, criação sem e com data, o aviso de conflito completo (mostra → sugere
 → empurra), cancelar com dois toques, e o layout no celular (~375px) —
 tudo com um cadastro descartável, nunca num cliente real.
 
+### Editar chamado depois de criado, e layout de horário (03/09/2026)
+
+Faltavam duas coisas depois da primeira entrega: só dava pra reagendar
+(mudar data/horário), não editar o resto; e o campo de duração era um menu
+suspenso, lento de usar no dia a dia.
+
+**Duração agora é botão de toque único** (1h/2h/3h/Manhã/Tarde/Dia
+inteiro), num campo escondido por baixo pra não mudar o resto do código
+que já lia `.value`. Quando a duração é um período fixo, o campo "Reservar
+a partir de" some e vira um texto informativo ("A partir das 08:00.") —
+mais claro que um campo desabilitado, que em alguns navegadores parece
+quebrado. Os dois formulários (criar e editar) usam a mesma função
+`ligarDuracaoPills`/`selecionaDuracaoPill`.
+
+**Editar chamado**: workflow novo `App - Editar chamado` cobre o que
+"Reagendar" não cobria — local exato, descrição, observações, o contato
+escolhido (relê o contato no Airtable se mudou) e novos anexos (soma aos
+que já existiam; ainda não dá pra excluir um anexo salvo, só adicionar).
+Data/horário continuam sendo só do "Reagendar chamado", que já tinha a
+lógica de conflito — o botão "Salvar" da edição chama os dois workflows em
+sequência quando a data está preenchida, e só o de edição quando não está.
+O cliente do chamado não muda nessa tela — só o que foi pedido, pra quem,
+e quando.
+
+`Listar chamados` passou a devolver também `clienteDocumento` (pra buscar
+a lista de contatos do cliente ao editar), `clienteId`, `observacoesServico`
+e `anexos` (nome + link), que faltavam.
+
+**Achado no teste**: ao testar pela primeira vez com dados reais no
+navegador, apareceu um chamado #1 de verdade (`EDIFICIO MONTE SAINT
+MICHEL`) — o dono já tinha usado a tela assim que foi entregue. Cuidado
+tomado: abri a edição dele sem querer, fechei sem salvar nada, e testei
+tudo de novo só no cadastro descartável, deixando o chamado real intocado.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

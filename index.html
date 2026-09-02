@@ -1249,34 +1249,62 @@
           <div id="lista-chamados-com-data"></div>
 
           <!-- Um formulário só, reaproveitado por qualquer card ao clicar em
-               "Editar agendamento" — evita duplicar os mesmos campos em
-               cada item da lista. -->
+               "Editar" — evita duplicar os mesmos campos em cada item da
+               lista. Cobre tudo do chamado, não só a data. -->
           <div id="chamado-editar-box" class="chamado-editar-box hidden">
-            <h2 class="titulo-bloco" id="chamado-editar-titulo">Editar agendamento</h2>
+            <h2 class="titulo-bloco" id="chamado-editar-titulo">Editar chamado</h2>
 
-            <label for="edit-chamado-data">Data</label>
-            <input type="date" id="edit-chamado-data" />
+            <div id="edit-chamado-contato-escolha" class="hidden">
+              <label>Quem pediu o serviço?</label>
+              <div id="edit-chamado-lista-contatos"></div>
+            </div>
 
-            <label for="edit-chamado-horario-combinado">Horário combinado com o cliente</label>
-            <input type="time" id="edit-chamado-horario-combinado" />
+            <label for="edit-chamado-local-exato">Local exato (opcional)</label>
+            <input type="text" id="edit-chamado-local-exato" placeholder="Ex: teto da garagem, subsolo" autocomplete="off" />
 
-            <label for="edit-chamado-reservado-inicio">Reservar a partir de</label>
-            <input type="time" id="edit-chamado-reservado-inicio" />
+            <label for="edit-chamado-descricao">O que precisa ser feito</label>
+            <textarea id="edit-chamado-descricao" rows="3"></textarea>
 
-            <label for="edit-chamado-duracao">Duração</label>
-            <select id="edit-chamado-duracao">
-              <option value="">Selecione</option>
-              <option value="1h">1 hora</option>
-              <option value="2h">2 horas</option>
-              <option value="3h">3 horas</option>
-              <option value="Período manhã">Período da manhã</option>
-              <option value="Período tarde">Período da tarde</option>
-              <option value="Dia inteiro">Dia inteiro</option>
-            </select>
+            <label for="edit-chamado-observacoes">Observações do serviço (interno)</label>
+            <textarea id="edit-chamado-observacoes" rows="2"></textarea>
 
-            <div id="edit-chamado-conflito" class="aviso-caixa hidden"></div>
+            <div id="edit-chamado-anexos-atuais-bloco" class="hidden">
+              <label>Anexos já salvos</label>
+              <div id="edit-chamado-anexos-atuais"></div>
+            </div>
 
-            <button type="button" id="edit-chamado-salvar">Salvar agendamento</button>
+            <label for="edit-chamado-anexos">Adicionar mais fotos/documentos (opcional, até 5MB cada)</label>
+            <input type="file" id="edit-chamado-anexos" accept="image/*,.pdf" multiple />
+            <div id="edit-chamado-anexos-lista"></div>
+
+            <div class="chamado-agendamento-caixa">
+              <h2 class="titulo-bloco">Agendamento</h2>
+
+              <label for="edit-chamado-data">Data</label>
+              <input type="date" id="edit-chamado-data" />
+
+              <label>Duração</label>
+              <div id="edit-chamado-duracao-opcoes" class="chamado-duracao-opcoes">
+                <button type="button" class="chamado-duracao-item" data-duracao="1h">1 hora</button>
+                <button type="button" class="chamado-duracao-item" data-duracao="2h">2 horas</button>
+                <button type="button" class="chamado-duracao-item" data-duracao="3h">3 horas</button>
+                <button type="button" class="chamado-duracao-item" data-duracao="Período manhã">Manhã</button>
+                <button type="button" class="chamado-duracao-item" data-duracao="Período tarde">Tarde</button>
+                <button type="button" class="chamado-duracao-item" data-duracao="Dia inteiro">Dia inteiro</button>
+              </div>
+              <input type="hidden" id="edit-chamado-duracao" />
+
+              <label for="edit-chamado-reservado-inicio">Reservar a partir de</label>
+              <input type="time" id="edit-chamado-reservado-inicio" />
+              <p id="edit-chamado-reservado-fixo-info" class="doc-hint hidden"></p>
+
+              <label for="edit-chamado-horario-combinado">Horário combinado com o cliente (opcional)</label>
+              <input type="time" id="edit-chamado-horario-combinado" />
+
+              <div id="edit-chamado-conflito" class="aviso-caixa hidden"></div>
+            </div>
+
+            <button type="button" id="edit-chamado-salvar">Salvar</button>
             <button type="button" id="edit-chamado-cancelar-form" class="botao-secundario">Fechar</button>
             <div id="edit-chamado-status" class="status"></div>
           </div>
@@ -1317,30 +1345,33 @@
               <input type="file" id="chamado-anexos" accept="image/*,.pdf" multiple />
               <div id="chamado-anexos-lista"></div>
 
-              <h2 class="titulo-bloco">Agendamento (opcional)</h2>
-              <p class="doc-hint">Pode deixar em branco e marcar depois.</p>
+              <div class="chamado-agendamento-caixa">
+                <h2 class="titulo-bloco">Agendamento (opcional)</h2>
+                <p class="doc-hint">Pode deixar em branco e marcar depois.</p>
 
-              <label for="chamado-data">Data</label>
-              <input type="date" id="chamado-data" />
+                <label for="chamado-data">Data</label>
+                <input type="date" id="chamado-data" />
 
-              <label for="chamado-horario-combinado">Horário combinado com o cliente</label>
-              <input type="time" id="chamado-horario-combinado" />
+                <label>Duração</label>
+                <div id="chamado-duracao-opcoes" class="chamado-duracao-opcoes">
+                  <button type="button" class="chamado-duracao-item" data-duracao="1h">1 hora</button>
+                  <button type="button" class="chamado-duracao-item" data-duracao="2h">2 horas</button>
+                  <button type="button" class="chamado-duracao-item" data-duracao="3h">3 horas</button>
+                  <button type="button" class="chamado-duracao-item" data-duracao="Período manhã">Manhã</button>
+                  <button type="button" class="chamado-duracao-item" data-duracao="Período tarde">Tarde</button>
+                  <button type="button" class="chamado-duracao-item" data-duracao="Dia inteiro">Dia inteiro</button>
+                </div>
+                <input type="hidden" id="chamado-duracao" />
 
-              <label for="chamado-reservado-inicio">Reservar a partir de</label>
-              <input type="time" id="chamado-reservado-inicio" value="08:00" />
+                <label for="chamado-reservado-inicio">Reservar a partir de</label>
+                <input type="time" id="chamado-reservado-inicio" value="08:00" />
+                <p id="chamado-reservado-fixo-info" class="doc-hint hidden"></p>
 
-              <label for="chamado-duracao">Duração</label>
-              <select id="chamado-duracao">
-                <option value="">Selecione</option>
-                <option value="1h">1 hora</option>
-                <option value="2h">2 horas</option>
-                <option value="3h">3 horas</option>
-                <option value="Período manhã">Período da manhã</option>
-                <option value="Período tarde">Período da tarde</option>
-                <option value="Dia inteiro">Dia inteiro</option>
-              </select>
+                <label for="chamado-horario-combinado">Horário combinado com o cliente (opcional)</label>
+                <input type="time" id="chamado-horario-combinado" />
 
-              <div id="chamado-conflito" class="aviso-caixa hidden"></div>
+                <div id="chamado-conflito" class="aviso-caixa hidden"></div>
+              </div>
 
               <button type="submit" id="chamado-salvar-botao">Criar chamado</button>
               <button type="button" id="chamado-cancelar-botao" class="botao-secundario hidden">Cancelar</button>

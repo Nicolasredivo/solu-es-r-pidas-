@@ -1388,11 +1388,43 @@ button:active:not(:disabled) {
   color: var(--error);
 }
 
-/* Formulário de reagendar/cancelar, aberto a partir de um cartão da lista */
+/* Formulário de editar/cancelar, aberto a partir de um cartão da lista */
 .chamado-editar-box {
   background: var(--card);
   border: 1px solid var(--accent);
   border-radius: 10px;
   padding: 14px;
   margin-top: 16px;
+}
+
+/* Agrupa visualmente os campos de data/duração/horário, dentro do
+   formulário de criar e do de editar */
+.chamado-agendamento-caixa {
+  background: #12162a;
+  border-radius: 10px;
+  padding: 12px 14px 4px;
+  margin: 6px 0 16px;
+}
+
+/* Duração em botões de um toque só, em vez de menu suspenso */
+.chamado-duracao-opcoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 14px;
+}
+
+.chamado-duracao-item {
+  background: transparent;
+  border: 1px solid #2c3153;
+  color: var(--muted);
+  border-radius: 20px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+}
+
+.chamado-duracao-item.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
 }

@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.02";
+const APP_VERSION = "2026.09.03";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4666,9 +4666,20 @@ const recarregarChamadosBotao = document.getElementById("recarregar-chamados");
 
 const chamadoEditarBox = document.getElementById("chamado-editar-box");
 const chamadoEditarTitulo = document.getElementById("chamado-editar-titulo");
+const editChamadoContatoEscolhaBox = document.getElementById("edit-chamado-contato-escolha");
+const editChamadoListaContatos = document.getElementById("edit-chamado-lista-contatos");
+const editChamadoLocalExato = document.getElementById("edit-chamado-local-exato");
+const editChamadoDescricao = document.getElementById("edit-chamado-descricao");
+const editChamadoObservacoes = document.getElementById("edit-chamado-observacoes");
+const editChamadoAnexosAtuaisBloco = document.getElementById("edit-chamado-anexos-atuais-bloco");
+const editChamadoAnexosAtuais = document.getElementById("edit-chamado-anexos-atuais");
+const editChamadoAnexosInput = document.getElementById("edit-chamado-anexos");
+const editChamadoAnexosLista = document.getElementById("edit-chamado-anexos-lista");
 const editChamadoData = document.getElementById("edit-chamado-data");
 const editChamadoHorarioCombinado = document.getElementById("edit-chamado-horario-combinado");
 const editChamadoReservadoInicio = document.getElementById("edit-chamado-reservado-inicio");
+const editChamadoReservadoFixoInfo = document.getElementById("edit-chamado-reservado-fixo-info");
+const editChamadoDuracaoOpcoes = document.getElementById("edit-chamado-duracao-opcoes");
 const editChamadoDuracao = document.getElementById("edit-chamado-duracao");
 const editChamadoConflito = document.getElementById("edit-chamado-conflito");
 const editChamadoSalvarBotao = document.getElementById("edit-chamado-salvar");
@@ -4693,6 +4704,8 @@ const chamadoAnexosLista = document.getElementById("chamado-anexos-lista");
 const chamadoDataInput = document.getElementById("chamado-data");
 const chamadoHorarioCombinadoInput = document.getElementById("chamado-horario-combinado");
 const chamadoReservadoInicioInput = document.getElementById("chamado-reservado-inicio");
+const chamadoReservadoFixoInfo = document.getElementById("chamado-reservado-fixo-info");
+const chamadoDuracaoOpcoes = document.getElementById("chamado-duracao-opcoes");
 const chamadoDuracaoSelect = document.getElementById("chamado-duracao");
 const chamadoConflitoBox = document.getElementById("chamado-conflito");
 const chamadoForm = document.getElementById("chamado-form");
@@ -4708,6 +4721,8 @@ let chamadosAnexosArquivos = [];
 let chamadosSemData = [];
 let chamadosComData = [];
 let chamadoEditandoAtual = null;
+let chamadoEditContatoEscolhidoId = "";
+let chamadoEditAnexosNovos = [];
 
 function mostrarChamadoStatus(tipo, mensagem) {
   chamadoStatus.textContent = mensagem;
@@ -4722,18 +4737,48 @@ function mostrarChamadosListaStatus(tipo, mensagem) {
   chamadosStatusEl.className = `doc-hint ${tipo}`;
 }
 
-// Período/dia inteiro têm horário fixo (combinado com o dono): trava o
-// campo "reservar a partir de" pra refletir isso quando escolhido.
+// Duração como botões de toque único, em vez de menu suspenso — mais rápido
+// pro dia a dia, principalmente no celular. Período/dia inteiro têm horário
+// fixo (combinado com o dono): nesse caso o campo de hora vira um texto
+// informativo, mais claro do que um campo desabilitado (que em alguns
+// navegadores parece quebrado).
 const DURACAO_HORARIO_FIXO = { "Período manhã": "08:00", "Período tarde": "13:30", "Dia inteiro": "08:00" };
-function ligarDuracaoFixa(selectEl, inicioEl) {
-  selectEl.addEventListener("change", () => {
-    const fixo = DURACAO_HORARIO_FIXO[selectEl.value];
-    inicioEl.disabled = Boolean(fixo);
-    if (fixo) inicioEl.value = fixo;
+
+function aplicaDuracaoNoHorario(duracao, inicioEl, fixoInfoEl) {
+  const fixo = DURACAO_HORARIO_FIXO[duracao];
+  if (fixo) {
+    inicioEl.value = fixo;
+    inicioEl.classList.add("hidden");
+    fixoInfoEl.textContent = `A partir das ${fixo}.`;
+    fixoInfoEl.classList.remove("hidden");
+  } else {
+    inicioEl.classList.remove("hidden");
+    fixoInfoEl.classList.add("hidden");
+  }
+}
+
+function ligarDuracaoPills(containerEl, hiddenInputEl, inicioEl, fixoInfoEl) {
+  containerEl.querySelectorAll(".chamado-duracao-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      containerEl.querySelectorAll(".chamado-duracao-item").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      hiddenInputEl.value = btn.dataset.duracao;
+      aplicaDuracaoNoHorario(btn.dataset.duracao, inicioEl, fixoInfoEl);
+    });
   });
 }
-ligarDuracaoFixa(chamadoDuracaoSelect, chamadoReservadoInicioInput);
-ligarDuracaoFixa(editChamadoDuracao, editChamadoReservadoInicio);
+
+// Usado ao limpar o formulário e ao abrir a edição de um chamado, pra marcar
+// a opção certa sem precisar de um clique de verdade.
+function selecionaDuracaoPill(containerEl, hiddenInputEl, inicioEl, fixoInfoEl, duracao) {
+  containerEl.querySelectorAll(".chamado-duracao-item").forEach((b) => b.classList.toggle("active", b.dataset.duracao === duracao));
+  hiddenInputEl.value = duracao || "";
+  if (duracao) aplicaDuracaoNoHorario(duracao, inicioEl, fixoInfoEl);
+  else { inicioEl.classList.remove("hidden"); fixoInfoEl.classList.add("hidden"); }
+}
+
+ligarDuracaoPills(chamadoDuracaoOpcoes, chamadoDuracaoSelect, chamadoReservadoInicioInput, chamadoReservadoFixoInfo);
+ligarDuracaoPills(editChamadoDuracaoOpcoes, editChamadoDuracao, editChamadoReservadoInicio, editChamadoReservadoFixoInfo);
 
 // ----- passo 1: busca de cliente, 100% no navegador -----
 
@@ -4902,6 +4947,47 @@ chamadoAnexosInput.addEventListener("change", async () => {
   desenharAnexosChamado();
 });
 
+// Mesma ideia, pro formulário de edição — anexos que já estavam salvos só
+// são mostrados (nome do arquivo), sem opção de excluir por enquanto; o que
+// esta tela adiciona são anexos novos, que se juntam aos existentes.
+function desenharAnexosNovosEdicao() {
+  editChamadoAnexosLista.innerHTML = "";
+  chamadoEditAnexosNovos.forEach((a, i) => {
+    const item = document.createElement("div");
+    item.className = "chamado-anexo-item";
+    const ehImagem = a.contentType.startsWith("image/");
+    item.innerHTML = (ehImagem ? `<img src="${a.url}" alt="" />` : `<span class="chamado-anexo-icone">📄</span>`) +
+      `<span class="chamado-anexo-nome">${escapeHtml(a.filename)}</span>` +
+      `<button type="button" class="chamado-anexo-remover" aria-label="Remover">×</button>`;
+    item.querySelector(".chamado-anexo-remover").addEventListener("click", () => {
+      chamadoEditAnexosNovos.splice(i, 1);
+      desenharAnexosNovosEdicao();
+    });
+    editChamadoAnexosLista.appendChild(item);
+  });
+}
+
+editChamadoAnexosInput.addEventListener("change", async () => {
+  const arquivos = Array.from(editChamadoAnexosInput.files || []);
+  for (const arquivo of arquivos) {
+    if (arquivo.size > 5 * 1024 * 1024) {
+      mostrarEditChamadoStatus("error", `"${arquivo.name}" passa de 5MB e não foi adicionado.`);
+      continue;
+    }
+    try {
+      const base64 = await arquivoParaBase64(arquivo);
+      chamadoEditAnexosNovos.push({
+        filename: arquivo.name, contentType: arquivo.type || "application/octet-stream",
+        base64, url: URL.createObjectURL(arquivo),
+      });
+    } catch (err) {
+      mostrarEditChamadoStatus("error", `Não consegui ler "${arquivo.name}".`);
+    }
+  }
+  editChamadoAnexosInput.value = "";
+  desenharAnexosNovosEdicao();
+});
+
 // ----- conflito de horário -----
 
 function formatarHoraIso(iso) {
@@ -4959,8 +5045,7 @@ function limparFormularioChamado() {
   chamadoDataInput.value = "";
   chamadoHorarioCombinadoInput.value = "";
   chamadoReservadoInicioInput.value = "08:00";
-  chamadoReservadoInicioInput.disabled = false;
-  chamadoDuracaoSelect.value = "";
+  selecionaDuracaoPill(chamadoDuracaoOpcoes, chamadoDuracaoSelect, chamadoReservadoInicioInput, chamadoReservadoFixoInfo, "");
   limparConflitoBox(chamadoConflitoBox);
   mostrarChamadoStatus("neutral", "");
 }
@@ -5078,12 +5163,12 @@ function montarCardChamado(c, comData) {
     ${c.contatoNome ? `<p class="doc-hint">Contato: ${escapeHtml(c.contatoNome)}${c.contatoWhatsApp ? " · " + escapeHtml(c.contatoWhatsApp) : ""}</p>` : ""}
     ${horarioTexto}
     <div class="chamado-card-acoes">
-      <button type="button" class="botao-secundario botao-editar-agendamento">${comData ? "Reagendar" : "Marcar data"}</button>
+      <button type="button" class="botao-secundario botao-editar-chamado">Editar</button>
       <button type="button" class="botao-secundario botao-cancelar-chamado">Cancelar chamado</button>
     </div>
   `;
 
-  card.querySelector(".botao-editar-agendamento").addEventListener("click", () => abrirEdicaoAgendamento(c));
+  card.querySelector(".botao-editar-chamado").addEventListener("click", () => abrirEdicaoChamado(c));
 
   const cancelarBotao = card.querySelector(".botao-cancelar-chamado");
   cancelarBotao.addEventListener("click", () => {
@@ -5135,11 +5220,31 @@ async function carregarChamados() {
 
 recarregarChamadosBotao.addEventListener("click", carregarChamados);
 
-// ----- editar agendamento (reagendar) -----
+// ----- editar chamado -----
+//
+// Uma tela só cobre tudo: local/descrição/observações/anexos/contato (via
+// "App - Editar chamado") e, se a data estiver preenchida, o agendamento
+// (via "App - Reagendar chamado", que já tinha a lógica de conflito). O
+// cliente em si não muda — só o que foi pedido, pra quem, e quando.
 
-function abrirEdicaoAgendamento(chamado) {
+async function abrirEdicaoChamado(chamado) {
   chamadoEditandoAtual = chamado;
   chamadoEditarTitulo.textContent = `Chamado #${chamado.numero} — ${chamado.clienteNome}`;
+
+  editChamadoLocalExato.value = chamado.localExato || "";
+  editChamadoDescricao.value = chamado.descricaoSolicitacao || "";
+  editChamadoObservacoes.value = chamado.observacoesServico || "";
+
+  chamadoEditAnexosNovos = [];
+  editChamadoAnexosLista.innerHTML = "";
+  if (chamado.anexos && chamado.anexos.length) {
+    editChamadoAnexosAtuaisBloco.classList.remove("hidden");
+    editChamadoAnexosAtuais.innerHTML = chamado.anexos
+      .map((a) => `<p class="doc-hint">📎 ${escapeHtml(a.filename)}</p>`).join("");
+  } else {
+    editChamadoAnexosAtuaisBloco.classList.add("hidden");
+    editChamadoAnexosAtuais.innerHTML = "";
+  }
 
   if (chamado.reservadoInicio) {
     const d = new Date(chamado.reservadoInicio);
@@ -5150,13 +5255,39 @@ function abrirEdicaoAgendamento(chamado) {
     editChamadoReservadoInicio.value = "08:00";
   }
   editChamadoHorarioCombinado.value = chamado.horarioCombinadoCliente || "";
-  editChamadoDuracao.value = chamado.duracaoEscolhida || "";
-  editChamadoReservadoInicio.disabled = Boolean(DURACAO_HORARIO_FIXO[chamado.duracaoEscolhida]);
+  selecionaDuracaoPill(editChamadoDuracaoOpcoes, editChamadoDuracao, editChamadoReservadoInicio, editChamadoReservadoFixoInfo, chamado.duracaoEscolhida || "");
   limparConflitoBox(editChamadoConflito);
   mostrarEditChamadoStatus("neutral", "");
 
   chamadoEditarBox.classList.remove("hidden");
   chamadoEditarBox.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  // Contatos: só mostra escolha se o cliente tiver mais de um. Carrega
+  // depois de abrir a caixa, pra não atrasar a abertura da tela.
+  editChamadoContatoEscolhaBox.classList.add("hidden");
+  editChamadoListaContatos.innerHTML = "";
+  chamadoEditContatoEscolhidoId = "";
+  if (chamado.clienteDocumento) {
+    const contatosResp = await pedirAoN8n("listar-contatos", { documento: chamado.clienteDocumento });
+    const listaContatos = (contatosResp && contatosResp.contatos) || [];
+    if (listaContatos.length > 1) {
+      editChamadoContatoEscolhaBox.classList.remove("hidden");
+      listaContatos.forEach((ct) => {
+        const nomeCt = ct.nome || ct.whatsapps[0] || ct.emails[0] || "Sem nome";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "chamado-contato-item" + (nomeCt === chamado.contatoNome ? " active" : "");
+        btn.textContent = nomeCt;
+        if (nomeCt === chamado.contatoNome) chamadoEditContatoEscolhidoId = ct.id;
+        btn.addEventListener("click", () => {
+          chamadoEditContatoEscolhidoId = ct.id;
+          editChamadoListaContatos.querySelectorAll(".chamado-contato-item").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+        });
+        editChamadoListaContatos.appendChild(btn);
+      });
+    }
+  }
 }
 
 editChamadoCancelarFormBotao.addEventListener("click", () => {
@@ -5164,29 +5295,55 @@ editChamadoCancelarFormBotao.addEventListener("click", () => {
   chamadoEditandoAtual = null;
 });
 
-async function salvarEdicaoAgendamento(chamadoEmpurradoId, sugestaoParaEmpurrado, duracaoEmpurrado) {
+async function salvarEdicaoChamado(chamadoEmpurradoId, sugestaoParaEmpurrado, duracaoEmpurrado) {
   editChamadoSalvarBotao.disabled = true;
   mostrarEditChamadoStatus("neutral", "Salvando...");
 
-  const resposta = await pedirAoN8n("reagendar-chamado", {
+  const corpoEdicao = {
     chamadoId: chamadoEditandoAtual.id,
-    data: editChamadoData.value, reservadoInicio: editChamadoReservadoInicio.value,
-    duracao: editChamadoDuracao.value, horarioCombinadoCliente: editChamadoHorarioCombinado.value,
-  });
+    contatoId: chamadoEditContatoEscolhidoId,
+    localExato: editChamadoLocalExato.value.trim(),
+    descricaoSolicitacao: editChamadoDescricao.value.trim(),
+    observacoesServico: editChamadoObservacoes.value.trim(),
+    anexosNovos: JSON.stringify(chamadoEditAnexosNovos.map((a) => ({ filename: a.filename, contentType: a.contentType, base64: a.base64 }))),
+  };
 
-  if (resposta && resposta.ok && chamadoEmpurradoId && sugestaoParaEmpurrado) {
-    await pedirAoN8n("reagendar-chamado", {
-      chamadoId: chamadoEmpurradoId, data: sugestaoParaEmpurrado.data,
-      reservadoInicio: sugestaoParaEmpurrado.inicio, duracao: duracaoEmpurrado,
-    });
+  let respostaEdicao;
+  try {
+    respostaEdicao = await pedirAoN8n("editar-chamado", corpoEdicao);
+  } catch (err) {
+    editChamadoSalvarBotao.disabled = false;
+    mostrarEditChamadoStatus("error", "Não consegui falar com o servidor.");
+    return;
   }
-
-  editChamadoSalvarBotao.disabled = false;
-  if (!resposta || !resposta.ok) {
-    mostrarEditChamadoStatus("error", (resposta && resposta.mensagem) || "Não consegui salvar.");
+  if (!respostaEdicao || !respostaEdicao.ok) {
+    editChamadoSalvarBotao.disabled = false;
+    mostrarEditChamadoStatus("error", (respostaEdicao && respostaEdicao.mensagem) || "Não consegui salvar.");
     return;
   }
 
+  // O agendamento só muda se data e duração estiverem preenchidos — editar
+  // só os outros campos, sem mexer na data, não toca nisso.
+  if (editChamadoData.value && editChamadoDuracao.value) {
+    const respostaAgenda = await pedirAoN8n("reagendar-chamado", {
+      chamadoId: chamadoEditandoAtual.id,
+      data: editChamadoData.value, reservadoInicio: editChamadoReservadoInicio.value,
+      duracao: editChamadoDuracao.value, horarioCombinadoCliente: editChamadoHorarioCombinado.value,
+    });
+    if (respostaAgenda && respostaAgenda.ok && chamadoEmpurradoId && sugestaoParaEmpurrado) {
+      await pedirAoN8n("reagendar-chamado", {
+        chamadoId: chamadoEmpurradoId, data: sugestaoParaEmpurrado.data,
+        reservadoInicio: sugestaoParaEmpurrado.inicio, duracao: duracaoEmpurrado,
+      });
+    }
+    if (!respostaAgenda || !respostaAgenda.ok) {
+      editChamadoSalvarBotao.disabled = false;
+      mostrarEditChamadoStatus("error", (respostaAgenda && respostaAgenda.mensagem) || "Salvei o resto, mas não consegui atualizar o agendamento.");
+      return;
+    }
+  }
+
+  editChamadoSalvarBotao.disabled = false;
   chamadoEditarBox.classList.add("hidden");
   chamadoEditandoAtual = null;
   await carregarChamados();
@@ -5195,28 +5352,30 @@ async function salvarEdicaoAgendamento(chamadoEmpurradoId, sugestaoParaEmpurrado
 editChamadoSalvarBotao.addEventListener("click", async () => {
   limparConflitoBox(editChamadoConflito);
 
-  if (!editChamadoData.value || !editChamadoDuracao.value) {
-    mostrarEditChamadoStatus("error", "Escolha data e duração.");
+  if (editChamadoData.value && !editChamadoDuracao.value) {
+    mostrarEditChamadoStatus("error", "Escolha a duração do agendamento.");
     return;
   }
 
-  const resultado = await checarConflito(editChamadoData.value, editChamadoReservadoInicio.value, editChamadoDuracao.value, chamadoEditandoAtual.id);
-  if (resultado && resultado.temConflito) {
-    mostrarConflitoBox(editChamadoConflito, resultado,
-      (sugestao) => {
-        editChamadoData.value = sugestao.data;
-        editChamadoReservadoInicio.value = sugestao.inicio;
-        limparConflitoBox(editChamadoConflito);
-        salvarEdicaoAgendamento();
-      },
-      (sugestao, conflito) => {
-        limparConflitoBox(editChamadoConflito);
-        salvarEdicaoAgendamento(conflito.id, sugestao, conflito.duracao);
-      });
-    return;
+  if (editChamadoData.value && editChamadoDuracao.value) {
+    const resultado = await checarConflito(editChamadoData.value, editChamadoReservadoInicio.value, editChamadoDuracao.value, chamadoEditandoAtual.id);
+    if (resultado && resultado.temConflito) {
+      mostrarConflitoBox(editChamadoConflito, resultado,
+        (sugestao) => {
+          editChamadoData.value = sugestao.data;
+          editChamadoReservadoInicio.value = sugestao.inicio;
+          limparConflitoBox(editChamadoConflito);
+          salvarEdicaoChamado();
+        },
+        (sugestao, conflito) => {
+          limparConflitoBox(editChamadoConflito);
+          salvarEdicaoChamado(conflito.id, sugestao, conflito.duracao);
+        });
+      return;
+    }
   }
 
-  await salvarEdicaoAgendamento();
+  await salvarEdicaoChamado();
 });
 
 document.querySelector('.sidebar-item[data-page="chamados"]').addEventListener("click", () => {
@@ -5315,9 +5474,12 @@ sairBotao.addEventListener("click", () => {
   chamadosSemData = [];
   chamadosComData = [];
   chamadoEditandoAtual = null;
+  chamadoEditContatoEscolhidoId = "";
+  chamadoEditAnexosNovos = [];
   listaChamadosSemData.innerHTML = "";
   listaChamadosComData.innerHTML = "";
   chamadosListaClientes.innerHTML = "";
+  editChamadoAnexosLista.innerHTML = "";
   chamadoEditarBox.classList.add("hidden");
   mostrarChamadosListaStatus("neutral", "");
   limparFormularioChamado();
