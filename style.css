@@ -1444,3 +1444,24 @@ button:active:not(:disabled) {
   border-color: var(--accent);
   color: white;
 }
+
+/* Segunda fileira: extensao de horas, so aparece quando a duracao base
+   escolhida e Manha ou Tarde (as unicas que aceitam "+ Nh") */
+.chamado-duracao-extra-opcoes {
+  margin-top: -8px;
+}
+
+.chamado-duracao-extra-item {
+  background: transparent;
+  border: 1px solid #2c3153;
+  color: var(--muted);
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+}
+
+.chamado-duracao-extra-item.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}

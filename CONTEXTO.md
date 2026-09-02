@@ -1646,6 +1646,52 @@ dono pediu explicitamente pra abrir a galeria. Virou dois botões
 alimentam a mesma lista de anexos por baixo; o usuário nem percebe a
 diferença, só que agora tem dois toques em vez de um.
 
+### Duração combinada: período + horas extras (03/09/2026)
+
+Pedido: Manhã ou Tarde poder vir combinado com uma extensão — "Manhã + 2h",
+"Tarde + 1h" etc. — pro serviço que passa um pouco do período normal mas não
+chega a precisar do dia inteiro. Só Manhã e Tarde aceitam extensão (1h/2h/3h);
+Dia inteiro e as durações em hora fixa (1h/2h/3h sozinhas) não fazem sentido
+combinadas.
+
+**Codificação**: uma string só, `"Período manhã + 2h"` — o período normal
+seguido de `" + Nh"` quando há extensão. Guardada assim direto no Airtable
+(`Duracao_Escolhida` continua singleSelect; `typecast: true`, já usado em
+toda escrita, cria a opção nova sozinho, sem precisar mexer no schema à
+mão). `separaDuracaoExtra()` (n8n, em `chamados-comum.js`) e sua espelha no
+app `separaDuracaoBase()` (`app.js`) fazem o parse — o resto da lógica de
+cálculo de bloco/conflito não muda, só o fim do bloco é empurrado pelas
+horas extras.
+
+**Tela**: segunda fileira de botões ("Só o período" / "+1 hora" / "+2
+horas" / "+3 horas") aparece só quando Manhã ou Tarde está selecionado,
+embaixo da fileira principal de duração — nos dois formulários (criar e
+editar). `ligarDuracaoPills`/`selecionaDuracaoPill` (`app.js`) ganharam um
+parâmetro a mais (o container da segunda fileira) pra mostrar/esconder e
+marcar a opção certa, inclusive ao reabrir um chamado que já tem uma
+extensão salva.
+
+**Achado testando (bug de verdade, não só do combo)**: `achaHorarioLivre`
+montava o horário sugerido cortando a string ISO na marra
+(`cursor.slice(11, 16)`), assumindo que ela sempre vinha no formato
+`-03:00`. Isso só era verdade quando o cursor vinha de `isoBrasilia(...)`
+(dia sem nenhum chamado antes) — mas quando a folga sugerida começa logo
+depois do fim de um chamado já existente, esse fim vem do Airtable, que
+**sempre** devolve data/hora em UTC (`...Z`). Nesse caso a sugestão saía
+com a hora errada (UTC em vez de Brasília) — um bug que já existia antes
+do combo, só nunca tinha sido pego porque os testes unitários até então só
+usavam strings montadas à mão em `-03:00`. Corrigido com uma função nova,
+`horaLocalBrasilia(iso)`, que converte de verdade (soma/subtrai o fuso via
+`Date`) em vez de cortar a string. Redeploy feito nos três workflows que
+usam essa lógica (`App - Checar conflito de chamado`, `App - Criar
+chamado`, `App - Reagendar chamado`).
+
+**Dev server pro navegador embutido**: criado `.claude/launch.json`
+(`npx serve -l 8099 .`) pra testar o app servido por HTTP de verdade — só
+abrir como `file://` faz o navegador embutido renderizar como "static
+snapshot" e não carrega `style.css`/`app.js` (achado ao ver que a segunda
+fileira de duração aparecia sempre visível, sem nenhum CSS aplicado).
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

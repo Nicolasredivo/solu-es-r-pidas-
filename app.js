@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03b";
+const APP_VERSION = "2026.09.03c";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4683,6 +4683,7 @@ const editChamadoHorarioCombinado = document.getElementById("edit-chamado-horari
 const editChamadoReservadoInicio = document.getElementById("edit-chamado-reservado-inicio");
 const editChamadoReservadoFixoInfo = document.getElementById("edit-chamado-reservado-fixo-info");
 const editChamadoDuracaoOpcoes = document.getElementById("edit-chamado-duracao-opcoes");
+const editChamadoDuracaoExtraOpcoes = document.getElementById("edit-chamado-duracao-extra-opcoes");
 const editChamadoDuracao = document.getElementById("edit-chamado-duracao");
 const editChamadoConflito = document.getElementById("edit-chamado-conflito");
 const editChamadoSalvarBotao = document.getElementById("edit-chamado-salvar");
@@ -4712,6 +4713,7 @@ const chamadoHorarioCombinadoInput = document.getElementById("chamado-horario-co
 const chamadoReservadoInicioInput = document.getElementById("chamado-reservado-inicio");
 const chamadoReservadoFixoInfo = document.getElementById("chamado-reservado-fixo-info");
 const chamadoDuracaoOpcoes = document.getElementById("chamado-duracao-opcoes");
+const chamadoDuracaoExtraOpcoes = document.getElementById("chamado-duracao-extra-opcoes");
 const chamadoDuracaoSelect = document.getElementById("chamado-duracao");
 const chamadoConflitoBox = document.getElementById("chamado-conflito");
 const chamadoForm = document.getElementById("chamado-form");
@@ -4750,8 +4752,24 @@ function mostrarChamadosListaStatus(tipo, mensagem) {
 // navegadores parece quebrado).
 const DURACAO_HORARIO_FIXO = { "Período manhã": "08:00", "Período tarde": "13:30", "Dia inteiro": "08:00" };
 
-function aplicaDuracaoNoHorario(duracao, inicioEl, fixoInfoEl) {
-  const fixo = DURACAO_HORARIO_FIXO[duracao];
+// Só manhã e tarde aceitam a extensão "+ Nh" (dia inteiro já cobre o dia
+// todo, e as durações em hora fixa não têm "período" pra estender).
+const PERIODOS_COM_EXTRA = ["Período manhã", "Período tarde"];
+
+function montaDuracaoFinal(base, extraHoras) {
+  return extraHoras ? `${base} + ${extraHoras}h` : base;
+}
+
+// Espelha, no navegador, o mesmo regex usado no n8n (chamados-comum.js) pra
+// separar duração base + extensão — precisa reconstruir o estado da UI ao
+// abrir a edição de um chamado que já tem uma extensão salva.
+function separaDuracaoBase(duracao) {
+  const m = /^(.*) \+ (\d)h$/.exec(duracao || "");
+  return m ? { base: m[1], extra: Number(m[2]) } : { base: duracao || "", extra: 0 };
+}
+
+function aplicaDuracaoNoHorario(base, inicioEl, fixoInfoEl) {
+  const fixo = DURACAO_HORARIO_FIXO[base];
   if (fixo) {
     inicioEl.value = fixo;
     inicioEl.classList.add("hidden");
@@ -4763,28 +4781,55 @@ function aplicaDuracaoNoHorario(duracao, inicioEl, fixoInfoEl) {
   }
 }
 
-function ligarDuracaoPills(containerEl, hiddenInputEl, inicioEl, fixoInfoEl) {
+function ligarDuracaoPills(containerEl, extraContainerEl, hiddenInputEl, inicioEl, fixoInfoEl) {
   containerEl.querySelectorAll(".chamado-duracao-item").forEach((btn) => {
     btn.addEventListener("click", () => {
       containerEl.querySelectorAll(".chamado-duracao-item").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      hiddenInputEl.value = btn.dataset.duracao;
-      aplicaDuracaoNoHorario(btn.dataset.duracao, inicioEl, fixoInfoEl);
+      const base = btn.dataset.duracao;
+      aplicaDuracaoNoHorario(base, inicioEl, fixoInfoEl);
+      if (PERIODOS_COM_EXTRA.includes(base)) {
+        extraContainerEl.classList.remove("hidden");
+        extraContainerEl.querySelectorAll(".chamado-duracao-extra-item").forEach((b) => b.classList.toggle("active", b.dataset.extra === "0"));
+        hiddenInputEl.value = montaDuracaoFinal(base, 0);
+      } else {
+        extraContainerEl.classList.add("hidden");
+        extraContainerEl.querySelectorAll(".chamado-duracao-extra-item").forEach((b) => b.classList.remove("active"));
+        hiddenInputEl.value = base;
+      }
+    });
+  });
+  extraContainerEl.querySelectorAll(".chamado-duracao-extra-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const baseAtivo = containerEl.querySelector(".chamado-duracao-item.active");
+      if (!baseAtivo) return;
+      extraContainerEl.querySelectorAll(".chamado-duracao-extra-item").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      hiddenInputEl.value = montaDuracaoFinal(baseAtivo.dataset.duracao, Number(btn.dataset.extra));
     });
   });
 }
 
 // Usado ao limpar o formulário e ao abrir a edição de um chamado, pra marcar
-// a opção certa sem precisar de um clique de verdade.
-function selecionaDuracaoPill(containerEl, hiddenInputEl, inicioEl, fixoInfoEl, duracao) {
-  containerEl.querySelectorAll(".chamado-duracao-item").forEach((b) => b.classList.toggle("active", b.dataset.duracao === duracao));
+// a opção certa (base + extensão) sem precisar de um clique de verdade.
+function selecionaDuracaoPill(containerEl, extraContainerEl, hiddenInputEl, inicioEl, fixoInfoEl, duracao) {
+  const { base, extra } = separaDuracaoBase(duracao);
+  containerEl.querySelectorAll(".chamado-duracao-item").forEach((b) => b.classList.toggle("active", b.dataset.duracao === base));
   hiddenInputEl.value = duracao || "";
-  if (duracao) aplicaDuracaoNoHorario(duracao, inicioEl, fixoInfoEl);
+  if (base) aplicaDuracaoNoHorario(base, inicioEl, fixoInfoEl);
   else { inicioEl.classList.remove("hidden"); fixoInfoEl.classList.add("hidden"); }
+
+  if (base && PERIODOS_COM_EXTRA.includes(base)) {
+    extraContainerEl.classList.remove("hidden");
+    extraContainerEl.querySelectorAll(".chamado-duracao-extra-item").forEach((b) => b.classList.toggle("active", Number(b.dataset.extra) === extra));
+  } else {
+    extraContainerEl.classList.add("hidden");
+    extraContainerEl.querySelectorAll(".chamado-duracao-extra-item").forEach((b) => b.classList.remove("active"));
+  }
 }
 
-ligarDuracaoPills(chamadoDuracaoOpcoes, chamadoDuracaoSelect, chamadoReservadoInicioInput, chamadoReservadoFixoInfo);
-ligarDuracaoPills(editChamadoDuracaoOpcoes, editChamadoDuracao, editChamadoReservadoInicio, editChamadoReservadoFixoInfo);
+ligarDuracaoPills(chamadoDuracaoOpcoes, chamadoDuracaoExtraOpcoes, chamadoDuracaoSelect, chamadoReservadoInicioInput, chamadoReservadoFixoInfo);
+ligarDuracaoPills(editChamadoDuracaoOpcoes, editChamadoDuracaoExtraOpcoes, editChamadoDuracao, editChamadoReservadoInicio, editChamadoReservadoFixoInfo);
 
 // ----- passo 1: busca de cliente, 100% no navegador -----
 
@@ -5057,7 +5102,7 @@ function limparFormularioChamado() {
   chamadoDataInput.value = "";
   chamadoHorarioCombinadoInput.value = "";
   chamadoReservadoInicioInput.value = "08:00";
-  selecionaDuracaoPill(chamadoDuracaoOpcoes, chamadoDuracaoSelect, chamadoReservadoInicioInput, chamadoReservadoFixoInfo, "");
+  selecionaDuracaoPill(chamadoDuracaoOpcoes, chamadoDuracaoExtraOpcoes, chamadoDuracaoSelect, chamadoReservadoInicioInput, chamadoReservadoFixoInfo, "");
   limparConflitoBox(chamadoConflitoBox);
   mostrarChamadoStatus("neutral", "");
 }
@@ -5267,7 +5312,7 @@ async function abrirEdicaoChamado(chamado) {
     editChamadoReservadoInicio.value = "08:00";
   }
   editChamadoHorarioCombinado.value = chamado.horarioCombinadoCliente || "";
-  selecionaDuracaoPill(editChamadoDuracaoOpcoes, editChamadoDuracao, editChamadoReservadoInicio, editChamadoReservadoFixoInfo, chamado.duracaoEscolhida || "");
+  selecionaDuracaoPill(editChamadoDuracaoOpcoes, editChamadoDuracaoExtraOpcoes, editChamadoDuracao, editChamadoReservadoInicio, editChamadoReservadoFixoInfo, chamado.duracaoEscolhida || "");
   limparConflitoBox(editChamadoConflito);
   mostrarEditChamadoStatus("neutral", "");
 
