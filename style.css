@@ -1405,27 +1405,107 @@ button:active:not(:disabled) {
   cursor: pointer;
 }
 
+/* A Agenda é uma FAIXA de dias que rola horizontalmente (a régua de horas
+   fica fixa à esquerda), não mais um dia por vez -- ver CONTEXTO.md
+   "Agenda em visão de semana". A tela de Criar chamado continua com sua
+   própria timeline de um dia só (#chamado-timeline-criar), que não usa
+   nada deste bloco de regras. */
 .chamado-timeline {
   position: relative;
+  display: flex;
+  align-items: flex-start;
   margin: 8px 0 18px;
   border-top: 1px solid #2c3153;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.12);
-  /* deixa o navegador tratar o scroll vertical da página normalmente,
-     mas entrega o gesto horizontal (arrastar pra trocar de dia) pro JS */
-  touch-action: pan-y;
-  /* sem isso, arrastar pro lado por cima dos números de hora seleciona
-     o texto em vez de disparar o gesto de trocar de dia */
+  /* rolagem horizontal nativa (troca de dia) -- o navegador já cuida do
+     gesto, inércia incluída; sem isso o dedo/mouse arrastando por cima da
+     grade tentaria selecionar texto em vez de rolar */
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
   user-select: none;
   -webkit-user-select: none;
-  /* trava de segurança: se o gesto de arrastar (mover/trocar de dia)
-     ficar preso sem o soltar completar direito (ex: toque interrompido
-     no celular), o bloco não pode escapar visualmente pra fora da
-     grade -- fica cortado aqui em vez de flutuar por cima do resto do
-     app até a próxima tela recarregar. */
-  overflow: hidden;
 }
 
+/* Régua de horas fixa (sticky) enquanto a faixa rola por baixo dela --
+   reusa .chamado-timeline-hora (com texto) igual a tela de Criar já usava.
+   Empilha um espaçador (mesma altura dos cabeçalhos de coluna) + a grade,
+   em fluxo normal -- sem precisar de position:absolute pra alinhar, já que
+   as colunas ao lado empilham exatamente do mesmo jeito. */
+.chamado-timeline-eixo {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  flex: 0 0 auto;
+  width: 34px;
+  background: #12162a;
+}
+
+.chamado-timeline-eixo-espacador {
+  height: 34px;
+}
+
+.chamado-timeline-eixo-grade {
+  position: relative;
+}
+
+/* As colunas ficam em fluxo normal (flex), não position:absolute -- o
+   navegador já organiza a ordem e a largura sozinho (inclusive ao inserir
+   uma coluna nova no início, pra expandir a janela pra trás, sem precisar
+   recalcular "left" de nada). Só a camada de blocos por cima (ver abaixo)
+   continua absoluta, porque ela precisa flutuar livre por cima de todas
+   as colunas ao mesmo tempo. */
+.chamado-timeline-corpo {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+}
+
+.chamado-timeline-coluna {
+  flex: 0 0 auto;
+  border-left: 1px dashed #232842;
+}
+
+.chamado-timeline-coluna.chamado-timeline-coluna-hoje {
+  background: rgba(91, 141, 239, 0.08);
+}
+
+.chamado-timeline-coluna-cabecalho {
+  height: 34px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  color: var(--muted);
+  line-height: 1.15;
+  border-bottom: 1px dashed #232842;
+}
+
+/* Mesma ideia da régua, mas dentro de cada coluna (sem texto -- ver
+   .chamado-timeline-hora reusada com mostrarTexto=false). Fica logo
+   abaixo do cabeçalho por fluxo normal, position:relative só pra servir
+   de âncora às linhas de hora (position:absolute) dentro dela. */
+.chamado-timeline-coluna-grade {
+  position: relative;
+}
+
+.chamado-timeline-coluna-hoje .chamado-timeline-coluna-cabecalho {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.chamado-timeline-coluna-feriado {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--aviso);
+  margin-top: 2px;
+}
+
+/* Linhas de hora sem texto dentro de cada coluna (o texto já aparece uma
+   vez só na régua fixa) -- mesma classe da régua, só sem conteúdo. */
 .chamado-timeline-hora {
   position: absolute;
   left: 0;
@@ -1436,15 +1516,22 @@ button:active:not(:disabled) {
   padding-left: 4px;
 }
 
-.chamado-timeline-vazio {
+/* Uma única camada por cima de todas as colunas -- todo bloco de todo dia
+   visível vive aqui, plano, nunca dentro do div de uma coluna específica
+   (é o que permite saber "em qual dia esse bloco está" só pela posição
+   horizontal dele, sem precisar mover o elemento entre containers). */
+.chamado-timeline-blocos {
   position: absolute;
-  top: 50%;
   left: 0;
-  right: 0;
-  transform: translateY(-50%);
-  text-align: center;
+  top: 0;
+  pointer-events: none;
 }
 
+/* left/width/transform ficam como padrão (centralizado, largura fixa) pra
+   quem não sobrescreve -- é o caso da tela de Criar chamado, que nunca
+   passou a ter dia/coluna e continua confiando nisso. Os blocos da Agenda
+   (várias colunas) sobrescrevem left/width/transform direto no elemento
+   (estilo inline vence a regra da classe), um por coluna do dia certo. */
 .chamado-timeline-bloco {
   position: absolute;
   left: 50%;
@@ -1458,6 +1545,7 @@ button:active:not(:disabled) {
   color: white;
   background: #2c3153;
   touch-action: none;
+  pointer-events: auto;
 }
 
 .chamado-timeline-bloco.arrastando {

@@ -2301,6 +2301,88 @@ de esperar); soltar e cancelar sempre deixaram o temporizador limpo
 (nenhum vazamento). Bloco continuou sem escapar da grade durante todo o
 teste.
 
+### Agenda em visão de semana, arrastar entre dias direto (03/09/2026)
+
+Pedido de brainstorm ("não execute ainda, apenas ideias") sobre deixar a
+Agenda mais interativa/fácil/visualizável virou um plano concreto depois
+de conversar sobre prioridades: o dono confirmou que queria **manter e
+aprimorar** o mecanismo de arrastar o balão (mover + esticar a duração
+pela alça), unificado com a ideia de "visão de conjunto" — em vez de um
+dia só com "segurar na borda pra virar página", a Agenda virou uma
+**faixa de vários dias lado a lado, que rola horizontalmente**, com o
+balão arrastando **direto de uma coluna de dia pra outra**.
+
+**Arquitetura**: todas as colunas de dia ficam em fluxo normal (flex) —
+o navegador organiza a ordem sozinho, inclusive ao inserir uma coluna
+nova no início pra expandir a janela pra trás. Uma **única camada de
+blocos** (`chamado-timeline-blocos`), `position:absolute` por cima de
+todas as colunas, guarda todo bloco de todo dia visível — "em qual dia
+esse bloco está" vira uma conta simples a partir da posição horizontal
+dele (`Math.floor(left / TIMELINE_COLUNA_LARGURA_PX)`), sem nunca
+precisar mover o elemento entre containers, nem durante o arrasto. A
+régua de horas fica fixa (`position:sticky`) à esquerda enquanto a faixa
+rola por baixo. Uma janela de dias é construída (alguns antes de hoje,
+mais depois, já que agendamento olha pro futuro) e **expande sozinha**
+quando a rolagem chega perto de uma borda do que já existe (com um teto
+de segurança pra nunca crescer sem necessidade).
+
+O mecanismo de "segurar perto da borda da TELA continua sozinho" (a
+cadeia de `setTimeout` com velocidade variável, construída na rodada
+anterior) foi **reaproveitado sem reescrever a lógica de velocidade** —
+só o que cada passo FAZ mudou: em vez de somar um dia inteiro, agora
+rola a faixa (`scrollLeft`) e reposiciona o bloco sob o dedo/cursor.
+
+**Dois bugs achados e corrigidos durante o teste** (importante registrar,
+porque não são óbvios sem testar de verdade com espera real):
+
+1. **Ordem das colunas invertia ao expandir a janela pra trás** —
+   inserir cada coluna nova com `insertBefore(col, corpoEl.firstChild)`
+   dentro de um loop muda o alvo a cada volta (o item recém-inserido vira
+   o novo `firstChild`), o que inverte a ordem final. Corrigido
+   capturando a referência **uma vez, fora do loop**, e inserindo todas
+   relativas a essa mesma referência fixa.
+2. **O bloco escapava visualmente da tela ao segurar perto da borda** —
+   o código só media a posição do PONTO seguro (dedo/cursor) contra os
+   limites da faixa inteira, não contra a TELA visível; segurando o
+   bloco pelo centro perto de uma borda, a borda OPOSTA do bloco (mais
+   larga que a margem de ativação) escapava pra fora. Corrigido travando
+   a posição do bloco contra os limites da área VISÍVEL (nem embaixo da
+   régua fixa, nem pra fora da tela), em cima da trava já existente
+   contra os limites totais da janela.
+
+**Também corrigido de passagem** (achado revisando o código, não só
+testando): a alça de redimensionar usava `timelineDataAtual` (o dia mais
+visível na tela) pra confirmar a mudança — errado numa faixa com vários
+dias visíveis, já que dá pra redimensionar um chamado que não é o dia
+focado no momento. Agora usa a data do PRÓPRIO chamado sendo
+redimensionado. A mesma correção valeu pro texto de status ("chamado
+movido pra X" vs "agora é das X às Y") depois de mover um bloco.
+
+O gesto de "arrastar o fundo pra trocar de dia" (rodada anterior) foi
+removido da Agenda — rolar a faixa nativamente já faz isso, melhor
+(proporcional, com inércia). Continua intacto na tela de Criar chamado
+(que não muda nesta rodada, ainda um dia só).
+
+**Achado testando (ambiente, não bug de verdade)**: `element.scrollTo({
+behavior: 'smooth' })` não anima nesse navegador de teste (mesma raiz do
+`requestAnimationFrame` não disparar, já documentado antes) — atribuir
+`scrollLeft` direto funciona instantâneo aqui e deve funcionar suave de
+verdade num navegador real (a régua de CSS `scroll-behavior:smooth` cobre
+isso). Os botões de dia anterior/próximo usam `scrollTo` suave por
+escolha de UX; não dá pra confirmar a animação neste ambiente, só a
+lógica por trás dela (índice/destino corretos).
+
+Testado com dado falso injetado (nunca real) e rede sempre travada antes
+de qualquer teste que pudesse gravar: arrasto vertical (só horário),
+arrasto cruzando exatamente uma borda de coluna (dia certo, preview e
+cabeçalho batendo), segurar perto da borda por vários segundos de espera
+de verdade (rolagem automática + expansão da janela + bloco nunca escapa
+da tela), soltar/cancelar em cada ponto de saída (sem temporizador
+vazando), alça de redimensionar, navegação por dia/mês/"Ir pra
+hoje"/campo de data, aviso de feriado, e regressão na tela de Criar
+chamado (block ainda centralizado via CSS, ainda arrastável). Confirmado
+por leitura que nenhum registro real foi alterado durante os testes.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
@@ -2323,3 +2405,16 @@ teste.
 
 - Painel de status das automações
 - Tela de chat/assistente
+- **Chamados/Agenda — ideias já discutidas com o dono (03/09/2026), não
+  detalhadas/planejadas ainda**:
+  - Timeline mais rica: linha do "agora", legenda de cor, tocar num
+    espaço vazio da grade pra já abrir "Criar chamado" com aquele
+    horário, comprimir a régua em dias muito cheios.
+  - Ações rápidas: segurar (long-press) o balão pra um menu rápido
+    (ligar/WhatsApp, marcar "Em andamento", ver endereço) sem abrir o
+    formulário inteiro; deslizar o card da lista pra editar/cancelar
+    rápido.
+  - Lista de baixo ("Agenda", abaixo da faixa de dias) reorganizada:
+    agrupar por dia com cabeçalhos, busca por cliente, cards compactos
+    que expandem ao tocar — repensar se ela ainda faz sentido do jeito
+    atual ou vira um resumo ligado à própria faixa de dias.
