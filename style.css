@@ -1389,6 +1389,9 @@ button:active:not(:disabled) {
   border-top: 1px solid #2c3153;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.12);
+  /* deixa o navegador tratar o scroll vertical da página normalmente,
+     mas entrega o gesto horizontal (arrastar pra trocar de dia) pro JS */
+  touch-action: pan-y;
 }
 
 .chamado-timeline-hora {

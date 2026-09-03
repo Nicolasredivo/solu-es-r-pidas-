@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03h";
+const APP_VERSION = "2026.09.03i";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -5282,6 +5282,16 @@ function montarCardChamado(c, comData) {
 async function cancelarChamado(id) {
   const resposta = await pedirAoN8n("reagendar-chamado", { chamadoId: id, cancelar: "true" });
   if (resposta && resposta.ok) {
+    // Tira da tela na hora, sem esperar uma segunda rodada de rede -- o
+    // cancelamento já aconteceu de verdade no servidor, só falta refletir
+    // aqui (antes esperava um "listar-chamados" inteiro de novo pra sumir
+    // o card, o que dobrava o tempo de espera). Ainda assim recarrega de
+    // verdade em seguida, pra pegar qualquer outra mudança.
+    chamadosSemData = chamadosSemData.filter((c) => c.id !== id);
+    chamadosComData = chamadosComData.filter((c) => c.id !== id);
+    desenharListaChamados();
+    renderizarTimeline();
+    renderizarTimelineCriar();
     await carregarChamados();
   } else {
     mostrarChamadosListaStatus("error", (resposta && resposta.mensagem) || "Não consegui cancelar.");
@@ -5778,6 +5788,51 @@ function mudaDiaCriar(deltaDias) {
 }
 chamadoTimelineCriarAnterior.addEventListener("click", () => mudaDiaCriar(-1));
 chamadoTimelineCriarProximo.addEventListener("click", () => mudaDiaCriar(1));
+
+// Arrastar pro lado no fundo da própria linha do tempo (fora de qualquer
+// bloco) também troca de dia -- mais rápido que ficar clicando nas setas.
+// Só conta o arrastar que começa no fundo (evento.target === containerEl)
+// pra não brigar com o arrastar/redimensionar de um bloco em cima.
+function ligarSwipeDiaTimeline(containerEl, aoTrocarDia) {
+  const LIMIAR_PX = 60;
+  let arrastando = false;
+  let moveu = false;
+  let inicioX = 0;
+
+  containerEl.addEventListener("pointerdown", (evento) => {
+    if (evento.target !== containerEl) return;
+    arrastando = true;
+    moveu = false;
+    inicioX = evento.clientX;
+    try { containerEl.setPointerCapture(evento.pointerId); } catch (e) { /* segue sem captura formal */ }
+  });
+
+  containerEl.addEventListener("pointermove", (evento) => {
+    if (!arrastando) return;
+    const deltaX = evento.clientX - inicioX;
+    if (Math.abs(deltaX) > 8) moveu = true;
+    containerEl.style.transform = `translateX(${deltaX}px)`;
+  });
+
+  function soltar(evento) {
+    if (!arrastando) return;
+    arrastando = false;
+    containerEl.style.transform = "";
+    if (!moveu) return;
+    const deltaX = evento.clientX - inicioX;
+    if (deltaX <= -LIMIAR_PX) aoTrocarDia(1);
+    else if (deltaX >= LIMIAR_PX) aoTrocarDia(-1);
+  }
+
+  containerEl.addEventListener("pointerup", soltar);
+  containerEl.addEventListener("pointercancel", () => {
+    arrastando = false;
+    containerEl.style.transform = "";
+  });
+}
+
+ligarSwipeDiaTimeline(chamadoTimelineEl, mudaDiaTimeline);
+ligarSwipeDiaTimeline(chamadoTimelineCriarEl, mudaDiaCriar);
 
 async function carregarChamados() {
   mostrarChamadosListaStatus("neutral", "Carregando...");

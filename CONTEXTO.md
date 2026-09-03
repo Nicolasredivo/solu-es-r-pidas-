@@ -1893,6 +1893,38 @@ dedicado embaixo do campo Data (criar e editar), e junto da data mostrada
 nas duas linhas do tempo ("· Feriado: Natal"). Não impede marcar — é
 literalmente só texto, sem nenhuma validação de bloqueio.
 
+### Trocar de dia arrastando, e cancelar mais rápido na tela (03/09/2026)
+
+**Arrastar pro lado na linha do tempo troca de dia**: nos dois lugares
+(Agenda e Criar chamado), arrastar o fundo da grade (fora de qualquer
+bloco) pra esquerda ou direita troca de dia — mesmo efeito das setas
+‹/›, só que mais direto. Só conta o arrastar que começa no fundo mesmo
+(`evento.target === containerEl`), pra não brigar com o mover/redimensionar
+de um bloco em cima. `touch-action: pan-y` na grade deixa o navegador
+tratar o scroll vertical da página normal, mas entrega o gesto horizontal
+pro JS.
+
+**Cancelar atualiza a tela na hora**: antes, cancelar esperava DOIS
+round-trips seguidos (o cancelamento em si, depois um "listar-chamados"
+inteiro de novo) antes do card sumir — dava a impressão de não ter
+atualizado sozinho. Agora `cancelarChamado` tira o chamado da lista local
+e redesenha assim que o cancelamento confirma (1 round-trip), e só depois
+recarrega de verdade em segundo plano pra pegar qualquer outra mudança.
+Testado simulando os dois round-trips com atraso (300ms e 3s) e
+conferindo que o card já tinha sumido bem antes do segundo terminar.
+
+**Sobre "o redimensionar não funciona" reportado depois do deploy
+anterior**: testado de novo com arrasto de mouse de verdade (não só
+evento simulado) tanto local quanto conferindo o HTML publicado no
+GitHub Pages direto — o código está correto e funcionando dos dois
+lados. A explicação mais provável é cache do PWA no aparelho (o app já
+tem lógica de auto-atualizar sozinho, chamando `registration.update()` e
+recarregando quando um novo service worker assume — mas isso leva
+alguns segundos depois de abrir, e um print tirado rápido demais ainda
+mostra a versão antiga). Se acontecer de novo: Ctrl+Shift+R força
+recarregar ignorando o cache; se não resolver, F12 → Aba Application →
+Service Workers → Unregister, e Storage → Clear site data.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
