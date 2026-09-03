@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03u";
+const APP_VERSION = "2026.09.03v";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4718,6 +4718,19 @@ function somaDiasNaData(dataStr, dias) {
   return dataLocalISO(somaDias(new Date(`${dataStr}T00:00:00`), dias));
 }
 
+// Soma meses sem deixar "rolar" pro mês seguinte quando o dia não existe
+// no mês de destino (ex: 31/01 + 1 mês vira 28 ou 29/02, não 02 ou
+// 03/03, que é o que o JS faria puro com setMonth).
+function somaMesesNaData(dataStr, meses) {
+  const d = new Date(`${dataStr}T00:00:00`);
+  const diaOriginal = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + meses);
+  const ultimoDiaDoMesAlvo = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(diaOriginal, ultimoDiaDoMesAlvo));
+  return dataLocalISO(d);
+}
+
 function feriadosDoAno(ano) {
   const pascoa = calculaPascoa(ano);
   const lista = FERIADOS_FIXOS.map((f) => ({
@@ -4746,8 +4759,10 @@ const listaChamadosSemData = document.getElementById("lista-chamados-sem-data");
 const listaChamadosComData = document.getElementById("lista-chamados-com-data");
 const recarregarChamadosBotao = document.getElementById("recarregar-chamados");
 
+const chamadoTimelineMesAnterior = document.getElementById("chamado-timeline-mes-anterior");
 const chamadoTimelineAnterior = document.getElementById("chamado-timeline-anterior");
 const chamadoTimelineProximo = document.getElementById("chamado-timeline-proximo");
+const chamadoTimelineProximoMes = document.getElementById("chamado-timeline-proximo-mes");
 const chamadoTimelineHoje = document.getElementById("chamado-timeline-hoje");
 const chamadoTimelineDataTexto = document.getElementById("chamado-timeline-data-texto");
 const chamadoTimelineFeriadoAviso = document.getElementById("chamado-timeline-feriado-aviso");
@@ -4806,8 +4821,10 @@ const chamadoReservadoFimInput = document.getElementById("chamado-reservado-fim"
 const chamadoDataPassadoAviso = document.getElementById("chamado-data-passado-aviso");
 const chamadoDataFeriadoAviso = document.getElementById("chamado-data-feriado-aviso");
 const chamadoTimelineCriarCaixa = document.getElementById("chamado-timeline-criar-caixa");
+const chamadoTimelineCriarMesAnterior = document.getElementById("chamado-timeline-criar-mes-anterior");
 const chamadoTimelineCriarAnterior = document.getElementById("chamado-timeline-criar-anterior");
 const chamadoTimelineCriarProximo = document.getElementById("chamado-timeline-criar-proximo");
+const chamadoTimelineCriarProximoMes = document.getElementById("chamado-timeline-criar-proximo-mes");
 const chamadoTimelineCriarDataTexto = document.getElementById("chamado-timeline-criar-data-texto");
 const chamadoTimelineCriarFeriadoAviso = document.getElementById("chamado-timeline-criar-feriado-aviso");
 const chamadoTimelineCriarEl = document.getElementById("chamado-timeline-criar");
@@ -5760,8 +5777,15 @@ function mudaDiaTimeline(deltaDias) {
   renderizarTimeline();
 }
 
+function mudaMesTimeline(deltaMeses) {
+  timelineDataAtual = somaMesesNaData(timelineDataAtual, deltaMeses);
+  renderizarTimeline();
+}
+
+chamadoTimelineMesAnterior.addEventListener("click", () => mudaMesTimeline(-1));
 chamadoTimelineAnterior.addEventListener("click", () => mudaDiaTimeline(-1));
 chamadoTimelineProximo.addEventListener("click", () => mudaDiaTimeline(1));
+chamadoTimelineProximoMes.addEventListener("click", () => mudaMesTimeline(1));
 chamadoTimelineHoje.addEventListener("click", () => {
   timelineDataAtual = dataLocalISOBrasilia(agoraBrasilia());
   renderizarTimeline();
@@ -6023,8 +6047,21 @@ function mudaDiaCriar(deltaDias) {
   chamadoDataInput.value = novaData;
   renderizarTimelineCriar();
 }
+function mudaMesCriar(deltaMeses) {
+  if (!chamadoDataInput.value) return;
+  const novaData = somaMesesNaData(chamadoDataInput.value, deltaMeses);
+  if (novaData < primeiroDiaPermitidoParaAgendar()) {
+    avisaDataPassada(chamadoDataPassadoAviso);
+    return;
+  }
+  chamadoDataInput.value = novaData;
+  renderizarTimelineCriar();
+}
+
+chamadoTimelineCriarMesAnterior.addEventListener("click", () => mudaMesCriar(-1));
 chamadoTimelineCriarAnterior.addEventListener("click", () => mudaDiaCriar(-1));
 chamadoTimelineCriarProximo.addEventListener("click", () => mudaDiaCriar(1));
+chamadoTimelineCriarProximoMes.addEventListener("click", () => mudaMesCriar(1));
 
 // Arrastar pro lado no fundo da própria linha do tempo (fora de qualquer
 // bloco) também troca de dia -- mais rápido que ficar clicando nas setas.

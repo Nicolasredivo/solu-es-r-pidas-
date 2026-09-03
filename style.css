@@ -1372,6 +1372,24 @@ button:active:not(:disabled) {
   font-size: 0.8rem;
 }
 
+/* Mês numa fileira própria, acima da fileira de dia -- salto maior fica
+   em cima (mais "zoom out"), dia embaixo, mais perto da data de verdade.
+   Junto os dois na mesma fileira do dia estourava a largura no celular
+   (5 elementos + texto de 2 linhas não cabiam). */
+.chamado-timeline-nav-mes-linha {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.chamado-timeline-nav-mes {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+
 .chamado-timeline-data-wrap {
   position: relative;
   text-align: center;

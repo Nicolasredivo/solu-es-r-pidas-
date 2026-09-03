@@ -2216,6 +2216,30 @@ os dias corretamente. Confirmado também que o bloco fica perfeitamente
 centralizado (centro do bloco = centro do container) e nunca ultrapassa
 a borda mesmo durante o avanço.
 
+### Botões de mês anterior/próximo mês (03/09/2026)
+
+Pedido simples: navegar por mês, não só por dia, nos dois lugares
+(Agenda e Criar chamado). `somaMesesNaData(dataStr, meses)` fixa o dia
+em 1 antes de somar o mês (evita o `setMonth` do JS "rolar" pro mês
+seguinte quando o dia não existe lá — ex: 31/01 + 1 mês vira 28/02, não
+02 ou 03/03) e depois volta pro dia original, limitado ao último dia
+válido do mês de destino. Conferido: 31/01+1→28/02 (2026 não é
+bissexto), 31/01−1→31/12, 31/03+1→30/04, virada de ano certa.
+
+**Achado testando em celular de verdade**: colocar os botões de mês
+JUNTO com os de dia na mesma fileira (`« [‹ Dia anterior] [data] [Próximo
+dia ›] »`) estourava a largura em 375px — 5 elementos mais o texto de
+data em 2 linhas não cabiam, o botão de "Próximo mês" saía da tela.
+Corrigido separando em duas fileiras: mês numa linha própria acima
+(`.chamado-timeline-nav-mes-linha`), dia na fileira de baixo como já
+era — lido de cima pra baixo, do salto maior (mês) pro menor (dia),
+mais perto da data.
+
+No formulário de criar, o botão de mês reaproveita a mesma trava de não
+agendar antes de hoje (`mudaMesCriar` chama `primeiroDiaPermitidoParaAgendar`
+igual `mudaDiaCriar` já fazia) — testado tentando voltar um mês pra
+antes de hoje: recusa e avisa, igual o dia já fazia.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
