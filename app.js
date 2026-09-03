@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03s";
+const APP_VERSION = "2026.09.03t";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -5493,6 +5493,8 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
   let topOriginal = 0;
   let duracaoMin = 0;
   let diasDeslocados = 0;
+  let limiteEsquerdaPx = 0;
+  let limiteDireitaPx = 0;
 
   bloco.addEventListener("pointerdown", (evento) => {
     // Captura tudo que o solto vai precisar ANTES do setPointerCapture --
@@ -5505,6 +5507,16 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     offsetX = evento.clientX;
     topOriginal = parseFloat(bloco.style.top);
     duracaoMin = parseFloat(bloco.style.height) / TIMELINE_PX_POR_MINUTO;
+
+    // Limites pra o bloco nunca sair visualmente da grade durante o
+    // arrasto (mesmo arrastando bem longe pra pegar vários dias de uma
+    // vez -- só a posição na tela fica presa na borda, o dia continua
+    // mudando normalmente por baixo).
+    const containerRect = chamadoTimelineEl.getBoundingClientRect();
+    const blocoRect = bloco.getBoundingClientRect();
+    limiteEsquerdaPx = containerRect.left - blocoRect.left;
+    limiteDireitaPx = containerRect.right - blocoRect.right;
+
     try { bloco.setPointerCapture(evento.pointerId); } catch (e) { /* segue sem captura formal */ }
     bloco.classList.add("arrastando");
   });
@@ -5520,16 +5532,17 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
 
     // Vertical muda a hora (como já era); horizontal muda o dia -- pra
     // direita avança, pra esquerda volta (como puxar o calendário: o dedo
-    // vai pro futuro à direita). Dá pra ir vários dias, não só ±1. O
-    // bloco acompanha o dedo/cursor no eixo X de verdade (transform),
-    // pra ficar claro que é ele que tá sendo arrastado, não só um número
-    // mudando sozinho.
+    // vai pro futuro à direita). Dá pra ir vários dias, não só ±1
+    // (diasDeslocados usa a distância de verdade, sem limite). O bloco
+    // acompanha o dedo/cursor no eixo X (transform), mas travado nas
+    // bordas da grade -- não pode escapar visualmente pra fora dela.
     const deltaX = evento.clientX - offsetX;
     diasDeslocados = Math.round(deltaX / TIMELINE_LIMIAR_DIA_PX);
+    const deltaXVisual = Math.max(limiteEsquerdaPx, Math.min(deltaX, limiteDireitaPx));
 
     if (Math.abs(novoTop - topOriginal) > 2 || diasDeslocados !== 0) moveuBastante = true;
     bloco.style.top = `${novoTop}px`;
-    bloco.style.transform = `translateX(${deltaX}px)`;
+    bloco.style.transform = `translateX(${deltaXVisual}px)`;
 
     const novoInicioMinAoVivo = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
     const diaAlvo = diasDeslocados !== 0 ? somaDiasNaData(timelineDataAtual, diasDeslocados) : timelineDataAtual;
@@ -5566,13 +5579,20 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     await confirmaNovoHorarioBloco(bloco, c, novaData, novoInicioMin, novoFimMin, restauraVisualOriginal);
   }
 
-  bloco.addEventListener("pointerup", soltar);
-  bloco.addEventListener("pointercancel", () => {
+  function cancelarArrastar() {
     if (!arrastando) return;
     arrastando = false;
     bloco.classList.remove("arrastando");
     restauraVisualOriginal();
-  });
+  }
+
+  bloco.addEventListener("pointerup", soltar);
+  bloco.addEventListener("pointercancel", cancelarArrastar);
+  // Rede de segurança: se a captura do ponteiro for perdida por qualquer
+  // motivo (toque interrompido no celular, troca de app etc.) sem o
+  // pointercancel disparar direito, isso ainda garante que o bloco não
+  // fique preso arrastado pra sempre.
+  bloco.addEventListener("lostpointercapture", cancelarArrastar);
 
   // Alça no rodapé: estica/encolhe só o fim, início fica fixo -- mais
   // possibilidades de duração sem precisar abrir a edição completa.
@@ -5626,14 +5646,17 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     await confirmaNovoHorarioBloco(bloco, c, timelineDataAtual, novoInicioMin, novoFimMin, restauraAlturaOriginal);
   }
 
-  alca.addEventListener("pointerup", soltarResize);
-  alca.addEventListener("pointercancel", (evento) => {
-    evento.stopPropagation();
+  function cancelarRedimensionar(evento) {
+    if (evento) evento.stopPropagation();
     if (!redimensionando) return;
     redimensionando = false;
     bloco.classList.remove("arrastando");
     restauraAlturaOriginal();
-  });
+  }
+
+  alca.addEventListener("pointerup", soltarResize);
+  alca.addEventListener("pointercancel", cancelarRedimensionar);
+  alca.addEventListener("lostpointercapture", cancelarRedimensionar);
 }
 
 // Confirma um novo início/fim pra um chamado real (usado tanto pelo
@@ -5857,13 +5880,16 @@ function ligarArrastarBlocoNovo(bloco, minInicio, minFim, duracaoMin) {
     renderizarTimelineCriar();
   }
 
-  bloco.addEventListener("pointerup", soltar);
-  bloco.addEventListener("pointercancel", () => {
+  function cancelarArrastarNovo() {
     if (!arrastando) return;
     arrastando = false;
     bloco.classList.remove("arrastando");
     bloco.style.top = `${topOriginal}px`;
-  });
+  }
+
+  bloco.addEventListener("pointerup", soltar);
+  bloco.addEventListener("pointercancel", cancelarArrastarNovo);
+  bloco.addEventListener("lostpointercapture", cancelarArrastarNovo);
 
   // Alça no rodapé: estica/encolhe só o "Até", o "De" fica fixo -- mesma
   // ideia da Agenda, só que aqui só mexe no formulário, sem checar nada
@@ -5910,14 +5936,17 @@ function ligarArrastarBlocoNovo(bloco, minInicio, minFim, duracaoMin) {
     renderizarTimelineCriar();
   }
 
-  alca.addEventListener("pointerup", soltarResize);
-  alca.addEventListener("pointercancel", (evento) => {
-    evento.stopPropagation();
+  function cancelarRedimensionarNovo(evento) {
+    if (evento) evento.stopPropagation();
     if (!redimensionando) return;
     redimensionando = false;
     bloco.classList.remove("arrastando");
     bloco.style.height = `${alturaOriginal}px`;
-  });
+  }
+
+  alca.addEventListener("pointerup", soltarResize);
+  alca.addEventListener("pointercancel", cancelarRedimensionarNovo);
+  alca.addEventListener("lostpointercapture", cancelarRedimensionarNovo);
 }
 
 editChamadoData.addEventListener("change", () => {
@@ -5997,12 +6026,15 @@ function ligarSwipeDiaTimeline(containerEl, aoTrocarDia, aoPreVisualizar) {
     else if (aoPreVisualizar) aoPreVisualizar(0);
   }
 
-  containerEl.addEventListener("pointerup", soltar);
-  containerEl.addEventListener("pointercancel", () => {
+  function cancelarSwipe() {
     arrastando = false;
     containerEl.style.transform = "";
     if (aoPreVisualizar) aoPreVisualizar(0);
-  });
+  }
+
+  containerEl.addEventListener("pointerup", soltar);
+  containerEl.addEventListener("pointercancel", cancelarSwipe);
+  containerEl.addEventListener("lostpointercapture", cancelarSwipe);
 }
 
 ligarSwipeDiaTimeline(chamadoTimelineEl, mudaDiaTimeline, (dias) => {

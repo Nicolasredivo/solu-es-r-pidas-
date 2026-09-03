@@ -2142,6 +2142,41 @@ horário (`.hora`), que antes só existia no nome — sem isso, com o bloco
 mais estreito, o horário quebrava em várias linhas de forma feia; agora
 trunca com "..." como o nome já fazia.
 
+### Bloco arrastado não pode escapar da grade (03/09/2026)
+
+Achado (e reportado com print) um bloco "flutuando" bem fora da caixa da
+Agenda, com texto de dia ao vivo ("Seg 28/09 - ...") — sinal de um
+arrasto que ficou preso no meio do caminho: o `pointermove` rodou (aplicou
+`transform` e o texto de preview), mas o `pointerup`/`pointercancel` nunca
+completou o ciclo pra confirmar ou desfazer. Provavelmente um toque
+interrompido no celular (troca de app, gesto do sistema etc.).
+
+Três camadas de correção:
+
+1. **O arrasto agora trava nas bordas da própria grade** — calculado uma
+   vez no `pointerdown` (`limiteEsquerdaPx`/`limiteDireitaPx`, a partir do
+   `getBoundingClientRect` do bloco e do container), e o `translateX`
+   aplicado no `pointermove` fica sempre dentro desse intervalo, não
+   importa o quão longe o dedo/cursor vá. A lógica de **quantos dias**
+   avançar continua calculada a partir da distância de verdade
+   (`diasDeslocados`), sem limite — só a posição na tela é que trava; dá
+   pra continuar arrastando bem longe pra pular vários dias de uma vez,
+   só que o bloco fica "grudado" na borda em vez de sair visualmente.
+2. **`overflow: hidden` na `.chamado-timeline`** como rede de segurança
+   extra — mesmo que algum caso não previsto escape do limite acima, não
+   consegue mais renderizar por cima do resto do app.
+3. **`lostpointercapture` como sinal adicional de "soltou"** — junto do
+   `pointerup`/`pointercancel` já existentes, nos cinco lugares que
+   arrastam algo (mover e redimensionar bloco, mover e redimensionar o
+   "Novo chamado", arrastar-o-fundo-vazio). Cobre o caso de a captura ser
+   perdida sem nenhum dos outros dois eventos disparar direito.
+
+Testado simulando um arrasto de 5000px (bem além de qualquer uso normal)
+— o bloco ficou preso exatamente na borda direita da grade
+(`getBoundingClientRect` confirmando), e ainda assim o dia calculado
+avançou ~83 dias corretamente (a lógica de pular vários dias não foi
+afetada pelo travamento visual).
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

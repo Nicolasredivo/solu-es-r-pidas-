@@ -1400,6 +1400,12 @@ button:active:not(:disabled) {
      o texto em vez de disparar o gesto de trocar de dia */
   user-select: none;
   -webkit-user-select: none;
+  /* trava de segurança: se o gesto de arrastar (mover/trocar de dia)
+     ficar preso sem o soltar completar direito (ex: toque interrompido
+     no celular), o bloco não pode escapar visualmente pra fora da
+     grade -- fica cortado aqui em vez de flutuar por cima do resto do
+     app até a próxima tela recarregar. */
+  overflow: hidden;
 }
 
 .chamado-timeline-hora {
