@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03l";
+const APP_VERSION = "2026.09.03m";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -5342,6 +5342,14 @@ function minutosParaHHMM(min) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+// Atualiza o texto de horário dentro do bloco EM TEMPO REAL durante o
+// arrastar (mover ou redimensionar) -- sem isso o número só mudava depois
+// de soltar, e não dava pra saber em que horário ia parar antes de largar.
+function atualizaTextoHorarioBloco(bloco, minInicioAbsoluto, minFimAbsoluto) {
+  const horaEl = bloco.querySelector(".hora");
+  if (horaEl) horaEl.textContent = `${minutosParaHHMM(minInicioAbsoluto)}–${minutosParaHHMM(minFimAbsoluto)}`;
+}
+
 // Frestas livres no dia, dentro do intervalo mostrado -- é o "conselho"
 // rápido de onde ainda cabe algo, sem ter que ficar comparando os cards.
 function calculaFolgasLivres(doDia, minInicio, minFim) {
@@ -5469,6 +5477,8 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     novoTop = Math.round(novoTop / passoPx) * passoPx;
     if (Math.abs(novoTop - topOriginal) > 2) moveuBastante = true;
     bloco.style.top = `${novoTop}px`;
+    const novoInicioMinAoVivo = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
+    atualizaTextoHorarioBloco(bloco, novoInicioMinAoVivo, novoInicioMinAoVivo + duracaoMin);
   });
 
   async function soltar(evento) {
@@ -5527,6 +5537,8 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     novaAltura = Math.round(novaAltura / passoPx) * passoPx;
     novaAltura = Math.max(passoPx, Math.min(novaAltura, alturaTotal - topPx));
     bloco.style.height = `${novaAltura}px`;
+    const inicioMinAoVivo = minInicio + topPx / TIMELINE_PX_POR_MINUTO;
+    atualizaTextoHorarioBloco(bloco, inicioMinAoVivo, inicioMinAoVivo + novaAltura / TIMELINE_PX_POR_MINUTO);
   });
 
   async function soltarResize(evento) {
@@ -5740,6 +5752,8 @@ function ligarArrastarBlocoNovo(bloco, minInicio, minFim, duracaoMin) {
     const passoPx = TIMELINE_PASSO_MINUTOS * TIMELINE_PX_POR_MINUTO;
     novoTop = Math.round(novoTop / passoPx) * passoPx;
     bloco.style.top = `${novoTop}px`;
+    const novoInicioMinAoVivo = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
+    atualizaTextoHorarioBloco(bloco, novoInicioMinAoVivo, novoInicioMinAoVivo + duracaoMin);
   });
 
   function soltar() {
@@ -5791,6 +5805,8 @@ function ligarArrastarBlocoNovo(bloco, minInicio, minFim, duracaoMin) {
     novaAltura = Math.round(novaAltura / passoPx) * passoPx;
     novaAltura = Math.max(passoPx, Math.min(novaAltura, alturaTotal - topPx));
     bloco.style.height = `${novaAltura}px`;
+    const inicioMinAoVivo = minInicio + topPx / TIMELINE_PX_POR_MINUTO;
+    atualizaTextoHorarioBloco(bloco, inicioMinAoVivo, inicioMinAoVivo + novaAltura / TIMELINE_PX_POR_MINUTO);
   });
 
   function soltarResize(evento) {

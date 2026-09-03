@@ -1976,6 +1976,17 @@ máximo), e o aviso de feriado virou uma caixa própria embaixo do
 cabeçalho (mesmo estilo `.doc-hint.aviso` já usado no aviso perto do
 campo Data).
 
+### Horário do bloco atualiza ao vivo durante o arrastar (03/09/2026)
+
+O texto de horário dentro do bloco (`08:00–09:00`) só mudava depois de
+soltar — durante o arrastar (mover ou redimensionar) ficava parado no
+valor de antes, então não dava pra saber em que horário ia parar antes de
+largar o mouse/dedo. `atualizaTextoHorarioBloco` chama isso a cada
+`pointermove`, nos quatro lugares que arrastam um bloco (mover e
+redimensionar, tanto na Agenda quanto no "Novo chamado" do formulário de
+criar). Testado com eventos de ponteiro conferindo o texto no meio do
+arrastar (antes de soltar) — bate certinho com o valor final.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
