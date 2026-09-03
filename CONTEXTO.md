@@ -1925,6 +1925,57 @@ mostra a versão antiga). Se acontecer de novo: Ctrl+Shift+R força
 recarregar ignorando o cache; se não resolver, F12 → Aba Application →
 Service Workers → Unregister, e Storage → Clear site data.
 
+### Não deixa agendar antes de hoje (03/09/2026)
+
+Pedido: bloquear de verdade marcar um chamado antes do dia atual — mas
+sem impedir de *navegar* pra um dia passado (útil, por exemplo, pra achar
+um chamado atrasado que ainda está "Em andamento").
+
+**Decisão de escopo**: a trava é só no que *cria/reagenda pra uma data*
+(formulário de criar e o campo Data da edição) — não na Agenda. Arrastar
+um bloco na Agenda muda só a *hora* dentro do mesmo dia que já está
+sendo visto (o gesto é vertical, nunca muda de dia sozinho), então não
+tem como isso "agendar no passado" que já não estivesse lá; e navegar a
+Agenda pra qualquer dia continua livre, sem trava, porque é uma tela de
+visualização/gestão, não de criação.
+
+`primeiroDiaPermitidoParaAgendar()` (hoje, em horário de Brasília) é o
+piso. Três camadas, pra fechar qualquer jeito de escapar:
+
+1. **Navegar** (setas ou arrastar pro lado) na linha do tempo de criar:
+   `mudaDiaCriar` recusa ir abaixo do piso e mostra um aviso temporário
+   (some sozinho em 4s) — a data simplesmente não muda.
+2. **Digitar/escolher direto** no campo Data (criar e editar): se vier
+   uma data passada (o navegador deixa digitar/colar qualquer coisa no
+   `<input type="date">`), corrige na hora de volta pra hoje e mostra o
+   mesmo aviso.
+3. **Rede de segurança no envio** (criar e salvar edição): mesmo que as
+   duas primeiras camadas sejam burladas de algum jeito, o clique final
+   confere de novo antes de mandar pro n8n.
+
+Aviso novo (`chamado-data-passado-aviso`/`edit-chamado-data-passado-aviso`)
+usa `.doc-hint.error` (vermelho) em vez do `.aviso` (laranja) do feriado —
+cor diferente de propósito, pra ficar claro que um é só informativo e o
+outro é um bloqueio de verdade.
+
+### Dia da semana no cabeçalho da linha do tempo (03/09/2026)
+
+Pedido simples: mostrar o dia da semana junto da data no cabeçalho das
+duas linhas do tempo (Agenda e Criar chamado) — `nomeDiaSemana(dataStr)`
+usa `toLocaleDateString("pt-BR", {weekday:"long"})` (não precisa de
+tabela própria de nomes) e capitaliza a primeira letra.
+
+**Achado testando em celular de verdade (375px)**: colocar o dia da
+semana JUNTO com o nome do feriado no mesmo texto centralizado
+(`"Segunda-feira, 07/09/2026 · Feriado: Independência do Brasil"`) ficava
+comprido demais e quebrava em até 4 linhas, deixando os botões ‹/›
+(centralizados verticalmente no bloco todo) flutuando no meio do texto de
+forma esquisita. Corrigido separando em dois elementos: o cabeçalho de
+navegação mostra só "Dia da semana, data" (fica curto, 1-2 linhas no
+máximo), e o aviso de feriado virou uma caixa própria embaixo do
+cabeçalho (mesmo estilo `.doc-hint.aviso` já usado no aviso perto do
+campo Data).
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

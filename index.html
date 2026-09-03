@@ -1249,6 +1249,7 @@
               </div>
               <button type="button" id="chamado-timeline-proximo" class="botao-secundario">Próximo dia ›</button>
             </div>
+            <p id="chamado-timeline-feriado-aviso" class="doc-hint aviso hidden"></p>
             <button type="button" id="chamado-timeline-hoje" class="link-button">Ir pra hoje</button>
             <p class="doc-hint">Arraste um chamado pra mudar o horário nesse dia. Toque sem arrastar pra abrir e editar.</p>
             <div id="chamado-timeline" class="chamado-timeline"></div>
@@ -1303,6 +1304,7 @@
 
               <label for="edit-chamado-data">Data</label>
               <input type="date" id="edit-chamado-data" />
+              <p id="edit-chamado-data-passado-aviso" class="doc-hint error hidden"></p>
               <p id="edit-chamado-data-feriado-aviso" class="doc-hint aviso hidden"></p>
 
               <label>Reservar o tempo de serviço</label>
@@ -1375,6 +1377,7 @@
 
                 <label for="chamado-data">Data</label>
                 <input type="date" id="chamado-data" />
+                <p id="chamado-data-passado-aviso" class="doc-hint error hidden"></p>
                 <p id="chamado-data-feriado-aviso" class="doc-hint aviso hidden"></p>
 
                 <label>Reservar o tempo de serviço</label>
@@ -1398,6 +1401,7 @@
                     <strong id="chamado-timeline-criar-data-texto">—</strong>
                     <button type="button" id="chamado-timeline-criar-proximo" class="botao-secundario">›</button>
                   </div>
+                  <p id="chamado-timeline-criar-feriado-aviso" class="doc-hint aviso hidden"></p>
                   <p class="doc-hint">Assim está esse dia. Arraste o bloco tracejado pra escolher o horário, ou a alça de baixo dele pra ajustar a duração — os outros já são chamados marcados.</p>
                   <div id="chamado-timeline-criar" class="chamado-timeline"></div>
                   <p id="chamado-timeline-criar-livres" class="doc-hint"></p>

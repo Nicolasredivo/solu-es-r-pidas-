@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03i";
+const APP_VERSION = "2026.09.03l";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4746,6 +4746,7 @@ const chamadoTimelineAnterior = document.getElementById("chamado-timeline-anteri
 const chamadoTimelineProximo = document.getElementById("chamado-timeline-proximo");
 const chamadoTimelineHoje = document.getElementById("chamado-timeline-hoje");
 const chamadoTimelineDataTexto = document.getElementById("chamado-timeline-data-texto");
+const chamadoTimelineFeriadoAviso = document.getElementById("chamado-timeline-feriado-aviso");
 const chamadoTimelineDataInput = document.getElementById("chamado-timeline-data-input");
 const chamadoTimelineEl = document.getElementById("chamado-timeline");
 const chamadoTimelineLivres = document.getElementById("chamado-timeline-livres");
@@ -4766,6 +4767,7 @@ const editChamadoAnexosFotoBotao = document.getElementById("edit-chamado-anexos-
 const editChamadoAnexosDocBotao = document.getElementById("edit-chamado-anexos-doc-botao");
 const editChamadoAnexosLista = document.getElementById("edit-chamado-anexos-lista");
 const editChamadoData = document.getElementById("edit-chamado-data");
+const editChamadoDataPassadoAviso = document.getElementById("edit-chamado-data-passado-aviso");
 const editChamadoDataFeriadoAviso = document.getElementById("edit-chamado-data-feriado-aviso");
 const editChamadoHorarioCombinado = document.getElementById("edit-chamado-horario-combinado");
 const editChamadoReservadoInicio = document.getElementById("edit-chamado-reservado-inicio");
@@ -4797,11 +4799,13 @@ const chamadoDataInput = document.getElementById("chamado-data");
 const chamadoHorarioCombinadoInput = document.getElementById("chamado-horario-combinado");
 const chamadoReservadoInicioInput = document.getElementById("chamado-reservado-inicio");
 const chamadoReservadoFimInput = document.getElementById("chamado-reservado-fim");
+const chamadoDataPassadoAviso = document.getElementById("chamado-data-passado-aviso");
 const chamadoDataFeriadoAviso = document.getElementById("chamado-data-feriado-aviso");
 const chamadoTimelineCriarCaixa = document.getElementById("chamado-timeline-criar-caixa");
 const chamadoTimelineCriarAnterior = document.getElementById("chamado-timeline-criar-anterior");
 const chamadoTimelineCriarProximo = document.getElementById("chamado-timeline-criar-proximo");
 const chamadoTimelineCriarDataTexto = document.getElementById("chamado-timeline-criar-data-texto");
+const chamadoTimelineCriarFeriadoAviso = document.getElementById("chamado-timeline-criar-feriado-aviso");
 const chamadoTimelineCriarEl = document.getElementById("chamado-timeline-criar");
 const chamadoTimelineCriarLivres = document.getElementById("chamado-timeline-criar-livres");
 const chamadoConflitoBox = document.getElementById("chamado-conflito");
@@ -5057,6 +5061,10 @@ function formatarHoraIso(iso) {
 function formatarDataChamado(dataStr) {
   return new Date(`${dataStr}T00:00:00`).toLocaleDateString("pt-BR");
 }
+function nomeDiaSemana(dataStr) {
+  const nome = new Date(`${dataStr}T00:00:00`).toLocaleDateString("pt-BR", { weekday: "long" });
+  return nome.charAt(0).toUpperCase() + nome.slice(1);
+}
 function limparConflitoBox(box) {
   box.classList.add("hidden");
   box.innerHTML = "";
@@ -5186,6 +5194,11 @@ chamadoForm.addEventListener("submit", async (evento) => {
   }
 
   const temData = Boolean(chamadoDataInput.value);
+  if (temData && chamadoDataInput.value < primeiroDiaPermitidoParaAgendar()) {
+    avisaDataPassada(chamadoDataPassadoAviso);
+    mostrarChamadoStatus("error", "Não é possível agendar antes de hoje.");
+    return;
+  }
   if (temData && (!chamadoReservadoInicioInput.value || !chamadoReservadoFimInput.value)) {
     mostrarChamadoStatus("error", "Preencha o horário de início e fim do serviço.");
     return;
@@ -5388,8 +5401,14 @@ function criaBlocoTimeline(c, minInicio, classeExtra) {
 
 function renderizarTimeline() {
   chamadoTimelineDataInput.value = timelineDataAtual;
+  chamadoTimelineDataTexto.textContent = `${nomeDiaSemana(timelineDataAtual)}, ${formatarDataChamado(timelineDataAtual)}`;
   const feriadoAgenda = nomeFeriado(timelineDataAtual);
-  chamadoTimelineDataTexto.textContent = formatarDataChamado(timelineDataAtual) + (feriadoAgenda ? ` · Feriado: ${feriadoAgenda}` : "");
+  if (feriadoAgenda) {
+    chamadoTimelineFeriadoAviso.textContent = `Feriado: ${feriadoAgenda}.`;
+    chamadoTimelineFeriadoAviso.classList.remove("hidden");
+  } else {
+    chamadoTimelineFeriadoAviso.classList.add("hidden");
+  }
 
   const doDia = chamadosComData.filter((c) => dataLocalISO(new Date(c.reservadoInicio)) === timelineDataAtual);
 
@@ -5590,6 +5609,22 @@ chamadoTimelineDataInput.addEventListener("change", () => {
   }
 });
 
+// Diferente de feriado, isto BLOQUEIA de verdade -- não dá pra agendar (ou
+// reagendar) um chamado antes de hoje. Ver/navegar pra um dia passado
+// continua liberado (útil pra achar um chamado atrasado, por exemplo); o
+// que é bloqueado é o resultado terminar com uma data passada de verdade.
+function primeiroDiaPermitidoParaAgendar() {
+  return dataLocalISOBrasilia(agoraBrasilia());
+}
+
+let timerAvisoPassado = null;
+function avisaDataPassada(elAviso) {
+  elAviso.textContent = "Não é possível agendar antes de hoje. Escolha hoje ou uma data futura.";
+  elAviso.classList.remove("hidden");
+  clearTimeout(timerAvisoPassado);
+  timerAvisoPassado = setTimeout(() => elAviso.classList.add("hidden"), 4000);
+}
+
 // Feriado é só aviso, nunca bloqueia -- o dono pode ter um motivo real pra
 // atender nesse dia (plantão, cliente que só pode nesse dia etc.).
 function atualizaAvisoFeriadoEm(elAviso, dataStr) {
@@ -5614,15 +5649,26 @@ function atualizaAvisoFeriado(dataStr) {
 // são arrastáveis aqui -- mover outro chamado é coisa da tela de Agenda).
 
 function renderizarTimelineCriar() {
-  const dataStr = chamadoDataInput.value;
+  let dataStr = chamadoDataInput.value;
+  if (dataStr && dataStr < primeiroDiaPermitidoParaAgendar()) {
+    avisaDataPassada(chamadoDataPassadoAviso);
+    dataStr = primeiroDiaPermitidoParaAgendar();
+    chamadoDataInput.value = dataStr;
+  }
   atualizaAvisoFeriado(dataStr);
   if (!dataStr) {
     chamadoTimelineCriarCaixa.classList.add("hidden");
     return;
   }
   chamadoTimelineCriarCaixa.classList.remove("hidden");
+  chamadoTimelineCriarDataTexto.textContent = `${nomeDiaSemana(dataStr)}, ${formatarDataChamado(dataStr)}`;
   const feriadoCriar = nomeFeriado(dataStr);
-  chamadoTimelineCriarDataTexto.textContent = formatarDataChamado(dataStr) + (feriadoCriar ? ` · Feriado: ${feriadoCriar}` : "");
+  if (feriadoCriar) {
+    chamadoTimelineCriarFeriadoAviso.textContent = `Feriado: ${feriadoCriar}.`;
+    chamadoTimelineCriarFeriadoAviso.classList.remove("hidden");
+  } else {
+    chamadoTimelineCriarFeriadoAviso.classList.add("hidden");
+  }
 
   const doDia = chamadosComData.filter((c) => dataLocalISO(new Date(c.reservadoInicio)) === dataStr);
 
@@ -5769,7 +5815,13 @@ function ligarArrastarBlocoNovo(bloco, minInicio, minFim, duracaoMin) {
   });
 }
 
-editChamadoData.addEventListener("change", () => atualizaAvisoFeriadoEm(editChamadoDataFeriadoAviso, editChamadoData.value));
+editChamadoData.addEventListener("change", () => {
+  if (editChamadoData.value && editChamadoData.value < primeiroDiaPermitidoParaAgendar()) {
+    avisaDataPassada(editChamadoDataPassadoAviso);
+    editChamadoData.value = primeiroDiaPermitidoParaAgendar();
+  }
+  atualizaAvisoFeriadoEm(editChamadoDataFeriadoAviso, editChamadoData.value);
+});
 
 chamadoDataInput.addEventListener("change", renderizarTimelineCriar);
 chamadoReservadoInicioInput.addEventListener("change", renderizarTimelineCriar);
@@ -5783,7 +5835,12 @@ function mudaDiaCriar(deltaDias) {
   if (!chamadoDataInput.value) return;
   const d = new Date(`${chamadoDataInput.value}T00:00:00`);
   d.setDate(d.getDate() + deltaDias);
-  chamadoDataInput.value = dataLocalISO(d);
+  const novaData = dataLocalISO(d);
+  if (novaData < primeiroDiaPermitidoParaAgendar()) {
+    avisaDataPassada(chamadoDataPassadoAviso);
+    return;
+  }
+  chamadoDataInput.value = novaData;
   renderizarTimelineCriar();
 }
 chamadoTimelineCriarAnterior.addEventListener("click", () => mudaDiaCriar(-1));
@@ -5990,6 +6047,11 @@ async function salvarEdicaoChamado(chamadoEmpurradoId, sugestaoParaEmpurrado) {
 editChamadoSalvarBotao.addEventListener("click", async () => {
   limparConflitoBox(editChamadoConflito);
 
+  if (editChamadoData.value && editChamadoData.value < primeiroDiaPermitidoParaAgendar()) {
+    avisaDataPassada(editChamadoDataPassadoAviso);
+    mostrarEditChamadoStatus("error", "Não é possível agendar antes de hoje.");
+    return;
+  }
   if (editChamadoData.value && (!editChamadoReservadoInicio.value || !editChamadoReservadoFim.value)) {
     mostrarEditChamadoStatus("error", "Preencha o horário de início e fim do serviço.");
     return;
