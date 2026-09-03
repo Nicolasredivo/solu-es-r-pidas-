@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03p";
+const APP_VERSION = "2026.09.03q";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -5290,14 +5290,24 @@ function montarCardChamado(c, comData) {
       cancelarBotao.textContent = "Confirmar cancelamento";
       return;
     }
-    cancelarChamado(c.id);
+    // Sem isso, o botão fica parado do jeito que estava durante a espera
+    // da rede -- sem feedback nenhum, mesmo alguns segundos de demora
+    // parecem "travado".
+    cancelarBotao.disabled = true;
+    cancelarBotao.textContent = "Cancelando...";
+    cancelarChamado(c.id, cancelarBotao);
   });
 
   return card;
 }
 
-async function cancelarChamado(id) {
-  const resposta = await pedirAoN8n("reagendar-chamado", { chamadoId: id, cancelar: "true" });
+async function cancelarChamado(id, botao) {
+  let resposta;
+  try {
+    resposta = await pedirAoN8n("reagendar-chamado", { chamadoId: id, cancelar: "true" });
+  } catch (err) {
+    resposta = null;
+  }
   if (resposta && resposta.ok) {
     // Tira da tela na hora, sem esperar uma segunda rodada de rede -- o
     // cancelamento já aconteceu de verdade no servidor, só falta refletir
@@ -5311,6 +5321,12 @@ async function cancelarChamado(id) {
     renderizarTimelineCriar();
     await carregarChamados();
   } else {
+    // Se deu errado, o botão precisa voltar a funcionar -- senão fica
+    // preso em "Cancelando..." pra sempre.
+    if (botao) {
+      botao.disabled = false;
+      botao.textContent = "Confirmar cancelamento";
+    }
     mostrarChamadosListaStatus("error", (resposta && resposta.mensagem) || "Não consegui cancelar.");
   }
 }

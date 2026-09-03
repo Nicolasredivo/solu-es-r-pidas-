@@ -630,6 +630,10 @@ button {
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
+  /* o destaque padrão de toque do celular (um retângulo sólido cobrindo
+     o botão por um instante) fica estranho em cima das cores próprias
+     de cada botão -- tira e deixa só o :active (scale) abaixo */
+  -webkit-tap-highlight-color: transparent;
 }
 
 button:disabled {

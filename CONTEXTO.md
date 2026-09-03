@@ -2087,6 +2087,31 @@ mouse, só com eventos sintéticos -- a barra de horas ficava com o texto
 Causa: `.chamado-timeline` não tinha `user-select: none`. Corrigido (e
 confirmado com arrasto de mouse de verdade nas duas direções depois).
 
+### Botão de cancelar parecia travado, sem feedback durante a espera (03/09/2026)
+
+Reportado "tá demorando pra cancelar" com um print mostrando o botão
+sólido vermelho, sem texto visível. Duas causas prováveis, corrigidas
+juntas:
+
+1. **Sem feedback nenhum durante a chamada de rede**: `cancelarChamado`
+   não desabilitava o botão nem mudava o texto enquanto esperava a
+   resposta do n8n — mesmo alguns segundos de demora normal (tunnel +
+   Airtable) pareciam "travado", porque o botão ficava parado exatamente
+   como estava. Corrigido: ao confirmar, o botão vira "Cancelando..." e
+   fica desabilitado até a resposta chegar; se der erro, volta pra
+   "Confirmar cancelamento" habilitado (senão ficaria preso pra sempre).
+   Testado simulando rede lenta (2s) e rede com erro — os dois cenários
+   se comportam certo.
+
+2. **Provável causa do vermelho sólido sem texto**: o destaque padrão de
+   toque do celular (`-webkit-tap-highlight-color`), que em alguns
+   navegadores desenha um retângulo sólido por cima do botão por um
+   instante ao tocar — combinado com a cor vermelha de
+   `.confirmando`, pode ter parecido um botão vermelho vazio. Removido
+   globalmente nos botões (não é possível reproduzir/confirmar 100% sem
+   um celular real na mão, mas é a explicação mais provável e a correção
+   não tem efeito colateral).
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
