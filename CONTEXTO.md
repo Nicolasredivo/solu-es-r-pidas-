@@ -2020,6 +2020,36 @@ reverter visual completo (posição e texto) quando bloqueado. Nenhuma
 chamada real de rede durante os testes (tudo espionado); conferido
 direto no Airtable depois que os dados reais continuam intactos.
 
+### Achada a causa raiz de verdade do "não atualiza" (03/09/2026)
+
+Durante várias rodadas seguidas o dono reportou "ainda não atualizou"
+mesmo depois de eu confirmar que o deploy tinha subido certinho no
+GitHub. A explicação de "espera a propagação do CDN" era só parte da
+história — a causa raiz de verdade:
+
+**O `cache.addAll(APP_SHELL)` do service worker busca cada arquivo com o
+modo de cache padrão do navegador, que respeita o `Cache-Control` que o
+CDN do GitHub Pages manda.** Isso significa que mesmo um service worker
+**recém-instalado**, na sequência certa (deploy novo → SW detecta →
+reinstala), podia acabar buscando uma cópia **velha** de `app.js` que
+ainda estava em cache no CDN — nada a ver com o cache do navegador do
+usuário, que ele já tinha limpado direitinho várias vezes. Confirmado
+na mão: pedir `app.js` direto deu versão velha; pedir
+`app.js?nocache=1` (um parâmetro qualquer, só pra virar uma URL nunca
+vista) deu a versão certa na hora.
+
+**Corrigido** buscando cada arquivo do `APP_SHELL` com um parâmetro de
+versão carimbado na URL (`?v=<CACHE_NAME>`) e `cache: "no-store"`
+durante o `install` — isso força o CDN a tratar como pedido nunca visto
+antes, sem chance de vir do cache dele. Salva no Cache Storage do
+service worker sob a **chave original, sem o parâmetro** (`cache.put(url,
+resposta)`), pra continuar batendo certinho com os pedidos reais que
+chegam no `fetch` handler depois (esses não têm o parâmetro).
+
+Com isso, a partir de agora cada deploy novo (que já muda `CACHE_NAME`)
+força uma busca de verdade no CDN, sem depender de esperar propagação
+nem de o usuário limpar nada na mão.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

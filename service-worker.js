@@ -1,5 +1,5 @@
 // Sobe junto com o APP_VERSION do app.js a cada publicação.
-const CACHE_NAME = "solucoes-rapidas-2026.09.03n";
+const CACHE_NAME = "solucoes-rapidas-2026.09.03o";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -11,8 +11,22 @@ const APP_SHELL = [
 ];
 
 self.addEventListener("install", (event) => {
+  // cache.addAll() busca cada arquivo com o modo padrão de cache, que
+  // respeita o Cache-Control do CDN do GitHub Pages -- descoberto que
+  // isso podia trazer uma cópia velha de app.js pro cache novo mesmo
+  // logo depois de um deploy de verdade (o service worker reinstala,
+  // mas busca o arquivo errado). Corrigido buscando cada arquivo com um
+  // parâmetro de versão na URL (força o CDN a tratar como pedido novo,
+  // nunca visto antes) e guardando no cache sob a chave normal (sem o
+  // parâmetro), pra bater certinho com os pedidos reais no fetch abaixo.
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(APP_SHELL.map(async (url) => {
+        const urlComVersao = url.includes("?") ? `${url}&v=${CACHE_NAME}` : `${url}?v=${CACHE_NAME}`;
+        const resposta = await fetch(urlComVersao, { cache: "no-store" });
+        await cache.put(url, resposta);
+      }))
+    )
   );
   self.skipWaiting();
 });
