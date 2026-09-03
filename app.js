@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03o";
+const APP_VERSION = "2026.09.03p";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -5424,16 +5424,24 @@ function criaBlocoTimeline(c, minInicio, classeExtra) {
   return bloco;
 }
 
-function renderizarTimeline() {
-  chamadoTimelineDataInput.value = timelineDataAtual;
-  chamadoTimelineDataTexto.textContent = `${nomeDiaSemana(timelineDataAtual)}, ${formatarDataChamado(timelineDataAtual)}`;
-  const feriadoAgenda = nomeFeriado(timelineDataAtual);
-  if (feriadoAgenda) {
-    chamadoTimelineFeriadoAviso.textContent = `Feriado: ${feriadoAgenda}.`;
+// Cabeçalho da Agenda (data grande + aviso de feriado) -- função própria
+// pra poder chamar tanto no render normal quanto, ao vivo, enquanto
+// arrasta um chamado pra outro dia (mostra pra qual dia vai antes de
+// soltar, não só o texto pequeno dentro do bloco).
+function atualizaCabecalhoAgenda(dataStr) {
+  chamadoTimelineDataInput.value = dataStr;
+  chamadoTimelineDataTexto.textContent = `${nomeDiaSemana(dataStr)}, ${formatarDataChamado(dataStr)}`;
+  const feriado = nomeFeriado(dataStr);
+  if (feriado) {
+    chamadoTimelineFeriadoAviso.textContent = `Feriado: ${feriado}.`;
     chamadoTimelineFeriadoAviso.classList.remove("hidden");
   } else {
     chamadoTimelineFeriadoAviso.classList.add("hidden");
   }
+}
+
+function renderizarTimeline() {
+  atualizaCabecalhoAgenda(timelineDataAtual);
 
   const doDia = chamadosComData.filter((c) => dataLocalISO(new Date(c.reservadoInicio)) === timelineDataAtual);
 
@@ -5498,23 +5506,30 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     novoTop = Math.round(novoTop / passoPx) * passoPx;
 
     // Vertical muda a hora (como já era); horizontal muda o dia -- pra
-    // esquerda avança, pra direita volta, mesma convenção do arrastar no
-    // fundo vazio da grade. Dá pra ir vários dias, não só ±1.
+    // direita avança, pra esquerda volta (como puxar o calendário: o dedo
+    // vai pro futuro à direita). Dá pra ir vários dias, não só ±1. O
+    // bloco acompanha o dedo/cursor no eixo X de verdade (transform),
+    // pra ficar claro que é ele que tá sendo arrastado, não só um número
+    // mudando sozinho.
     const deltaX = evento.clientX - offsetX;
-    diasDeslocados = -Math.round(deltaX / TIMELINE_LIMIAR_DIA_PX);
+    diasDeslocados = Math.round(deltaX / TIMELINE_LIMIAR_DIA_PX);
 
     if (Math.abs(novoTop - topOriginal) > 2 || diasDeslocados !== 0) moveuBastante = true;
     bloco.style.top = `${novoTop}px`;
+    bloco.style.transform = `translateX(${deltaX}px)`;
 
     const novoInicioMinAoVivo = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
-    const diaAlvo = diasDeslocados !== 0 ? somaDiasNaData(timelineDataAtual, diasDeslocados) : null;
-    atualizaTextoHorarioBloco(bloco, novoInicioMinAoVivo, novoInicioMinAoVivo + duracaoMin, diaAlvo && diaCurto(diaAlvo));
+    const diaAlvo = diasDeslocados !== 0 ? somaDiasNaData(timelineDataAtual, diasDeslocados) : timelineDataAtual;
+    atualizaTextoHorarioBloco(bloco, novoInicioMinAoVivo, novoInicioMinAoVivo + duracaoMin, diasDeslocados !== 0 && diaCurto(diaAlvo));
+    atualizaCabecalhoAgenda(diaAlvo);
   });
 
   function restauraVisualOriginal() {
     bloco.style.top = `${topOriginal}px`;
+    bloco.style.transform = "";
     const inicioOriginalMin = minInicio + topOriginal / TIMELINE_PX_POR_MINUTO;
     atualizaTextoHorarioBloco(bloco, inicioOriginalMin, inicioOriginalMin + duracaoMin);
+    atualizaCabecalhoAgenda(timelineDataAtual);
   }
 
   async function soltar(evento) {
@@ -5715,6 +5730,19 @@ function atualizaAvisoFeriado(dataStr) {
 // atualiza De/Até. Os chamados já marcados aparecem só de referência (não
 // são arrastáveis aqui -- mover outro chamado é coisa da tela de Agenda).
 
+// Espelha atualizaCabecalhoAgenda, só que pro cabeçalho da timeline do
+// formulário de criar -- reaproveitada pro preview ao vivo do arrastar.
+function atualizaCabecalhoCriar(dataStr) {
+  chamadoTimelineCriarDataTexto.textContent = `${nomeDiaSemana(dataStr)}, ${formatarDataChamado(dataStr)}`;
+  const feriado = nomeFeriado(dataStr);
+  if (feriado) {
+    chamadoTimelineCriarFeriadoAviso.textContent = `Feriado: ${feriado}.`;
+    chamadoTimelineCriarFeriadoAviso.classList.remove("hidden");
+  } else {
+    chamadoTimelineCriarFeriadoAviso.classList.add("hidden");
+  }
+}
+
 function renderizarTimelineCriar() {
   let dataStr = chamadoDataInput.value;
   if (dataStr && dataStr < primeiroDiaPermitidoParaAgendar()) {
@@ -5728,14 +5756,7 @@ function renderizarTimelineCriar() {
     return;
   }
   chamadoTimelineCriarCaixa.classList.remove("hidden");
-  chamadoTimelineCriarDataTexto.textContent = `${nomeDiaSemana(dataStr)}, ${formatarDataChamado(dataStr)}`;
-  const feriadoCriar = nomeFeriado(dataStr);
-  if (feriadoCriar) {
-    chamadoTimelineCriarFeriadoAviso.textContent = `Feriado: ${feriadoCriar}.`;
-    chamadoTimelineCriarFeriadoAviso.classList.remove("hidden");
-  } else {
-    chamadoTimelineCriarFeriadoAviso.classList.add("hidden");
-  }
+  atualizaCabecalhoCriar(dataStr);
 
   const doDia = chamadosComData.filter((c) => dataLocalISO(new Date(c.reservadoInicio)) === dataStr);
 
@@ -5921,8 +5942,10 @@ chamadoTimelineCriarProximo.addEventListener("click", () => mudaDiaCriar(1));
 // bloco) também troca de dia -- mais rápido que ficar clicando nas setas.
 // Só conta o arrastar que começa no fundo (evento.target === containerEl)
 // pra não brigar com o arrastar/redimensionar de um bloco em cima.
-function ligarSwipeDiaTimeline(containerEl, aoTrocarDia) {
-  const LIMIAR_PX = 60;
+// `aoPreVisualizar(diasDeslocados)` (opcional) atualiza o cabeçalho ao
+// vivo enquanto arrasta, antes de soltar -- mesma ideia do texto dentro
+// do bloco arrastável.
+function ligarSwipeDiaTimeline(containerEl, aoTrocarDia, aoPreVisualizar) {
   let arrastando = false;
   let moveu = false;
   let inicioX = 0;
@@ -5940,27 +5963,42 @@ function ligarSwipeDiaTimeline(containerEl, aoTrocarDia) {
     const deltaX = evento.clientX - inicioX;
     if (Math.abs(deltaX) > 8) moveu = true;
     containerEl.style.transform = `translateX(${deltaX}px)`;
+    if (aoPreVisualizar) aoPreVisualizar(Math.round(deltaX / TIMELINE_LIMIAR_DIA_PX));
   });
 
   function soltar(evento) {
     if (!arrastando) return;
     arrastando = false;
     containerEl.style.transform = "";
-    if (!moveu) return;
+    if (!moveu) {
+      if (aoPreVisualizar) aoPreVisualizar(0);
+      return;
+    }
+    // Pra direita avança o dia, pra esquerda volta -- como puxar o
+    // calendário: arrasta o dedo pro futuro à direita. Proporcional (não
+    // só ±1), igual ao preview mostrado durante o arrastar -- senão o
+    // dia que aparece no meio do gesto não bate com onde solta.
     const deltaX = evento.clientX - inicioX;
-    if (deltaX <= -LIMIAR_PX) aoTrocarDia(1);
-    else if (deltaX >= LIMIAR_PX) aoTrocarDia(-1);
+    const dias = Math.round(deltaX / TIMELINE_LIMIAR_DIA_PX);
+    if (dias !== 0) aoTrocarDia(dias);
+    else if (aoPreVisualizar) aoPreVisualizar(0);
   }
 
   containerEl.addEventListener("pointerup", soltar);
   containerEl.addEventListener("pointercancel", () => {
     arrastando = false;
     containerEl.style.transform = "";
+    if (aoPreVisualizar) aoPreVisualizar(0);
   });
 }
 
-ligarSwipeDiaTimeline(chamadoTimelineEl, mudaDiaTimeline);
-ligarSwipeDiaTimeline(chamadoTimelineCriarEl, mudaDiaCriar);
+ligarSwipeDiaTimeline(chamadoTimelineEl, mudaDiaTimeline, (dias) => {
+  atualizaCabecalhoAgenda(dias !== 0 ? somaDiasNaData(timelineDataAtual, dias) : timelineDataAtual);
+});
+ligarSwipeDiaTimeline(chamadoTimelineCriarEl, mudaDiaCriar, (dias) => {
+  if (!chamadoDataInput.value) return;
+  atualizaCabecalhoCriar(dias !== 0 ? somaDiasNaData(chamadoDataInput.value, dias) : chamadoDataInput.value);
+});
 
 async function carregarChamados() {
   mostrarChamadosListaStatus("neutral", "Carregando...");

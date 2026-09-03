@@ -1392,6 +1392,10 @@ button:active:not(:disabled) {
   /* deixa o navegador tratar o scroll vertical da página normalmente,
      mas entrega o gesto horizontal (arrastar pra trocar de dia) pro JS */
   touch-action: pan-y;
+  /* sem isso, arrastar pro lado por cima dos números de hora seleciona
+     o texto em vez de disparar o gesto de trocar de dia */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .chamado-timeline-hora {

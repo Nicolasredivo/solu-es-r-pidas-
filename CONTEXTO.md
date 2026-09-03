@@ -2050,6 +2050,43 @@ Com isso, a partir de agora cada deploy novo (que já muda `CACHE_NAME`)
 força uma busca de verdade no CDN, sem depender de esperar propagação
 nem de o usuário limpar nada na mão.
 
+### Ajustes no arrastar-pra-trocar-de-dia: direção, feedback ao vivo, interatividade (03/09/2026)
+
+Depois de usar de verdade (os chamados #5 e #6 já tinham sido movidos
+entre vários dias pelo dono, confirmando que o mecanismo básico
+funcionava), três ajustes pedidos:
+
+**Direção invertida**: era esquerda-avança/direita-volta; virou
+**direita avança, esquerda volta** — como puxar um calendário físico, o
+dedo/cursor "vai pro futuro" indo pra direita. Mudado nos dois gestos que
+existem (arrastar o bloco e arrastar o fundo vazio da grade), pra não
+ficar um de cada jeito.
+
+**Data grande do cabeçalho atualiza ao vivo**: antes só o textinho dentro
+do bloco mudava durante o arrasto; a data grande (`Segunda-feira,
+07/09/2026`) só atualizava depois de soltar. Extraído
+`atualizaCabecalhoAgenda`/`atualizaCabecalhoCriar` (usadas tanto no
+render normal quanto no preview ao vivo) e chamadas a cada `pointermove`
+nos dois gestos.
+
+**Achado ajustando**: o arrastar-o-fundo-vazio (`ligarSwipeDiaTimeline`)
+só andava ±1 dia fixo ao soltar, mas o preview ao vivo (que eu tinha
+acabado de adicionar) calculava proporcional à distância arrastada —
+resultado: o preview podia mostrar "vai pro dia 12" e soltar no dia 11.
+Corrigido trocando o soltar também pra proporcional (`Math.round(deltaX /
+TIMELINE_LIMIAR_DIA_PX)`), igual ao arrastar-o-bloco já fazia.
+
+**Mais interativo**: o bloco agora acompanha o cursor/dedo no eixo
+horizontal de verdade (`transform: translateX`) enquanto arrasta, não só
+o texto mudando — fica claro que é ELE que está sendo movido.
+
+**Achado testando com mouse de verdade (não só evento simulado)**: o
+arrastar-o-fundo-vazio não disparava com um clique-arrasto real do
+mouse, só com eventos sintéticos -- a barra de horas ficava com o texto
+"selecionado" (seleção de texto do navegador competindo com o gesto).
+Causa: `.chamado-timeline` não tinha `user-select: none`. Corrigido (e
+confirmado com arrasto de mouse de verdade nas duas direções depois).
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
