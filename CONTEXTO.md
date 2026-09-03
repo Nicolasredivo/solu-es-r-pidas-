@@ -1802,6 +1802,53 @@ sem comparar cartão por cartão.
   — e confirmado por leitura direta no Airtable que o Chamado #2 real
   nunca foi alterado durante os testes.
 
+### Linha do tempo também na tela de Criar chamado (03/09/2026)
+
+Pedido: poder usar o mesmo esquema visual/arrastar da Agenda também ao
+criar um chamado, **sem tirar** os campos De/Até que já existiam — os dois
+modelos convivem.
+
+Reaproveita a mesma visualização (grade de horas, blocos por chamado)
+numa segunda instância, dentro do formulário de criar. Diferenças da
+versão da Agenda:
+
+- Os chamados **já marcados** aparecem só como referência (classe
+  `somente-leitura`, sem arrastar neles) — mover um chamado existente
+  continua sendo coisa só da Agenda.
+- Existe um bloco a mais, tracejado ("Novo chamado"), representando o
+  chamado sendo criado agora — esse sim é arrastável.
+- **Os dois formatos ficam sincronizados nos dois sentidos**: digitar em
+  "De"/"Até" reposiciona o bloco tracejado; arrastar o bloco atualiza
+  "De"/"Até". Nenhuma chamada de rede acontece durante o arrastar aqui
+  (o chamado ainda nem existe) — a checagem de conflito de verdade
+  continua sendo só no envio do formulário, como já era.
+- Ver o bloco novo sobrepondo um chamado já marcado já mostra o conflito
+  visualmente, de graça, sem precisar calcular nada a mais.
+
+Refatorado pra evitar duplicar código entre as duas telas: `renderizarTimeline`
+(Agenda) e `renderizarTimelineCriar` (Criar chamado) compartilham
+`calculaIntervaloHoras`, `desenhaGradeHoras` e `criaBlocoTimeline`.
+
+**Achado durante o teste**: pra testar localmente (servidor estático em
+`:8099`, ver nota acima), reiniciar o `preview_start` cria um perfil de
+navegador novo — localStorage some, e com ele o endereço do túnel n8n
+salvo (`n8n_base_url`) e a senha lembrada. Sem isso, `pedirAoN8n` manda a
+requisição pro próprio `localhost:8099` (a origem do app) em vez do n8n,
+e volta HTML (a página 404 do `serve`) em vez de JSON. Contornado
+setando `localStorage.setItem('n8n_base_url', 'http://localhost:5678')`
+(mesmo endereço que os scripts de deploy usam pra API admin, porta
+`5678` — o CORS do workflow já libera `localhost:8099`) direto no
+console antes de testar.
+
+**Achado no meio do teste (não é bug, mas quase virou confusão)**: o
+Chamado #2 (OPERA) apareceu como "Cancelado" no Airtable no meio da
+sessão de testes. Antes de presumir qualquer coisa, perguntei — era o
+próprio dono testando/cancelando de propósito, nada a ver com os testes
+daqui (que só usam funções simuladas, nunca gravam de verdade). Fica
+registrado o hábito: **sempre perguntar antes de assumir que um dado
+real mudou por causa de um teste**, mesmo quando a evidência (código
+revisado, leituras antes/depois) aponta pra "não fui eu".
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

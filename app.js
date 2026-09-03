@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03e";
+const APP_VERSION = "2026.09.03f";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4718,6 +4718,9 @@ const chamadoDataInput = document.getElementById("chamado-data");
 const chamadoHorarioCombinadoInput = document.getElementById("chamado-horario-combinado");
 const chamadoReservadoInicioInput = document.getElementById("chamado-reservado-inicio");
 const chamadoReservadoFimInput = document.getElementById("chamado-reservado-fim");
+const chamadoTimelineCriarCaixa = document.getElementById("chamado-timeline-criar-caixa");
+const chamadoTimelineCriarEl = document.getElementById("chamado-timeline-criar");
+const chamadoTimelineCriarLivres = document.getElementById("chamado-timeline-criar-livres");
 const chamadoConflitoBox = document.getElementById("chamado-conflito");
 const chamadoForm = document.getElementById("chamado-form");
 const chamadoSalvarBotao = document.getElementById("chamado-salvar-botao");
@@ -5039,6 +5042,7 @@ function limparFormularioChamado() {
   chamadoHorarioCombinadoInput.value = "";
   chamadoReservadoInicioInput.value = "08:00";
   chamadoReservadoFimInput.value = "09:00";
+  renderizarTimelineCriar();
   limparConflitoBox(chamadoConflitoBox);
   mostrarChamadoStatus("neutral", "");
 }
@@ -5248,39 +5252,60 @@ function calculaFolgasLivres(doDia, minInicio, minFim) {
   return folgas.filter(([a, b]) => b - a >= 15);
 }
 
+// O intervalo padrão (7h-19h) cobre o horário comercial comum, mas se algum
+// bloco começar antes ou terminar depois, a linha do tempo se estica pra
+// caber ele inteiro em vez de cortar. `blocos` é uma lista de
+// {inicioMin, fimMin}; usado tanto pelos chamados já marcados quanto (na
+// tela de criar) pelo bloco novo ainda sendo escolhido.
+function calculaIntervaloHoras(blocos) {
+  let horaMin = TIMELINE_HORA_INICIO_PADRAO;
+  let horaMax = TIMELINE_HORA_FIM_PADRAO;
+  blocos.forEach(({ inicioMin, fimMin }) => {
+    const hIni = Math.floor(inicioMin / 60);
+    if (hIni < horaMin) horaMin = hIni;
+    const hFim = Math.ceil(fimMin / 60);
+    if (hFim > horaMax) horaMax = hFim;
+  });
+  return { horaMin, horaMax };
+}
+
+function desenhaGradeHoras(containerEl, horaMin, horaMax, minInicio) {
+  containerEl.style.height = `${(horaMax - horaMin) * 60 * TIMELINE_PX_POR_MINUTO}px`;
+  containerEl.innerHTML = "";
+  for (let h = horaMin; h <= horaMax; h++) {
+    const linha = document.createElement("div");
+    linha.className = "chamado-timeline-hora";
+    linha.style.top = `${(h * 60 - minInicio) * TIMELINE_PX_POR_MINUTO}px`;
+    linha.textContent = `${String(h).padStart(2, "0")}:00`;
+    containerEl.appendChild(linha);
+  }
+}
+
+function criaBlocoTimeline(c, minInicio, classeExtra) {
+  const bloco = document.createElement("div");
+  bloco.className = `chamado-timeline-bloco ${classeExtra || statusClasseTimeline(c.status)}`;
+  const inicioMin = minutosDoDiaIso(c.reservadoInicio);
+  const duracaoMin = Math.max(minutosDoDiaIso(c.reservadoFim) - inicioMin, TIMELINE_PASSO_MINUTOS);
+  bloco.style.top = `${(inicioMin - minInicio) * TIMELINE_PX_POR_MINUTO}px`;
+  bloco.style.height = `${duracaoMin * TIMELINE_PX_POR_MINUTO}px`;
+  bloco.innerHTML = `<span class="nome">#${c.numero} ${escapeHtml(c.clienteNome)}</span>` +
+    `<span class="hora">${formatarHoraIso(c.reservadoInicio)}–${formatarHoraIso(c.reservadoFim)}</span>`;
+  return bloco;
+}
+
 function renderizarTimeline() {
   chamadoTimelineDataInput.value = timelineDataAtual;
   chamadoTimelineDataTexto.textContent = formatarDataChamado(timelineDataAtual);
 
   const doDia = chamadosComData.filter((c) => dataLocalISO(new Date(c.reservadoInicio)) === timelineDataAtual);
 
-  // O intervalo padrão (7h-19h) cobre o horário comercial comum, mas se
-  // algum chamado nesse dia começar antes ou terminar depois, a linha do
-  // tempo se estica pra caber ele inteiro em vez de cortar.
-  let horaMin = TIMELINE_HORA_INICIO_PADRAO;
-  let horaMax = TIMELINE_HORA_FIM_PADRAO;
-  doDia.forEach((c) => {
-    const ini = new Date(c.reservadoInicio);
-    const fim = new Date(c.reservadoFim);
-    if (ini.getHours() < horaMin) horaMin = ini.getHours();
-    const horaFimArredondada = fim.getMinutes() > 0 ? fim.getHours() + 1 : fim.getHours();
-    if (horaFimArredondada > horaMax) horaMax = horaFimArredondada;
-  });
-
+  const { horaMin, horaMax } = calculaIntervaloHoras(
+    doDia.map((c) => ({ inicioMin: minutosDoDiaIso(c.reservadoInicio), fimMin: minutosDoDiaIso(c.reservadoFim) }))
+  );
   const minInicio = horaMin * 60;
   const minFim = horaMax * 60;
-  const alturaTotal = (minFim - minInicio) * TIMELINE_PX_POR_MINUTO;
 
-  chamadoTimelineEl.style.height = `${alturaTotal}px`;
-  chamadoTimelineEl.innerHTML = "";
-
-  for (let h = horaMin; h <= horaMax; h++) {
-    const linha = document.createElement("div");
-    linha.className = "chamado-timeline-hora";
-    linha.style.top = `${(h * 60 - minInicio) * TIMELINE_PX_POR_MINUTO}px`;
-    linha.textContent = `${String(h).padStart(2, "0")}:00`;
-    chamadoTimelineEl.appendChild(linha);
-  }
+  desenhaGradeHoras(chamadoTimelineEl, horaMin, horaMax, minInicio);
 
   if (!doDia.length) {
     const vazio = document.createElement("p");
@@ -5290,14 +5315,7 @@ function renderizarTimeline() {
   }
 
   doDia.forEach((c) => {
-    const bloco = document.createElement("div");
-    bloco.className = `chamado-timeline-bloco ${statusClasseTimeline(c.status)}`;
-    const inicioMin = minutosDoDiaIso(c.reservadoInicio);
-    const duracaoMin = Math.max(minutosDoDiaIso(c.reservadoFim) - inicioMin, TIMELINE_PASSO_MINUTOS);
-    bloco.style.top = `${(inicioMin - minInicio) * TIMELINE_PX_POR_MINUTO}px`;
-    bloco.style.height = `${duracaoMin * TIMELINE_PX_POR_MINUTO}px`;
-    bloco.innerHTML = `<span class="nome">#${c.numero} ${escapeHtml(c.clienteNome)}</span>` +
-      `<span class="hora">${formatarHoraIso(c.reservadoInicio)}–${formatarHoraIso(c.reservadoFim)}</span>`;
+    const bloco = criaBlocoTimeline(c, minInicio);
     ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim);
     chamadoTimelineEl.appendChild(bloco);
   });
@@ -5417,6 +5435,119 @@ chamadoTimelineDataInput.addEventListener("change", () => {
   }
 });
 
+// ----- linha do tempo no formulário de criar -----
+//
+// Mesma visualização da Agenda, mas sem eliminar os campos De/Até que já
+// existiam -- os dois continuam funcionando juntos, em qualquer direção:
+// digitar De/Até reposiciona o bloco tracejado, e arrastar o bloco
+// atualiza De/Até. Os chamados já marcados aparecem só de referência (não
+// são arrastáveis aqui -- mover outro chamado é coisa da tela de Agenda).
+
+function renderizarTimelineCriar() {
+  const dataStr = chamadoDataInput.value;
+  if (!dataStr) {
+    chamadoTimelineCriarCaixa.classList.add("hidden");
+    return;
+  }
+  chamadoTimelineCriarCaixa.classList.remove("hidden");
+
+  const doDia = chamadosComData.filter((c) => dataLocalISO(new Date(c.reservadoInicio)) === dataStr);
+
+  const novoIni = chamadoReservadoInicioInput.value;
+  const novoFim = chamadoReservadoFimInput.value;
+  const temNovo = Boolean(novoIni && novoFim && novoFim > novoIni);
+
+  const blocosParaIntervalo = doDia.map((c) => ({ inicioMin: minutosDoDiaIso(c.reservadoInicio), fimMin: minutosDoDiaIso(c.reservadoFim) }));
+  let novoInicioMin = 0;
+  let novoDuracaoMin = 0;
+  if (temNovo) {
+    const [hIni, mIni] = novoIni.split(":").map(Number);
+    const [hFim, mFim] = novoFim.split(":").map(Number);
+    novoInicioMin = hIni * 60 + mIni;
+    novoDuracaoMin = Math.max(hFim * 60 + mFim - novoInicioMin, TIMELINE_PASSO_MINUTOS);
+    blocosParaIntervalo.push({ inicioMin: novoInicioMin, fimMin: novoInicioMin + novoDuracaoMin });
+  }
+
+  const { horaMin, horaMax } = calculaIntervaloHoras(blocosParaIntervalo);
+  const minInicio = horaMin * 60;
+  const minFim = horaMax * 60;
+
+  desenhaGradeHoras(chamadoTimelineCriarEl, horaMin, horaMax, minInicio);
+
+  doDia.forEach((c) => {
+    const bloco = criaBlocoTimeline(c, minInicio, `somente-leitura ${statusClasseTimeline(c.status)}`);
+    chamadoTimelineCriarEl.appendChild(bloco);
+  });
+
+  if (temNovo) {
+    const bloco = document.createElement("div");
+    bloco.className = "chamado-timeline-bloco chamado-timeline-novo";
+    bloco.style.top = `${(novoInicioMin - minInicio) * TIMELINE_PX_POR_MINUTO}px`;
+    bloco.style.height = `${novoDuracaoMin * TIMELINE_PX_POR_MINUTO}px`;
+    bloco.innerHTML = `<span class="nome">Novo chamado</span><span class="hora">${novoIni}–${novoFim}</span>`;
+    ligarArrastarBlocoNovo(bloco, minInicio, minFim, novoDuracaoMin);
+    chamadoTimelineCriarEl.appendChild(bloco);
+  }
+
+  const folgas = calculaFolgasLivres(doDia, minInicio, minFim);
+  chamadoTimelineCriarLivres.textContent = folgas.length
+    ? `Livre nesse dia: ${folgas.map(([a, b]) => `${minutosParaHHMM(a)}–${minutosParaHHMM(b)}`).join(", ")}`
+    : "Sem folga livre nesse intervalo do dia.";
+}
+
+// Arrastar o bloco tracejado só mexe no formulário (De/Até) -- nenhuma
+// chamada de rede acontece aqui, o chamado ainda nem existe. A checagem de
+// conflito de verdade continua acontecendo no envio do formulário, como já
+// era antes.
+function ligarArrastarBlocoNovo(bloco, minInicio, minFim, duracaoMin) {
+  let arrastando = false;
+  let offsetY = 0;
+  let topOriginal = 0;
+
+  bloco.addEventListener("pointerdown", (evento) => {
+    arrastando = true;
+    offsetY = evento.clientY - bloco.getBoundingClientRect().top;
+    topOriginal = parseFloat(bloco.style.top);
+    try { bloco.setPointerCapture(evento.pointerId); } catch (e) { /* segue sem captura formal */ }
+    bloco.classList.add("arrastando");
+  });
+
+  bloco.addEventListener("pointermove", (evento) => {
+    if (!arrastando) return;
+    const containerTop = chamadoTimelineCriarEl.getBoundingClientRect().top;
+    let novoTop = evento.clientY - containerTop - offsetY;
+    const alturaTotal = (minFim - minInicio) * TIMELINE_PX_POR_MINUTO;
+    novoTop = Math.max(0, Math.min(novoTop, alturaTotal - parseFloat(bloco.style.height)));
+    const passoPx = TIMELINE_PASSO_MINUTOS * TIMELINE_PX_POR_MINUTO;
+    novoTop = Math.round(novoTop / passoPx) * passoPx;
+    bloco.style.top = `${novoTop}px`;
+  });
+
+  function soltar() {
+    if (!arrastando) return;
+    arrastando = false;
+    bloco.classList.remove("arrastando");
+    const novoTop = parseFloat(bloco.style.top);
+    if (novoTop === topOriginal) return;
+    const novoInicioMin = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
+    chamadoReservadoInicioInput.value = minutosParaHHMM(novoInicioMin);
+    chamadoReservadoFimInput.value = minutosParaHHMM(novoInicioMin + duracaoMin);
+    renderizarTimelineCriar();
+  }
+
+  bloco.addEventListener("pointerup", soltar);
+  bloco.addEventListener("pointercancel", () => {
+    if (!arrastando) return;
+    arrastando = false;
+    bloco.classList.remove("arrastando");
+    bloco.style.top = `${topOriginal}px`;
+  });
+}
+
+chamadoDataInput.addEventListener("change", renderizarTimelineCriar);
+chamadoReservadoInicioInput.addEventListener("change", renderizarTimelineCriar);
+chamadoReservadoFimInput.addEventListener("change", renderizarTimelineCriar);
+
 async function carregarChamados() {
   mostrarChamadosListaStatus("neutral", "Carregando...");
   const dados = await pedirAoN8n("listar-chamados", {});
@@ -5428,6 +5559,7 @@ async function carregarChamados() {
   chamadosComData = dados.comData || [];
   desenharListaChamados();
   renderizarTimeline();
+  renderizarTimelineCriar();
   mostrarChamadosListaStatus("neutral", "");
 }
 
