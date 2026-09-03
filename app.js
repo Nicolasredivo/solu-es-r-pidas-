@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03t";
+const APP_VERSION = "2026.09.03u";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -5348,6 +5348,11 @@ const TIMELINE_HORA_FIM_PADRAO = 19;
 const TIMELINE_PX_POR_MINUTO = 1;
 const TIMELINE_PASSO_MINUTOS = 5;
 const TIMELINE_LIMIAR_DIA_PX = 60;
+// Arrastar o bloco perto da borda da grade "vira página" (como clicar em
+// ‹/›) e continua virando sozinho, rápido, enquanto o cursor/dedo ficar
+// nessa faixa perto da borda -- solta e para.
+const TIMELINE_MARGEM_BORDA_PX = 42;
+const TIMELINE_INTERVALO_AUTO_AVANCO_MS = 260;
 
 function minutosDoDiaIso(iso) {
   const d = new Date(iso);
@@ -5495,6 +5500,43 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
   let diasDeslocados = 0;
   let limiteEsquerdaPx = 0;
   let limiteDireitaPx = 0;
+  let intervaloBorda = null;
+  let direcaoBordaAtual = 0;
+  let deltaXVisualAtual = 0;
+
+  // Enquanto o cursor/dedo fica perto de uma borda da grade, "vira
+  // página" (soma/diminui diasDeslocados) e continua virando sozinho,
+  // rápido, até sair da faixa da borda ou soltar. Um passo imediato ao
+  // entrar na faixa, depois repete no intervalo.
+  function atualizaPreviewComDia() {
+    const novoTop = parseFloat(bloco.style.top);
+    const novoInicioMinAoVivo = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
+    const diaAlvo = diasDeslocados !== 0 ? somaDiasNaData(timelineDataAtual, diasDeslocados) : timelineDataAtual;
+    atualizaTextoHorarioBloco(bloco, novoInicioMinAoVivo, novoInicioMinAoVivo + duracaoMin, diasDeslocados !== 0 && diaCurto(diaAlvo));
+    atualizaCabecalhoAgenda(diaAlvo);
+  }
+
+  function pararAutoAvancoDia() {
+    if (intervaloBorda) {
+      clearInterval(intervaloBorda);
+      intervaloBorda = null;
+    }
+    direcaoBordaAtual = 0;
+  }
+
+  function atualizaAutoAvancoDia(direcaoBorda) {
+    if (direcaoBorda === direcaoBordaAtual) return;
+    pararAutoAvancoDia();
+    if (direcaoBorda === 0) return;
+    direcaoBordaAtual = direcaoBorda;
+    diasDeslocados += direcaoBorda;
+    moveuBastante = true;
+    atualizaPreviewComDia();
+    intervaloBorda = setInterval(() => {
+      diasDeslocados += direcaoBorda;
+      atualizaPreviewComDia();
+    }, TIMELINE_INTERVALO_AUTO_AVANCO_MS);
+  }
 
   bloco.addEventListener("pointerdown", (evento) => {
     // Captura tudo que o solto vai precisar ANTES do setPointerCapture --
@@ -5503,15 +5545,14 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     arrastando = true;
     moveuBastante = false;
     diasDeslocados = 0;
+    deltaXVisualAtual = 0;
     offsetY = evento.clientY - bloco.getBoundingClientRect().top;
     offsetX = evento.clientX;
     topOriginal = parseFloat(bloco.style.top);
     duracaoMin = parseFloat(bloco.style.height) / TIMELINE_PX_POR_MINUTO;
 
     // Limites pra o bloco nunca sair visualmente da grade durante o
-    // arrasto (mesmo arrastando bem longe pra pegar vários dias de uma
-    // vez -- só a posição na tela fica presa na borda, o dia continua
-    // mudando normalmente por baixo).
+    // arrasto -- fica "grudado" perto da borda em vez de escapar.
     const containerRect = chamadoTimelineEl.getBoundingClientRect();
     const blocoRect = bloco.getBoundingClientRect();
     limiteEsquerdaPx = containerRect.left - blocoRect.left;
@@ -5530,27 +5571,28 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     const passoPx = TIMELINE_PASSO_MINUTOS * TIMELINE_PX_POR_MINUTO;
     novoTop = Math.round(novoTop / passoPx) * passoPx;
 
-    // Vertical muda a hora (como já era); horizontal muda o dia -- pra
-    // direita avança, pra esquerda volta (como puxar o calendário: o dedo
-    // vai pro futuro à direita). Dá pra ir vários dias, não só ±1
-    // (diasDeslocados usa a distância de verdade, sem limite). O bloco
-    // acompanha o dedo/cursor no eixo X (transform), mas travado nas
-    // bordas da grade -- não pode escapar visualmente pra fora dela.
+    // Vertical muda a hora (como já era). Horizontal: o bloco acompanha o
+    // dedo/cursor até perto da borda da grade -- dali, gruda e "vira
+    // página" sozinho (ver atualizaAutoAvancoDia) em vez de continuar
+    // seguindo o dedo pra fora da grade.
     const deltaX = evento.clientX - offsetX;
-    diasDeslocados = Math.round(deltaX / TIMELINE_LIMIAR_DIA_PX);
-    const deltaXVisual = Math.max(limiteEsquerdaPx, Math.min(deltaX, limiteDireitaPx));
+    deltaXVisualAtual = Math.max(limiteEsquerdaPx, Math.min(deltaX, limiteDireitaPx));
 
-    if (Math.abs(novoTop - topOriginal) > 2 || diasDeslocados !== 0) moveuBastante = true;
+    if (Math.abs(novoTop - topOriginal) > 2) moveuBastante = true;
     bloco.style.top = `${novoTop}px`;
-    bloco.style.transform = `translateX(${deltaXVisual}px)`;
+    bloco.style.transform = `translateX(calc(-50% + ${deltaXVisualAtual}px))`;
 
-    const novoInicioMinAoVivo = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
-    const diaAlvo = diasDeslocados !== 0 ? somaDiasNaData(timelineDataAtual, diasDeslocados) : timelineDataAtual;
-    atualizaTextoHorarioBloco(bloco, novoInicioMinAoVivo, novoInicioMinAoVivo + duracaoMin, diasDeslocados !== 0 && diaCurto(diaAlvo));
-    atualizaCabecalhoAgenda(diaAlvo);
+    const containerRect = chamadoTimelineEl.getBoundingClientRect();
+    let direcaoBorda = 0;
+    if (evento.clientX >= containerRect.right - TIMELINE_MARGEM_BORDA_PX) direcaoBorda = 1;
+    else if (evento.clientX <= containerRect.left + TIMELINE_MARGEM_BORDA_PX) direcaoBorda = -1;
+    atualizaAutoAvancoDia(direcaoBorda);
+
+    atualizaPreviewComDia();
   });
 
   function restauraVisualOriginal() {
+    pararAutoAvancoDia();
     bloco.style.top = `${topOriginal}px`;
     bloco.style.transform = "";
     const inicioOriginalMin = minInicio + topOriginal / TIMELINE_PX_POR_MINUTO;
@@ -5562,6 +5604,10 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     if (!arrastando) return;
     arrastando = false;
     bloco.classList.remove("arrastando");
+    // Trava o dia decidido ANTES de qualquer outra coisa -- se o auto-
+    // avanço ainda estivesse rodando (soltou bem na hora de um "tick"),
+    // ele não pode continuar mudando diasDeslocados depois de já lido.
+    pararAutoAvancoDia();
 
     if (!moveuBastante) {
       // Toque sem arrastar de verdade: abre pra editar, como clicar em

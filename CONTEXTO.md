@@ -2177,6 +2177,45 @@ Testado simulando um arrasto de 5000px (bem além de qualquer uso normal)
 avançou ~83 dias corretamente (a lógica de pular vários dias não foi
 afetada pelo travamento visual).
 
+### Arrastar pra mudar de dia virou "segurar na borda pra virar página" (03/09/2026)
+
+Redesenho pedido do gesto de arrastar o bloco pra outro dia — trocou de
+"proporcional à distância arrastada" pra um modelo tipo carrossel:
+
+- **Bloco sempre centralizado** na grade (`left:50%; width:46%;
+  transform: translateX(-50%)`, em vez do antigo `left:58px; right:50%`).
+- **Segurar perto de uma borda "vira página"**: dentro de
+  `TIMELINE_MARGEM_BORDA_PX` (42px) da borda direita ou esquerda da
+  grade, avança/volta um dia na hora, e continua avançando sozinho a
+  cada `TIMELINE_INTERVALO_AUTO_AVANCO_MS` (260ms) enquanto o
+  cursor/dedo continuar naquela faixa — solta ou volta pro meio e para
+  na hora. Isso troca completamente o cálculo antigo
+  (`Math.round(deltaX / limiar)`, proporcional à distância total) por um
+  acumulador (`diasDeslocados += direção`) dirigido por um
+  `setInterval`, que precisa ser explicitamente parado em **todo** ponto
+  de saída do arrasto (soltar com sucesso, cancelar, perder a captura) —
+  esquecer de parar em algum deles deixaria um intervalo rodando pra
+  sempre por trás.
+- O bloco continua **travado dentro da grade visualmente** (não sai pra
+  fora, técnica da rodada anterior) enquanto isso acontece — só "gruda"
+  perto da borda, não escapa.
+- Cabeçalho grande e texto do bloco continuam atualizando ao vivo a cada
+  passo (reaproveitado da rodada anterior).
+
+Só a Agenda tem esse comportamento (é sobre mover um chamado já
+existente pra outro dia); o bloco tracejado "Novo chamado" do formulário
+de criar não arrasta pra outro dia (usa os botões/arrastar-o-fundo pra
+isso, sem mudança nessa rodada).
+
+Testado com espera de verdade (não só eventos instantâneos, já que o
+avanço automático depende de tempo passando): segurar perto da borda
+direita por ~900ms avançou vários dias, soltar parou na hora (nenhuma
+chamada de rede a mais depois de esperar mais 600ms), voltar pro meio
+da grade parou o avanço antes mesmo de soltar, e o lado esquerdo volta
+os dias corretamente. Confirmado também que o bloco fica perfeitamente
+centralizado (centro do bloco = centro do container) e nunca ultrapassa
+a borda mesmo durante o avanço.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

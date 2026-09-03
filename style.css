@@ -1429,8 +1429,9 @@ button:active:not(:disabled) {
 
 .chamado-timeline-bloco {
   position: absolute;
-  left: 58px;
-  right: 50%;
+  left: 50%;
+  width: 46%;
+  transform: translateX(-50%);
   border-radius: 8px;
   padding: 4px 8px;
   overflow: hidden;
