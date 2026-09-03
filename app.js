@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03v";
+const APP_VERSION = "2026.09.03w";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -5366,10 +5366,15 @@ const TIMELINE_PX_POR_MINUTO = 1;
 const TIMELINE_PASSO_MINUTOS = 5;
 const TIMELINE_LIMIAR_DIA_PX = 60;
 // Arrastar o bloco perto da borda da grade "vira página" (como clicar em
-// ‹/›) e continua virando sozinho, rápido, enquanto o cursor/dedo ficar
-// nessa faixa perto da borda -- solta e para.
-const TIMELINE_MARGEM_BORDA_PX = 42;
-const TIMELINE_INTERVALO_AUTO_AVANCO_MS = 260;
+// ‹/›) e continua virando sozinho enquanto o cursor/dedo ficar nessa
+// faixa -- solta ou volta pro meio e para. A velocidade varia com a
+// distância da borda: encostado nela troca bem rápido
+// (TIMELINE_INTERVALO_MIN_MS entre uma página e outra), mal entrando na
+// faixa troca bem devagar (TIMELINE_INTERVALO_MAX_MS) -- dá controle
+// fino, não é ligado/desligado.
+const TIMELINE_MARGEM_BORDA_PX = 56;
+const TIMELINE_INTERVALO_MIN_MS = 90;
+const TIMELINE_INTERVALO_MAX_MS = 550;
 
 function minutosDoDiaIso(iso) {
   const d = new Date(iso);
@@ -5517,14 +5522,11 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
   let diasDeslocados = 0;
   let limiteEsquerdaPx = 0;
   let limiteDireitaPx = 0;
-  let intervaloBorda = null;
   let direcaoBordaAtual = 0;
+  let distanciaBordaAtual = 0;
+  let timeoutAutoAvanco = null;
   let deltaXVisualAtual = 0;
 
-  // Enquanto o cursor/dedo fica perto de uma borda da grade, "vira
-  // página" (soma/diminui diasDeslocados) e continua virando sozinho,
-  // rápido, até sair da faixa da borda ou soltar. Um passo imediato ao
-  // entrar na faixa, depois repete no intervalo.
   function atualizaPreviewComDia() {
     const novoTop = parseFloat(bloco.style.top);
     const novoInicioMinAoVivo = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
@@ -5533,26 +5535,38 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     atualizaCabecalhoAgenda(diaAlvo);
   }
 
-  function pararAutoAvancoDia() {
-    if (intervaloBorda) {
-      clearInterval(intervaloBorda);
-      intervaloBorda = null;
-    }
-    direcaoBordaAtual = 0;
+  // Quanto mais perto da borda, mais rápido vira página -- interpola
+  // entre o intervalo mais lento (mal entrou na faixa) e o mais rápido
+  // (encostado na borda), em vez de um único ritmo fixo ligado/desligado.
+  function calculaIntervaloAutoAvanco(distanciaDaBorda) {
+    const profundidade = Math.max(0, Math.min(1, 1 - distanciaDaBorda / TIMELINE_MARGEM_BORDA_PX));
+    return TIMELINE_INTERVALO_MAX_MS - profundidade * (TIMELINE_INTERVALO_MAX_MS - TIMELINE_INTERVALO_MIN_MS);
   }
 
-  function atualizaAutoAvancoDia(direcaoBorda) {
-    if (direcaoBorda === direcaoBordaAtual) return;
-    pararAutoAvancoDia();
-    if (direcaoBorda === 0) return;
-    direcaoBordaAtual = direcaoBorda;
-    diasDeslocados += direcaoBorda;
-    moveuBastante = true;
-    atualizaPreviewComDia();
-    intervaloBorda = setInterval(() => {
-      diasDeslocados += direcaoBorda;
+  function pararAutoAvancoDia() {
+    if (timeoutAutoAvanco !== null) {
+      clearTimeout(timeoutAutoAvanco);
+      timeoutAutoAvanco = null;
+    }
+    direcaoBordaAtual = 0;
+    distanciaBordaAtual = 0;
+  }
+
+  // Cadeia de setTimeout (não setInterval) porque o intervalo entre um
+  // passo e outro precisa mudar a cada vez, conforme a distância mais
+  // recente do cursor/dedo até a borda -- cada passo já agenda o próximo
+  // com o intervalo recalculado, então a velocidade acompanha o
+  // movimento em vez de ficar presa no ritmo de quando começou.
+  function agendaProximoAvancoDia() {
+    const intervaloAlvo = calculaIntervaloAutoAvanco(distanciaBordaAtual);
+    timeoutAutoAvanco = setTimeout(() => {
+      timeoutAutoAvanco = null;
+      if (!arrastando || direcaoBordaAtual === 0) return;
+      diasDeslocados += direcaoBordaAtual;
+      moveuBastante = true;
       atualizaPreviewComDia();
-    }, TIMELINE_INTERVALO_AUTO_AVANCO_MS);
+      agendaProximoAvancoDia();
+    }, intervaloAlvo);
   }
 
   bloco.addEventListener("pointerdown", (evento) => {
@@ -5590,7 +5604,7 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
 
     // Vertical muda a hora (como já era). Horizontal: o bloco acompanha o
     // dedo/cursor até perto da borda da grade -- dali, gruda e "vira
-    // página" sozinho (ver atualizaAutoAvancoDia) em vez de continuar
+    // página" sozinho (ver cicloAutoAvancoDia) em vez de continuar
     // seguindo o dedo pra fora da grade.
     const deltaX = evento.clientX - offsetX;
     deltaXVisualAtual = Math.max(limiteEsquerdaPx, Math.min(deltaX, limiteDireitaPx));
@@ -5599,11 +5613,42 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     bloco.style.top = `${novoTop}px`;
     bloco.style.transform = `translateX(calc(-50% + ${deltaXVisualAtual}px))`;
 
+    // Distância até a borda mais próxima (só conta se estiver dentro da
+    // faixa de "segurar pra virar página"). Ao ENTRAR numa faixa nova (ou
+    // trocar de lado), vira uma página na hora -- resposta imediata --e
+    // liga a cadeia de auto-avanço; ao SAIR, desliga. Enquanto continuar
+    // do mesmo lado, só atualiza a distância -- o próximo passo já
+    // agendado (agendaProximoAvancoDia) recalcula o intervalo com o valor
+    // mais novo assim que disparar, então a velocidade acompanha o
+    // movimento do cursor sem precisar recriar o temporizador a cada
+    // pointermove (o que travaria o disparo se o dedo tremer).
     const containerRect = chamadoTimelineEl.getBoundingClientRect();
-    let direcaoBorda = 0;
-    if (evento.clientX >= containerRect.right - TIMELINE_MARGEM_BORDA_PX) direcaoBorda = 1;
-    else if (evento.clientX <= containerRect.left + TIMELINE_MARGEM_BORDA_PX) direcaoBorda = -1;
-    atualizaAutoAvancoDia(direcaoBorda);
+    const distDireita = containerRect.right - evento.clientX;
+    const distEsquerda = evento.clientX - containerRect.left;
+    let novaDirecaoBorda = 0;
+    let novaDistanciaBorda = 0;
+    if (distDireita <= TIMELINE_MARGEM_BORDA_PX) {
+      novaDirecaoBorda = 1;
+      novaDistanciaBorda = Math.max(0, distDireita);
+    } else if (distEsquerda <= TIMELINE_MARGEM_BORDA_PX) {
+      novaDirecaoBorda = -1;
+      novaDistanciaBorda = Math.max(0, distEsquerda);
+    }
+    if (novaDirecaoBorda !== direcaoBordaAtual) {
+      if (timeoutAutoAvanco !== null) {
+        clearTimeout(timeoutAutoAvanco);
+        timeoutAutoAvanco = null;
+      }
+      direcaoBordaAtual = novaDirecaoBorda;
+      distanciaBordaAtual = novaDistanciaBorda;
+      if (novaDirecaoBorda !== 0) {
+        diasDeslocados += novaDirecaoBorda;
+        moveuBastante = true;
+        agendaProximoAvancoDia();
+      }
+    } else {
+      distanciaBordaAtual = novaDistanciaBorda;
+    }
 
     atualizaPreviewComDia();
   });

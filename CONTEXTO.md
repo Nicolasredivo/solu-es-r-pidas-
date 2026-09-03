@@ -2240,6 +2240,67 @@ agendar antes de hoje (`mudaMesCriar` chama `primeiroDiaPermitidoParaAgendar`
 igual `mudaDiaCriar` já fazia) — testado tentando voltar um mês pra
 antes de hoje: recusa e avisa, igual o dia já fazia.
 
+### Velocidade de troca de dia varia com a distância da borda (03/09/2026)
+
+Pedido: segurando o balão perto da borda pra virar página, a velocidade
+era fixa (`TIMELINE_INTERVALO_AUTO_AVANCO_MS`, 260ms) — o dono queria
+controle fino, bem encostado na borda troca rápido, mal entrando na
+faixa troca devagar.
+
+- Trocado o intervalo fixo por uma interpolação entre dois extremos:
+  `TIMELINE_INTERVALO_MIN_MS` (90ms, colado na borda) e
+  `TIMELINE_INTERVALO_MAX_MS` (550ms, mal entrando nos
+  `TIMELINE_MARGEM_BORDA_PX`, agora 56px de faixa). `calculaIntervaloAutoAvanco(distancia)`
+  faz a conta.
+- **Trocado `setInterval` (ritmo fixo) por uma cadeia de `setTimeout`**
+  que se re-agenda a cada passo (`agendaProximoAvancoDia`), sempre
+  recalculando o intervalo com a distância mais recente do cursor —
+  assim a velocidade acompanha o movimento em vez de ficar presa no
+  ritmo de quando a borda foi tocada pela primeira vez. Entrar numa
+  faixa nova (ou trocar de lado) dá um passo imediato, como já era;
+  ficar na mesma borda só atualiza a distância (o próximo passo já
+  agendado pega o valor novo sozinho) — rescheduling a cada
+  `pointermove` foi descartado de propósito, porque o dedo/mouse nunca
+  fica perfeitamente parado e isso reiniciaria o temporizador antes
+  dele nunca disparar.
+- Mesma disciplina de limpeza de sempre: `pararAutoAvancoDia()` cancela
+  o `setTimeout` pendente e zera direção/distância, chamado em **todo**
+  ponto de saída (soltar com sucesso — antes de ler o dia final, cancelar,
+  perder a captura, sair da faixa da borda no meio do arrasto).
+
+**Achado testando (útil pra próximas rodadas)**: tentei primeiro com
+`requestAnimationFrame`, mas ele **nunca dispara** no navegador
+embutido de teste deste ambiente (0 frames em 3s de espera real, mesmo
+com `document.hidden = false`) — provavelmente esse preview não roda um
+compositor contínuo. Troquei para `setTimeout` (que dispara normalmente
+aqui) por ser mais confiável de qualquer forma para atrasos que mudam a
+cada passo, não só por causa do ambiente de teste.
+
+Também descoberto no meio do teste: o **service worker local** estava
+servindo uma cópia velha do `app.js` pro próprio navegador de teste,
+mesmo depois de várias edições — o mesmo tipo de problema já resolvido
+pro CDN do GitHub Pages (`service-worker.js`), mas acontecendo local
+porque troquei `APP_VERSION`/`CACHE_NAME` só uma vez no início da rodada
+e segui editando o arquivo depois sem trocar de novo, então o SW nunca
+reinstalou. Corrigido pra teste rodando
+`navigator.serviceWorker.getRegistrations()...unregister()` +
+`caches.keys()...delete()` antes de recarregar. **Lição pra próximas
+rodadas**: ao testar localmente mexendo em `app.js` várias vezes segui-
+das, ou trocar a versão a cada edição, ou desregistrar o service worker
+no navegador de teste — senão o teste roda em cima de código velho sem
+avisar (nenhum erro, só comportamento errado).
+
+Testado com espera de verdade e leitura direta do estado interno do
+arrasto (variáveis do fechamento expostas temporariamente por um hook
+de depuração, removido antes do commit): perto da borda (distância
+2px) a cadeia continuou avançando dia a dia sozinha sem travar; longe
+mas ainda na faixa (distância 50px) também continuou avançando, mais
+devagar; sair da faixa no meio do arrasto (voltar o cursor pro centro)
+parou a cadeia na hora (temporizador cancelado, sem mais avanços depois
+de esperar); soltar e cancelar sempre deixaram o temporizador limpo
+(nenhum vazamento). Bloco continuou sem escapar da grade durante todo o
+teste.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
