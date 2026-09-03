@@ -1568,11 +1568,6 @@ button:active:not(:disabled) {
   margin-top: 10px;
 }
 
-.botao-cancelar-chamado.confirmando {
-  border-color: var(--error);
-  color: var(--error);
-}
-
 /* Formulário de editar/cancelar, aberto a partir de um cartão da lista */
 .chamado-editar-box {
   background: var(--card);

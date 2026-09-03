@@ -2112,6 +2112,26 @@ juntas:
    um celular real na mão, mas é a explicação mais provável e a correção
    não tem efeito colateral).
 
+### Cancelar chamado: pergunta de verdade em vez do botão ficar vermelho (03/09/2026)
+
+**Raiz do "vermelho sem texto" que persistia print após print**: não era
+CSS nem bug de verdade — era o botão preso no estado "confirmando" (do
+padrão de dois toques) de um clique anterior do próprio dono que nunca
+foi completado nem desfeito, numa aba que também nunca recarregou.
+Confirmado lendo o botão de verdade (fresco, recém-renderizado) via
+`carregarChamados()` real: estava normal, sem "confirmando" nenhum — só
+a aba antiga do dono é que tinha ficado presa naquele estado visual.
+
+Ainda assim, o padrão "botão vira vermelho esperando um segundo toque"
+foi trocado por um `confirm()` de verdade ("Cancelar o Chamado #N
+(Cliente)?") — pedido explícito do dono, e resolve o problema de raiz:
+uma pergunta modal não tem como ficar "esquecida" num estado ambíguo
+como o botão ficava. (O padrão de dois toques continua em outros lugares
+do app, como "Sair" — não mexido aqui, fora do escopo do pedido.) CSS do
+estado `.confirmando` removido (não é mais usado). Testado simulando
+`confirm()` retornando `false` (não cancela, nenhuma chamada de rede) e
+`true` (cancela normalmente, card some).
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

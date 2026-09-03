@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03q";
+const APP_VERSION = "2026.09.03r";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -5285,14 +5285,11 @@ function montarCardChamado(c, comData) {
 
   const cancelarBotao = card.querySelector(".botao-cancelar-chamado");
   cancelarBotao.addEventListener("click", () => {
-    if (!cancelarBotao.classList.contains("confirmando")) {
-      cancelarBotao.classList.add("confirmando");
-      cancelarBotao.textContent = "Confirmar cancelamento";
-      return;
-    }
-    // Sem isso, o botão fica parado do jeito que estava durante a espera
-    // da rede -- sem feedback nenhum, mesmo alguns segundos de demora
-    // parecem "travado".
+    // Pergunta de verdade (confirm nativo) em vez do botão virar vermelho
+    // esperando um segundo toque -- esse formato ficava parecendo travado
+    // quando a pessoa não completava o segundo toque na hora (voltava
+    // depois e via só um botão vermelho sem explicação nenhuma).
+    if (!confirm(`Cancelar o Chamado #${c.numero} (${c.clienteNome})?`)) return;
     cancelarBotao.disabled = true;
     cancelarBotao.textContent = "Cancelando...";
     cancelarChamado(c.id, cancelarBotao);
@@ -5325,7 +5322,7 @@ async function cancelarChamado(id, botao) {
     // preso em "Cancelando..." pra sempre.
     if (botao) {
       botao.disabled = false;
-      botao.textContent = "Confirmar cancelamento";
+      botao.textContent = "Cancelar chamado";
     }
     mostrarChamadosListaStatus("error", (resposta && resposta.mensagem) || "Não consegui cancelar.");
   }
