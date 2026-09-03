@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03m";
+const APP_VERSION = "2026.09.03n";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4714,6 +4714,10 @@ function somaDias(data, dias) {
   return d;
 }
 
+function somaDiasNaData(dataStr, dias) {
+  return dataLocalISO(somaDias(new Date(`${dataStr}T00:00:00`), dias));
+}
+
 function feriadosDoAno(ano) {
   const pascoa = calculaPascoa(ano);
   const lista = FERIADOS_FIXOS.map((f) => ({
@@ -5330,6 +5334,7 @@ const TIMELINE_HORA_INICIO_PADRAO = 7;
 const TIMELINE_HORA_FIM_PADRAO = 19;
 const TIMELINE_PX_POR_MINUTO = 1;
 const TIMELINE_PASSO_MINUTOS = 5;
+const TIMELINE_LIMIAR_DIA_PX = 60;
 
 function minutosDoDiaIso(iso) {
   const d = new Date(iso);
@@ -5345,9 +5350,21 @@ function minutosParaHHMM(min) {
 // Atualiza o texto de horário dentro do bloco EM TEMPO REAL durante o
 // arrastar (mover ou redimensionar) -- sem isso o número só mudava depois
 // de soltar, e não dava pra saber em que horário ia parar antes de largar.
-function atualizaTextoHorarioBloco(bloco, minInicioAbsoluto, minFimAbsoluto) {
+// `prefixoDia` (opcional) mostra pra qual dia o chamado vai, quando o
+// arrastar horizontal (na Agenda) também está mudando o dia.
+function atualizaTextoHorarioBloco(bloco, minInicioAbsoluto, minFimAbsoluto, prefixoDia) {
   const horaEl = bloco.querySelector(".hora");
-  if (horaEl) horaEl.textContent = `${minutosParaHHMM(minInicioAbsoluto)}–${minutosParaHHMM(minFimAbsoluto)}`;
+  if (horaEl) {
+    horaEl.textContent = (prefixoDia ? `${prefixoDia} · ` : "") +
+      `${minutosParaHHMM(minInicioAbsoluto)}–${minutosParaHHMM(minFimAbsoluto)}`;
+  }
+}
+
+// Nome curto pro dia de destino enquanto arrasta pra outro dia (ex: "Qui
+// 10/09") -- o suficiente pra confirmar visualmente antes de soltar, sem
+// ocupar o bloco inteiro.
+function diaCurto(dataStr) {
+  return `${nomeDiaSemana(dataStr).slice(0, 3)} ${formatarDataChamado(dataStr).slice(0, 5)}`;
 }
 
 // Frestas livres no dia, dentro do intervalo mostrado -- é o "conselho"
@@ -5451,8 +5468,10 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
   let arrastando = false;
   let moveuBastante = false;
   let offsetY = 0;
+  let offsetX = 0;
   let topOriginal = 0;
   let duracaoMin = 0;
+  let diasDeslocados = 0;
 
   bloco.addEventListener("pointerdown", (evento) => {
     // Captura tudo que o solto vai precisar ANTES do setPointerCapture --
@@ -5460,7 +5479,9 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     // arrastar não pode ficar com a duração zerada por causa disso.
     arrastando = true;
     moveuBastante = false;
+    diasDeslocados = 0;
     offsetY = evento.clientY - bloco.getBoundingClientRect().top;
+    offsetX = evento.clientX;
     topOriginal = parseFloat(bloco.style.top);
     duracaoMin = parseFloat(bloco.style.height) / TIMELINE_PX_POR_MINUTO;
     try { bloco.setPointerCapture(evento.pointerId); } catch (e) { /* segue sem captura formal */ }
@@ -5475,11 +5496,26 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     novoTop = Math.max(0, Math.min(novoTop, alturaTotal - parseFloat(bloco.style.height)));
     const passoPx = TIMELINE_PASSO_MINUTOS * TIMELINE_PX_POR_MINUTO;
     novoTop = Math.round(novoTop / passoPx) * passoPx;
-    if (Math.abs(novoTop - topOriginal) > 2) moveuBastante = true;
+
+    // Vertical muda a hora (como já era); horizontal muda o dia -- pra
+    // esquerda avança, pra direita volta, mesma convenção do arrastar no
+    // fundo vazio da grade. Dá pra ir vários dias, não só ±1.
+    const deltaX = evento.clientX - offsetX;
+    diasDeslocados = -Math.round(deltaX / TIMELINE_LIMIAR_DIA_PX);
+
+    if (Math.abs(novoTop - topOriginal) > 2 || diasDeslocados !== 0) moveuBastante = true;
     bloco.style.top = `${novoTop}px`;
+
     const novoInicioMinAoVivo = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
-    atualizaTextoHorarioBloco(bloco, novoInicioMinAoVivo, novoInicioMinAoVivo + duracaoMin);
+    const diaAlvo = diasDeslocados !== 0 ? somaDiasNaData(timelineDataAtual, diasDeslocados) : null;
+    atualizaTextoHorarioBloco(bloco, novoInicioMinAoVivo, novoInicioMinAoVivo + duracaoMin, diaAlvo && diaCurto(diaAlvo));
   });
+
+  function restauraVisualOriginal() {
+    bloco.style.top = `${topOriginal}px`;
+    const inicioOriginalMin = minInicio + topOriginal / TIMELINE_PX_POR_MINUTO;
+    atualizaTextoHorarioBloco(bloco, inicioOriginalMin, inicioOriginalMin + duracaoMin);
+  }
 
   async function soltar(evento) {
     if (!arrastando) return;
@@ -5489,7 +5525,7 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     if (!moveuBastante) {
       // Toque sem arrastar de verdade: abre pra editar, como clicar em
       // "Editar" no card da lista.
-      bloco.style.top = `${topOriginal}px`;
+      restauraVisualOriginal();
       abrirEdicaoChamado(c);
       chamadoEditarBox.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
@@ -5498,7 +5534,8 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     const novoTop = parseFloat(bloco.style.top);
     const novoInicioMin = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
     const novoFimMin = novoInicioMin + duracaoMin;
-    await confirmaNovoHorarioBloco(bloco, c, novoInicioMin, novoFimMin, () => { bloco.style.top = `${topOriginal}px`; });
+    const novaData = diasDeslocados !== 0 ? somaDiasNaData(timelineDataAtual, diasDeslocados) : timelineDataAtual;
+    await confirmaNovoHorarioBloco(bloco, c, novaData, novoInicioMin, novoFimMin, restauraVisualOriginal);
   }
 
   bloco.addEventListener("pointerup", soltar);
@@ -5506,7 +5543,7 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     if (!arrastando) return;
     arrastando = false;
     bloco.classList.remove("arrastando");
-    bloco.style.top = `${topOriginal}px`;
+    restauraVisualOriginal();
   });
 
   // Alça no rodapé: estica/encolhe só o fim, início fica fixo -- mais
@@ -5541,6 +5578,13 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     atualizaTextoHorarioBloco(bloco, inicioMinAoVivo, inicioMinAoVivo + novaAltura / TIMELINE_PX_POR_MINUTO);
   });
 
+  function restauraAlturaOriginal() {
+    bloco.style.height = `${alturaOriginal}px`;
+    const topPx = parseFloat(bloco.style.top);
+    const inicioMin = minInicio + topPx / TIMELINE_PX_POR_MINUTO;
+    atualizaTextoHorarioBloco(bloco, inicioMin, inicioMin + alturaOriginal / TIMELINE_PX_POR_MINUTO);
+  }
+
   async function soltarResize(evento) {
     if (!redimensionando) return;
     redimensionando = false;
@@ -5551,7 +5595,7 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     const topPx = parseFloat(bloco.style.top);
     const novoInicioMin = minInicio + topPx / TIMELINE_PX_POR_MINUTO;
     const novoFimMin = novoInicioMin + alturaFinal / TIMELINE_PX_POR_MINUTO;
-    await confirmaNovoHorarioBloco(bloco, c, novoInicioMin, novoFimMin, () => { bloco.style.height = `${alturaOriginal}px`; });
+    await confirmaNovoHorarioBloco(bloco, c, timelineDataAtual, novoInicioMin, novoFimMin, restauraAlturaOriginal);
   }
 
   alca.addEventListener("pointerup", soltarResize);
@@ -5560,7 +5604,7 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     if (!redimensionando) return;
     redimensionando = false;
     bloco.classList.remove("arrastando");
-    bloco.style.height = `${alturaOriginal}px`;
+    restauraAlturaOriginal();
   });
 }
 
@@ -5569,14 +5613,21 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
 // confere conflito, grava se estiver livre, e reverte o bloco se der
 // errado. `aoFalhar` desfaz só a mudança visual específica de quem chamou
 // (top no caso de mover, height no caso de redimensionar).
-async function confirmaNovoHorarioBloco(bloco, c, novoInicioMin, novoFimMin, aoFalhar) {
+async function confirmaNovoHorarioBloco(bloco, c, novaData, novoInicioMin, novoFimMin, aoFalhar) {
   const novoInicio = minutosParaHHMM(novoInicioMin);
   const novoFim = minutosParaHHMM(novoFimMin);
+
+  if (novaData < primeiroDiaPermitidoParaAgendar()) {
+    aoFalhar();
+    chamadoTimelineStatus.textContent = "Não é possível agendar antes de hoje. O chamado não foi movido.";
+    chamadoTimelineStatus.className = "doc-hint error";
+    return;
+  }
 
   chamadoTimelineStatus.textContent = "Verificando horário...";
   chamadoTimelineStatus.className = "doc-hint";
 
-  const resultado = await checarConflito(timelineDataAtual, novoInicio, novoFim, c.id);
+  const resultado = await checarConflito(novaData, novoInicio, novoFim, c.id);
   if (resultado && resultado.temConflito) {
     aoFalhar();
     const conf = resultado.conflitos[0];
@@ -5586,7 +5637,7 @@ async function confirmaNovoHorarioBloco(bloco, c, novoInicioMin, novoFimMin, aoF
   }
 
   const resposta = await pedirAoN8n("reagendar-chamado", {
-    chamadoId: c.id, data: timelineDataAtual, reservadoInicio: novoInicio, reservadoFim: novoFim,
+    chamadoId: c.id, data: novaData, reservadoInicio: novoInicio, reservadoFim: novoFim,
     horarioCombinadoCliente: c.horarioCombinadoCliente || "",
   });
   if (!resposta || !resposta.ok) {
@@ -5596,8 +5647,12 @@ async function confirmaNovoHorarioBloco(bloco, c, novoInicioMin, novoFimMin, aoF
     return;
   }
 
-  chamadoTimelineStatus.textContent = `Chamado #${c.numero} agora é das ${novoInicio} às ${novoFim}.`;
+  const mudouDia = novaData !== timelineDataAtual;
+  chamadoTimelineStatus.textContent = mudouDia
+    ? `Chamado #${c.numero} movido pra ${formatarDataChamado(novaData)}, das ${novoInicio} às ${novoFim}.`
+    : `Chamado #${c.numero} agora é das ${novoInicio} às ${novoFim}.`;
   chamadoTimelineStatus.className = "doc-hint ok";
+  if (mudouDia) timelineDataAtual = novaData;
   await carregarChamados();
 }
 

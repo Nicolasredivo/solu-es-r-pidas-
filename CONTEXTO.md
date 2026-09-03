@@ -1987,6 +1987,39 @@ redimensionar, tanto na Agenda quanto no "Novo chamado" do formulário de
 criar). Testado com eventos de ponteiro conferindo o texto no meio do
 arrastar (antes de soltar) — bate certinho com o valor final.
 
+### Arrastar pro lado na Agenda também muda o dia do chamado (03/09/2026)
+
+Pedido: mover um chamado pra outro dia (não só outro horário no mesmo
+dia) arrastando, e podendo ir vários dias de uma vez, não só ±1.
+
+Antes, arrastar um bloco só mexia verticalmente (hora). Agora o mesmo
+arrastar-pra-mover é um gesto 2D: vertical continua mudando a hora,
+horizontal muda o dia — pra esquerda avança, pra direita volta (mesma
+convenção do arrastar-no-fundo-vazio-da-grade já existente), a cada
+`TIMELINE_LIMIAR_DIA_PX` (60px) equivale a 1 dia, então dá pra ir vários
+dias arrastando mais longe. Durante o arrasto, o texto do bloco mostra
+pra onde vai (ex: "Sáb 12/09 · 09:00–10:00"), calculado ao vivo a cada
+`pointermove` — sem isso não dava pra saber em qual dia ia soltar.
+
+Reaproveita a mesma trava de "não agenda antes de hoje" já existente:
+`confirmaNovoHorarioBloco` agora recebe a data como parâmetro (antes
+sempre usava `timelineDataAtual` fixo) e checa o piso antes de mais nada
+— se o arrasto (em qualquer direção, tempo ou dia) resultar numa data
+passada, recusa, avisa, e devolve o bloco pro lugar original (posição E
+texto). O redimensionar (alça de baixo) continua só de duração, sem
+mexer no dia.
+
+Depois de mover pra outro dia com sucesso, a própria Agenda troca pra
+mostrar aquele dia (`timelineDataAtual` acompanha o chamado movido) —
+senão ele "sumiria" da tela sem explicação.
+
+Testado com eventos de ponteiro reais simulando arrasto diagonal (2 dias
++ 1h ao mesmo tempo) e a trava de dia passado (arrasto bem longo pra
+trás) — os dois cenários bateram certinho, incluindo o texto ao vivo e o
+reverter visual completo (posição e texto) quando bloqueado. Nenhuma
+chamada real de rede durante os testes (tudo espionado); conferido
+direto no Airtable depois que os dados reais continuam intactos.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
