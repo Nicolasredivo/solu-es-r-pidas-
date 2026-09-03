@@ -1849,6 +1849,50 @@ registrado o hábito: **sempre perguntar antes de assumir que um dado
 real mudou por causa de um teste**, mesmo quando a evidência (código
 revisado, leituras antes/depois) aponta pra "não fui eu".
 
+### Alça de redimensionar, navegar dia clicando, hora de Brasília e feriados (03/09/2026)
+
+Rodada de ajustes finos pedidos em sequência depois da linha do tempo:
+
+**Alça pra esticar/encolher a duração**: cada bloco arrastável (os reais
+da Agenda e o tracejado "Novo chamado" do formulário de criar) ganhou uma
+faixa fina no rodapé (`.chamado-timeline-resize`, com uma alcinha visual)
+que arrasta só o **fim**, mantendo o início fixo — mais uma forma de achar
+o horário certo, sem precisar redigitar o campo "Até". A alça tem seus
+próprios eventos de ponteiro e chama `evento.stopPropagation()` no
+`pointerdown` pra não disparar também o arrastar-pra-mover do bloco
+inteiro (que está escutando o mesmo tipo de evento, só que no bloco pai).
+Na Agenda, soltar a alça confere conflito e grava de verdade (extraído
+pra uma função só, `confirmaNovoHorarioBloco`, reaproveitada pelo mover E
+pelo redimensionar, que antes eram lógicas quase idênticas duplicadas).
+No formulário de criar, só atualiza o campo "Até" — sem chamada de rede,
+igual ao mover.
+
+**Trocar de dia clicando na própria linha do tempo do formulário de
+criar**: ganhou a mesma barra de navegação que a Agenda já tinha (‹ / data
+por extenso / ›) — clicar muda a própria `Data` do formulário (não é uma
+"data de visita" separada da que vai ser gravada).
+
+**Horário "agora" sempre em Brasília, não no fuso do aparelho**:
+`dataLocalISO(new Date())` usa o fuso configurado no sistema operacional
+de quem está usando — se alguém abrir o app com o aparelho em outro fuso
+(ou UTC, como aconteceu tentando testar no navegador embutido), "hoje"
+sai errado. Trocado por `agoraBrasilia()`/`dataLocalISOBrasilia()`, que
+pegam o instante real (`Date.now()`, sempre UTC de verdade) e descontam
+3h fixas, lendo depois com os métodos `getUTC*` -- mesmo truque já usado
+no backend (`horaLocalBrasilia`, em `chamados-comum.js`). Usado no
+"Ir pra hoje" e na data inicial da Agenda.
+
+**Feriados nacionais, só aviso (nunca bloqueia)**: fixos (Confraternização,
+Tiradentes, Trabalho, Independência, Aparecida, Finados, República,
+Natal) e móveis calculados a partir da Páscoa (algoritmo de Meeus/Jones/
+Butcher — conferido contra datas reais de 2024-2027: Carnaval 2026 =
+17/02, Páscoa 2026 = 05/04, batendo certinho). **Só feriados nacionais**
+— estadual/municipal varia por cidade e não foi informado qual usar, não
+dava pra adivinhar sem risco de errar. Aparece em três lugares: um aviso
+dedicado embaixo do campo Data (criar e editar), e junto da data mostrada
+nas duas linhas do tempo ("· Feriado: Natal"). Não impede marcar — é
+literalmente só texto, sem nenhuma validação de bloqueio.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03f";
+const APP_VERSION = "2026.09.03h";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4658,6 +4658,84 @@ function dataLocalISO(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+// "Agora" em horário de Brasília (-03:00 fixo, sem horário de verão
+// atualmente -- mesma convenção do backend) independente do fuso
+// configurado no aparelho de quem está usando. Pega o instante real
+// (Date.now(), que já é UTC de verdade) e desloca 3h; os métodos UTC
+// (getUTCHours etc.) lidos depois dão a hora certa de Brasília sem
+// depender do fuso do sistema operacional.
+function agoraBrasilia() {
+  return new Date(Date.now() - 3 * 3600000);
+}
+function dataLocalISOBrasilia(d) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+// ----- feriados nacionais (fixos + móveis) -----
+//
+// Só feriados nacionais -- estaduais/municipais variam por cidade e o
+// dono não informou qual usar, então ficaria arriscado adivinhar. É só
+// aviso (o dono pediu explicitamente pra não bloquear marcação nenhuma).
+
+const FERIADOS_FIXOS = [
+  { mes: 1, dia: 1, nome: "Confraternização Universal" },
+  { mes: 4, dia: 21, nome: "Tiradentes" },
+  { mes: 5, dia: 1, nome: "Dia do Trabalho" },
+  { mes: 9, dia: 7, nome: "Independência do Brasil" },
+  { mes: 10, dia: 12, nome: "Nossa Senhora Aparecida" },
+  { mes: 11, dia: 2, nome: "Finados" },
+  { mes: 11, dia: 15, nome: "Proclamação da República" },
+  { mes: 12, dia: 25, nome: "Natal" },
+];
+
+// Domingo de Páscoa, calendário gregoriano (algoritmo de Meeus/Jones/
+// Butcher) -- a partir dele dá pra calcular os feriados móveis.
+function calculaPascoa(ano) {
+  const a = ano % 19;
+  const b = Math.floor(ano / 100);
+  const c = ano % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31);
+  const dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(ano, mes - 1, dia);
+}
+
+function somaDias(data, dias) {
+  const d = new Date(data);
+  d.setDate(d.getDate() + dias);
+  return d;
+}
+
+function feriadosDoAno(ano) {
+  const pascoa = calculaPascoa(ano);
+  const lista = FERIADOS_FIXOS.map((f) => ({
+    data: `${ano}-${String(f.mes).padStart(2, "0")}-${String(f.dia).padStart(2, "0")}`,
+    nome: f.nome,
+  }));
+  lista.push({ data: dataLocalISO(somaDias(pascoa, -47)), nome: "Carnaval" });
+  lista.push({ data: dataLocalISO(somaDias(pascoa, -2)), nome: "Sexta-feira Santa" });
+  lista.push({ data: dataLocalISO(pascoa), nome: "Páscoa" });
+  lista.push({ data: dataLocalISO(somaDias(pascoa, 60)), nome: "Corpus Christi" });
+  return lista;
+}
+
+const FERIADOS_POR_ANO = {};
+function nomeFeriado(dataStr) {
+  if (!dataStr) return "";
+  const ano = Number(dataStr.slice(0, 4));
+  if (!FERIADOS_POR_ANO[ano]) FERIADOS_POR_ANO[ano] = feriadosDoAno(ano);
+  const achado = FERIADOS_POR_ANO[ano].find((f) => f.data === dataStr);
+  return achado ? achado.nome : "";
+}
+
 const chamadosStatusEl = document.getElementById("chamados-status");
 const chamadosSemDataBloco = document.getElementById("chamados-sem-data-bloco");
 const listaChamadosSemData = document.getElementById("lista-chamados-sem-data");
@@ -4688,6 +4766,7 @@ const editChamadoAnexosFotoBotao = document.getElementById("edit-chamado-anexos-
 const editChamadoAnexosDocBotao = document.getElementById("edit-chamado-anexos-doc-botao");
 const editChamadoAnexosLista = document.getElementById("edit-chamado-anexos-lista");
 const editChamadoData = document.getElementById("edit-chamado-data");
+const editChamadoDataFeriadoAviso = document.getElementById("edit-chamado-data-feriado-aviso");
 const editChamadoHorarioCombinado = document.getElementById("edit-chamado-horario-combinado");
 const editChamadoReservadoInicio = document.getElementById("edit-chamado-reservado-inicio");
 const editChamadoReservadoFim = document.getElementById("edit-chamado-reservado-fim");
@@ -4718,7 +4797,11 @@ const chamadoDataInput = document.getElementById("chamado-data");
 const chamadoHorarioCombinadoInput = document.getElementById("chamado-horario-combinado");
 const chamadoReservadoInicioInput = document.getElementById("chamado-reservado-inicio");
 const chamadoReservadoFimInput = document.getElementById("chamado-reservado-fim");
+const chamadoDataFeriadoAviso = document.getElementById("chamado-data-feriado-aviso");
 const chamadoTimelineCriarCaixa = document.getElementById("chamado-timeline-criar-caixa");
+const chamadoTimelineCriarAnterior = document.getElementById("chamado-timeline-criar-anterior");
+const chamadoTimelineCriarProximo = document.getElementById("chamado-timeline-criar-proximo");
+const chamadoTimelineCriarDataTexto = document.getElementById("chamado-timeline-criar-data-texto");
 const chamadoTimelineCriarEl = document.getElementById("chamado-timeline-criar");
 const chamadoTimelineCriarLivres = document.getElementById("chamado-timeline-criar-livres");
 const chamadoConflitoBox = document.getElementById("chamado-conflito");
@@ -4734,7 +4817,7 @@ let chamadoContatoEscolhidoId = "";
 let chamadosAnexosArquivos = [];
 let chamadosSemData = [];
 let chamadosComData = [];
-let timelineDataAtual = dataLocalISO(new Date());
+let timelineDataAtual = dataLocalISOBrasilia(agoraBrasilia());
 let chamadoEditandoAtual = null;
 let chamadoEditContatoEscolhidoId = "";
 let chamadoEditAnexosNovos = [];
@@ -5295,7 +5378,8 @@ function criaBlocoTimeline(c, minInicio, classeExtra) {
 
 function renderizarTimeline() {
   chamadoTimelineDataInput.value = timelineDataAtual;
-  chamadoTimelineDataTexto.textContent = formatarDataChamado(timelineDataAtual);
+  const feriadoAgenda = nomeFeriado(timelineDataAtual);
+  chamadoTimelineDataTexto.textContent = formatarDataChamado(timelineDataAtual) + (feriadoAgenda ? ` · Feriado: ${feriadoAgenda}` : "");
 
   const doDia = chamadosComData.filter((c) => dataLocalISO(new Date(c.reservadoInicio)) === timelineDataAtual);
 
@@ -5375,35 +5459,7 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     const novoTop = parseFloat(bloco.style.top);
     const novoInicioMin = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
     const novoFimMin = novoInicioMin + duracaoMin;
-    const novoInicio = minutosParaHHMM(novoInicioMin);
-    const novoFim = minutosParaHHMM(novoFimMin);
-
-    chamadoTimelineStatus.textContent = "Verificando horário...";
-    chamadoTimelineStatus.className = "doc-hint";
-
-    const resultado = await checarConflito(timelineDataAtual, novoInicio, novoFim, c.id);
-    if (resultado && resultado.temConflito) {
-      bloco.style.top = `${topOriginal}px`;
-      const conf = resultado.conflitos[0];
-      chamadoTimelineStatus.textContent = `Bate com o Chamado #${conf.numero} (${formatarHoraIso(conf.inicio)}–${formatarHoraIso(conf.fim)}). Horário não mudou.`;
-      chamadoTimelineStatus.className = "doc-hint error";
-      return;
-    }
-
-    const resposta = await pedirAoN8n("reagendar-chamado", {
-      chamadoId: c.id, data: timelineDataAtual, reservadoInicio: novoInicio, reservadoFim: novoFim,
-      horarioCombinadoCliente: c.horarioCombinadoCliente || "",
-    });
-    if (!resposta || !resposta.ok) {
-      bloco.style.top = `${topOriginal}px`;
-      chamadoTimelineStatus.textContent = (resposta && resposta.mensagem) || "Não consegui mudar o horário.";
-      chamadoTimelineStatus.className = "doc-hint error";
-      return;
-    }
-
-    chamadoTimelineStatus.textContent = `Chamado #${c.numero} movido pra ${novoInicio} às ${novoFim}.`;
-    chamadoTimelineStatus.className = "doc-hint ok";
-    await carregarChamados();
+    await confirmaNovoHorarioBloco(bloco, c, novoInicioMin, novoFimMin, () => { bloco.style.top = `${topOriginal}px`; });
   }
 
   bloco.addEventListener("pointerup", soltar);
@@ -5413,6 +5469,95 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim) {
     bloco.classList.remove("arrastando");
     bloco.style.top = `${topOriginal}px`;
   });
+
+  // Alça no rodapé: estica/encolhe só o fim, início fica fixo -- mais
+  // possibilidades de duração sem precisar abrir a edição completa.
+  const alca = document.createElement("div");
+  alca.className = "chamado-timeline-resize";
+  bloco.appendChild(alca);
+
+  let redimensionando = false;
+  let alturaOriginal = 0;
+
+  alca.addEventListener("pointerdown", (evento) => {
+    evento.stopPropagation();
+    redimensionando = true;
+    alturaOriginal = parseFloat(bloco.style.height);
+    try { alca.setPointerCapture(evento.pointerId); } catch (e) { /* segue sem captura formal */ }
+    bloco.classList.add("arrastando");
+  });
+
+  alca.addEventListener("pointermove", (evento) => {
+    if (!redimensionando) return;
+    evento.stopPropagation();
+    const containerTop = chamadoTimelineEl.getBoundingClientRect().top;
+    const topPx = parseFloat(bloco.style.top);
+    const alturaTotal = (minFim - minInicio) * TIMELINE_PX_POR_MINUTO;
+    const passoPx = TIMELINE_PASSO_MINUTOS * TIMELINE_PX_POR_MINUTO;
+    let novaAltura = evento.clientY - containerTop - topPx;
+    novaAltura = Math.round(novaAltura / passoPx) * passoPx;
+    novaAltura = Math.max(passoPx, Math.min(novaAltura, alturaTotal - topPx));
+    bloco.style.height = `${novaAltura}px`;
+  });
+
+  async function soltarResize(evento) {
+    if (!redimensionando) return;
+    redimensionando = false;
+    bloco.classList.remove("arrastando");
+    const alturaFinal = parseFloat(bloco.style.height);
+    if (alturaFinal === alturaOriginal) return;
+
+    const topPx = parseFloat(bloco.style.top);
+    const novoInicioMin = minInicio + topPx / TIMELINE_PX_POR_MINUTO;
+    const novoFimMin = novoInicioMin + alturaFinal / TIMELINE_PX_POR_MINUTO;
+    await confirmaNovoHorarioBloco(bloco, c, novoInicioMin, novoFimMin, () => { bloco.style.height = `${alturaOriginal}px`; });
+  }
+
+  alca.addEventListener("pointerup", soltarResize);
+  alca.addEventListener("pointercancel", (evento) => {
+    evento.stopPropagation();
+    if (!redimensionando) return;
+    redimensionando = false;
+    bloco.classList.remove("arrastando");
+    bloco.style.height = `${alturaOriginal}px`;
+  });
+}
+
+// Confirma um novo início/fim pra um chamado real (usado tanto pelo
+// arrastar-pra-mover quanto pelo arrastar-a-alça-pra-redimensionar) --
+// confere conflito, grava se estiver livre, e reverte o bloco se der
+// errado. `aoFalhar` desfaz só a mudança visual específica de quem chamou
+// (top no caso de mover, height no caso de redimensionar).
+async function confirmaNovoHorarioBloco(bloco, c, novoInicioMin, novoFimMin, aoFalhar) {
+  const novoInicio = minutosParaHHMM(novoInicioMin);
+  const novoFim = minutosParaHHMM(novoFimMin);
+
+  chamadoTimelineStatus.textContent = "Verificando horário...";
+  chamadoTimelineStatus.className = "doc-hint";
+
+  const resultado = await checarConflito(timelineDataAtual, novoInicio, novoFim, c.id);
+  if (resultado && resultado.temConflito) {
+    aoFalhar();
+    const conf = resultado.conflitos[0];
+    chamadoTimelineStatus.textContent = `Bate com o Chamado #${conf.numero} (${formatarHoraIso(conf.inicio)}–${formatarHoraIso(conf.fim)}). Horário não mudou.`;
+    chamadoTimelineStatus.className = "doc-hint error";
+    return;
+  }
+
+  const resposta = await pedirAoN8n("reagendar-chamado", {
+    chamadoId: c.id, data: timelineDataAtual, reservadoInicio: novoInicio, reservadoFim: novoFim,
+    horarioCombinadoCliente: c.horarioCombinadoCliente || "",
+  });
+  if (!resposta || !resposta.ok) {
+    aoFalhar();
+    chamadoTimelineStatus.textContent = (resposta && resposta.mensagem) || "Não consegui mudar o horário.";
+    chamadoTimelineStatus.className = "doc-hint error";
+    return;
+  }
+
+  chamadoTimelineStatus.textContent = `Chamado #${c.numero} agora é das ${novoInicio} às ${novoFim}.`;
+  chamadoTimelineStatus.className = "doc-hint ok";
+  await carregarChamados();
 }
 
 function mudaDiaTimeline(deltaDias) {
@@ -5425,7 +5570,7 @@ function mudaDiaTimeline(deltaDias) {
 chamadoTimelineAnterior.addEventListener("click", () => mudaDiaTimeline(-1));
 chamadoTimelineProximo.addEventListener("click", () => mudaDiaTimeline(1));
 chamadoTimelineHoje.addEventListener("click", () => {
-  timelineDataAtual = dataLocalISO(new Date());
+  timelineDataAtual = dataLocalISOBrasilia(agoraBrasilia());
   renderizarTimeline();
 });
 chamadoTimelineDataInput.addEventListener("change", () => {
@@ -5434,6 +5579,21 @@ chamadoTimelineDataInput.addEventListener("change", () => {
     renderizarTimeline();
   }
 });
+
+// Feriado é só aviso, nunca bloqueia -- o dono pode ter um motivo real pra
+// atender nesse dia (plantão, cliente que só pode nesse dia etc.).
+function atualizaAvisoFeriadoEm(elAviso, dataStr) {
+  const feriado = nomeFeriado(dataStr);
+  if (feriado) {
+    elAviso.textContent = `${formatarDataChamado(dataStr)} é feriado (${feriado}). Pode marcar normalmente — é só um aviso.`;
+    elAviso.classList.remove("hidden");
+  } else {
+    elAviso.classList.add("hidden");
+  }
+}
+function atualizaAvisoFeriado(dataStr) {
+  atualizaAvisoFeriadoEm(chamadoDataFeriadoAviso, dataStr);
+}
 
 // ----- linha do tempo no formulário de criar -----
 //
@@ -5445,11 +5605,14 @@ chamadoTimelineDataInput.addEventListener("change", () => {
 
 function renderizarTimelineCriar() {
   const dataStr = chamadoDataInput.value;
+  atualizaAvisoFeriado(dataStr);
   if (!dataStr) {
     chamadoTimelineCriarCaixa.classList.add("hidden");
     return;
   }
   chamadoTimelineCriarCaixa.classList.remove("hidden");
+  const feriadoCriar = nomeFeriado(dataStr);
+  chamadoTimelineCriarDataTexto.textContent = formatarDataChamado(dataStr) + (feriadoCriar ? ` · Feriado: ${feriadoCriar}` : "");
 
   const doDia = chamadosComData.filter((c) => dataLocalISO(new Date(c.reservadoInicio)) === dataStr);
 
@@ -5542,11 +5705,79 @@ function ligarArrastarBlocoNovo(bloco, minInicio, minFim, duracaoMin) {
     bloco.classList.remove("arrastando");
     bloco.style.top = `${topOriginal}px`;
   });
+
+  // Alça no rodapé: estica/encolhe só o "Até", o "De" fica fixo -- mesma
+  // ideia da Agenda, só que aqui só mexe no formulário, sem checar nada
+  // no servidor (o chamado ainda nem existe).
+  const alca = document.createElement("div");
+  alca.className = "chamado-timeline-resize";
+  bloco.appendChild(alca);
+
+  let redimensionando = false;
+  let alturaOriginal = 0;
+
+  alca.addEventListener("pointerdown", (evento) => {
+    evento.stopPropagation();
+    redimensionando = true;
+    alturaOriginal = parseFloat(bloco.style.height);
+    try { alca.setPointerCapture(evento.pointerId); } catch (e) { /* segue sem captura formal */ }
+    bloco.classList.add("arrastando");
+  });
+
+  alca.addEventListener("pointermove", (evento) => {
+    if (!redimensionando) return;
+    evento.stopPropagation();
+    const containerTop = chamadoTimelineCriarEl.getBoundingClientRect().top;
+    const topPx = parseFloat(bloco.style.top);
+    const alturaTotal = (minFim - minInicio) * TIMELINE_PX_POR_MINUTO;
+    const passoPx = TIMELINE_PASSO_MINUTOS * TIMELINE_PX_POR_MINUTO;
+    let novaAltura = evento.clientY - containerTop - topPx;
+    novaAltura = Math.round(novaAltura / passoPx) * passoPx;
+    novaAltura = Math.max(passoPx, Math.min(novaAltura, alturaTotal - topPx));
+    bloco.style.height = `${novaAltura}px`;
+  });
+
+  function soltarResize(evento) {
+    if (!redimensionando) return;
+    redimensionando = false;
+    bloco.classList.remove("arrastando");
+    const alturaFinal = parseFloat(bloco.style.height);
+    if (alturaFinal === alturaOriginal) return;
+    const topPx = parseFloat(bloco.style.top);
+    const novoInicioMin = minInicio + topPx / TIMELINE_PX_POR_MINUTO;
+    chamadoReservadoFimInput.value = minutosParaHHMM(novoInicioMin + alturaFinal / TIMELINE_PX_POR_MINUTO);
+    renderizarTimelineCriar();
+  }
+
+  alca.addEventListener("pointerup", soltarResize);
+  alca.addEventListener("pointercancel", (evento) => {
+    evento.stopPropagation();
+    if (!redimensionando) return;
+    redimensionando = false;
+    bloco.classList.remove("arrastando");
+    bloco.style.height = `${alturaOriginal}px`;
+  });
 }
+
+editChamadoData.addEventListener("change", () => atualizaAvisoFeriadoEm(editChamadoDataFeriadoAviso, editChamadoData.value));
 
 chamadoDataInput.addEventListener("change", renderizarTimelineCriar);
 chamadoReservadoInicioInput.addEventListener("change", renderizarTimelineCriar);
 chamadoReservadoFimInput.addEventListener("change", renderizarTimelineCriar);
+
+// Clicar pros lados troca de dia direto na própria linha do tempo do
+// formulário, sem precisar abrir o calendário -- muda a mesma "Data" do
+// formulário (não é uma data "de visita" separada), então o horário que
+// aparece já é o que vai valer pro chamado.
+function mudaDiaCriar(deltaDias) {
+  if (!chamadoDataInput.value) return;
+  const d = new Date(`${chamadoDataInput.value}T00:00:00`);
+  d.setDate(d.getDate() + deltaDias);
+  chamadoDataInput.value = dataLocalISO(d);
+  renderizarTimelineCriar();
+}
+chamadoTimelineCriarAnterior.addEventListener("click", () => mudaDiaCriar(-1));
+chamadoTimelineCriarProximo.addEventListener("click", () => mudaDiaCriar(1));
 
 async function carregarChamados() {
   mostrarChamadosListaStatus("neutral", "Carregando...");
@@ -5607,6 +5838,7 @@ async function abrirEdicaoChamado(chamado) {
     editChamadoReservadoFim.value = "09:00";
   }
   editChamadoHorarioCombinado.value = chamado.horarioCombinadoCliente || "";
+  atualizaAvisoFeriadoEm(editChamadoDataFeriadoAviso, editChamadoData.value);
   limparConflitoBox(editChamadoConflito);
   mostrarEditChamadoStatus("neutral", "");
 

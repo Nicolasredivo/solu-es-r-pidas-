@@ -1476,6 +1476,31 @@ button:active:not(:disabled) {
   color: white;
 }
 
+/* Alça no rodapé do bloco pra arrastar só o fim (esticar/encolher a
+   duração, início fica fixo) -- separada do arrastar do bloco inteiro
+   (que move os dois horários juntos). */
+.chamado-timeline-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 14px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.chamado-timeline-resize::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
 .chamado-card {
   background: var(--card);
   border: 1px solid #2c3153;

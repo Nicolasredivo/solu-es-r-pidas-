@@ -1303,6 +1303,7 @@
 
               <label for="edit-chamado-data">Data</label>
               <input type="date" id="edit-chamado-data" />
+              <p id="edit-chamado-data-feriado-aviso" class="doc-hint aviso hidden"></p>
 
               <label>Reservar o tempo de serviço</label>
               <div class="chamado-horario-intervalo">
@@ -1374,6 +1375,7 @@
 
                 <label for="chamado-data">Data</label>
                 <input type="date" id="chamado-data" />
+                <p id="chamado-data-feriado-aviso" class="doc-hint aviso hidden"></p>
 
                 <label>Reservar o tempo de serviço</label>
                 <div class="chamado-horario-intervalo">
@@ -1391,7 +1393,12 @@
                 <input type="time" id="chamado-horario-combinado" />
 
                 <div id="chamado-timeline-criar-caixa" class="chamado-timeline-caixa hidden">
-                  <p class="doc-hint">Assim está esse dia. Arraste o bloco tracejado pra escolher o horário — os outros já são chamados marcados.</p>
+                  <div class="chamado-timeline-nav">
+                    <button type="button" id="chamado-timeline-criar-anterior" class="botao-secundario">‹</button>
+                    <strong id="chamado-timeline-criar-data-texto">—</strong>
+                    <button type="button" id="chamado-timeline-criar-proximo" class="botao-secundario">›</button>
+                  </div>
+                  <p class="doc-hint">Assim está esse dia. Arraste o bloco tracejado pra escolher o horário, ou a alça de baixo dele pra ajustar a duração — os outros já são chamados marcados.</p>
                   <div id="chamado-timeline-criar" class="chamado-timeline"></div>
                   <p id="chamado-timeline-criar-livres" class="doc-hint"></p>
                 </div>
