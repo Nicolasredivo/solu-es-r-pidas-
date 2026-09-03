@@ -2132,6 +2132,16 @@ estado `.confirmando` removido (não é mais usado). Testado simulando
 `confirm()` retornando `false` (não cancela, nenhuma chamada de rede) e
 `true` (cancela normalmente, card some).
 
+### Bloco da linha do tempo mais estreito (03/09/2026)
+
+Pedido simples: o bloco não precisa ir até a borda direita da grade,
+metade da largura já basta. `.chamado-timeline-bloco` trocou `right: 6px`
+por `right: 50%` (começa depois da coluna de horas, termina no meio da
+grade). Aproveitado pra também dar `text-overflow: ellipsis` no texto de
+horário (`.hora`), que antes só existia no nome — sem isso, com o bloco
+mais estreito, o horário quebrava em várias linhas de forma feia; agora
+trunca com "..." como o nome já fazia.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

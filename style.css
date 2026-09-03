@@ -1424,7 +1424,7 @@ button:active:not(:disabled) {
 .chamado-timeline-bloco {
   position: absolute;
   left: 58px;
-  right: 6px;
+  right: 50%;
   border-radius: 8px;
   padding: 4px 8px;
   overflow: hidden;
@@ -1455,6 +1455,9 @@ button:active:not(:disabled) {
   display: block;
   font-size: 0.72rem;
   opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chamado-timeline-bloco.chamado-timeline-cor-agendado {
