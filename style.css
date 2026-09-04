@@ -1424,11 +1424,12 @@ button:active:not(:disabled) {
   cursor: pointer;
 }
 
-/* A Agenda é uma FAIXA de dias que rola horizontalmente (a régua de horas
-   fica fixa à esquerda), não mais um dia por vez -- ver CONTEXTO.md
-   "Agenda em visão de semana". A tela de Criar chamado continua com sua
-   própria timeline de um dia só (#chamado-timeline-criar), que não usa
-   nada deste bloco de regras. */
+/* A Agenda (#chamado-timeline) e a tela de Criar chamado
+   (#chamado-timeline-criar) são as duas FAIXAS de dias que rolam
+   horizontalmente (a régua de horas fica fixa à esquerda) -- mesmas
+   classes, dois contextos JS independentes (ver criaContextoFaixaDias em
+   app.js e CONTEXTO.md "Agenda em visão de semana" / "Criar chamado
+   ganha a mesma faixa de dias"). */
 .chamado-timeline {
   position: relative;
   display: flex;

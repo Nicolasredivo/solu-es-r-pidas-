@@ -2428,6 +2428,72 @@ na hora com hoje já selecionado, o bloco "Novo chamado" no horário
 padrão (08:00–09:00), e que navegar pra o dia seguinte continua
 sincronizando o campo Data escondido por trás.
 
+### Criar chamado ganha a mesma faixa de dias da Agenda (03/09/2026)
+
+Depois de destravar a linha do tempo pra aparecer sem precisar digitar
+Data primeiro (seção anterior), o dono pediu o resto: "faltou poder ver
+os dias em colunas igual na agenda". A tela de Criar chamado tinha
+ficado pra trás na rodada da "Agenda em visão de semana" — continuava
+um dia só.
+
+**Decisão de arquitetura**: em vez de duplicar toda a lógica de
+janela/rolagem/arrasto-com-borda (grande, intrincada, já tinha 2 bugs
+achados e corrigidos na Agenda), ela foi generalizada pra servir as
+duas telas:
+
+- `criaContextoFaixaDias({...})` monta um "contexto" (`ctx`) por tela —
+  elementos do DOM, colunas construídas, e dois pontos de
+  personalização: `montaBlocos(ctx, daJanela, minInicio, minFim)`
+  (o que aparece na camada de blocos) e `aoFocoMudar(ctx, novaData)`
+  (o que atualizar quando o dia mais visível muda). `agendaCtx` e
+  `criarCtx` são as duas instâncias.
+- Todas as funções de janela (`construirJanelaTimeline`,
+  `expandeJanelaTimeline[SeNecessario]`, `redesenhaConteudoTimeline`,
+  `atualizaFocoTimeline`, `atualizaFolgasDoDiaFocado`,
+  `indiceColunaPorData`) passaram a receber `ctx` como primeiro
+  argumento, em vez de mexer direto nos globais antigos
+  (`colunasTimeline`, `chamadoTimelineBlocosEl` etc., que não existem
+  mais — cada `ctx` tem os seus).
+- O arrastar-com-rolagem-automática-na-borda (a parte mais delicada, com
+  o mecanismo de velocidade variável) virou uma função só,
+  `ligarArrastarBlocoNaFaixa(ctx, bloco, minInicio, minFim, dataOrigem,
+  handlers)` — o que muda entre "arrastar um chamado real da Agenda"
+  (grava no servidor) e "arrastar a prévia da Criar" (só atualiza o
+  formulário) fica isolado em `handlers` (`aoSoltarComSucesso`,
+  `aoRedimensionarComSucesso`, `aoPreviewMudar` etc.).
+  `ligarArrastarBlocoTimeline` (Agenda) e a nova
+  `ligarArrastarBlocoNovoFaixa` (Criar) são wrappers finos por cima
+  dela.
+
+**O que Criar ganhou**: a mesma faixa rolável (`#chamado-timeline-criar`
+ganhou a mesma estrutura eixo/corpo do HTML da Agenda), com os chamados
+já marcados aparecendo como referência (sem arrastar) em QUALQUER dia
+da janela visível, e o bloco tracejado "Novo chamado" arrastando
+**entre colunas** (não só verticalmente como antes) — inclusive
+segurando perto da borda da tela pra rolar sozinho e expandir a janela,
+igual a Agenda. Diferença importante de comportamento: como aqui a
+Data É o horário sendo escolhido (não só "olhando" como na Agenda),
+`renderizarTimelineCriar()` sempre rola a faixa até o dia do campo
+Data ficar visível (`scrollTo` suave) depois de qualquer mudança —
+rolar só pra "espiar" outro dia (sem mexer no formulário) continua
+livre, só não fica "preso" lá.
+
+O gesto antigo de "arrastar o fundo pra trocar de dia"
+(`ligarSwipeDiaTimeline`) foi removido de vez (rolagem nativa já cobre
+os dois lugares agora) — a função inteira e a constante
+`TIMELINE_LIMIAR_DIA_PX` (só usada por ela) foram apagadas por não
+terem mais nenhum uso.
+
+Testado com dados falsos (existentes em dois dias diferentes + a prévia
+"Novo chamado" numa terceira coluna, todos visíveis juntos), arrastar a
+prévia pra um dia vizinho (Data/De/Até do formulário atualizando
+certo), segurar perto da borda por vários segundos de verdade (mesma
+rolagem automática + expansão da Agenda, bloco não escapa da tela),
+alça de redimensionar, botões de dia/mês, e cancelar no meio do arrasto
+(reverte certo, sem vazar nada). Também refeito o teste de regressão da
+Agenda depois da generalização (mover entre colunas e redimensionar) —
+sem nenhuma mudança de comportamento.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

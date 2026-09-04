@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03z";
+const APP_VERSION = "2026.09.03za";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4830,6 +4830,8 @@ const chamadoTimelineCriarProximoMes = document.getElementById("chamado-timeline
 const chamadoTimelineCriarDataTexto = document.getElementById("chamado-timeline-criar-data-texto");
 const chamadoTimelineCriarFeriadoAviso = document.getElementById("chamado-timeline-criar-feriado-aviso");
 const chamadoTimelineCriarEl = document.getElementById("chamado-timeline-criar");
+const chamadoTimelineCriarEixoEl = document.getElementById("chamado-timeline-criar-eixo");
+const chamadoTimelineCriarCorpoEl = document.getElementById("chamado-timeline-criar-corpo");
 const chamadoTimelineCriarLivres = document.getElementById("chamado-timeline-criar-livres");
 const chamadoConflitoBox = document.getElementById("chamado-conflito");
 const chamadoForm = document.getElementById("chamado-form");
@@ -4844,7 +4846,6 @@ let chamadoContatoEscolhidoId = "";
 let chamadosAnexosArquivos = [];
 let chamadosSemData = [];
 let chamadosComData = [];
-let timelineDataAtual = dataLocalISOBrasilia(agoraBrasilia());
 let chamadoEditandoAtual = null;
 let chamadoEditContatoEscolhidoId = "";
 let chamadoEditAnexosNovos = [];
@@ -5377,7 +5378,6 @@ const TIMELINE_HORA_INICIO_PADRAO = 7;
 const TIMELINE_HORA_FIM_PADRAO = 19;
 const TIMELINE_PX_POR_MINUTO = 1;
 const TIMELINE_PASSO_MINUTOS = 5;
-const TIMELINE_LIMIAR_DIA_PX = 60;
 // Arrastar o bloco perto da borda da grade "vira página" (como clicar em
 // ‹/›) e continua virando sozinho enquanto o cursor/dedo ficar nessa
 // faixa -- solta ou volta pro meio e para. A velocidade varia com a
@@ -5479,8 +5479,8 @@ function calculaIntervaloHoras(blocos) {
 }
 
 // `mostrarTexto=false` desenha só as linhas tracejadas, sem o texto da
-// hora -- usado dentro de cada coluna da Agenda, já que o texto aparece
-// uma vez só, na régua fixa (chamadoTimelineEixoGradeEl).
+// hora -- usado dentro de cada coluna, já que o texto aparece uma vez só,
+// na régua fixa (ctx.eixoGradeEl).
 function desenhaGradeHoras(containerEl, horaMin, horaMax, minInicio, mostrarTexto = true) {
   containerEl.style.height = `${(horaMax - horaMin) * 60 * TIMELINE_PX_POR_MINUTO}px`;
   containerEl.innerHTML = "";
@@ -5522,31 +5522,44 @@ function atualizaCabecalhoAgenda(dataStr) {
   }
 }
 
-// ----- janela de dias da Agenda (faixa rolável) -----
+// ----- faixa de dias rolável (base compartilhada pela Agenda e por Criar
+// chamado -- as duas telas mostram vários dias lado a lado, cada uma com
+// seu próprio "contexto": elementos do DOM, colunas construídas, e o que
+// fazer quando o foco muda ou quando os blocos precisam ser desenhados)
+// -----
 //
-// colunasTimeline: lista ordenada (esquerda->direita) de
+// ctx.colunas: lista ordenada (esquerda->direita) de
 // {data, colEl, cabecalhoEl, gradeEl}. As colunas ficam em fluxo normal
-// (flex) dentro de chamadoTimelineCorpoEl -- o navegador organiza a ordem
-// sozinho, inclusive ao inserir uma coluna nova no início. Só a camada de
-// blocos (chamadoTimelineBlocosEl) é position:absolute, flutuando por
-// cima de todas as colunas ao mesmo tempo.
-let colunasTimeline = [];
-let chamadoTimelineBlocosEl = null;
-let chamadoTimelineEixoGradeEl = null;
-// Enquanto um arrasto estiver rolando, um redesenho de dados (ex: recarregar
-// depois de outra ação) não pode recriar a camada de blocos -- apagaria o
-// próprio elemento que o dedo/cursor está segurando. Fica pendente e roda
-// assim que o arrasto terminar (ver soltar/cancelarArrastar).
-let arrastoTimelineEmAndamento = false;
-let redesenhoTimelinePendente = false;
-// Eixo de horas compartilhado por toda a janela visível no momento --
-// guardado aqui pra atualizaFocoTimeline poder recalcular as folgas do
-// dia focado sem precisar refazer a conta de novo.
-let timelineMinInicioAtual = 0;
-let timelineMinFimAtual = 0;
+// (flex) dentro de ctx.corpoEl -- o navegador organiza a ordem sozinho,
+// inclusive ao inserir uma coluna nova no início. Só a camada de blocos
+// (ctx.blocosEl) é position:absolute, flutuando por cima de todas as
+// colunas ao mesmo tempo.
+function criaContextoFaixaDias({ timelineEl, eixoEl, corpoEl, livresEl, montaBlocos, aoFocoMudar, blocosExtrasParaIntervalo }) {
+  return {
+    timelineEl, eixoEl, corpoEl, livresEl,
+    colunas: [],
+    blocosEl: null,
+    eixoGradeEl: null,
+    // Enquanto um arrasto estiver rolando, um redesenho de dados (ex:
+    // recarregar depois de outra ação) não pode recriar a camada de
+    // blocos -- apagaria o próprio elemento que o dedo/cursor está
+    // segurando. Fica pendente e roda assim que o arrasto terminar.
+    arrastoEmAndamento: false,
+    redesenhoPendente: false,
+    // Eixo de horas compartilhado por toda a janela visível no momento --
+    // guardado aqui pra atualizaFocoTimeline poder recalcular as folgas
+    // do dia focado sem precisar refazer a conta de novo.
+    minInicioAtual: 0,
+    minFimAtual: 0,
+    dataFocoAtual: null,
+    montaBlocos, // (ctx, daJanela, minInicio, minFim) => void -- preenche ctx.blocosEl
+    aoFocoMudar, // (ctx, novaData) => void -- atualiza o cabeçalho específico dessa tela
+    blocosExtrasParaIntervalo, // opcional: () => [{inicioMin, fimMin}] -- ex. o bloco "novo" em Criar
+  };
+}
 
-function indiceColunaPorData(dataStr) {
-  return colunasTimeline.findIndex((col) => col.data === dataStr);
+function indiceColunaPorData(ctx, dataStr) {
+  return ctx.colunas.findIndex((col) => col.data === dataStr);
 }
 
 function criaColunaTimeline(dataStr) {
@@ -5570,7 +5583,7 @@ function criaColunaTimeline(dataStr) {
   // aquela data -- preenchido já na criação, não só no redesenho de
   // conteúdo. Importa principalmente durante um arrasto: expandir a
   // janela ali só pode CRIAR colunas (nunca refazer a camada de blocos,
-  // ver arrastoTimelineEmAndamento), então sem isso as colunas reveladas
+  // ver ctx.arrastoEmAndamento), então sem isso as colunas reveladas
   // ficariam com cabeçalho em branco até o arrasto terminar.
   atualizaCabecalhoColuna(col);
   return col;
@@ -5585,39 +5598,39 @@ function atualizaCabecalhoColuna(col) {
 
 // Constrói do zero uma janela de dias centrada em `dataFoco` (ela fica na
 // borda esquerda, dias seguintes à direita) -- usada pra pulos grandes
-// (mês, "Ir pra hoje", digitar a data, primeira vez que a Agenda abre).
+// (mês, "Ir pra hoje", digitar a data, primeira vez que a tela abre).
 // Pulos pequenos (dia anterior/próximo, rolar a faixa) NÃO passam por
-// aqui -- só ajustam a rolagem dentro da janela já construída (ver
-// mudaDiaTimeline/expandeJanelaTimelineSeNecessario).
-function construirJanelaTimeline(dataFoco) {
-  colunasTimeline = [];
-  chamadoTimelineCorpoEl.innerHTML = "";
+// aqui -- só ajustam a rolagem dentro da janela já construída.
+function construirJanelaTimeline(ctx, dataFoco) {
+  ctx.colunas = [];
+  ctx.corpoEl.innerHTML = "";
 
-  chamadoTimelineEixoEl.innerHTML = "";
+  ctx.eixoEl.innerHTML = "";
   const espacadorEixo = document.createElement("div");
   espacadorEixo.className = "chamado-timeline-eixo-espacador";
-  chamadoTimelineEixoEl.appendChild(espacadorEixo);
-  chamadoTimelineEixoGradeEl = document.createElement("div");
-  chamadoTimelineEixoGradeEl.className = "chamado-timeline-eixo-grade";
-  chamadoTimelineEixoEl.appendChild(chamadoTimelineEixoGradeEl);
+  ctx.eixoEl.appendChild(espacadorEixo);
+  ctx.eixoGradeEl = document.createElement("div");
+  ctx.eixoGradeEl.className = "chamado-timeline-eixo-grade";
+  ctx.eixoEl.appendChild(ctx.eixoGradeEl);
 
   const inicioJanela = somaDiasNaData(dataFoco, -TIMELINE_JANELA_DIAS_ANTES);
   const totalDias = TIMELINE_JANELA_DIAS_ANTES + 1 + TIMELINE_JANELA_DIAS_DEPOIS;
   for (let i = 0; i < totalDias; i++) {
     const col = criaColunaTimeline(somaDiasNaData(inicioJanela, i));
-    colunasTimeline.push(col);
-    chamadoTimelineCorpoEl.appendChild(col.colEl);
+    ctx.colunas.push(col);
+    ctx.corpoEl.appendChild(col.colEl);
   }
 
-  chamadoTimelineBlocosEl = document.createElement("div");
-  chamadoTimelineBlocosEl.className = "chamado-timeline-blocos";
-  chamadoTimelineCorpoEl.appendChild(chamadoTimelineBlocosEl);
+  ctx.blocosEl = document.createElement("div");
+  ctx.blocosEl.className = "chamado-timeline-blocos";
+  ctx.corpoEl.appendChild(ctx.blocosEl);
 
-  redesenhaConteudoTimeline();
+  redesenhaConteudoTimeline(ctx);
 
-  const idxFoco = indiceColunaPorData(dataFoco);
-  chamadoTimelineEl.scrollLeft = idxFoco >= 0 ? colunasTimeline[idxFoco].colEl.offsetLeft : 0;
-  atualizaFocoTimeline();
+  const idxFoco = indiceColunaPorData(ctx, dataFoco);
+  ctx.timelineEl.scrollLeft = idxFoco >= 0 ? ctx.colunas[idxFoco].colEl.offsetLeft : 0;
+  ctx.dataFocoAtual = dataFoco;
+  atualizaFocoTimeline(ctx);
 }
 
 // Acrescenta dias no início ou fim da janela já construída, sem recriar
@@ -5626,14 +5639,14 @@ function construirJanelaTimeline(dataFoco) {
 // ativo, a posição do próprio bloco arrastado) pelo mesmo tanto de pixel
 // que as colunas novas ocupam -- senão tudo "pula" na tela, já que
 // inserir conteúdo antes desloca a posição de tudo que já existia.
-function expandeJanelaTimeline(noInicio, blocoArrastadoAtual) {
-  if (colunasTimeline.length >= TIMELINE_JANELA_DIAS_MAXIMA) return;
-  const passo = Math.min(TIMELINE_PASSO_EXPANSAO_DIAS, TIMELINE_JANELA_DIAS_MAXIMA - colunasTimeline.length);
+function expandeJanelaTimeline(ctx, noInicio, blocoArrastadoAtual) {
+  if (ctx.colunas.length >= TIMELINE_JANELA_DIAS_MAXIMA) return;
+  const passo = Math.min(TIMELINE_PASSO_EXPANSAO_DIAS, TIMELINE_JANELA_DIAS_MAXIMA - ctx.colunas.length);
   if (passo <= 0) return;
 
   const novasColunas = [];
   if (noInicio) {
-    const inicioAtual = colunasTimeline[0].data;
+    const inicioAtual = ctx.colunas[0].data;
     for (let i = passo; i >= 1; i--) {
       novasColunas.push(criaColunaTimeline(somaDiasNaData(inicioAtual, -i)));
     }
@@ -5642,37 +5655,37 @@ function expandeJanelaTimeline(noInicio, blocoArrastadoAtual) {
     // inserido vira o novo firstChild), o que inverteria a ordem final
     // das colunas novas (a mais distante ficaria colada na mais antiga
     // que já existia, em vez de na ponta).
-    const referencia = chamadoTimelineCorpoEl.firstChild;
-    novasColunas.forEach((col) => chamadoTimelineCorpoEl.insertBefore(col.colEl, referencia));
-    colunasTimeline = novasColunas.concat(colunasTimeline);
+    const referencia = ctx.corpoEl.firstChild;
+    novasColunas.forEach((col) => ctx.corpoEl.insertBefore(col.colEl, referencia));
+    ctx.colunas = novasColunas.concat(ctx.colunas);
 
     const deslocamentoPx = passo * TIMELINE_COLUNA_LARGURA_PX;
-    chamadoTimelineEl.scrollLeft += deslocamentoPx;
+    ctx.timelineEl.scrollLeft += deslocamentoPx;
     if (blocoArrastadoAtual) {
       blocoArrastadoAtual.style.left = `${parseFloat(blocoArrastadoAtual.style.left) + deslocamentoPx}px`;
     }
   } else {
-    const fimAtual = colunasTimeline[colunasTimeline.length - 1].data;
+    const fimAtual = ctx.colunas[ctx.colunas.length - 1].data;
     for (let i = 1; i <= passo; i++) {
       novasColunas.push(criaColunaTimeline(somaDiasNaData(fimAtual, i)));
     }
-    novasColunas.forEach((col) => chamadoTimelineCorpoEl.insertBefore(col.colEl, chamadoTimelineBlocosEl));
-    colunasTimeline = colunasTimeline.concat(novasColunas);
+    novasColunas.forEach((col) => ctx.corpoEl.insertBefore(col.colEl, ctx.blocosEl));
+    ctx.colunas = ctx.colunas.concat(novasColunas);
   }
 
   // Novas colunas entram vazias (sem grade/altura) até o próximo
   // redesenho de conteúdo -- normal durante um arrasto (fica pendente,
-  // ver pararArrastoTimeline); fora de arrasto, redesenha na hora.
-  if (!arrastoTimelineEmAndamento) redesenhaConteudoTimeline();
+  // ver arrastoEmAndamento); fora de arrasto, redesenha na hora.
+  if (!ctx.arrastoEmAndamento) redesenhaConteudoTimeline(ctx);
 }
 
 // Chamada pelo listener de scroll: expande a janela quando a rolagem
 // chega perto de uma borda do que já está construído.
-function expandeJanelaTimelineSeNecessario(blocoArrastadoAtual) {
-  const restanteEsquerda = chamadoTimelineEl.scrollLeft;
-  const restanteDireita = chamadoTimelineCorpoEl.scrollWidth - chamadoTimelineEl.scrollLeft - chamadoTimelineEl.clientWidth;
-  if (restanteEsquerda < TIMELINE_LIMIAR_EXPANSAO_PX) expandeJanelaTimeline(true, blocoArrastadoAtual);
-  if (restanteDireita < TIMELINE_LIMIAR_EXPANSAO_PX) expandeJanelaTimeline(false, blocoArrastadoAtual);
+function expandeJanelaTimelineSeNecessario(ctx, blocoArrastadoAtual) {
+  const restanteEsquerda = ctx.timelineEl.scrollLeft;
+  const restanteDireita = ctx.corpoEl.scrollWidth - ctx.timelineEl.scrollLeft - ctx.timelineEl.clientWidth;
+  if (restanteEsquerda < TIMELINE_LIMIAR_EXPANSAO_PX) expandeJanelaTimeline(ctx, true, blocoArrastadoAtual);
+  if (restanteDireita < TIMELINE_LIMIAR_EXPANSAO_PX) expandeJanelaTimeline(ctx, false, blocoArrastadoAtual);
 }
 
 // Redesenha o eixo de horas (compartilhado por toda a janela visível) e a
@@ -5680,83 +5693,92 @@ function expandeJanelaTimelineSeNecessario(blocoArrastadoAtual) {
 // construir/expandir a janela. NÃO mexe em quais colunas existem nem na
 // posição de rolagem (isso é responsabilidade de quem constrói/expande a
 // janela). Se um arrasto estiver em andamento, fica pendente (ver
-// arrastoTimelineEmAndamento) -- refazer a camada de blocos no meio de um
-// arrasto apagaria o próprio elemento que está sendo segurado.
-function redesenhaConteudoTimeline() {
-  if (arrastoTimelineEmAndamento) {
-    redesenhoTimelinePendente = true;
+// arrastoEmAndamento) -- refazer a camada de blocos no meio de um arrasto
+// apagaria o próprio elemento que está sendo segurado. `ctx.montaBlocos`
+// é quem decide O QUE aparece na camada de blocos (chamados reais
+// arrastáveis na Agenda; chamados só de referência + o bloco "novo"
+// arrastável em Criar).
+function redesenhaConteudoTimeline(ctx) {
+  if (ctx.arrastoEmAndamento) {
+    ctx.redesenhoPendente = true;
     return;
   }
-  redesenhoTimelinePendente = false;
-  if (!colunasTimeline.length) return;
+  ctx.redesenhoPendente = false;
+  if (!ctx.colunas.length) return;
 
-  const dataInicioJanela = colunasTimeline[0].data;
-  const dataFimJanela = colunasTimeline[colunasTimeline.length - 1].data;
+  const dataInicioJanela = ctx.colunas[0].data;
+  const dataFimJanela = ctx.colunas[ctx.colunas.length - 1].data;
   const daJanela = chamadosComData.filter((c) => {
     const d = dataLocalISO(new Date(c.reservadoInicio));
     return d >= dataInicioJanela && d <= dataFimJanela;
   });
 
-  const { horaMin, horaMax } = calculaIntervaloHoras(
-    daJanela.map((c) => ({ inicioMin: minutosDoDiaIso(c.reservadoInicio), fimMin: minutosDoDiaIso(c.reservadoFim) }))
-  );
+  const blocosParaIntervalo = daJanela.map((c) => ({ inicioMin: minutosDoDiaIso(c.reservadoInicio), fimMin: minutosDoDiaIso(c.reservadoFim) }));
+  if (ctx.blocosExtrasParaIntervalo) blocosParaIntervalo.push(...ctx.blocosExtrasParaIntervalo());
+
+  const { horaMin, horaMax } = calculaIntervaloHoras(blocosParaIntervalo);
   const minInicio = horaMin * 60;
   const minFim = horaMax * 60;
-  timelineMinInicioAtual = minInicio;
-  timelineMinFimAtual = minFim;
+  ctx.minInicioAtual = minInicio;
+  ctx.minFimAtual = minFim;
   const alturaGradePx = (horaMax - horaMin) * 60 * TIMELINE_PX_POR_MINUTO;
 
-  desenhaGradeHoras(chamadoTimelineEixoGradeEl, horaMin, horaMax, minInicio, true);
+  desenhaGradeHoras(ctx.eixoGradeEl, horaMin, horaMax, minInicio, true);
 
-  colunasTimeline.forEach((col) => {
+  ctx.colunas.forEach((col) => {
     desenhaGradeHoras(col.gradeEl, horaMin, horaMax, minInicio, false);
   });
 
-  chamadoTimelineBlocosEl.innerHTML = "";
-  chamadoTimelineBlocosEl.style.top = `${TIMELINE_ALTURA_CABECALHO_COLUNA_PX}px`;
-  chamadoTimelineBlocosEl.style.width = `${colunasTimeline.length * TIMELINE_COLUNA_LARGURA_PX}px`;
-  chamadoTimelineBlocosEl.style.height = `${alturaGradePx}px`;
+  ctx.blocosEl.innerHTML = "";
+  ctx.blocosEl.style.top = `${TIMELINE_ALTURA_CABECALHO_COLUNA_PX}px`;
+  ctx.blocosEl.style.width = `${ctx.colunas.length * TIMELINE_COLUNA_LARGURA_PX}px`;
+  ctx.blocosEl.style.height = `${alturaGradePx}px`;
 
-  daJanela.forEach((c) => {
-    const dataChamado = dataLocalISO(new Date(c.reservadoInicio));
-    const idx = indiceColunaPorData(dataChamado);
-    if (idx === -1) return;
-    const bloco = criaBlocoTimeline(c, minInicio);
-    bloco.style.left = `${idx * TIMELINE_COLUNA_LARGURA_PX + 6}px`;
-    bloco.style.width = `${TIMELINE_COLUNA_LARGURA_PX - 12}px`;
-    bloco.style.transform = "none";
-    ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataChamado);
-    chamadoTimelineBlocosEl.appendChild(bloco);
-  });
+  ctx.montaBlocos(ctx, daJanela, minInicio, minFim);
 
-  atualizaFolgasDoDiaFocado();
+  atualizaFolgasDoDiaFocado(ctx);
 }
 
-function atualizaFolgasDoDiaFocado() {
-  const doDia = chamadosComData.filter((c) => dataLocalISO(new Date(c.reservadoInicio)) === timelineDataAtual);
-  const folgas = calculaFolgasLivres(doDia, timelineMinInicioAtual, timelineMinFimAtual);
-  chamadoTimelineLivres.textContent = folgas.length
+function atualizaFolgasDoDiaFocado(ctx) {
+  if (!ctx.livresEl) return;
+  const doDia = chamadosComData.filter((c) => dataLocalISO(new Date(c.reservadoInicio)) === ctx.dataFocoAtual);
+  const folgas = calculaFolgasLivres(doDia, ctx.minInicioAtual, ctx.minFimAtual);
+  ctx.livresEl.textContent = folgas.length
     ? `Livre nesse dia: ${folgas.map(([a, b]) => `${minutosParaHHMM(a)}–${minutosParaHHMM(b)}`).join(", ")}`
     : "Sem folga livre nesse intervalo do dia.";
 }
 
 // Descobre qual coluna está mais visível (centro da área visível, já
-// descontando a régua fixa) e atualiza timelineDataAtual/cabeçalho/folgas
-// de acordo -- é o que faz o cabeçalho grande "seguir" a rolagem.
-function atualizaFocoTimeline() {
-  if (!colunasTimeline.length) return;
-  const larguraEixo = chamadoTimelineEixoEl.getBoundingClientRect().width;
-  const larguraVisivelCorpo = Math.max(0, chamadoTimelineEl.clientWidth - larguraEixo);
-  const centroCorpoRelativo = chamadoTimelineEl.scrollLeft + larguraVisivelCorpo / 2;
-  const idx = Math.max(0, Math.min(colunasTimeline.length - 1, Math.floor(centroCorpoRelativo / TIMELINE_COLUNA_LARGURA_PX)));
-  const novaData = colunasTimeline[idx].data;
-  if (novaData === timelineDataAtual) return;
-  timelineDataAtual = novaData;
-  atualizaCabecalhoAgenda(timelineDataAtual);
-  atualizaFolgasDoDiaFocado();
+// descontando a régua fixa) e atualiza o dia focado/cabeçalho/folgas de
+// acordo -- é o que faz o cabeçalho grande "seguir" a rolagem.
+function atualizaFocoTimeline(ctx) {
+  if (!ctx.colunas.length) return;
+  const larguraEixo = ctx.eixoEl.getBoundingClientRect().width;
+  const larguraVisivelCorpo = Math.max(0, ctx.timelineEl.clientWidth - larguraEixo);
+  const centroCorpoRelativo = ctx.timelineEl.scrollLeft + larguraVisivelCorpo / 2;
+  const idx = Math.max(0, Math.min(ctx.colunas.length - 1, Math.floor(centroCorpoRelativo / TIMELINE_COLUNA_LARGURA_PX)));
+  const novaData = ctx.colunas[idx].data;
+  if (novaData === ctx.dataFocoAtual) return;
+  ctx.dataFocoAtual = novaData;
+  ctx.aoFocoMudar(ctx, novaData);
+  atualizaFolgasDoDiaFocado(ctx);
 }
 
-function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataOrigem) {
+// Liga o arrastar (mover + redimensionar, com rolagem automática perto da
+// borda da tela) num bloco dentro de uma faixa de dias -- compartilhado
+// pela Agenda (bloco = chamado real, grava no servidor) e por Criar
+// chamado (bloco = a prévia "Novo chamado", só mexe no formulário). O que
+// muda entre as duas fica em `handlers`:
+//   aoPreviewMudar(diaAlvo) -- além do texto do próprio bloco, o que mais
+//     atualizar ao vivo durante o arrasto (cabeçalho grande da tela).
+//   aoRestaurarPreview() -- desfaz aoPreviewMudar ao cancelar/reverter.
+//   aoTocarSemArrastar() -- toque sem mover de verdade (Agenda abre
+//     edição; Criar não faz nada).
+//   aoSoltarComSucesso(novaData, novoInicioMin, novoFimMin, restaurar) --
+//     resultado de mover o bloco.
+//   aoRedimensionarComSucesso(novoInicioMin, novoFimMin, restaurar) --
+//     resultado de arrastar a alça.
+function ligarArrastarBlocoNaFaixa(ctx, bloco, minInicio, minFim, dataOrigem, handlers) {
   let arrastando = false;
   let moveuBastante = false;
   let offsetY = 0;
@@ -5775,17 +5797,17 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataOrigem) {
   // não precisa de nenhum acumulador: dá pra recalcular do zero sempre.
   function colunaAtualIndex() {
     const centro = parseFloat(bloco.style.left) + larguraBloco / 2;
-    return Math.max(0, Math.min(colunasTimeline.length - 1, Math.floor(centro / TIMELINE_COLUNA_LARGURA_PX)));
+    return Math.max(0, Math.min(ctx.colunas.length - 1, Math.floor(centro / TIMELINE_COLUNA_LARGURA_PX)));
   }
 
   function atualizaPreviewArrasto() {
     const novoTop = parseFloat(bloco.style.top);
     const novoInicioMinAoVivo = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
-    const col = colunasTimeline[colunaAtualIndex()];
+    const col = ctx.colunas[colunaAtualIndex()];
     const diaAlvo = col ? col.data : dataOrigem;
     const mudouDia = diaAlvo !== dataOrigem;
     atualizaTextoHorarioBloco(bloco, novoInicioMinAoVivo, novoInicioMinAoVivo + duracaoMin, mudouDia && diaCurto(diaAlvo));
-    atualizaCabecalhoAgenda(diaAlvo);
+    handlers.aoPreviewMudar(diaAlvo);
   }
 
   // Quanto mais perto da borda da TELA (não da faixa inteira, que pode ter
@@ -5809,10 +5831,10 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataOrigem) {
   // Recoloca o bloco sob o cursor/dedo usando a última posição conhecida
   // -- precisa ser refeito a cada passo de rolagem automática (não só a
   // cada pointermove), porque rolar a faixa desloca o próprio referencial
-  // (chamadoTimelineCorpoEl) em que o bloco é posicionado: sem reancorar,
-  // o bloco ficaria "pra trás" visualmente enquanto o conteúdo rola.
+  // (ctx.corpoEl) em que o bloco é posicionado: sem reancorar, o bloco
+  // ficaria "pra trás" visualmente enquanto o conteúdo rola.
   function reposicionaSobPonteiro() {
-    const corpoRect = chamadoTimelineCorpoEl.getBoundingClientRect();
+    const corpoRect = ctx.corpoEl.getBoundingClientRect();
     let novoLeft = (ultimoClientX - corpoRect.left) - offsetXNoBloco;
 
     // Trava pra o bloco nunca escapar visualmente da faixa VISÍVEL --
@@ -5821,26 +5843,26 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataOrigem) {
     // empurra a borda OPOSTA do bloco (mais larga que a própria margem de
     // ativação) pra fora da tela, já que só seguir o dedo/cursor não
     // limita onde a BORDA do bloco (não o ponto seguro) para.
-    const viewportRect = chamadoTimelineEl.getBoundingClientRect();
-    const larguraEixo = chamadoTimelineEixoEl.getBoundingClientRect().width;
+    const viewportRect = ctx.timelineEl.getBoundingClientRect();
+    const larguraEixo = ctx.eixoEl.getBoundingClientRect().width;
     const limiteEsquerdaVisivel = (viewportRect.left + larguraEixo) - corpoRect.left;
     const limiteDireitaVisivel = (viewportRect.right - larguraBloco) - corpoRect.left;
     novoLeft = Math.max(limiteEsquerdaVisivel, Math.min(novoLeft, limiteDireitaVisivel));
 
     // Trava adicional contra os limites de verdade da janela construída
     // (só importa nas pontas, quando a janela é menor que a tela inteira).
-    const maxLeft = colunasTimeline.length * TIMELINE_COLUNA_LARGURA_PX - larguraBloco;
+    const maxLeft = ctx.colunas.length * TIMELINE_COLUNA_LARGURA_PX - larguraBloco;
     novoLeft = Math.max(0, Math.min(novoLeft, maxLeft));
     bloco.style.left = `${novoLeft}px`;
   }
 
   function executaPassoAutoRolagem() {
-    const maxScroll = Math.max(0, chamadoTimelineEl.scrollWidth - chamadoTimelineEl.clientWidth);
-    chamadoTimelineEl.scrollLeft = Math.max(0, Math.min(chamadoTimelineEl.scrollLeft + direcaoBordaAtual * TIMELINE_PASSO_AUTOROLAGEM_PX, maxScroll));
+    const maxScroll = Math.max(0, ctx.timelineEl.scrollWidth - ctx.timelineEl.clientWidth);
+    ctx.timelineEl.scrollLeft = Math.max(0, Math.min(ctx.timelineEl.scrollLeft + direcaoBordaAtual * TIMELINE_PASSO_AUTOROLAGEM_PX, maxScroll));
     moveuBastante = true;
     reposicionaSobPonteiro();
-    expandeJanelaTimelineSeNecessario(bloco);
-    atualizaFocoTimeline();
+    expandeJanelaTimelineSeNecessario(ctx, bloco);
+    atualizaFocoTimeline(ctx);
     atualizaPreviewArrasto();
   }
 
@@ -5865,7 +5887,7 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataOrigem) {
     // arrastar não pode ficar com a duração zerada por causa disso.
     arrastando = true;
     moveuBastante = false;
-    arrastoTimelineEmAndamento = true;
+    ctx.arrastoEmAndamento = true;
     offsetY = evento.clientY - bloco.getBoundingClientRect().top;
     offsetXNoBloco = evento.clientX - bloco.getBoundingClientRect().left;
     ultimoClientX = evento.clientX;
@@ -5882,11 +5904,10 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataOrigem) {
     if (!arrastando) return;
     ultimoClientX = evento.clientX;
 
-    // Vertical muda a hora (como já era) -- agora medido a partir do
-    // topo da CAMADA DE BLOCOS (logo abaixo dos cabeçalhos de coluna),
-    // não mais do topo do container inteiro (que hoje inclui a faixa de
-    // cabeçalhos por cima da grade).
-    const blocosRect = chamadoTimelineBlocosEl.getBoundingClientRect();
+    // Vertical muda a hora (como já era) -- medido a partir do topo da
+    // CAMADA DE BLOCOS (logo abaixo dos cabeçalhos de coluna), não do
+    // topo do container inteiro (que inclui a faixa de cabeçalhos).
+    const blocosRect = ctx.blocosEl.getBoundingClientRect();
     let novoTop = evento.clientY - blocosRect.top - offsetY;
     const alturaTotal = (minFim - minInicio) * TIMELINE_PX_POR_MINUTO;
     novoTop = Math.max(0, Math.min(novoTop, alturaTotal - parseFloat(bloco.style.height)));
@@ -5902,7 +5923,7 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataOrigem) {
     reposicionaSobPonteiro();
     if (parseFloat(bloco.style.left) !== leftOriginal) moveuBastante = true;
 
-    const viewportRect = chamadoTimelineEl.getBoundingClientRect();
+    const viewportRect = ctx.timelineEl.getBoundingClientRect();
     const distDireita = viewportRect.right - evento.clientX;
     const distEsquerda = evento.clientX - viewportRect.left;
     let novaDirecaoBorda = 0;
@@ -5940,7 +5961,7 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataOrigem) {
     bloco.style.left = `${leftOriginal}px`;
     const inicioOriginalMin = minInicio + topOriginal / TIMELINE_PX_POR_MINUTO;
     atualizaTextoHorarioBloco(bloco, inicioOriginalMin, inicioOriginalMin + duracaoMin);
-    atualizaCabecalhoAgenda(timelineDataAtual);
+    handlers.aoRestaurarPreview();
   }
 
   // Termina o arrasto pro resto do módulo (libera a trava que impede
@@ -5949,11 +5970,11 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataOrigem) {
   // algum (ex: a janela expandiu perto da borda mas não pôde redesenhar
   // o conteúdo enquanto o arrasto durava).
   function terminaArrastoTimeline() {
-    arrastoTimelineEmAndamento = false;
-    if (redesenhoTimelinePendente) redesenhaConteudoTimeline();
+    ctx.arrastoEmAndamento = false;
+    if (ctx.redesenhoPendente) redesenhaConteudoTimeline(ctx);
   }
 
-  async function soltar(evento) {
+  async function soltar() {
     if (!arrastando) return;
     arrastando = false;
     bloco.classList.remove("arrastando");
@@ -5963,22 +5984,19 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataOrigem) {
     pararAutoRolagem();
 
     if (!moveuBastante) {
-      // Toque sem arrastar de verdade: abre pra editar, como clicar em
-      // "Editar" no card da lista.
       restauraVisualOriginal();
       terminaArrastoTimeline();
-      abrirEdicaoChamado(c);
-      chamadoEditarBox.scrollIntoView({ behavior: "smooth", block: "start" });
+      handlers.aoTocarSemArrastar();
       return;
     }
 
     const novoTop = parseFloat(bloco.style.top);
     const novoInicioMin = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
     const novoFimMin = novoInicioMin + duracaoMin;
-    const col = colunasTimeline[colunaAtualIndex()];
+    const col = ctx.colunas[colunaAtualIndex()];
     const novaData = col ? col.data : dataOrigem;
     terminaArrastoTimeline();
-    await confirmaNovoHorarioBloco(bloco, c, novaData, novoInicioMin, novoFimMin, restauraVisualOriginal);
+    await handlers.aoSoltarComSucesso(novaData, novoInicioMin, novoFimMin, restauraVisualOriginal);
   }
 
   function cancelarArrastar() {
@@ -6018,7 +6036,7 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataOrigem) {
   alca.addEventListener("pointermove", (evento) => {
     if (!redimensionando) return;
     evento.stopPropagation();
-    const blocosRect = chamadoTimelineBlocosEl.getBoundingClientRect();
+    const blocosRect = ctx.blocosEl.getBoundingClientRect();
     const topPx = parseFloat(bloco.style.top);
     const alturaTotal = (minFim - minInicio) * TIMELINE_PX_POR_MINUTO;
     const passoPx = TIMELINE_PASSO_MINUTOS * TIMELINE_PX_POR_MINUTO;
@@ -6037,7 +6055,7 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataOrigem) {
     atualizaTextoHorarioBloco(bloco, inicioMin, inicioMin + alturaOriginal / TIMELINE_PX_POR_MINUTO);
   }
 
-  async function soltarResize(evento) {
+  async function soltarResize() {
     if (!redimensionando) return;
     redimensionando = false;
     bloco.classList.remove("arrastando");
@@ -6047,11 +6065,7 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataOrigem) {
     const topPx = parseFloat(bloco.style.top);
     const novoInicioMin = minInicio + topPx / TIMELINE_PX_POR_MINUTO;
     const novoFimMin = novoInicioMin + alturaFinal / TIMELINE_PX_POR_MINUTO;
-    // Usa a data do PRÓPRIO chamado, não timelineDataAtual (o dia mais
-    // visível na tela no momento) -- redimensionar nunca muda de dia, e
-    // numa faixa com vários dias visíveis o bloco redimensionado pode
-    // estar numa coluna diferente da que está focada.
-    await confirmaNovoHorarioBloco(bloco, c, dataOrigem, novoInicioMin, novoFimMin, restauraAlturaOriginal);
+    await handlers.aoRedimensionarComSucesso(novoInicioMin, novoFimMin, restauraAlturaOriginal);
   }
 
   function cancelarRedimensionar(evento) {
@@ -6065,6 +6079,26 @@ function ligarArrastarBlocoTimeline(bloco, c, minInicio, minFim, dataOrigem) {
   alca.addEventListener("pointerup", soltarResize);
   alca.addEventListener("pointercancel", cancelarRedimensionar);
   alca.addEventListener("lostpointercapture", cancelarRedimensionar);
+}
+
+// Wrapper da Agenda: bloco é um chamado real, arrastar grava no servidor
+// (via confirmaNovoHorarioBloco), tocar sem arrastar abre a edição.
+function ligarArrastarBlocoTimeline(ctx, bloco, c, minInicio, minFim, dataOrigem) {
+  ligarArrastarBlocoNaFaixa(ctx, bloco, minInicio, minFim, dataOrigem, {
+    aoPreviewMudar: (diaAlvo) => atualizaCabecalhoAgenda(diaAlvo),
+    aoRestaurarPreview: () => atualizaCabecalhoAgenda(ctx.dataFocoAtual),
+    aoTocarSemArrastar: () => {
+      abrirEdicaoChamado(c);
+      chamadoEditarBox.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+    aoSoltarComSucesso: (novaData, novoInicioMin, novoFimMin, restaurar) =>
+      confirmaNovoHorarioBloco(bloco, c, novaData, novoInicioMin, novoFimMin, restaurar),
+    // Usa a data do PRÓPRIO chamado (dataOrigem), não o dia focado na
+    // tela -- redimensionar nunca muda de dia, e numa faixa com vários
+    // dias visíveis o bloco redimensionado pode não ser o dia focado.
+    aoRedimensionarComSucesso: (novoInicioMin, novoFimMin, restaurar) =>
+      confirmaNovoHorarioBloco(bloco, c, dataOrigem, novoInicioMin, novoFimMin, restaurar),
+  });
 }
 
 // Confirma um novo início/fim pra um chamado real (usado tanto pelo
@@ -6118,23 +6152,48 @@ async function confirmaNovoHorarioBloco(bloco, c, novaData, novoInicioMin, novoF
   await carregarChamados();
 }
 
+// Preenche a camada de blocos da Agenda: um bloco arrastável por chamado
+// real da janela visível (grava no servidor ao soltar).
+function montaBlocosAgenda(ctx, daJanela, minInicio, minFim) {
+  daJanela.forEach((c) => {
+    const dataChamado = dataLocalISO(new Date(c.reservadoInicio));
+    const idx = indiceColunaPorData(ctx, dataChamado);
+    if (idx === -1) return;
+    const bloco = criaBlocoTimeline(c, minInicio);
+    bloco.style.left = `${idx * TIMELINE_COLUNA_LARGURA_PX + 6}px`;
+    bloco.style.width = `${TIMELINE_COLUNA_LARGURA_PX - 12}px`;
+    bloco.style.transform = "none";
+    ligarArrastarBlocoTimeline(ctx, bloco, c, minInicio, minFim, dataChamado);
+    ctx.blocosEl.appendChild(bloco);
+  });
+}
+
+const agendaCtx = criaContextoFaixaDias({
+  timelineEl: chamadoTimelineEl,
+  eixoEl: chamadoTimelineEixoEl,
+  corpoEl: chamadoTimelineCorpoEl,
+  livresEl: chamadoTimelineLivres,
+  montaBlocos: montaBlocosAgenda,
+  aoFocoMudar: (ctx, novaData) => atualizaCabecalhoAgenda(novaData),
+});
+
 // Um dia de cada vez -- se o dia-alvo já estiver na janela construída, só
 // rola até ele (suave); se não estiver (raro: muitos cliques em sequência
 // perto de uma borda, antes da expansão automática alcançar), reconstrói
 // a janela centrada ali. Pulos grandes (mês, "Ir pra hoje", digitar a
 // data) sempre reconstroem -- não faz sentido tentar só rolar até lá.
 function mudaDiaTimeline(deltaDias) {
-  const alvo = somaDiasNaData(timelineDataAtual, deltaDias);
-  const idx = indiceColunaPorData(alvo);
+  const alvo = somaDiasNaData(agendaCtx.dataFocoAtual, deltaDias);
+  const idx = indiceColunaPorData(agendaCtx, alvo);
   if (idx === -1) {
-    construirJanelaTimeline(alvo);
+    construirJanelaTimeline(agendaCtx, alvo);
     return;
   }
-  chamadoTimelineEl.scrollTo({ left: colunasTimeline[idx].colEl.offsetLeft, behavior: "smooth" });
+  agendaCtx.timelineEl.scrollTo({ left: agendaCtx.colunas[idx].colEl.offsetLeft, behavior: "smooth" });
 }
 
 function mudaMesTimeline(deltaMeses) {
-  construirJanelaTimeline(somaMesesNaData(timelineDataAtual, deltaMeses));
+  construirJanelaTimeline(agendaCtx, somaMesesNaData(agendaCtx.dataFocoAtual, deltaMeses));
 }
 
 chamadoTimelineMesAnterior.addEventListener("click", () => mudaMesTimeline(-1));
@@ -6142,19 +6201,19 @@ chamadoTimelineAnterior.addEventListener("click", () => mudaDiaTimeline(-1));
 chamadoTimelineProximo.addEventListener("click", () => mudaDiaTimeline(1));
 chamadoTimelineProximoMes.addEventListener("click", () => mudaMesTimeline(1));
 chamadoTimelineHoje.addEventListener("click", () => {
-  construirJanelaTimeline(dataLocalISOBrasilia(agoraBrasilia()));
+  construirJanelaTimeline(agendaCtx, dataLocalISOBrasilia(agoraBrasilia()));
 });
 chamadoTimelineDataInput.addEventListener("change", () => {
   if (chamadoTimelineDataInput.value) {
-    construirJanelaTimeline(chamadoTimelineDataInput.value);
+    construirJanelaTimeline(agendaCtx, chamadoTimelineDataInput.value);
   }
 });
 // Atualiza o dia focado (cabeçalho grande + folgas) e expande a janela
 // conforme a faixa rola -- tanto por gesto nativo (dedo/mouse/scrollbar)
 // quanto pelos ajustes de rolagem feitos pelo próprio código acima.
 chamadoTimelineEl.addEventListener("scroll", () => {
-  atualizaFocoTimeline();
-  expandeJanelaTimelineSeNecessario();
+  atualizaFocoTimeline(agendaCtx);
+  expandeJanelaTimelineSeNecessario(agendaCtx);
 });
 
 // Diferente de feriado, isto BLOQUEIA de verdade -- não dá pra agendar (ou
@@ -6190,11 +6249,13 @@ function atualizaAvisoFeriado(dataStr) {
 
 // ----- linha do tempo no formulário de criar -----
 //
-// Mesma visualização da Agenda, mas sem eliminar os campos De/Até que já
-// existiam -- os dois continuam funcionando juntos, em qualquer direção:
-// digitar De/Até reposiciona o bloco tracejado, e arrastar o bloco
-// atualiza De/Até. Os chamados já marcados aparecem só de referência (não
-// são arrastáveis aqui -- mover outro chamado é coisa da tela de Agenda).
+// Mesma faixa de dias rolável da Agenda (ver criaContextoFaixaDias), mas
+// sem eliminar os campos De/Até que já existiam -- os dois continuam
+// funcionando juntos, em qualquer direção: digitar Data/De/Até reposiciona
+// o bloco tracejado, e arrastar o bloco (inclusive pra outro dia) atualiza
+// Data/De/Até. Os chamados já marcados aparecem em qualquer coluna só de
+// referência (nunca arrastáveis aqui -- mover outro chamado é coisa da
+// tela de Agenda).
 
 // Espelha atualizaCabecalhoAgenda, só que pro cabeçalho da timeline do
 // formulário de criar -- reaproveitada pro preview ao vivo do arrastar.
@@ -6209,6 +6270,76 @@ function atualizaCabecalhoCriar(dataStr) {
   }
 }
 
+function hhmmParaMinutos(hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// Preenche a camada de blocos de Criar: um bloco só de referência (sem
+// arrastar) por chamado real em qualquer dia da janela visível, mais o
+// bloco "Novo chamado" (tracejado, arrastável -- inclusive pra outro dia)
+// na coluna da Data escolhida no formulário, se De/Até já formarem um
+// intervalo válido.
+function montaBlocosCriar(ctx, daJanela, minInicio, minFim) {
+  daJanela.forEach((c) => {
+    const dataChamado = dataLocalISO(new Date(c.reservadoInicio));
+    const idx = indiceColunaPorData(ctx, dataChamado);
+    if (idx === -1) return;
+    const bloco = criaBlocoTimeline(c, minInicio, `somente-leitura ${statusClasseTimeline(c.status)}`);
+    bloco.style.left = `${idx * TIMELINE_COLUNA_LARGURA_PX + 6}px`;
+    bloco.style.width = `${TIMELINE_COLUNA_LARGURA_PX - 12}px`;
+    bloco.style.transform = "none";
+    ctx.blocosEl.appendChild(bloco);
+  });
+
+  const novoIni = chamadoReservadoInicioInput.value;
+  const novoFim = chamadoReservadoFimInput.value;
+  const dataAlvo = chamadoDataInput.value;
+  if (!(dataAlvo && novoIni && novoFim && novoFim > novoIni)) return;
+
+  const idx = indiceColunaPorData(ctx, dataAlvo);
+  if (idx === -1) return; // data fora da janela construída -- não deveria acontecer no fluxo normal
+
+  const novoInicioMin = hhmmParaMinutos(novoIni);
+  const novoDuracaoMin = Math.max(hhmmParaMinutos(novoFim) - novoInicioMin, TIMELINE_PASSO_MINUTOS);
+
+  const bloco = document.createElement("div");
+  bloco.className = "chamado-timeline-bloco chamado-timeline-novo";
+  bloco.style.top = `${(novoInicioMin - minInicio) * TIMELINE_PX_POR_MINUTO}px`;
+  bloco.style.height = `${novoDuracaoMin * TIMELINE_PX_POR_MINUTO}px`;
+  bloco.style.left = `${idx * TIMELINE_COLUNA_LARGURA_PX + 6}px`;
+  bloco.style.width = `${TIMELINE_COLUNA_LARGURA_PX - 12}px`;
+  bloco.style.transform = "none";
+  bloco.innerHTML = `<span class="nome">Novo chamado</span><span class="hora">${novoIni}–${novoFim}</span>`;
+  ligarArrastarBlocoNovoFaixa(ctx, bloco, minInicio, minFim, dataAlvo);
+  ctx.blocosEl.appendChild(bloco);
+}
+
+const criarCtx = criaContextoFaixaDias({
+  timelineEl: chamadoTimelineCriarEl,
+  eixoEl: chamadoTimelineCriarEixoEl,
+  corpoEl: chamadoTimelineCriarCorpoEl,
+  livresEl: chamadoTimelineCriarLivres,
+  montaBlocos: montaBlocosCriar,
+  aoFocoMudar: (ctx, novaData) => atualizaCabecalhoCriar(novaData),
+  // O bloco "novo" ainda não é um chamado real (não está em
+  // chamadosComData) -- soma o intervalo dele aqui também, senão a grade
+  // não se estica pra caber um horário fora do padrão (ex: 22h-23h).
+  blocosExtrasParaIntervalo: () => {
+    const novoIni = chamadoReservadoInicioInput.value;
+    const novoFim = chamadoReservadoFimInput.value;
+    if (!(novoIni && novoFim && novoFim > novoIni)) return [];
+    const inicioMin = hhmmParaMinutos(novoIni);
+    const fimMin = Math.max(hhmmParaMinutos(novoFim), inicioMin + TIMELINE_PASSO_MINUTOS);
+    return [{ inicioMin, fimMin }];
+  },
+});
+
+// Primeira vez (ou o dia da Data saiu da janela já construída, ex: digitou
+// uma data longe): reconstrói centrada nela. Senão só atualiza o
+// conteúdo -- e, como aqui (diferente da Agenda) a Data É o que está
+// sendo escolhido, sempre rola até ela ficar visível (não só "olhando",
+// é o próprio valor que o formulário vai usar).
 function renderizarTimelineCriar() {
   let dataStr = chamadoDataInput.value;
   if (dataStr && dataStr < primeiroDiaPermitidoParaAgendar()) {
@@ -6222,161 +6353,37 @@ function renderizarTimelineCriar() {
     return;
   }
   chamadoTimelineCriarCaixa.classList.remove("hidden");
-  atualizaCabecalhoCriar(dataStr);
 
-  const doDia = chamadosComData.filter((c) => dataLocalISO(new Date(c.reservadoInicio)) === dataStr);
-
-  const novoIni = chamadoReservadoInicioInput.value;
-  const novoFim = chamadoReservadoFimInput.value;
-  const temNovo = Boolean(novoIni && novoFim && novoFim > novoIni);
-
-  const blocosParaIntervalo = doDia.map((c) => ({ inicioMin: minutosDoDiaIso(c.reservadoInicio), fimMin: minutosDoDiaIso(c.reservadoFim) }));
-  let novoInicioMin = 0;
-  let novoDuracaoMin = 0;
-  if (temNovo) {
-    const [hIni, mIni] = novoIni.split(":").map(Number);
-    const [hFim, mFim] = novoFim.split(":").map(Number);
-    novoInicioMin = hIni * 60 + mIni;
-    novoDuracaoMin = Math.max(hFim * 60 + mFim - novoInicioMin, TIMELINE_PASSO_MINUTOS);
-    blocosParaIntervalo.push({ inicioMin: novoInicioMin, fimMin: novoInicioMin + novoDuracaoMin });
+  const idx = indiceColunaPorData(criarCtx, dataStr);
+  if (!criarCtx.colunas.length || idx === -1) {
+    construirJanelaTimeline(criarCtx, dataStr);
+    return;
   }
-
-  const { horaMin, horaMax } = calculaIntervaloHoras(blocosParaIntervalo);
-  const minInicio = horaMin * 60;
-  const minFim = horaMax * 60;
-
-  desenhaGradeHoras(chamadoTimelineCriarEl, horaMin, horaMax, minInicio);
-
-  doDia.forEach((c) => {
-    const bloco = criaBlocoTimeline(c, minInicio, `somente-leitura ${statusClasseTimeline(c.status)}`);
-    chamadoTimelineCriarEl.appendChild(bloco);
-  });
-
-  if (temNovo) {
-    const bloco = document.createElement("div");
-    bloco.className = "chamado-timeline-bloco chamado-timeline-novo";
-    bloco.style.top = `${(novoInicioMin - minInicio) * TIMELINE_PX_POR_MINUTO}px`;
-    bloco.style.height = `${novoDuracaoMin * TIMELINE_PX_POR_MINUTO}px`;
-    bloco.innerHTML = `<span class="nome">Novo chamado</span><span class="hora">${novoIni}–${novoFim}</span>`;
-    ligarArrastarBlocoNovo(bloco, minInicio, minFim, novoDuracaoMin);
-    chamadoTimelineCriarEl.appendChild(bloco);
-  }
-
-  const folgas = calculaFolgasLivres(doDia, minInicio, minFim);
-  chamadoTimelineCriarLivres.textContent = folgas.length
-    ? `Livre nesse dia: ${folgas.map(([a, b]) => `${minutosParaHHMM(a)}–${minutosParaHHMM(b)}`).join(", ")}`
-    : "Sem folga livre nesse intervalo do dia.";
+  redesenhaConteudoTimeline(criarCtx);
+  criarCtx.timelineEl.scrollTo({ left: criarCtx.colunas[idx].colEl.offsetLeft, behavior: "smooth" });
 }
 
-// Arrastar o bloco tracejado só mexe no formulário (De/Até) -- nenhuma
-// chamada de rede acontece aqui, o chamado ainda nem existe. A checagem de
-// conflito de verdade continua acontecendo no envio do formulário, como já
-// era antes.
-function ligarArrastarBlocoNovo(bloco, minInicio, minFim, duracaoMin) {
-  let arrastando = false;
-  let offsetY = 0;
-  let topOriginal = 0;
-
-  bloco.addEventListener("pointerdown", (evento) => {
-    arrastando = true;
-    offsetY = evento.clientY - bloco.getBoundingClientRect().top;
-    topOriginal = parseFloat(bloco.style.top);
-    try { bloco.setPointerCapture(evento.pointerId); } catch (e) { /* segue sem captura formal */ }
-    bloco.classList.add("arrastando");
+// Wrapper de Criar: bloco é a prévia "Novo chamado" (ainda não existe de
+// verdade) -- arrastar (mover ou redimensionar, inclusive pra outro dia)
+// só atualiza os campos do formulário, nenhuma chamada de rede. A
+// checagem de conflito de verdade continua acontecendo no envio do
+// formulário, como já era antes.
+function ligarArrastarBlocoNovoFaixa(ctx, bloco, minInicio, minFim, dataOrigem) {
+  ligarArrastarBlocoNaFaixa(ctx, bloco, minInicio, minFim, dataOrigem, {
+    aoPreviewMudar: (diaAlvo) => atualizaCabecalhoCriar(diaAlvo),
+    aoRestaurarPreview: () => atualizaCabecalhoCriar(ctx.dataFocoAtual),
+    aoTocarSemArrastar: () => {},
+    aoSoltarComSucesso: (novaData, novoInicioMin, novoFimMin) => {
+      chamadoDataInput.value = novaData;
+      chamadoReservadoInicioInput.value = minutosParaHHMM(novoInicioMin);
+      chamadoReservadoFimInput.value = minutosParaHHMM(novoFimMin);
+      renderizarTimelineCriar();
+    },
+    aoRedimensionarComSucesso: (novoInicioMin, novoFimMin) => {
+      chamadoReservadoFimInput.value = minutosParaHHMM(novoFimMin);
+      renderizarTimelineCriar();
+    },
   });
-
-  bloco.addEventListener("pointermove", (evento) => {
-    if (!arrastando) return;
-    const containerTop = chamadoTimelineCriarEl.getBoundingClientRect().top;
-    let novoTop = evento.clientY - containerTop - offsetY;
-    const alturaTotal = (minFim - minInicio) * TIMELINE_PX_POR_MINUTO;
-    novoTop = Math.max(0, Math.min(novoTop, alturaTotal - parseFloat(bloco.style.height)));
-    const passoPx = TIMELINE_PASSO_MINUTOS * TIMELINE_PX_POR_MINUTO;
-    novoTop = Math.round(novoTop / passoPx) * passoPx;
-    bloco.style.top = `${novoTop}px`;
-    const novoInicioMinAoVivo = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
-    atualizaTextoHorarioBloco(bloco, novoInicioMinAoVivo, novoInicioMinAoVivo + duracaoMin);
-  });
-
-  function soltar() {
-    if (!arrastando) return;
-    arrastando = false;
-    bloco.classList.remove("arrastando");
-    const novoTop = parseFloat(bloco.style.top);
-    if (novoTop === topOriginal) return;
-    const novoInicioMin = minInicio + novoTop / TIMELINE_PX_POR_MINUTO;
-    chamadoReservadoInicioInput.value = minutosParaHHMM(novoInicioMin);
-    chamadoReservadoFimInput.value = minutosParaHHMM(novoInicioMin + duracaoMin);
-    renderizarTimelineCriar();
-  }
-
-  function cancelarArrastarNovo() {
-    if (!arrastando) return;
-    arrastando = false;
-    bloco.classList.remove("arrastando");
-    bloco.style.top = `${topOriginal}px`;
-  }
-
-  bloco.addEventListener("pointerup", soltar);
-  bloco.addEventListener("pointercancel", cancelarArrastarNovo);
-  bloco.addEventListener("lostpointercapture", cancelarArrastarNovo);
-
-  // Alça no rodapé: estica/encolhe só o "Até", o "De" fica fixo -- mesma
-  // ideia da Agenda, só que aqui só mexe no formulário, sem checar nada
-  // no servidor (o chamado ainda nem existe).
-  const alca = document.createElement("div");
-  alca.className = "chamado-timeline-resize";
-  bloco.appendChild(alca);
-
-  let redimensionando = false;
-  let alturaOriginal = 0;
-
-  alca.addEventListener("pointerdown", (evento) => {
-    evento.stopPropagation();
-    redimensionando = true;
-    alturaOriginal = parseFloat(bloco.style.height);
-    try { alca.setPointerCapture(evento.pointerId); } catch (e) { /* segue sem captura formal */ }
-    bloco.classList.add("arrastando");
-  });
-
-  alca.addEventListener("pointermove", (evento) => {
-    if (!redimensionando) return;
-    evento.stopPropagation();
-    const containerTop = chamadoTimelineCriarEl.getBoundingClientRect().top;
-    const topPx = parseFloat(bloco.style.top);
-    const alturaTotal = (minFim - minInicio) * TIMELINE_PX_POR_MINUTO;
-    const passoPx = TIMELINE_PASSO_MINUTOS * TIMELINE_PX_POR_MINUTO;
-    let novaAltura = evento.clientY - containerTop - topPx;
-    novaAltura = Math.round(novaAltura / passoPx) * passoPx;
-    novaAltura = Math.max(passoPx, Math.min(novaAltura, alturaTotal - topPx));
-    bloco.style.height = `${novaAltura}px`;
-    const inicioMinAoVivo = minInicio + topPx / TIMELINE_PX_POR_MINUTO;
-    atualizaTextoHorarioBloco(bloco, inicioMinAoVivo, inicioMinAoVivo + novaAltura / TIMELINE_PX_POR_MINUTO);
-  });
-
-  function soltarResize(evento) {
-    if (!redimensionando) return;
-    redimensionando = false;
-    bloco.classList.remove("arrastando");
-    const alturaFinal = parseFloat(bloco.style.height);
-    if (alturaFinal === alturaOriginal) return;
-    const topPx = parseFloat(bloco.style.top);
-    const novoInicioMin = minInicio + topPx / TIMELINE_PX_POR_MINUTO;
-    chamadoReservadoFimInput.value = minutosParaHHMM(novoInicioMin + alturaFinal / TIMELINE_PX_POR_MINUTO);
-    renderizarTimelineCriar();
-  }
-
-  function cancelarRedimensionarNovo(evento) {
-    if (evento) evento.stopPropagation();
-    if (!redimensionando) return;
-    redimensionando = false;
-    bloco.classList.remove("arrastando");
-    bloco.style.height = `${alturaOriginal}px`;
-  }
-
-  alca.addEventListener("pointerup", soltarResize);
-  alca.addEventListener("pointercancel", cancelarRedimensionarNovo);
-  alca.addEventListener("lostpointercapture", cancelarRedimensionarNovo);
 }
 
 editChamadoData.addEventListener("change", () => {
@@ -6423,80 +6430,15 @@ chamadoTimelineCriarAnterior.addEventListener("click", () => mudaDiaCriar(-1));
 chamadoTimelineCriarProximo.addEventListener("click", () => mudaDiaCriar(1));
 chamadoTimelineCriarProximoMes.addEventListener("click", () => mudaMesCriar(1));
 
-// Arrastar pro lado no fundo da própria linha do tempo (fora de qualquer
-// bloco) também troca de dia -- mais rápido que ficar clicando nas setas.
-// Só conta o arrastar que começa no fundo (evento.target === containerEl)
-// pra não brigar com o arrastar/redimensionar de um bloco em cima.
-// `aoPreVisualizar(diasDeslocados)` (opcional) atualiza o cabeçalho ao
-// vivo enquanto arrasta, antes de soltar -- mesma ideia do texto dentro
-// do bloco arrastável.
-function ligarSwipeDiaTimeline(containerEl, aoTrocarDia, aoPreVisualizar) {
-  let arrastando = false;
-  let moveu = false;
-  let inicioX = 0;
-
-  containerEl.addEventListener("pointerdown", (evento) => {
-    if (evento.target !== containerEl) return;
-    arrastando = true;
-    moveu = false;
-    inicioX = evento.clientX;
-    try { containerEl.setPointerCapture(evento.pointerId); } catch (e) { /* segue sem captura formal */ }
-  });
-
-  containerEl.addEventListener("pointermove", (evento) => {
-    if (!arrastando) return;
-    const deltaX = evento.clientX - inicioX;
-    if (Math.abs(deltaX) > 8) moveu = true;
-    containerEl.style.transform = `translateX(${deltaX}px)`;
-    if (aoPreVisualizar) aoPreVisualizar(Math.round(deltaX / TIMELINE_LIMIAR_DIA_PX));
-  });
-
-  function soltar(evento) {
-    if (!arrastando) return;
-    arrastando = false;
-    containerEl.style.transform = "";
-    if (!moveu) {
-      if (aoPreVisualizar) aoPreVisualizar(0);
-      return;
-    }
-    // Pra direita avança o dia, pra esquerda volta -- como puxar o
-    // calendário: arrasta o dedo pro futuro à direita. Proporcional (não
-    // só ±1), igual ao preview mostrado durante o arrastar -- senão o
-    // dia que aparece no meio do gesto não bate com onde solta.
-    const deltaX = evento.clientX - inicioX;
-    const dias = Math.round(deltaX / TIMELINE_LIMIAR_DIA_PX);
-    if (dias !== 0) aoTrocarDia(dias);
-    else if (aoPreVisualizar) aoPreVisualizar(0);
-  }
-
-  function cancelarSwipe() {
-    arrastando = false;
-    containerEl.style.transform = "";
-    if (aoPreVisualizar) aoPreVisualizar(0);
-  }
-
-  containerEl.addEventListener("pointerup", soltar);
-  containerEl.addEventListener("pointercancel", cancelarSwipe);
-  containerEl.addEventListener("lostpointercapture", cancelarSwipe);
-}
-
-// A Agenda rola nativamente agora (ver .chamado-timeline com
-// overflow-x:auto) -- esse gesto de "arrastar o fundo pra trocar de dia"
-// fica só pra tela de Criar, que continua um dia só.
-ligarSwipeDiaTimeline(chamadoTimelineCriarEl, mudaDiaCriar, (dias) => {
-  if (!chamadoDataInput.value) return;
-  atualizaCabecalhoCriar(dias !== 0 ? somaDiasNaData(chamadoDataInput.value, dias) : chamadoDataInput.value);
-});
-
-// Primeira vez que a Agenda carrega (colunasTimeline ainda vazio): monta a
-// janela do zero, centrada em hoje. Depois disso, só atualiza o conteúdo
-// (grade/blocos) da janela já construída, sem mexer em quais dias estão
-// visíveis nem na posição de rolagem.
+// Primeira vez que a Agenda carrega (agendaCtx.colunas ainda vazio): monta
+// a janela do zero, centrada em hoje. Depois disso, só atualiza o
+// conteúdo (grade/blocos) da janela já construída, sem mexer em quais
+// dias estão visíveis nem na posição de rolagem.
 function atualizaTimelineAposCarregar() {
-  if (!colunasTimeline.length) {
-    construirJanelaTimeline(dataLocalISOBrasilia(agoraBrasilia()));
+  if (!agendaCtx.colunas.length) {
+    construirJanelaTimeline(agendaCtx, dataLocalISOBrasilia(agoraBrasilia()));
   } else {
-    redesenhaConteudoTimeline();
+    redesenhaConteudoTimeline(agendaCtx);
   }
 }
 
