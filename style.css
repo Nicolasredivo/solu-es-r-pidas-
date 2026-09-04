@@ -1359,11 +1359,18 @@ button:active:not(:disabled) {
   margin: 10px 0 20px;
 }
 
+/* Largura travada (e centralizada) pras duas fileiras de navegação --
+   sem isso, em telas largas (computador, .page chega a 960px) os botões
+   com flex:1 esticavam com um monte de espaço vazio dentro, e a data no
+   meio ficava afastadíssima das setas. Mobile nem sente a trava (a tela
+   já é mais estreita que isso). */
 .chamado-timeline-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  max-width: 420px;
+  margin: 0 auto;
 }
 
 .chamado-timeline-nav .botao-secundario {
@@ -1378,13 +1385,15 @@ button:active:not(:disabled) {
    (5 elementos + texto de 2 linhas não cabiam). */
 .chamado-timeline-nav-mes-linha {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   gap: 8px;
-  margin-bottom: 6px;
+  max-width: 420px;
+  margin: 0 auto 6px;
 }
 
 .chamado-timeline-nav-mes {
   flex: 1;
+  max-width: 190px;
   padding: 6px 8px;
   font-size: 0.72rem;
   opacity: 0.75;
@@ -1394,6 +1403,16 @@ button:active:not(:disabled) {
   position: relative;
   text-align: center;
   flex: 1;
+}
+
+/* "Ir pra hoje" ficava largado sozinho, colado na margem esquerda, longe
+   da data que ele afeta -- agora fica centralizado logo abaixo dela,
+   lendo como parte do mesmo grupo de navegação em vez de um item solto. */
+.chamado-timeline-hoje-link {
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin: 4px auto 10px;
 }
 
 .chamado-timeline-data-wrap input[type="date"] {

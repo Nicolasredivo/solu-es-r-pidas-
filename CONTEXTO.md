@@ -2383,6 +2383,29 @@ hoje"/campo de data, aviso de feriado, e regressão na tela de Criar
 chamado (block ainda centralizado via CSS, ainda arrastável). Confirmado
 por leitura que nenhum registro real foi alterado durante os testes.
 
+### Botões da Agenda desorganizados no computador (03/09/2026)
+
+O dono mandou print mostrando os botões de navegação (mês/dia/"Ir pra
+hoje") espalhados, com vãos enormes entre eles — só acontecia em tela
+larga (computador): `.page` chega a ter até 960px nessas telas, e as
+fileiras de botão usavam `flex:1`/`justify-content:space-between` sem
+nenhum limite de largura, pensadas só pro celular (375px) onde ficavam
+naturalmente coladas. Em 960px, isso esticava tudo com um monte de
+espaço vazio dentro dos botões e entre eles.
+
+- `.chamado-timeline-nav` e `.chamado-timeline-nav-mes-linha` ganharam
+  `max-width: 420px; margin: 0 auto;` — trava a largura e centraliza em
+  tela larga, sem efeito nenhum no celular (que já é mais estreito que
+  isso).
+- **"Ir pra hoje"** estava largado sozinho, alinhado à esquerda, longe
+  da data — parecia um item esquecido. Agora fica centralizado logo
+  abaixo da data (classe nova `chamado-timeline-hoje-link`, não mexeu no
+  `.link-button` genérico usado em outros lugares do app).
+
+Testado em 1280px (o problema do print) e voltando pra 375px (não
+regrediu): os dois ficam com o grupo de botões compacto e centralizado
+em vez de esticado.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
