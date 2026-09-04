@@ -2406,6 +2406,28 @@ Testado em 1280px (o problema do print) e voltando pra 375px (não
 regrediu): os dois ficam com o grupo de botões compacto e centralizado
 em vez de esticado.
 
+### Linha do tempo de Criar chamado não esperava mais a Data (03/09/2026)
+
+O dono queria usar o layout de arrastar o balão (ver os dias/horários já
+ocupados) como jeito PRINCIPAL de marcar um chamado novo — mas ele só
+aparecia depois de digitar uma data no campo "Data" primeiro
+(`renderizarTimelineCriar` escondia a caixa inteira enquanto
+`chamado-data` estivesse vazio).
+
+Corrigido em `escolherClienteChamado` (app.js): assim que o cliente é
+escolhido (passo que já revela o resto do formulário), se a Data ainda
+estiver vazia, preenche sozinho com hoje (`primeiroDiaPermitidoParaAgendar()`)
+e chama `renderizarTimelineCriar()` na hora — a linha do tempo já aparece
+pronta pra usar, sem precisar tocar no campo Data nenhuma vez. Dali dá
+pra navegar por dia/mês (botões ‹ › e « »), arrastar o bloco tracejado
+pra escolher horário, ou digitar a data manualmente se preferir — as
+duas formas continuam funcionando juntas, como já era.
+
+Testado escolhendo um cliente (falso) e conferindo que a caixa aparece
+na hora com hoje já selecionado, o bloco "Novo chamado" no horário
+padrão (08:00–09:00), e que navegar pra o dia seguinte continua
+sincronizando o campo Data escondido por trás.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

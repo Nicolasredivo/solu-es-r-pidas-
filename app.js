@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.03y";
+const APP_VERSION = "2026.09.03z";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4968,6 +4968,17 @@ async function escolherClienteChamado(entidadeId) {
   chamadoClienteStatus.textContent = "";
   chamadoPassoCliente.classList.add("hidden");
   chamadoClienteEscolhidoBox.classList.remove("hidden");
+
+  // A linha do tempo (ver os dias/horários já ocupados e arrastar pra
+  // escolher) é a forma principal de marcar -- não devia ficar escondida
+  // esperando a pessoa digitar uma data primeiro. Assim que o cliente é
+  // escolhido, já mostra hoje (ou o próximo dia permitido) de cara; dali
+  // dá pra navegar (‹/›, mês) sem nunca precisar tocar no campo Data.
+  if (!chamadoDataInput.value) {
+    chamadoDataInput.value = primeiroDiaPermitidoParaAgendar();
+    renderizarTimelineCriar();
+  }
+
   ajustarAlturasAuto(chamadoForm.closest(".page"));
 }
 
