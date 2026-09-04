@@ -2494,6 +2494,22 @@ alça de redimensionar, botões de dia/mês, e cancelar no meio do arrasto
 Agenda depois da generalização (mover entre colunas e redimensionar) —
 sem nenhuma mudança de comportamento.
 
+### Linhas do card de chamado grudadas (03/09/2026)
+
+Print do dono mostrando o nome do cliente colado direto em cima do
+endereço no card da lista ("Agenda", abaixo da faixa de dias). Causa:
+`.doc-hint` (usada aqui pro endereço/contato) tem `margin: -8px 0 4px`
+por padrão — pensada pra colar um texto de ajuda logo abaixo de um
+campo de formulário (uso original da classe, em outro lugar do app), não
+pra esse card. A margem de cima NEGATIVA puxava a linha do endereço pra
+cima, por cima do respiro que devia ter embaixo do nome em negrito.
+
+Corrigido com duas regras específicas de dentro do card (não mexe no
+`.doc-hint` geral, que continua servindo os outros lugares que já
+usavam ele certinho): `.chamado-card strong` vira bloco com uma margem
+de cima/baixo normal, e `.chamado-card p.doc-hint` sobrescreve a margem
+negativa herdada só ali dentro.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

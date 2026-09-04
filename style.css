@@ -1663,6 +1663,20 @@ button:active:not(:disabled) {
   margin-bottom: 4px;
 }
 
+/* .doc-hint por padrão tem margem de cima NEGATIVA (pensada pra colar num
+   campo de formulário logo acima) -- reaproveitada aqui pro endereço/
+   contato do card, isso grudava essas linhas direto embaixo do nome do
+   cliente. Sobrescreve só dentro do card, sem mexer no .doc-hint geral
+   usado em outros lugares. */
+.chamado-card strong {
+  display: block;
+  margin: 6px 0 2px;
+}
+
+.chamado-card p.doc-hint {
+  margin: 2px 0 4px;
+}
+
 .chamado-numero {
   color: var(--muted);
   font-size: 0.85rem;
