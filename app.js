@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.14c";
+const APP_VERSION = "2026.09.14d";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -103,6 +103,17 @@ document.querySelectorAll(".sidebar-item[data-page]").forEach((item) => {
 
     closeSidebar();
   });
+});
+
+// Grupo "Chamados" no menu: some tem duas telas (Criar/Consultar) que não
+// cabem num botão só, então o "+" abre/fecha os dois por baixo dele --
+// mesmo padrão simples de outros toggles do app (ver toggleConfig).
+const chamadosGrupoBotao = document.getElementById("chamados-grupo-botao");
+const chamadosGrupoItens = document.getElementById("chamados-grupo-itens");
+chamadosGrupoBotao.addEventListener("click", () => {
+  const abrindo = chamadosGrupoItens.classList.contains("hidden");
+  chamadosGrupoItens.classList.toggle("hidden", !abrindo);
+  chamadosGrupoBotao.setAttribute("aria-expanded", String(abrindo));
 });
 
 // ----- Abas internas de uma página -----
@@ -5560,7 +5571,7 @@ editChamadoSalvarBotao.addEventListener("click", async () => {
   await salvarEdicaoChamado();
 });
 
-document.querySelector('.sidebar-item[data-page="agenda"]').addEventListener("click", () => {
+document.querySelector('.sidebar-item[data-page="consultar-chamados"]').addEventListener("click", () => {
   if (!chamadosPaginaCarregada) {
     chamadosPaginaCarregada = true;
     carregarChamados();

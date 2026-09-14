@@ -60,8 +60,16 @@
       <button type="button" class="sidebar-item active" data-page="inicio">Início</button>
       <button type="button" class="sidebar-item" data-page="cadastro">Cadastro</button>
       <button type="button" class="sidebar-item" data-page="financeiro">Financeiro</button>
-      <button type="button" class="sidebar-item" data-page="chamados">Chamados</button>
-      <button type="button" class="sidebar-item" data-page="agenda">Agenda</button>
+      <div class="sidebar-grupo">
+        <button type="button" class="sidebar-item sidebar-grupo-cabecalho" id="chamados-grupo-botao" aria-expanded="false">
+          <span>Chamados</span>
+          <span class="sidebar-grupo-mais" aria-hidden="true">+</span>
+        </button>
+        <div id="chamados-grupo-itens" class="sidebar-grupo-itens hidden">
+          <button type="button" class="sidebar-item sidebar-subitem" data-page="chamados">Criar chamado</button>
+          <button type="button" class="sidebar-item sidebar-subitem" data-page="consultar-chamados">Consultar chamados</button>
+        </div>
+      </div>
 
       <div class="sidebar-rodape">
         <button type="button" id="sair" class="sidebar-item sair">Sair</button>
@@ -1228,8 +1236,8 @@
       </div>
 
       <!-- ===================== Agenda ===================== -->
-      <div id="page-agenda" class="card page hidden">
-        <h1>Agenda</h1>
+      <div id="page-consultar-chamados" class="card page hidden">
+        <h1>Consultar chamados</h1>
 
         <p id="chamados-status" class="doc-hint"></p>
         <button type="button" id="recarregar-chamados" class="link-button">↻ Atualizar</button>
@@ -1310,7 +1318,7 @@
 
       <!-- ===================== Chamados (Criar chamado) ===================== -->
       <div id="page-chamados" class="card page hidden">
-        <h1>Chamados</h1>
+        <h1>Criar chamado</h1>
 
         <form id="chamado-form">
             <div id="chamado-passo-cliente">

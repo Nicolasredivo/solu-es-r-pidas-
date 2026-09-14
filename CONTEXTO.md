@@ -2585,6 +2585,35 @@ Mudança só de organização de tela, nenhuma lógica nova:
   de ver a agenda, na cabeça dele) — só troca de posição no HTML, sem
   efeito em nada (a troca de página já é genérica, por `data-page`).
 
+### "Agenda" vira "Consultar chamados", dentro de um grupo "Chamados" com "+" no menu (14/09/2026)
+
+Mais uma volta na organização do menu, mesmo dia: em vez de "Chamados" e
+"Agenda" como dois itens separados, o dono pediu um "+" bem clean do lado
+da palavra "Chamados" que abre duas opções por baixo dele — "Criar
+chamado" e "Consultar chamados". Confirmado que "Consultar chamados" é a
+mesma tela que era "Agenda" (lista + editar), só renomeada.
+
+- Item "Agenda" do menu virou um **grupo**: um botão cabeçalho
+  (`#chamados-grupo-botao`, mesma classe `.sidebar-item` de sempre, sem
+  `data-page` — ele não é uma página, só abre/fecha) com um "+" ao lado
+  (`.sidebar-grupo-mais`) que gira 45° (vira "×") quando aberto. Por
+  baixo, dois itens normais (`.sidebar-item[data-page]`, mesmo mecanismo
+  de sempre) indentados: "Criar chamado" (`data-page="chamados"`, mesma
+  página de antes) e "Consultar chamados" (`data-page="consultar-chamados"`,
+  a página que era `#page-agenda`, renomeada pra `#page-consultar-chamados`
+  — `<h1>` também virou "Consultar chamados", e o `<h1>` de Chamados virou
+  "Criar chamado").
+- O cabeçalho do grupo acende sozinho (cor de destaque) quando um dos dois
+  itens de dentro está na tela — via `.sidebar-grupo:has(.sidebar-item.active)`,
+  sem precisar de JS extra pra isso.
+- Abrir/fechar é só um toggle de `.hidden` no bloco dos dois itens (mesmo
+  padrão do toggle de endereço do n8n na tela de entrada) — fica aberto ou
+  fechado independente de navegar, então se a pessoa estava em "Consultar
+  chamados" e reabre o menu, já aparece expandido.
+- O gatilho de carregar a lista pela primeira vez (`carregarChamados()`)
+  seguiu o mesmo mecanismo, só trocando o seletor de
+  `data-page="agenda"` pra `data-page="consultar-chamados"`.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

@@ -98,6 +98,41 @@ body {
   color: var(--accent);
 }
 
+/* Grupo "Chamados": não tem página própria (só abre/fecha os dois itens de
+   baixo), então o cabeçalho nunca ganha .active -- em vez disso acende
+   sozinho quando um dos itens dentro dele está na tela (:has, suportado nos
+   navegadores que o app roda). */
+.sidebar-grupo-cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-grupo:has(.sidebar-item.active) .sidebar-grupo-cabecalho {
+  color: var(--accent);
+}
+
+.sidebar-grupo-mais {
+  font-size: 1.1rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.sidebar-grupo-cabecalho[aria-expanded="true"] .sidebar-grupo-mais {
+  transform: rotate(45deg);
+}
+
+.sidebar-grupo-itens {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-subitem {
+  padding-left: 24px;
+  font-size: 0.92rem;
+}
+
 .sidebar-overlay {
   display: none;
   position: fixed;
