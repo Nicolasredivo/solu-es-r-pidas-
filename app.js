@@ -17,6 +17,18 @@ const configHint = document.getElementById("config-hint");
 const CHAVE_URL = "n8n_base_url";
 const CHAVE_SENHA = "senha_salva";
 
+// Confirmação rápida e discreta, pra ações que já têm feedback óbvio na
+// tela (a lista atualiza, o formulário fecha) mas ainda merecem um "deu
+// certo" visível -- ex: criar um chamado. Some sozinha, não trava nada.
+const toastEl = document.getElementById("toast");
+let toastTimer = null;
+function mostrarToast(mensagem) {
+  toastEl.textContent = mensagem;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2200);
+}
+
 // O endereço salvo no aparelho tem prioridade sobre o padrão do config.js,
 // para você poder trocar o link do túnel sem depender de uma publicação.
 function baseUrlN8n() {
@@ -31,7 +43,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.14h";
+const APP_VERSION = "2026.09.14i";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -5342,7 +5354,7 @@ async function criarChamadoDeVerdade() {
     return;
   }
 
-  mostrarChamadoStatus("ok", resposta.mensagem);
+  mostrarToast(resposta.mensagem);
   limparFormularioChamado();
   await carregarChamados();
 }

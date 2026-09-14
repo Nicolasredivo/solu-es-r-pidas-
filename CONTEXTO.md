@@ -2779,6 +2779,24 @@ agenda, grava `Status: "Aguardando confirmação de data"` e não toca em
 antes de mexer no app — já estava pronto pra esse caminho, só faltava o
 app sempre mandar os três campos em branco.
 
+### Confirmação "verdinha" ao criar chamado (14/09/2026)
+
+O dono notou (com razão) que depois de criar um chamado não aparecia
+nenhuma confirmação visível de que tinha dado certo. Causa: o texto de
+sucesso (`mostrarChamadoStatus("ok", ...)`) era escrito e, na mesma
+chamada, `limparFormularioChamado()` já sobrescrevia com `""` — o aviso
+nunca chegava a aparecer de verdade (o elemento também fica dentro do
+bloco que a limpeza esconde).
+
+Resolvido com um **toast** novo, reaproveitável (`mostrarToast(mensagem)`,
+`#toast` no fim do `<body>`, fora de qualquer página/subpágina): pílula
+verde flutuante, fixa embaixo no centro da tela, aparece com fade rápido
+(0.2s), mostra a mensagem de verdade do servidor (ex: "Chamado #12
+criado!") e some sozinha depois de ~2.2s — não trava nada, não precisa
+fechar. Por enquanto só usado na criação de chamado; dá pra reaproveitar
+noutras ações que já atualizam a tela sozinhas mas também merecem um "deu
+certo" rápido.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

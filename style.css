@@ -782,6 +782,34 @@ button:active:not(:disabled) {
   color: var(--muted);
 }
 
+/* Confirmação rápida e discreta (ex: "Chamado #12 criado!") -- flutua por
+   cima de tudo, alguns segundos, e some sozinha. Não trava nada: quem quer
+   seguir usando o app nem precisa esperar ela sumir. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translate(-50%, 8px);
+  background: var(--ok);
+  color: #08130d;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 50;
+  max-width: 90vw;
+  text-align: center;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 /* ----- Indicador de conexão com o n8n ----- */
 .conexao {
   margin-left: auto;
