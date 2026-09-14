@@ -2560,6 +2560,28 @@ saiu — Data volta a ficar em branco até o dono preencher, como o rótulo
 Ainda não há uma reconstrução definida — só o combinado de que o
 reaproveitamento das ideias acontece na próxima rodada.
 
+### Agenda vira página própria no menu, separada de Chamados (14/09/2026)
+
+Print do dono circulando a aba "Agenda" (que ficava dentro de "Chamados",
+lado a lado com "Criar chamado") pedindo pra tirar dali e virar uma área
+nova no menu lateral, com "Chamados" ficando só com o "Criar chamado".
+
+Mudança só de organização de tela, nenhuma lógica nova:
+- Novo item **Agenda** no menu lateral (`data-page="agenda"`, entre
+  Financeiro e Chamados), com sua própria `#page-agenda` — status,
+  "↻ Atualizar", os dois blocos de lista ("Aguardando confirmação de
+  data" e a lista principal, renomeada de "Agenda" pra **"Agendados"**
+  pra não repetir o nome da página) e a caixa de Editar chamado. Tudo
+  isso saiu de dentro de `#page-chamados`, sem mudar nenhum id interno
+  (`chamados-status`, `lista-chamados-com-data`, `chamado-editar-box`
+  etc. continuam os mesmos — só o container pai mudou).
+- `#page-chamados` perdeu as sub-abas (não fazia mais sentido ter duas
+  quando só sobrou "Criar chamado") e ficou só com o formulário de criar.
+- O carregamento inicial da lista (`carregarChamados()`, que antes
+  disparava ao clicar em "Chamados" pela primeira vez) passou a disparar
+  ao clicar em "Agenda" — "Criar chamado" nunca precisou dessa lista (a
+  checagem de conflito é sempre no servidor, via `checarConflito`).
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

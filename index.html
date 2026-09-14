@@ -60,6 +60,7 @@
       <button type="button" class="sidebar-item active" data-page="inicio">Início</button>
       <button type="button" class="sidebar-item" data-page="cadastro">Cadastro</button>
       <button type="button" class="sidebar-item" data-page="financeiro">Financeiro</button>
+      <button type="button" class="sidebar-item" data-page="agenda">Agenda</button>
       <button type="button" class="sidebar-item" data-page="chamados">Chamados</button>
 
       <div class="sidebar-rodape">
@@ -1226,97 +1227,92 @@
         </div>
       </div>
 
-      <!-- ===================== Chamados ===================== -->
+      <!-- ===================== Agenda ===================== -->
+      <div id="page-agenda" class="card page hidden">
+        <h1>Agenda</h1>
+
+        <p id="chamados-status" class="doc-hint"></p>
+        <button type="button" id="recarregar-chamados" class="link-button">↻ Atualizar</button>
+
+        <div id="chamados-sem-data-bloco" class="hidden">
+          <h2 class="titulo-bloco">Aguardando confirmação de data</h2>
+          <div id="lista-chamados-sem-data"></div>
+        </div>
+
+        <h2 class="titulo-bloco">Agendados</h2>
+        <div id="lista-chamados-com-data"></div>
+
+        <!-- Um formulário só, reaproveitado por qualquer card ao clicar em
+             "Editar" — evita duplicar os mesmos campos em cada item da
+             lista. Cobre tudo do chamado, não só a data. -->
+        <div id="chamado-editar-box" class="chamado-editar-box hidden">
+          <h2 class="titulo-bloco" id="chamado-editar-titulo">Editar chamado</h2>
+
+          <div id="edit-chamado-contato-escolha" class="hidden">
+            <label>Quem pediu o serviço?</label>
+            <div id="edit-chamado-lista-contatos"></div>
+          </div>
+
+          <label for="edit-chamado-local-exato">Local exato (opcional)</label>
+          <input type="text" id="edit-chamado-local-exato" placeholder="Ex: teto da garagem, subsolo" autocomplete="off" />
+
+          <label for="edit-chamado-descricao">O que precisa ser feito</label>
+          <textarea id="edit-chamado-descricao" rows="3"></textarea>
+
+          <label for="edit-chamado-observacoes">Observações do serviço (interno)</label>
+          <textarea id="edit-chamado-observacoes" rows="2"></textarea>
+
+          <div id="edit-chamado-anexos-atuais-bloco" class="hidden">
+            <label>Anexos já salvos</label>
+            <div id="edit-chamado-anexos-atuais"></div>
+          </div>
+
+          <label>Adicionar mais fotos/documentos (opcional, até 5MB cada)</label>
+          <div class="chamado-anexos-botoes">
+            <label id="edit-chamado-anexos-foto-botao" for="edit-chamado-anexos-foto" class="botao-secundario chamado-anexo-botao" tabindex="0">📷 Adicionar foto</label>
+            <input type="file" id="edit-chamado-anexos-foto" accept="image/*" multiple class="hidden" />
+            <label id="edit-chamado-anexos-doc-botao" for="edit-chamado-anexos-doc" class="botao-secundario chamado-anexo-botao" tabindex="0">📄 Adicionar PDF</label>
+            <input type="file" id="edit-chamado-anexos-doc" accept="application/pdf" multiple class="hidden" />
+          </div>
+          <div id="edit-chamado-anexos-lista"></div>
+
+          <div class="chamado-agendamento-caixa">
+            <h2 class="titulo-bloco">Agendamento</h2>
+
+            <label for="edit-chamado-data">Data</label>
+            <input type="date" id="edit-chamado-data" />
+            <p id="edit-chamado-data-passado-aviso" class="doc-hint error hidden"></p>
+            <p id="edit-chamado-data-feriado-aviso" class="doc-hint aviso hidden"></p>
+
+            <label>Reservar o tempo de serviço</label>
+            <div class="chamado-horario-intervalo">
+              <div>
+                <label for="edit-chamado-reservado-inicio">De</label>
+                <input type="time" id="edit-chamado-reservado-inicio" />
+              </div>
+              <div>
+                <label for="edit-chamado-reservado-fim">Até</label>
+                <input type="time" id="edit-chamado-reservado-fim" />
+              </div>
+            </div>
+
+            <label for="edit-chamado-horario-combinado">Horário combinado com o cliente (opcional)</label>
+            <input type="time" id="edit-chamado-horario-combinado" />
+
+            <div id="edit-chamado-conflito" class="aviso-caixa hidden"></div>
+          </div>
+
+          <button type="button" id="edit-chamado-salvar">Salvar</button>
+          <button type="button" id="edit-chamado-cancelar-form" class="botao-secundario">Fechar</button>
+          <div id="edit-chamado-status" class="status"></div>
+        </div>
+      </div>
+
+      <!-- ===================== Chamados (Criar chamado) ===================== -->
       <div id="page-chamados" class="card page hidden">
         <h1>Chamados</h1>
 
-        <div class="subtabs">
-          <button type="button" class="subtab active" data-subpage="agenda">Agenda</button>
-          <button type="button" class="subtab" data-subpage="criar">Criar chamado</button>
-        </div>
-
-        <!-- ===================== Agenda ===================== -->
-        <div id="subpage-agenda" class="subpage">
-          <p id="chamados-status" class="doc-hint"></p>
-          <button type="button" id="recarregar-chamados" class="link-button">↻ Atualizar</button>
-
-          <div id="chamados-sem-data-bloco" class="hidden">
-            <h2 class="titulo-bloco">Aguardando confirmação de data</h2>
-            <div id="lista-chamados-sem-data"></div>
-          </div>
-
-          <h2 class="titulo-bloco">Agenda</h2>
-          <div id="lista-chamados-com-data"></div>
-
-          <!-- Um formulário só, reaproveitado por qualquer card ao clicar em
-               "Editar" — evita duplicar os mesmos campos em cada item da
-               lista. Cobre tudo do chamado, não só a data. -->
-          <div id="chamado-editar-box" class="chamado-editar-box hidden">
-            <h2 class="titulo-bloco" id="chamado-editar-titulo">Editar chamado</h2>
-
-            <div id="edit-chamado-contato-escolha" class="hidden">
-              <label>Quem pediu o serviço?</label>
-              <div id="edit-chamado-lista-contatos"></div>
-            </div>
-
-            <label for="edit-chamado-local-exato">Local exato (opcional)</label>
-            <input type="text" id="edit-chamado-local-exato" placeholder="Ex: teto da garagem, subsolo" autocomplete="off" />
-
-            <label for="edit-chamado-descricao">O que precisa ser feito</label>
-            <textarea id="edit-chamado-descricao" rows="3"></textarea>
-
-            <label for="edit-chamado-observacoes">Observações do serviço (interno)</label>
-            <textarea id="edit-chamado-observacoes" rows="2"></textarea>
-
-            <div id="edit-chamado-anexos-atuais-bloco" class="hidden">
-              <label>Anexos já salvos</label>
-              <div id="edit-chamado-anexos-atuais"></div>
-            </div>
-
-            <label>Adicionar mais fotos/documentos (opcional, até 5MB cada)</label>
-            <div class="chamado-anexos-botoes">
-              <label id="edit-chamado-anexos-foto-botao" for="edit-chamado-anexos-foto" class="botao-secundario chamado-anexo-botao" tabindex="0">📷 Adicionar foto</label>
-              <input type="file" id="edit-chamado-anexos-foto" accept="image/*" multiple class="hidden" />
-              <label id="edit-chamado-anexos-doc-botao" for="edit-chamado-anexos-doc" class="botao-secundario chamado-anexo-botao" tabindex="0">📄 Adicionar PDF</label>
-              <input type="file" id="edit-chamado-anexos-doc" accept="application/pdf" multiple class="hidden" />
-            </div>
-            <div id="edit-chamado-anexos-lista"></div>
-
-            <div class="chamado-agendamento-caixa">
-              <h2 class="titulo-bloco">Agendamento</h2>
-
-              <label for="edit-chamado-data">Data</label>
-              <input type="date" id="edit-chamado-data" />
-              <p id="edit-chamado-data-passado-aviso" class="doc-hint error hidden"></p>
-              <p id="edit-chamado-data-feriado-aviso" class="doc-hint aviso hidden"></p>
-
-              <label>Reservar o tempo de serviço</label>
-              <div class="chamado-horario-intervalo">
-                <div>
-                  <label for="edit-chamado-reservado-inicio">De</label>
-                  <input type="time" id="edit-chamado-reservado-inicio" />
-                </div>
-                <div>
-                  <label for="edit-chamado-reservado-fim">Até</label>
-                  <input type="time" id="edit-chamado-reservado-fim" />
-                </div>
-              </div>
-
-              <label for="edit-chamado-horario-combinado">Horário combinado com o cliente (opcional)</label>
-              <input type="time" id="edit-chamado-horario-combinado" />
-
-              <div id="edit-chamado-conflito" class="aviso-caixa hidden"></div>
-            </div>
-
-            <button type="button" id="edit-chamado-salvar">Salvar</button>
-            <button type="button" id="edit-chamado-cancelar-form" class="botao-secundario">Fechar</button>
-            <div id="edit-chamado-status" class="status"></div>
-          </div>
-        </div>
-
-        <!-- ===================== Criar chamado ===================== -->
-        <div id="subpage-criar" class="subpage hidden">
-          <form id="chamado-form">
+        <form id="chamado-form">
             <div id="chamado-passo-cliente">
               <label for="chamado-busca-cliente">Cliente</label>
               <input type="text" id="chamado-busca-cliente" placeholder="Nome, CNPJ/CPF ou contato" autocomplete="off" />
@@ -1386,7 +1382,6 @@
               <div id="chamado-status" class="status"></div>
             </div>
           </form>
-        </div>
       </div>
     </main>
   </div>
