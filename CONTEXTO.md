@@ -889,6 +889,56 @@ O dono pediu duas coisas em Cadastro. Investigando antes de mexer:
     continua funcionando igual, e digitar depois de clicar no botão cancela
     a opção corretamente.
 
+### Bug achado a tempo: cadastro sem CPF ficava com endereço/contato invisível (14/09/2026)
+
+O dono perguntou, com razão, se um cadastro só-com-nome conseguiria ser
+**selecionado** depois (não só encontrado na busca) em qualquer aba que usa
+essa lista, tipo Chamados. Investigando, achei que **não** — antes de
+qualquer cadastro sem CPF existir de verdade:
+
+`listar-locais` e `listar-contatos` (usados tanto por Chamados > Criar
+chamado ao escolher um cliente quanto pela Consulta ao abrir um cadastro
+pra editar) filtravam os registros comparando o **texto do CPF/CNPJ**
+contra o vínculo no Airtable (`FIND(documento, {Cliente_Vinculado} & '')`)
+— isso só funciona porque o campo primário de `Entidades_Cadastradas` é o
+próprio `CPF_CNPJ` (Airtable só permite comparar o campo primário de um
+vínculo como texto numa fórmula, não o ID do registro). Sem documento, o
+próprio código já tinha um `if` explícito retornando `FALSE()` — ou seja,
+endereços e contatos de um cadastro sem CPF nunca apareceriam, mesmo
+existindo de verdade, ligados certinho no Airtable.
+
+**Corrigido nos dois workflows** (via API do n8n, ver "Como mexer no n8n
+direto pela API"): um passo novo (`Busca entidade`) busca a entidade
+primeiro — por `RECORD_ID()` quando o app manda `entidadeId` (novo,
+preferido), ou por `{CPF_CNPJ}` quando manda `documento` (mantido só pelo
+único lugar que ainda usa isso: trocar o contato de um chamado já criado,
+`abrirEdicaoChamado`). Um passo `Monta filtro` lê os IDs ligados direto do
+campo recíproco da entidade (`Locais_Atendimento`/`Contatos_Solicitantes`
+— API do Airtable devolve array de IDs de verdade nesses campos, diferente
+de fórmula) e monta `OR(RECORD_ID()='id1', RECORD_ID()='id2', ...)` pra
+buscar os registros de verdade. Não depende mais do CPF/CNPJ pra nada.
+
+`app.js` (`abrirLinha` na Consulta, `escolherClienteChamado` em Chamados)
+passou a mandar `entidadeId` em vez de `documento` nessas duas chamadas.
+
+Testado **de ponta a ponta com dado real** (só leitura, nada escrito): o
+dono autorizou testar direto no n8n local (`localhost:5678`, mesmo backend
+do túnel) com um cliente existente que já tem endereço e contato — achou
+certinho tanto por `entidadeId` quanto por `documento` (compatibilidade),
+e uma entidade inexistente devolve lista vazia sem erro. Confirmado
+também dentro do próprio app (Chamados > Criar chamado escolhendo o
+cliente, e Consulta abrindo o mesmo cadastro): endereço e contato
+aparecem nos dois lugares.
+
+**Não mexido** (fora do escopo desta pergunta, mas registrado): o terceiro
+lugar que ainda usa `documento` (trocar o contato ao editar um chamado já
+criado, `abrirEdicaoChamado`) continua sem oferecer a troca quando o
+chamado foi criado pra um cliente sem CPF (`if (chamado.clienteDocumento)`
+já pulava isso graciosamente, sem erro — só não tem a opção). Resolver
+isso de vez exigiria expor o `clienteId` (o vínculo `Cliente_Ref`) na
+resposta de `listar-chamados`, que hoje só devolve a cópia do documento.
+Fica pra quando/se isso incomodar de verdade.
+
 ## Padrão de layout: grade no computador, coluna única no celular (24/08/2026)
 
 **Vale para o app inteiro, inclusive telas que ainda não existem.** O pedido do

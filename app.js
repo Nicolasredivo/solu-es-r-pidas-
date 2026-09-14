@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.14e";
+const APP_VERSION = "2026.09.14f";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -934,8 +934,8 @@ async function abrirLinha(linha, caixa, cadastro, avisoDepois) {
     // e o tempo passa a ser o da mais lenta.
     const [detalhe, deLocais, deContatos] = await Promise.all([
       pedirAoN8n("detalhe-cadastro", { id: cadastro.id, documento: cadastro.documento }),
-      pedirAoN8n("listar-locais", { documento: cadastro.documento }),
-      pedirAoN8n("listar-contatos", { documento: cadastro.documento }),
+      pedirAoN8n("listar-locais", { entidadeId: cadastro.id }),
+      pedirAoN8n("listar-contatos", { entidadeId: cadastro.id }),
     ]);
 
     // Se qualquer uma das três falhar, o cadastro não abre. Abrir sem os
@@ -4944,11 +4944,10 @@ async function escolherClienteChamado(entidadeId) {
   chamadosListaClientes.innerHTML = "";
 
   const cad = chamadosCadastros.find((c) => c.id === entidadeId);
-  const documento = cad ? cad.documento : "";
 
   const [locaisResp, contatosResp] = await Promise.all([
-    pedirAoN8n("listar-locais", { documento }),
-    pedirAoN8n("listar-contatos", { documento }),
+    pedirAoN8n("listar-locais", { entidadeId }),
+    pedirAoN8n("listar-contatos", { entidadeId }),
   ]);
 
   const local0 = (locaisResp && locaisResp.locais && locaisResp.locais[0]) || {};

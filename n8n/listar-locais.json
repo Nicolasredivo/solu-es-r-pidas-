@@ -7,7 +7,7 @@
         "path": "listar-locais",
         "responseMode": "responseNode",
         "options": {
-          "allowedOrigins": "*"
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
         }
       },
       "id": "c0000000-0000-4000-8000-000000000010",
@@ -86,7 +86,7 @@
           "mode": "list",
           "cachedResultName": "Locais_Atendimento"
         },
-        "filterByFormula": "={{ (() => { const d = String($json.body.documento || '').replace(/D/g, ''); return d ? \"FIND('\" + d + \"', {Cliente_Vinculado} & '') > 0\" : 'FALSE()'; })() }}",
+        "filterByFormula": "={{ $json.formula }}",
         "returnAll": true,
         "options": {}
       },
@@ -95,7 +95,7 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
       "position": [
-        440,
+        860,
         -60
       ],
       "credentials": {
@@ -116,7 +116,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
+        1080,
         -60
       ]
     },
@@ -131,7 +131,57 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        880,
+        1300,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl5Joji6gAir3mNh",
+          "mode": "list",
+          "cachedResultName": "Entidades_Cadastradas"
+        },
+        "filterByFormula": "={{ (() => { const id = String($json.body.entidadeId || '').replace(/[^a-zA-Z0-9]/g, ''); if (id) return \"RECORD_ID() = '\" + id + \"'\"; const doc = String($json.body.documento || '').replace(/\\D/g, ''); return doc ? \"{CPF_CNPJ} = '\" + doc + \"'\" : 'FALSE()'; })() }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000017",
+      "name": "Busca entidade",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Le os IDs dos locais ligados direto do campo reciproco da entidade\n// (Entidades_Cadastradas.Locais_Atendimento) -- nao depende do CPF/CNPJ,\n// entao funciona igual pra cadastro com ou sem documento (ver Cadastro so\n// com nome, CONTEXTO.md 14/09/2026).\nconst entidade = $input.first().json;\nif (!entidade || !entidade.id) return [{ json: { formula: 'FALSE()' } }];\nconst raw = (entidade.fields && entidade.fields.Locais_Atendimento) || [];\nconst ids = raw.map((v) => (typeof v === 'string' ? v : (v && v.id) || '')).filter(Boolean);\nconst formula = ids.length\n  ? 'OR(' + ids.map((id) => \"RECORD_ID()='\" + id + \"'\").join(',') + ')'\n  : 'FALSE()';\nreturn [{ json: { formula } }];"
+      },
+      "id": "c0000000-0000-4000-8000-000000000018",
+      "name": "Monta filtro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
         -60
       ]
     }
@@ -152,7 +202,7 @@
       "main": [
         [
           {
-            "node": "Busca",
+            "node": "Busca entidade",
             "type": "main",
             "index": 0
           }
@@ -187,10 +237,31 @@
           }
         ]
       ]
+    },
+    "Busca entidade": {
+      "main": [
+        [
+          {
+            "node": "Monta filtro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta filtro": {
+      "main": [
+        [
+          {
+            "node": "Busca",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1"
-  },
-  "pinData": {}
+  }
 }
