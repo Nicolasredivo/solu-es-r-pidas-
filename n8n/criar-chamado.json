@@ -1,0 +1,566 @@
+{
+  "name": "App - Criar chamado",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "criar-chamado",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      },
+      "id": "h0000000-0000-4000-8000-000000000001",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "h0000000-0000-4000-8000-000000000002"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "h0000000-0000-4000-8000-000000000003",
+              "leftValue": "={{ $json.body.senha }}",
+              "rightValue": "TROQUE-ESTA-SENHA",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000004",
+      "name": "Senha esta correta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000005",
+      "name": "Responde senha incorreta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl5Joji6gAir3mNh",
+          "mode": "list",
+          "cachedResultName": "Entidades_Cadastradas"
+        },
+        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($(\"Recebe pedido do app\").first().json.body.clienteId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000006",
+      "name": "Busca cliente",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const achado = $input.all().map((i) => i.json).find((j) => j && j.id && !j.error);\nif (!achado) return [{ json: { semCliente: true } }];\nconst f = achado.fields || {};\nconst b = $(\"Recebe pedido do app\").first().json.body || {};\nconst contatoPedido = String(b.contatoId || \"\").trim();\nconst contatosDaEntidade = f.Contatos_Solicitantes || [];\nconst contatoId = (contatoPedido && contatosDaEntidade.includes(contatoPedido)) ? contatoPedido : (contatosDaEntidade[0] || \"\");\n// Local escolhido pelo app quando o cliente tem mais de um endereco\n// cadastrado (ver CONTEXTO.md 'Selecao de endereco', 14/09/2026) -- so\n// aceita se o id mandado realmente pertence a essa entidade, senao usa o\n// primeiro (mesmo comportamento de antes, pra clientes com 0 ou 1).\nconst localPedido = String(b.localId || \"\").trim();\nconst locaisDaEntidade = f.Locais_Atendimento || [];\nconst localId = (localPedido && locaisDaEntidade.includes(localPedido)) ? localPedido : (locaisDaEntidade[0] || \"\");\nreturn [{ json: {\n  clienteId: achado.id,\n  clienteNome: f.Razao_Social_Nome || \"\",\n  clienteDocumento: f.CPF_CNPJ || \"\",\n  localId,\n  contatoId,\n} }];"
+      },
+      "id": "h0000000-0000-4000-8000-000000000007",
+      "name": "Monta ids do local e contato",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblffVczCf1VeNxs7",
+          "mode": "list",
+          "cachedResultName": "Locais_Atendimento"
+        },
+        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($json.localId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000008",
+      "name": "Busca local",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblXXOEOCwQnC2qFX",
+          "mode": "list",
+          "cachedResultName": "Contatos_Solicitantes"
+        },
+        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($(\"Monta ids do local e contato\").first().json.contatoId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000009",
+      "name": "Busca contato",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbltipxOIw8F96QHO",
+          "mode": "list",
+          "cachedResultName": "Chamados"
+        },
+        "filterByFormula": "",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000010",
+      "name": "Busca todos os chamados",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Limites do dia de trabalho, usados so pra sugestao de horario livre\n// (o bloco reservado em si e sempre um \"de tal hora ate tal hora\" livre,\n// escolhido direto pelo usuario -- nao ha mais periodo fixo nem duracao\n// pre-definida). Ajustavel aqui se a rotina mudar.\nconst INICIO_DIA = \"08:00\", FIM_DIA = \"18:00\";\n\n// Horario de Brasilia fixo (-03:00, sem horario de verao atualmente) --\n// grava explicito pra nao depender de como o servidor interpreta data sem fuso.\nfunction isoBrasilia(data, hhmm) { return data + \"T\" + hhmm + \":00-03:00\"; }\n\n// Extrai \"HH:MM\" em horario de Brasilia de qualquer ISO (vem em -03:00 ao\n// montar aqui, mas vem em UTC/\"Z\" ao reler do Airtable) -- nao pode so\n// cortar a string, tem que converter de verdade.\nfunction horaLocalBrasilia(iso) {\n  const d = new Date(new Date(iso).getTime() - 3 * 3600000);\n  const hh = String(d.getUTCHours()).padStart(2, \"0\");\n  const mm = String(d.getUTCMinutes()).padStart(2, \"0\");\n  return hh + \":\" + mm;\n}\n\n// Monta o bloco reservado a partir do inicio e fim escolhidos direto pelo\n// usuario (ex: \"13:30\" ate \"17:30\") -- sem nenhum periodo/duracao\n// pre-definido no meio do caminho.\nfunction montaBloco(data, inicio, fim) {\n  return { inicioIso: isoBrasilia(data, inicio), fimIso: isoBrasilia(data, fim) };\n}\n\n// Duas janelas de tempo se cruzam se uma comeca antes da outra terminar,\n// nos dois sentidos.\nfunction seCruzam(aIni, aFim, bIni, bFim) {\n  return new Date(aIni) < new Date(bFim) && new Date(bIni) < new Date(aFim);\n}\n\n// Acha a primeira folga livre com a duracao pedida (em ms), comecando na\n// data dada e olhando ate alguns dias a frente se o dia nao tiver espaco.\n// ocupados e uma lista de { inicioIso, fimIso } (chamados ja marcados).\nfunction achaHorarioLivre(dataInicial, duracaoMs, ocupados, ignorarId) {\n  for (let d = 0; d < 10; d++) {\n    const dia = new Date(dataInicial + \"T00:00:00-03:00\");\n    dia.setUTCDate(dia.getUTCDate() + d);\n    const dataStr = dia.toISOString().slice(0, 10);\n\n    const doDia = ocupados\n      .filter((o) => o.id !== ignorarId)\n      .filter((o) => o.inicioIso.slice(0, 10) === dataStr || o.fimIso.slice(0, 10) === dataStr)\n      .sort((a, b) => new Date(a.inicioIso) - new Date(b.inicioIso));\n\n    let cursor = isoBrasilia(dataStr, INICIO_DIA);\n    const fimDoDia = isoBrasilia(dataStr, FIM_DIA);\n    for (const o of doDia) {\n      if (new Date(o.inicioIso) - new Date(cursor) >= duracaoMs) {\n        return montaSugestao(dataStr, cursor, duracaoMs);\n      }\n      if (new Date(o.fimIso) > new Date(cursor)) cursor = o.fimIso;\n    }\n    if (new Date(fimDoDia) - new Date(cursor) >= duracaoMs) {\n      return montaSugestao(dataStr, cursor, duracaoMs);\n    }\n  }\n  return null;\n}\n\nfunction montaSugestao(dataStr, cursor, duracaoMs) {\n  const fimIso = new Date(new Date(cursor).getTime() + duracaoMs).toISOString();\n  return { data: dataStr, inicio: horaLocalBrasilia(cursor), inicioIso: cursor, fim: horaLocalBrasilia(fimIso), fimIso };\n}\n\nconst base = $(\"Monta ids do local e contato\").first().json;\nif (base.semCliente) return [{ json: { erro: \"Cliente nao encontrado.\" } }];\nconst b = $(\"Recebe pedido do app\").first().json.body || {};\nconst texto = (v) => String(v ?? \"\").trim();\n\nconst local = $(\"Busca local\").all().map((i) => i.json).find((j) => j && j.id && !j.error) || {};\nconst lf = local.fields || {};\n\nconst contato = $(\"Busca contato\").all().map((i) => i.json).find((j) => j && j.id && !j.error) || {};\nconst cf = contato.fields || {};\nconst linhas = (v) => (Array.isArray(v) ? v : String(v || \"\").split(\"\\n\")).map((s) => s.trim()).filter(Boolean);\nconst whatsapp = linhas(cf.WhatsApps)[0] || \"\";\nconst email = linhas(cf.Emails)[0] || \"\";\n\n// Proximo numero sequencial: maior existente + 1 (comeca em 1 se a tabela\n// estiver vazia). O Airtable nao cria autonumber por API, entao calculamos.\nconst todos = $(\"Busca todos os chamados\").all().map((i) => i.json).filter((j) => j && j.id && !j.error);\nconst maiorNumero = todos.reduce((max, j) => Math.max(max, Number((j.fields || {}).Numero_Chamado) || 0), 0);\nconst numeroChamado = maiorNumero + 1;\n\nconst data = texto(b.data);\nconst reservadoInicio = texto(b.reservadoInicio);\nconst reservadoFim = texto(b.reservadoFim);\nconst temAgenda = Boolean(data && reservadoInicio && reservadoFim);\nconst bloco = temAgenda ? montaBloco(data, reservadoInicio, reservadoFim) : null;\n\nconst agora = new Date().toISOString();\nconst fields = {\n  Numero_Chamado: numeroChamado,\n  Cliente_Ref: [base.clienteId],\n  Cliente_Nome: base.clienteNome,\n  Cliente_Documento: base.clienteDocumento,\n  Endereco_Copia: lf.Endereco_Completo || \"\",\n  Contato_Nome: cf.Nome_Contato || \"\",\n  Contato_WhatsApp: whatsapp,\n  Contato_Email: email,\n  Local_Exato: texto(b.localExato),\n  Descricao_Solicitacao: texto(b.descricaoSolicitacao),\n  Observacoes_Servico: texto(b.observacoesServico),\n  Status: temAgenda ? \"Agendado\" : \"Aguardando confirma\\u00e7\\u00e3o de data\",\n  Historico: agora + \" -- Chamado #\" + numeroChamado + \" criado\" + (temAgenda ? \" e agendado.\" : \", sem data ainda.\"),\n};\nif (texto(b.horarioCombinadoCliente)) fields.Horario_Combinado_Cliente = texto(b.horarioCombinadoCliente);\nif (bloco) { fields.Reservado_Inicio = bloco.inicioIso; fields.Reservado_Fim = bloco.fimIso; }\n\nreturn [{ json: { metodo: \"POST\", url: \"https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO\", corpo: { typecast: true, records: [{ fields }] }, numeroChamado } }];"
+      },
+      "id": "h0000000-0000-4000-8000-000000000011",
+      "name": "Monta o chamado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo || {}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "h0000000-0000-4000-8000-000000000012",
+      "name": "Cria o chamado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "h0000000-0000-4000-8000-000000000013",
+              "leftValue": "={{ (() => { try { return JSON.parse($(\"Recebe pedido do app\").first().json.body.anexos || \"[]\").length > 0; } catch (e) { return false; } })() }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000014",
+      "name": "Tem anexo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1980,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const criado = $input.first().json;\nconst registro = (criado.records || [])[0];\nif (!registro) return [{ json: { semRegistro: true } }];\nconst b = $(\"Recebe pedido do app\").first().json.body || {};\nlet anexos = [];\ntry { anexos = JSON.parse(b.anexos || \"[]\"); } catch (e) { anexos = []; }\nif (!Array.isArray(anexos)) anexos = [];\nreturn anexos.map((a) => ({ json: {\n  url: \"https://content.airtable.com/v0/app6PyYmtFduIMp7B/\" + registro.id + \"/Anexos/uploadAttachment\",\n  corpo: { contentType: a.contentType, file: a.base64, filename: a.filename },\n} }));"
+      },
+      "id": "h0000000-0000-4000-8000-000000000015",
+      "name": "Prepara anexos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "h0000000-0000-4000-8000-000000000016",
+      "name": "Sobe os anexos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        -160
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const criado = $(\"Cria o chamado\").first().json;\nconst registro = (criado.records || [])[0] || {};\nconst numeroChamado = $(\"Monta o chamado\").first().json.numeroChamado;\nreturn [{ json: {\n  ok: true,\n  mensagem: \"Chamado #\" + numeroChamado + \" criado!\",\n  id: registro.id || \"\",\n  numeroChamado,\n  status: (registro.fields || {}).Status || \"\",\n} }];"
+      },
+      "id": "h0000000-0000-4000-8000-000000000017",
+      "name": "Junta a resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000018",
+      "name": "Responde ao app",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2860,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Não consegui criar o chamado.\"\n}",
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000019",
+      "name": "Responde erro",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        160
+      ]
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Senha esta correta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Senha esta correta?": {
+      "main": [
+        [
+          {
+            "node": "Busca cliente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde senha incorreta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca cliente": {
+      "main": [
+        [
+          {
+            "node": "Monta ids do local e contato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta ids do local e contato": {
+      "main": [
+        [
+          {
+            "node": "Busca local",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca local": {
+      "main": [
+        [
+          {
+            "node": "Busca contato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca contato": {
+      "main": [
+        [
+          {
+            "node": "Busca todos os chamados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca todos os chamados": {
+      "main": [
+        [
+          {
+            "node": "Monta o chamado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta o chamado": {
+      "main": [
+        [
+          {
+            "node": "Cria o chamado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cria o chamado": {
+      "main": [
+        [
+          {
+            "node": "Tem anexo?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem anexo?": {
+      "main": [
+        [
+          {
+            "node": "Prepara anexos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Junta a resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara anexos": {
+      "main": [
+        [
+          {
+            "node": "Sobe os anexos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sobe os anexos": {
+      "main": [
+        [
+          {
+            "node": "Junta a resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta a resposta": {
+      "main": [
+        [
+          {
+            "node": "Responde ao app",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

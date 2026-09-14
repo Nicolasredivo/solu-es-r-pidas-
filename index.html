@@ -1302,7 +1302,12 @@
 
           <div id="edit-chamado-contato-escolha" class="hidden">
             <label>Quem pediu o serviço?</label>
-            <div id="edit-chamado-lista-contatos"></div>
+            <div id="edit-chamado-lista-contatos" class="chamado-lista-picker"></div>
+          </div>
+
+          <div id="edit-chamado-local-escolha" class="hidden">
+            <label>Endereço de atendimento</label>
+            <div id="edit-chamado-lista-locais" class="chamado-lista-picker"></div>
           </div>
 
           <label for="edit-chamado-local-exato">Local exato (opcional)</label>
@@ -1327,32 +1332,6 @@
             <input type="file" id="edit-chamado-anexos-doc" accept="application/pdf" multiple class="hidden" />
           </div>
           <div id="edit-chamado-anexos-lista"></div>
-
-          <div class="chamado-agendamento-caixa">
-            <h2 class="titulo-bloco">Agendamento</h2>
-
-            <label for="edit-chamado-data">Data</label>
-            <input type="date" id="edit-chamado-data" />
-            <p id="edit-chamado-data-passado-aviso" class="doc-hint error hidden"></p>
-            <p id="edit-chamado-data-feriado-aviso" class="doc-hint aviso hidden"></p>
-
-            <label>Reservar o tempo de serviço</label>
-            <div class="chamado-horario-intervalo">
-              <div>
-                <label for="edit-chamado-reservado-inicio">De</label>
-                <input type="time" id="edit-chamado-reservado-inicio" />
-              </div>
-              <div>
-                <label for="edit-chamado-reservado-fim">Até</label>
-                <input type="time" id="edit-chamado-reservado-fim" />
-              </div>
-            </div>
-
-            <label for="edit-chamado-horario-combinado">Horário combinado com o cliente (opcional)</label>
-            <input type="time" id="edit-chamado-horario-combinado" />
-
-            <div id="edit-chamado-conflito" class="aviso-caixa hidden"></div>
-          </div>
 
           <button type="button" id="edit-chamado-salvar">Salvar</button>
           <button type="button" id="edit-chamado-cancelar-form" class="botao-secundario">Fechar</button>
@@ -1381,7 +1360,12 @@
 
               <div id="chamado-contato-escolha" class="hidden">
                 <label>Quem pediu o serviço desta vez?</label>
-                <div id="chamado-lista-contatos"></div>
+                <div id="chamado-lista-contatos" class="chamado-lista-picker"></div>
+              </div>
+
+              <div id="chamado-local-escolha" class="hidden">
+                <label>Qual endereço?</label>
+                <div id="chamado-lista-locais" class="chamado-lista-picker"></div>
               </div>
 
               <label for="chamado-local-exato">Local exato (opcional)</label>

@@ -1,0 +1,648 @@
+{
+  "name": "App - Editar chamado",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "editar-chamado",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      },
+      "id": "h0000000-0000-4000-8000-000000000001",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "h0000000-0000-4000-8000-000000000002"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "h0000000-0000-4000-8000-000000000003",
+              "leftValue": "={{ $json.body.senha }}",
+              "rightValue": "TROQUE-ESTA-SENHA",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000004",
+      "name": "Senha esta correta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000005",
+      "name": "Responde senha incorreta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbltipxOIw8F96QHO",
+          "mode": "list",
+          "cachedResultName": "Chamados"
+        },
+        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($(\"Recebe pedido do app\").first().json.body.chamadoId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000006",
+      "name": "Busca chamado atual",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "h0000000-0000-4000-8000-000000000007",
+              "leftValue": "={{ $(\"Recebe pedido do app\").first().json.body.contatoId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000008",
+      "name": "Trocou o contato?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblXXOEOCwQnC2qFX",
+          "mode": "list",
+          "cachedResultName": "Contatos_Solicitantes"
+        },
+        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($(\"Recebe pedido do app\").first().json.body.contatoId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000009",
+      "name": "Busca contato novo",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        -160
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let contatoNovo = null;\ntry { contatoNovo = $(\"Busca contato novo\").first().json; } catch (e) { contatoNovo = null; }\nreturn [{ json: { contatoNovo } }];"
+      },
+      "id": "h0000000-0000-4000-8000-000000000010",
+      "name": "Junta contato (ou nao)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const achado = $(\"Busca chamado atual\").all().map((i) => i.json).find((j) => j && j.id && !j.error);\nif (!achado) return [{ json: { erro: \"Chamado nao encontrado.\" } }];\nconst f = achado.fields || {};\nconst b = $(\"Recebe pedido do app\").first().json.body || {};\nconst texto = (v) => String(v ?? \"\").trim();\n\nconst fields = {\n  Local_Exato: texto(b.localExato),\n  Descricao_Solicitacao: texto(b.descricaoSolicitacao),\n  Observacoes_Servico: texto(b.observacoesServico),\n};\n\nconst entrada = $input.first().json || {};\n\nconst contatoNovo = entrada.contatoNovo;\nif (contatoNovo && contatoNovo.id && !contatoNovo.error) {\n  const cf = contatoNovo.fields || {};\n  const linhas = (v) => (Array.isArray(v) ? v : String(v || \"\").split(\"\\n\")).map((s) => s.trim()).filter(Boolean);\n  fields.Contato_Nome = cf.Nome_Contato || \"\";\n  fields.Contato_WhatsApp = linhas(cf.WhatsApps)[0] || \"\";\n  fields.Contato_Email = linhas(cf.Emails)[0] || \"\";\n}\n\n// Endereco escolhido pelo app quando o cliente tem mais de um endereco\n// cadastrado (ver CONTEXTO.md 'Selecao de endereco', 14/09/2026).\nconst localNovo = entrada.localNovo;\nif (localNovo && localNovo.id && !localNovo.error) {\n  const lf = localNovo.fields || {};\n  fields.Endereco_Copia = lf.Endereco_Completo || \"\";\n}\n\nconst agora = new Date().toISOString();\nconst linha = agora + \" -- Chamado editado.\";\nfields.Historico = (f.Historico ? f.Historico + \"\\n\" : \"\") + linha;\n\nreturn [{ json: { chamadoId: achado.id, metodo: \"PATCH\", url: \"https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO\", corpo: { typecast: true, records: [{ id: achado.id, fields }] } } }];"
+      },
+      "id": "h0000000-0000-4000-8000-000000000011",
+      "name": "Monta atualizacao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo || {}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "h0000000-0000-4000-8000-000000000012",
+      "name": "Grava chamado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "h0000000-0000-4000-8000-000000000013",
+              "leftValue": "={{ (() => { try { return JSON.parse($(\"Recebe pedido do app\").first().json.body.anexosNovos || \"[]\").length > 0; } catch (e) { return false; } })() }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000014",
+      "name": "Tem anexo novo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2200,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $(\"Recebe pedido do app\").first().json.body || {};\nlet anexos = [];\ntry { anexos = JSON.parse(b.anexosNovos || \"[]\"); } catch (e) { anexos = []; }\nif (!Array.isArray(anexos)) anexos = [];\nconst chamadoId = $(\"Monta atualizacao\").first().json.chamadoId;\nreturn anexos.map((a) => ({ json: {\n  url: \"https://content.airtable.com/v0/app6PyYmtFduIMp7B/\" + chamadoId + \"/Anexos/uploadAttachment\",\n  corpo: { contentType: a.contentType, file: a.base64, filename: a.filename },\n} }));"
+      },
+      "id": "h0000000-0000-4000-8000-000000000015",
+      "name": "Prepara anexos novos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "h0000000-0000-4000-8000-000000000016",
+      "name": "Sobe os anexos novos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        -160
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: true, mensagem: \"Chamado atualizado!\" } }];"
+      },
+      "id": "h0000000-0000-4000-8000-000000000017",
+      "name": "Junta a resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000018",
+      "name": "Responde ao app",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3080,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Não consegui salvar as alterações.\"\n}",
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000019",
+      "name": "Responde erro",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1980,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "h0000000-0000-4000-8000-000000000023",
+              "leftValue": "={{ $(\"Recebe pedido do app\").first().json.body.localId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000020",
+      "name": "Trocou o local?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblffVczCf1VeNxs7",
+          "mode": "list",
+          "cachedResultName": "Locais_Atendimento"
+        },
+        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($(\"Recebe pedido do app\").first().json.body.localId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000021",
+      "name": "Busca local novo",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        -160
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Carrega o que ja veio de 'Junta contato (ou nao)' (contatoNovo) e so\n// acrescenta localNovo -- Monta atualizacao le os dois daqui.\nconst anterior = $input.first().json || {};\nlet localNovo = null;\ntry { localNovo = $(\"Busca local novo\").first().json; } catch (e) { localNovo = null; }\nreturn [{ json: { ...anterior, localNovo } }];"
+      },
+      "id": "h0000000-0000-4000-8000-000000000022",
+      "name": "Junta local (ou nao)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -60
+      ]
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Senha esta correta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Senha esta correta?": {
+      "main": [
+        [
+          {
+            "node": "Busca chamado atual",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde senha incorreta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca chamado atual": {
+      "main": [
+        [
+          {
+            "node": "Trocou o contato?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trocou o contato?": {
+      "main": [
+        [
+          {
+            "node": "Busca contato novo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Junta contato (ou nao)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca contato novo": {
+      "main": [
+        [
+          {
+            "node": "Junta contato (ou nao)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta contato (ou nao)": {
+      "main": [
+        [
+          {
+            "node": "Trocou o local?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta atualizacao": {
+      "main": [
+        [
+          {
+            "node": "Grava chamado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava chamado": {
+      "main": [
+        [
+          {
+            "node": "Tem anexo novo?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem anexo novo?": {
+      "main": [
+        [
+          {
+            "node": "Prepara anexos novos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Junta a resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara anexos novos": {
+      "main": [
+        [
+          {
+            "node": "Sobe os anexos novos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sobe os anexos novos": {
+      "main": [
+        [
+          {
+            "node": "Junta a resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta a resposta": {
+      "main": [
+        [
+          {
+            "node": "Responde ao app",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trocou o local?": {
+      "main": [
+        [
+          {
+            "node": "Busca local novo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Junta local (ou nao)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca local novo": {
+      "main": [
+        [
+          {
+            "node": "Junta local (ou nao)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta local (ou nao)": {
+      "main": [
+        [
+          {
+            "node": "Monta atualizacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

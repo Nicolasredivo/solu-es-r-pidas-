@@ -43,7 +43,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.14i";
+const APP_VERSION = "2026.09.14j";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4850,101 +4850,6 @@ function dataLocalISO(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-// "Agora" em horário de Brasília (-03:00 fixo, sem horário de verão
-// atualmente -- mesma convenção do backend) independente do fuso
-// configurado no aparelho de quem está usando. Pega o instante real
-// (Date.now(), que já é UTC de verdade) e desloca 3h; os métodos UTC
-// (getUTCHours etc.) lidos depois dão a hora certa de Brasília sem
-// depender do fuso do sistema operacional.
-function agoraBrasilia() {
-  return new Date(Date.now() - 3 * 3600000);
-}
-function dataLocalISOBrasilia(d) {
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
-}
-
-// ----- feriados nacionais (fixos + móveis) -----
-//
-// Só feriados nacionais -- estaduais/municipais variam por cidade e o
-// dono não informou qual usar, então ficaria arriscado adivinhar. É só
-// aviso (o dono pediu explicitamente pra não bloquear marcação nenhuma).
-
-const FERIADOS_FIXOS = [
-  { mes: 1, dia: 1, nome: "Confraternização Universal" },
-  { mes: 4, dia: 21, nome: "Tiradentes" },
-  { mes: 5, dia: 1, nome: "Dia do Trabalho" },
-  { mes: 9, dia: 7, nome: "Independência do Brasil" },
-  { mes: 10, dia: 12, nome: "Nossa Senhora Aparecida" },
-  { mes: 11, dia: 2, nome: "Finados" },
-  { mes: 11, dia: 15, nome: "Proclamação da República" },
-  { mes: 12, dia: 25, nome: "Natal" },
-];
-
-// Domingo de Páscoa, calendário gregoriano (algoritmo de Meeus/Jones/
-// Butcher) -- a partir dele dá pra calcular os feriados móveis.
-function calculaPascoa(ano) {
-  const a = ano % 19;
-  const b = Math.floor(ano / 100);
-  const c = ano % 100;
-  const d = Math.floor(b / 4);
-  const e = b % 4;
-  const f = Math.floor((b + 8) / 25);
-  const g = Math.floor((b - f + 1) / 3);
-  const h = (19 * a + b - d - g + 15) % 30;
-  const i = Math.floor(c / 4);
-  const k = c % 4;
-  const l = (32 + 2 * e + 2 * i - h - k) % 7;
-  const m = Math.floor((a + 11 * h + 22 * l) / 451);
-  const mes = Math.floor((h + l - 7 * m + 114) / 31);
-  const dia = ((h + l - 7 * m + 114) % 31) + 1;
-  return new Date(ano, mes - 1, dia);
-}
-
-function somaDias(data, dias) {
-  const d = new Date(data);
-  d.setDate(d.getDate() + dias);
-  return d;
-}
-
-function somaDiasNaData(dataStr, dias) {
-  return dataLocalISO(somaDias(new Date(`${dataStr}T00:00:00`), dias));
-}
-
-// Soma meses sem deixar "rolar" pro mês seguinte quando o dia não existe
-// no mês de destino (ex: 31/01 + 1 mês vira 28 ou 29/02, não 02 ou
-// 03/03, que é o que o JS faria puro com setMonth).
-function somaMesesNaData(dataStr, meses) {
-  const d = new Date(`${dataStr}T00:00:00`);
-  const diaOriginal = d.getDate();
-  d.setDate(1);
-  d.setMonth(d.getMonth() + meses);
-  const ultimoDiaDoMesAlvo = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  d.setDate(Math.min(diaOriginal, ultimoDiaDoMesAlvo));
-  return dataLocalISO(d);
-}
-
-function feriadosDoAno(ano) {
-  const pascoa = calculaPascoa(ano);
-  const lista = FERIADOS_FIXOS.map((f) => ({
-    data: `${ano}-${String(f.mes).padStart(2, "0")}-${String(f.dia).padStart(2, "0")}`,
-    nome: f.nome,
-  }));
-  lista.push({ data: dataLocalISO(somaDias(pascoa, -47)), nome: "Carnaval" });
-  lista.push({ data: dataLocalISO(somaDias(pascoa, -2)), nome: "Sexta-feira Santa" });
-  lista.push({ data: dataLocalISO(pascoa), nome: "Páscoa" });
-  lista.push({ data: dataLocalISO(somaDias(pascoa, 60)), nome: "Corpus Christi" });
-  return lista;
-}
-
-const FERIADOS_POR_ANO = {};
-function nomeFeriado(dataStr) {
-  if (!dataStr) return "";
-  const ano = Number(dataStr.slice(0, 4));
-  if (!FERIADOS_POR_ANO[ano]) FERIADOS_POR_ANO[ano] = feriadosDoAno(ano);
-  const achado = FERIADOS_POR_ANO[ano].find((f) => f.data === dataStr);
-  return achado ? achado.nome : "";
-}
-
 const chamadosStatusEl = document.getElementById("chamados-status");
 const chamadosSemDataBloco = document.getElementById("chamados-sem-data-bloco");
 const listaChamadosSemData = document.getElementById("lista-chamados-sem-data");
@@ -4955,6 +4860,8 @@ const chamadoEditarBox = document.getElementById("chamado-editar-box");
 const chamadoEditarTitulo = document.getElementById("chamado-editar-titulo");
 const editChamadoContatoEscolhaBox = document.getElementById("edit-chamado-contato-escolha");
 const editChamadoListaContatos = document.getElementById("edit-chamado-lista-contatos");
+const editChamadoLocalEscolhaBox = document.getElementById("edit-chamado-local-escolha");
+const editChamadoListaLocais = document.getElementById("edit-chamado-lista-locais");
 const editChamadoLocalExato = document.getElementById("edit-chamado-local-exato");
 const editChamadoDescricao = document.getElementById("edit-chamado-descricao");
 const editChamadoObservacoes = document.getElementById("edit-chamado-observacoes");
@@ -4965,13 +4872,6 @@ const editChamadoAnexosDocInput = document.getElementById("edit-chamado-anexos-d
 const editChamadoAnexosFotoBotao = document.getElementById("edit-chamado-anexos-foto-botao");
 const editChamadoAnexosDocBotao = document.getElementById("edit-chamado-anexos-doc-botao");
 const editChamadoAnexosLista = document.getElementById("edit-chamado-anexos-lista");
-const editChamadoData = document.getElementById("edit-chamado-data");
-const editChamadoDataPassadoAviso = document.getElementById("edit-chamado-data-passado-aviso");
-const editChamadoDataFeriadoAviso = document.getElementById("edit-chamado-data-feriado-aviso");
-const editChamadoHorarioCombinado = document.getElementById("edit-chamado-horario-combinado");
-const editChamadoReservadoInicio = document.getElementById("edit-chamado-reservado-inicio");
-const editChamadoReservadoFim = document.getElementById("edit-chamado-reservado-fim");
-const editChamadoConflito = document.getElementById("edit-chamado-conflito");
 const editChamadoSalvarBotao = document.getElementById("edit-chamado-salvar");
 const editChamadoCancelarFormBotao = document.getElementById("edit-chamado-cancelar-form");
 const editChamadoStatus = document.getElementById("edit-chamado-status");
@@ -4986,6 +4886,8 @@ const chamadoClienteEnderecoEl = document.getElementById("chamado-cliente-endere
 const chamadoTrocarClienteBotao = document.getElementById("chamado-trocar-cliente");
 const chamadoContatoEscolhaBox = document.getElementById("chamado-contato-escolha");
 const chamadoListaContatos = document.getElementById("chamado-lista-contatos");
+const chamadoLocalEscolhaBox = document.getElementById("chamado-local-escolha");
+const chamadoListaLocais = document.getElementById("chamado-lista-locais");
 const chamadoLocalExatoInput = document.getElementById("chamado-local-exato");
 const chamadoDescricaoInput = document.getElementById("chamado-descricao");
 const chamadoObservacoesInput = document.getElementById("chamado-observacoes");
@@ -5003,11 +4905,13 @@ let chamadosCadastrosCarregados = false;
 let chamadosPaginaCarregada = false;
 let chamadoClienteEscolhido = null;
 let chamadoContatoEscolhidoId = "";
+let chamadoLocalEscolhidoId = "";
 let chamadosAnexosArquivos = [];
 let chamadosSemData = [];
 let chamadosComData = [];
 let chamadoEditandoAtual = null;
 let chamadoEditContatoEscolhidoId = "";
+let chamadoEditLocalEscolhidoId = "";
 let chamadoEditAnexosNovos = [];
 
 function mostrarChamadoStatus(tipo, mensagem) {
@@ -5092,17 +4996,40 @@ async function escolherClienteChamado(entidadeId) {
     pedirAoN8n("listar-contatos", { entidadeId }),
   ]);
 
-  const local0 = (locaisResp && locaisResp.locais && locaisResp.locais[0]) || {};
+  const listaLocais = (locaisResp && locaisResp.locais) || [];
   const listaContatos = (contatosResp && contatosResp.contatos) || [];
 
   chamadoClienteEscolhido = {
     id: entidadeId,
     nome: cad ? (cad.razaoSocial || cad.nomeFantasia) : "",
-    endereco: local0.endereco || "",
+    endereco: (listaLocais[0] && listaLocais[0].endereco) || "",
   };
 
   chamadoClienteNomeEl.textContent = chamadoClienteEscolhido.nome;
   chamadoClienteEnderecoEl.textContent = chamadoClienteEscolhido.endereco || "Sem endereço cadastrado.";
+
+  chamadoListaLocais.innerHTML = "";
+  if (listaLocais.length > 1) {
+    chamadoLocalEscolhaBox.classList.remove("hidden");
+    listaLocais.forEach((loc, i) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chamado-contato-item" + (i === 0 ? " active" : "");
+      btn.textContent = loc.nome || loc.endereco || "Sem nome";
+      btn.addEventListener("click", () => {
+        chamadoLocalEscolhidoId = loc.id;
+        chamadoClienteEscolhido.endereco = loc.endereco || "";
+        chamadoClienteEnderecoEl.textContent = chamadoClienteEscolhido.endereco || "Sem endereço cadastrado.";
+        chamadoListaLocais.querySelectorAll(".chamado-contato-item").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+      });
+      chamadoListaLocais.appendChild(btn);
+    });
+    chamadoLocalEscolhidoId = listaLocais[0].id;
+  } else {
+    chamadoLocalEscolhaBox.classList.add("hidden");
+    chamadoLocalEscolhidoId = listaLocais[0] ? listaLocais[0].id : "";
+  }
 
   chamadoListaContatos.innerHTML = "";
   if (listaContatos.length > 1) {
@@ -5135,6 +5062,7 @@ async function escolherClienteChamado(entidadeId) {
 chamadoTrocarClienteBotao.addEventListener("click", () => {
   chamadoClienteEscolhido = null;
   chamadoContatoEscolhidoId = "";
+  chamadoLocalEscolhidoId = "";
   chamadoClienteEscolhidoBox.classList.add("hidden");
   chamadoPassoCliente.classList.remove("hidden");
   chamadosBusca.value = "";
@@ -5249,62 +5177,12 @@ function nomeDiaSemana(dataStr) {
   const nome = new Date(`${dataStr}T00:00:00`).toLocaleDateString("pt-BR", { weekday: "long" });
   return nome.charAt(0).toUpperCase() + nome.slice(1);
 }
-function limparConflitoBox(box) {
-  box.classList.add("hidden");
-  box.innerHTML = "";
-}
-
-async function checarConflito(data, reservadoInicio, reservadoFim, ignorarId) {
-  if (!data || !reservadoInicio || !reservadoFim) return { ok: true, temConflito: false };
-  return pedirAoN8n("checar-conflito-chamado", { data, reservadoInicio, reservadoFim, chamadoIdIgnorar: ignorarId || "" });
-}
-
-// aoUsarSugestao(sugestao) e aoEmpurrar(sugestao, conflito) decidem o que
-// fazer -- criação e edição de agendamento reusam esta mesma caixa.
-// A sugestão de "usar esse horário" (pro que está sendo criado/editado
-// agora) e a de "empurrar o Chamado #X" (pra ELE) são calculadas com
-// durações diferentes lá no n8n — cada uma leva em conta a duração de quem
-// vai ocupar o horário sugerido — por isso vêm em campos separados
-// (resultado.sugestao e c.sugestaoEmpurrar), nunca reaproveitadas uma pela
-// outra.
-function mostrarConflitoBox(box, resultado, aoUsarSugestao, aoEmpurrar) {
-  const c = resultado.conflitos[0];
-  let html = `<strong>Choque de horário</strong>` +
-    `<p>Já tem o Chamado #${c.numero} (${escapeHtml(c.cliente)}) marcado das ${formatarHoraIso(c.inicio)} às ${formatarHoraIso(c.fim)} nesse dia.</p>` +
-    `<div class="chamado-opcoes-conflito">`;
-
-  if (resultado.sugestao) {
-    const s = resultado.sugestao;
-    html += `<div class="chamado-opcao-conflito">` +
-      `<p class="chamado-opcao-titulo">Usar outro horário pro seu chamado</p>` +
-      `<p class="chamado-opcao-horario">${formatarDataChamado(s.data)}, das ${s.inicio} às ${s.fim}</p>` +
-      `<button type="button" class="botao-usar-sugestao">Usar esse horário</button>` +
-      `</div>`;
-  }
-
-  if (c.sugestaoEmpurrar) {
-    const se = c.sugestaoEmpurrar;
-    html += `<div class="chamado-opcao-conflito">` +
-      `<p class="chamado-opcao-titulo">Manter seu horário e mover o Chamado #${c.numero}</p>` +
-      `<p class="chamado-opcao-horario">Chamado #${c.numero} vai pra ${formatarDataChamado(se.data)}, das ${se.inicio} às ${se.fim}</p>` +
-      `<button type="button" class="botao-secundario botao-empurrar">Marcar mesmo assim</button>` +
-      `</div>`;
-  }
-
-  html += `</div>`;
-
-  box.innerHTML = html;
-  box.classList.remove("hidden");
-
-  if (resultado.sugestao) box.querySelector(".botao-usar-sugestao").addEventListener("click", () => aoUsarSugestao(resultado.sugestao));
-  if (c.sugestaoEmpurrar) box.querySelector(".botao-empurrar").addEventListener("click", () => aoEmpurrar(c.sugestaoEmpurrar, c));
-}
-
 // ----- criar chamado -----
 
 function limparFormularioChamado() {
   chamadoClienteEscolhido = null;
   chamadoContatoEscolhidoId = "";
+  chamadoLocalEscolhidoId = "";
   chamadosAnexosArquivos = [];
   chamadoClienteEscolhidoBox.classList.add("hidden");
   chamadoPassoCliente.classList.remove("hidden");
@@ -5323,6 +5201,7 @@ async function criarChamadoDeVerdade() {
   const corpo = {
     clienteId: chamadoClienteEscolhido.id,
     contatoId: chamadoContatoEscolhidoId,
+    localId: chamadoLocalEscolhidoId,
     localExato: chamadoLocalExatoInput.value.trim(),
     descricaoSolicitacao: chamadoDescricaoInput.value.trim(),
     observacoesServico: chamadoObservacoesInput.value.trim(),
@@ -5464,41 +5343,6 @@ function desenharListaChamados() {
   }
 }
 
-// Diferente de feriado, isto BLOQUEIA de verdade -- não dá pra agendar (ou
-// reagendar) um chamado antes de hoje. Ver/navegar pra um dia passado
-// continua liberado (útil pra achar um chamado atrasado, por exemplo); o
-// que é bloqueado é o resultado terminar com uma data passada de verdade.
-function primeiroDiaPermitidoParaAgendar() {
-  return dataLocalISOBrasilia(agoraBrasilia());
-}
-
-let timerAvisoPassado = null;
-function avisaDataPassada(elAviso) {
-  elAviso.textContent = "Não é possível agendar antes de hoje. Escolha hoje ou uma data futura.";
-  elAviso.classList.remove("hidden");
-  clearTimeout(timerAvisoPassado);
-  timerAvisoPassado = setTimeout(() => elAviso.classList.add("hidden"), 4000);
-}
-
-// Feriado é só aviso, nunca bloqueia -- o dono pode ter um motivo real pra
-// atender nesse dia (plantão, cliente que só pode nesse dia etc.).
-function atualizaAvisoFeriadoEm(elAviso, dataStr) {
-  const feriado = nomeFeriado(dataStr);
-  if (feriado) {
-    elAviso.textContent = `${formatarDataChamado(dataStr)} é feriado (${feriado}). Pode marcar normalmente — é só um aviso.`;
-    elAviso.classList.remove("hidden");
-  } else {
-    elAviso.classList.add("hidden");
-  }
-}
-editChamadoData.addEventListener("change", () => {
-  if (editChamadoData.value && editChamadoData.value < primeiroDiaPermitidoParaAgendar()) {
-    avisaDataPassada(editChamadoDataPassadoAviso);
-    editChamadoData.value = primeiroDiaPermitidoParaAgendar();
-  }
-  atualizaAvisoFeriadoEm(editChamadoDataFeriadoAviso, editChamadoData.value);
-});
-
 async function carregarChamados() {
   mostrarChamadosListaStatus("neutral", "Carregando...");
   const dados = await pedirAoN8n("listar-chamados", {});
@@ -5516,10 +5360,10 @@ recarregarChamadosBotao.addEventListener("click", carregarChamados);
 
 // ----- editar chamado -----
 //
-// Uma tela só cobre tudo: local/descrição/observações/anexos/contato (via
-// "App - Editar chamado") e, se a data estiver preenchida, o agendamento
-// (via "App - Reagendar chamado", que já tinha a lógica de conflito). O
-// cliente em si não muda — só o que foi pedido, pra quem, e quando.
+// Uma tela só cobre tudo: endereço/local/descrição/observações/anexos/
+// contato (via "App - Editar chamado"). Agendamento não é feito por aqui
+// (ver CONTEXTO.md 14/09/2026) — o cliente em si também não muda, só o que
+// foi pedido, onde, e pra quem.
 
 async function abrirEdicaoChamado(chamado) {
   chamadoEditandoAtual = chamado;
@@ -5540,37 +5384,45 @@ async function abrirEdicaoChamado(chamado) {
     editChamadoAnexosAtuais.innerHTML = "";
   }
 
-  if (chamado.reservadoInicio) {
-    const d = new Date(chamado.reservadoInicio);
-    editChamadoData.value = dataLocalISO(d);
-    editChamadoReservadoInicio.value = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-    if (chamado.reservadoFim) {
-      const f = new Date(chamado.reservadoFim);
-      editChamadoReservadoFim.value = `${String(f.getHours()).padStart(2, "0")}:${String(f.getMinutes()).padStart(2, "0")}`;
-    } else {
-      editChamadoReservadoFim.value = "";
-    }
-  } else {
-    editChamadoData.value = "";
-    editChamadoReservadoInicio.value = "08:00";
-    editChamadoReservadoFim.value = "09:00";
-  }
-  editChamadoHorarioCombinado.value = chamado.horarioCombinadoCliente || "";
-  atualizaAvisoFeriadoEm(editChamadoDataFeriadoAviso, editChamadoData.value);
-  limparConflitoBox(editChamadoConflito);
   mostrarEditChamadoStatus("neutral", "");
 
   chamadoEditarBox.classList.remove("hidden");
   chamadoEditarBox.scrollIntoView({ behavior: "smooth", block: "start" });
 
-  // Contatos: só mostra escolha se o cliente tiver mais de um. Carrega
-  // depois de abrir a caixa, pra não atrasar a abertura da tela.
+  // Endereço e contato: só mostra escolha se o cliente tiver mais de um.
+  // Carrega depois de abrir a caixa, pra não atrasar a abertura da tela.
+  editChamadoLocalEscolhaBox.classList.add("hidden");
+  editChamadoListaLocais.innerHTML = "";
+  chamadoEditLocalEscolhidoId = "";
   editChamadoContatoEscolhaBox.classList.add("hidden");
   editChamadoListaContatos.innerHTML = "";
   chamadoEditContatoEscolhidoId = "";
-  if (chamado.clienteDocumento) {
-    const contatosResp = await pedirAoN8n("listar-contatos", { documento: chamado.clienteDocumento });
+  if (chamado.clienteId) {
+    const [locaisResp, contatosResp] = await Promise.all([
+      pedirAoN8n("listar-locais", { entidadeId: chamado.clienteId }),
+      pedirAoN8n("listar-contatos", { entidadeId: chamado.clienteId }),
+    ]);
+    const listaLocais = (locaisResp && locaisResp.locais) || [];
     const listaContatos = (contatosResp && contatosResp.contatos) || [];
+
+    if (listaLocais.length > 1) {
+      editChamadoLocalEscolhaBox.classList.remove("hidden");
+      listaLocais.forEach((loc) => {
+        const nomeLoc = loc.nome || loc.endereco || "Sem nome";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "chamado-contato-item" + (loc.endereco === chamado.enderecoCopia ? " active" : "");
+        btn.textContent = nomeLoc;
+        if (loc.endereco === chamado.enderecoCopia) chamadoEditLocalEscolhidoId = loc.id;
+        btn.addEventListener("click", () => {
+          chamadoEditLocalEscolhidoId = loc.id;
+          editChamadoListaLocais.querySelectorAll(".chamado-contato-item").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+        });
+        editChamadoListaLocais.appendChild(btn);
+      });
+    }
+
     if (listaContatos.length > 1) {
       editChamadoContatoEscolhaBox.classList.remove("hidden");
       listaContatos.forEach((ct) => {
@@ -5596,13 +5448,14 @@ editChamadoCancelarFormBotao.addEventListener("click", () => {
   chamadoEditandoAtual = null;
 });
 
-async function salvarEdicaoChamado(chamadoEmpurradoId, sugestaoParaEmpurrado) {
+async function salvarEdicaoChamado() {
   editChamadoSalvarBotao.disabled = true;
   mostrarEditChamadoStatus("neutral", "Salvando...");
 
   const corpoEdicao = {
     chamadoId: chamadoEditandoAtual.id,
     contatoId: chamadoEditContatoEscolhidoId,
+    localId: chamadoEditLocalEscolhidoId,
     localExato: editChamadoLocalExato.value.trim(),
     descricaoSolicitacao: editChamadoDescricao.value.trim(),
     observacoesServico: editChamadoObservacoes.value.trim(),
@@ -5617,75 +5470,18 @@ async function salvarEdicaoChamado(chamadoEmpurradoId, sugestaoParaEmpurrado) {
     mostrarEditChamadoStatus("error", "Não consegui falar com o servidor.");
     return;
   }
+  editChamadoSalvarBotao.disabled = false;
   if (!respostaEdicao || !respostaEdicao.ok) {
-    editChamadoSalvarBotao.disabled = false;
     mostrarEditChamadoStatus("error", (respostaEdicao && respostaEdicao.mensagem) || "Não consegui salvar.");
     return;
   }
 
-  // O agendamento só muda se data e horário estiverem preenchidos — editar
-  // só os outros campos, sem mexer na data, não toca nisso.
-  if (editChamadoData.value && editChamadoReservadoInicio.value && editChamadoReservadoFim.value) {
-    const respostaAgenda = await pedirAoN8n("reagendar-chamado", {
-      chamadoId: chamadoEditandoAtual.id,
-      data: editChamadoData.value, reservadoInicio: editChamadoReservadoInicio.value,
-      reservadoFim: editChamadoReservadoFim.value, horarioCombinadoCliente: editChamadoHorarioCombinado.value,
-    });
-    if (respostaAgenda && respostaAgenda.ok && chamadoEmpurradoId && sugestaoParaEmpurrado) {
-      await pedirAoN8n("reagendar-chamado", {
-        chamadoId: chamadoEmpurradoId, data: sugestaoParaEmpurrado.data,
-        reservadoInicio: sugestaoParaEmpurrado.inicio, reservadoFim: sugestaoParaEmpurrado.fim,
-      });
-    }
-    if (!respostaAgenda || !respostaAgenda.ok) {
-      editChamadoSalvarBotao.disabled = false;
-      mostrarEditChamadoStatus("error", (respostaAgenda && respostaAgenda.mensagem) || "Salvei o resto, mas não consegui atualizar o agendamento.");
-      return;
-    }
-  }
-
-  editChamadoSalvarBotao.disabled = false;
   chamadoEditarBox.classList.add("hidden");
   chamadoEditandoAtual = null;
   await carregarChamados();
 }
 
 editChamadoSalvarBotao.addEventListener("click", async () => {
-  limparConflitoBox(editChamadoConflito);
-
-  if (editChamadoData.value && editChamadoData.value < primeiroDiaPermitidoParaAgendar()) {
-    avisaDataPassada(editChamadoDataPassadoAviso);
-    mostrarEditChamadoStatus("error", "Não é possível agendar antes de hoje.");
-    return;
-  }
-  if (editChamadoData.value && (!editChamadoReservadoInicio.value || !editChamadoReservadoFim.value)) {
-    mostrarEditChamadoStatus("error", "Preencha o horário de início e fim do serviço.");
-    return;
-  }
-  if (editChamadoData.value && editChamadoReservadoFim.value <= editChamadoReservadoInicio.value) {
-    mostrarEditChamadoStatus("error", "O horário final precisa ser depois do início.");
-    return;
-  }
-
-  if (editChamadoData.value && editChamadoReservadoInicio.value && editChamadoReservadoFim.value) {
-    const resultado = await checarConflito(editChamadoData.value, editChamadoReservadoInicio.value, editChamadoReservadoFim.value, chamadoEditandoAtual.id);
-    if (resultado && resultado.temConflito) {
-      mostrarConflitoBox(editChamadoConflito, resultado,
-        (sugestao) => {
-          editChamadoData.value = sugestao.data;
-          editChamadoReservadoInicio.value = sugestao.inicio;
-          editChamadoReservadoFim.value = sugestao.fim;
-          limparConflitoBox(editChamadoConflito);
-          salvarEdicaoChamado();
-        },
-        (sugestao, conflito) => {
-          limparConflitoBox(editChamadoConflito);
-          salvarEdicaoChamado(conflito.id, sugestao);
-        });
-      return;
-    }
-  }
-
   await salvarEdicaoChamado();
 });
 

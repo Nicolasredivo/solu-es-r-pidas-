@@ -2797,6 +2797,64 @@ fechar. Por enquanto só usado na criação de chamado; dá pra reaproveitar
 noutras ações que já atualizam a tela sozinhas mas também merecem um "deu
 certo" rápido.
 
+### Agendamento tirado de Consultar chamados; escolha de endereço quando tem mais de um (14/09/2026)
+
+Mesmo padrão do que já tinha sido feito em Criar chamado, agora em Editar
+(dentro de Consultar chamados): removida a caixa inteira de "Agendamento"
+(Data, De/Até, Horário combinado, checagem de conflito com "empurrar") —
+**"não será feito por aqui"**, de novo sem adicionar em nenhuma outra tela
+(mesma memória `chamados-rebuild-ideias-reaproveitar` atualizada). Local
+exato, descrição, observações, contato e anexos continuam editáveis
+normalmente.
+
+Junto veio um pedido novo, que valia tanto pra Criar quanto pra Editar: **quando
+o cadastro do cliente tem mais de um endereço salvo, o sistema precisa
+deixar escolher qual** — antes, tanto `escolherClienteChamado` (Criar)
+quanto o próprio backend (`criar-chamado`) sempre pegavam cegamente o
+primeiro endereço da lista, sem opção nenhuma de trocar; e Editar nem
+tinha noção de endereço, só o texto livre "Local exato". Vale pra CNPJ,
+CPF e cadastro só-com-nome igual — a escolha nunca depende do tipo de
+documento, só de quantos `Locais_Atendimento` a entidade tem ligados.
+
+**Frontend**: novo bloco "Qual endereço?" / "Endereço de atendimento"
+(mesmo componente pill-list já usado pra escolher contato,
+`.chamado-lista-picker`/`.chamado-contato-item` — reaproveitado, não
+recriado com nome próprio), aparece só quando `locais.length > 1`
+(reusa a resposta de `listar-locais`, que Criar já buscava e Editar
+passou a buscar também). Com 0 ou 1 endereço, comportamento igual a
+antes — usa o único que existe (ou nenhum), sem mostrar escolha à toa.
+
+Editar passou a usar `chamado.clienteId` (que `listar-chamados` já
+devolvia, sem precisar de mudança ali) pra buscar `listar-locais` e
+`listar-contatos` por `entidadeId` — antes usava `documento` só pra
+contato, o que não achava nada pra cliente sem CPF (mesma classe de bug
+já corrigida noutro lugar em "Corrige endereço/contato invisível", agora
+fechada também aqui).
+
+**Backend**: `criar-chamado` ("Monta ids do local e contato") passou a
+respeitar um `localId` mandado pelo app, exatamente como já fazia com
+`contatoId` — só aceita se o id pertencer de verdade à entidade, senão
+cai no primeiro (mesmo fallback de antes). `editar-chamado` ganhou dois
+nós novos (`Trocou o local?` → `Busca local novo` → `Junta local (ou
+nao)`), encadeados depois do equivalente de contato, que atualizam
+`Endereco_Copia` a partir do `Endereco_Completo` do local escolhido —
+mesmo padrão exato já usado pra trocar de contato ali. Publicado e
+testado com IDs falsos (chamado/local inexistentes, propositalmente,
+pra não tocar em nenhum registro real) — confirma que os nós novos
+rodam sem erro de execução no n8n.
+
+**Limpeza**: com o agendamento fora de Criar e Editar, ficaram várias
+funções órfãs (nada mais chamava): `checarConflito`, `mostrarConflitoBox`,
+`limparConflitoBox`, `primeiroDiaPermitidoParaAgendar`, `avisaDataPassada`,
+`atualizaAvisoFeriadoEm`, e a conta de feriados nacionais inteira
+(`feriadosDoAno`, `nomeFeriado`, `calculaPascoa`, `FERIADOS_FIXOS`) —
+removidas. Bônus encontrado nessa limpeza: existiam **duas** funções
+`somaDias` no arquivo (uma de quando a Agenda tinha faixa de dias,
+já apagada; outra mais antiga, usada pelo Financeiro) — a segunda
+sobrescrevia a primeira silenciosamente (JS não avisa de redeclaração de
+função no mesmo escopo). Removida a órfã, sobrou só a do Financeiro — sem
+mudança de comportamento visível hoje, mas um bug latente a menos.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

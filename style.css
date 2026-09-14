@@ -1400,8 +1400,9 @@ button:active:not(:disabled) {
   margin-bottom: 2px;
 }
 
-/* Lista de contatos pra escolher, quando o cadastro tem mais de um */
-#chamado-lista-contatos {
+/* Lista pra escolher entre opções do cadastro (contato ou endereço) quando
+   tem mais de uma -- mesmo componente nos dois casos, em Criar e Editar. */
+.chamado-lista-picker {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -1563,67 +1564,3 @@ button:active:not(:disabled) {
   margin-top: 16px;
 }
 
-/* Agrupa visualmente os campos de data/duração/horário, dentro do
-   formulário de criar e do de editar */
-.chamado-agendamento-caixa {
-  background: #12162a;
-  border-radius: 10px;
-  padding: 12px 14px 4px;
-  margin: 6px 0 16px;
-}
-
-/* Tempo reservado pro serviço: só um "de" e um "até" lado a lado, direto --
-   o dono pediu algo simples, sem botão de duração pra escolher. */
-.chamado-horario-intervalo {
-  display: flex;
-  gap: 12px;
-  margin: 6px 0 14px;
-}
-
-.chamado-horario-intervalo > div {
-  flex: 1;
-}
-
-.chamado-horario-intervalo label {
-  display: block;
-  font-size: 0.8rem;
-  color: var(--muted);
-  margin-bottom: 2px;
-}
-
-.chamado-horario-intervalo input[type="time"] {
-  width: 100%;
-}
-
-/* Caixa de choque de horário: as duas opções (usar outro horário pro seu
-   chamado / empurrar o chamado que já estava marcado) lado a lado, bem
-   separadas visualmente uma da outra pra não confundir qual botão faz o quê */
-.chamado-opcoes-conflito {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.chamado-opcao-conflito {
-  flex: 1 1 220px;
-  background: rgba(0, 0, 0, 0.18);
-  border: 1px solid #2c3153;
-  border-radius: 10px;
-  padding: 12px;
-}
-
-.chamado-opcao-titulo {
-  font-weight: 600;
-  margin: 0 0 4px;
-}
-
-.chamado-opcao-horario {
-  color: var(--muted);
-  margin: 0 0 10px;
-}
-
-.chamado-opcao-conflito .botao-usar-sugestao,
-.chamado-opcao-conflito .botao-secundario {
-  width: 100%;
-}
