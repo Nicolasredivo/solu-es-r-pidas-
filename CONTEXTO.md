@@ -2873,6 +2873,22 @@ limpo. Sem confirmação em dois toques (diferente de excluir/cancelar
 chamado já salvo): nada foi gravado ainda nesse ponto, é só o que a
 pessoa tinha digitado na tela.
 
+### Lista de clientes aparece ao focar, antes de digitar (14/09/2026)
+
+Mesma tela: antes, a busca de cliente em Criar chamado só mostrava
+resultado depois de digitar algo (`desenharResultadosBuscaChamado`
+retornava vazio sem termo). O dono pediu pra já aparecer a lista
+**completa** de cadastros ao focar o campo, pra dar pra rolar e escolher
+com o mouse sem digitar nada — digitar continua funcionando igual,
+filtrando a mesma lista.
+
+`desenharResultadosBuscaChamado(termo)` agora usa todo `chamadosCadastros`
+quando `termo` é vazio (sem o corte de 15 que a busca filtrada tem — ali o
+corte existe pra não afogar com resultado parecido; aqui é a lista
+inteira de propósito). O listener de foco do campo (`chamadosBusca`)
+passou a chamar `desenharResultadosBuscaChamado` depois de carregar os
+cadastros (`carregarCadastrosParaChamados`, que já existia e só busca
+uma vez), não só disparar o carregamento calado como antes.
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

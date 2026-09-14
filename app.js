@@ -43,7 +43,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.14k";
+const APP_VERSION = "2026.09.14l";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4955,18 +4955,24 @@ async function carregarCadastrosParaChamados() {
   }
 }
 
+// Sem termo nenhum, mostra TODOS os cadastros (já vêm ordenados por nome do
+// n8n) -- dá pra rolar e escolher com o mouse sem precisar digitar nada.
+// Digitando, vira busca normal, limitada aos 15 melhores resultados.
 function desenharResultadosBuscaChamado(termo) {
-  chamadosListaClientes.innerHTML = "";
-  if (!termo) return;
+  const encontrados = termo
+    ? chamadosCadastros
+        .map((c) => ({ c, pontos: pontuaCadastroChamado(c, termo) }))
+        .filter((x) => x.pontos > 0)
+        .sort((a, b) => b.pontos - a.pontos)
+        .slice(0, 15)
+    : chamadosCadastros.map((c) => ({ c }));
 
-  const encontrados = chamadosCadastros
-    .map((c) => ({ c, pontos: pontuaCadastroChamado(c, termo) }))
-    .filter((x) => x.pontos > 0)
-    .sort((a, b) => b.pontos - a.pontos)
-    .slice(0, 15);
+  chamadosListaClientes.innerHTML = "";
 
   if (!encontrados.length) {
-    chamadosListaClientes.innerHTML = `<p class="doc-hint">Nenhum cliente encontrado.</p>`;
+    chamadosListaClientes.innerHTML = termo
+      ? `<p class="doc-hint">Nenhum cliente encontrado.</p>`
+      : `<p class="doc-hint">Nenhum cadastro ainda.</p>`;
     return;
   }
 
@@ -4981,7 +4987,10 @@ function desenharResultadosBuscaChamado(termo) {
   });
 }
 
-chamadosBusca.addEventListener("focus", carregarCadastrosParaChamados);
+chamadosBusca.addEventListener("focus", async () => {
+  await carregarCadastrosParaChamados();
+  desenharResultadosBuscaChamado(chamadosBusca.value.trim());
+});
 chamadosBusca.addEventListener("input", () => desenharResultadosBuscaChamado(chamadosBusca.value.trim()));
 
 async function escolherClienteChamado(entidadeId) {
