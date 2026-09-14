@@ -1601,23 +1601,444 @@ button:active:not(:disabled) {
   margin-top: 16px;
 }
 
-/* Agenda em duas colunas: a esquerda fica reservada pra mais coisa numa
-   rodada futura (vazia por enquanto, então não ocupa espaço nenhum no
-   celular -- só existe de verdade a partir da tela larga, onde tem espaço
-   sobrando pras duas colunas lado a lado). A lista fica só na coluna da
-   direita, num painel de largura fixa (o dono apontou isso direto na
-   tela: a lista não devia tomar a largura toda). */
+/* ===================== Agenda =====================
+
+   Duas colunas: linha do tempo vertical contínua na esquerda e fila de
+   chamados na direita. A esquerda ocupa o espaço que sobra; a fila tem
+   largura fixa (o dono apontou isso direto na tela: a lista não devia tomar
+   a largura toda). No celular vira uma coluna só, empilhada. */
+.agenda-cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agenda-cabecalho h1 {
+  margin: 0;
+}
+
+.agenda-ferramentas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+}
+
+/* Escala do tempo: um botão por nível, no mesmo trilho, com "−/+" nas pontas
+   pra quem prefere ir de um em um. No celular o trilho não cabe inteiro, e aí
+   ele rola por dentro -- a página em volta nunca pode rolar de lado. */
+.agenda-zoom {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  scrollbar-width: none;
+}
+
+.agenda-zoom::-webkit-scrollbar {
+  display: none;
+}
+
+.agenda-zoom button {
+  width: auto;
+  flex: 0 0 auto;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 7px 11px;
+  line-height: 1;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.agenda-zoom button + button {
+  border-left: 1px solid #2c3153;
+}
+
+.agenda-zoom button:hover {
+  background: rgba(91, 141, 239, 0.12);
+  color: var(--text);
+}
+
+.agenda-nivel.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.agenda-zoom-passo {
+  font-size: 1rem !important;
+  padding: 7px 12px !important;
+}
+
+/* Durante um arrasto, passar o mouse em cima de um nível e segurar um
+   instante troca a escala sem soltar o chamado. */
+.agenda-nivel.alvo-arraste {
+  background: rgba(62, 207, 142, 0.25);
+  color: var(--text);
+}
+
+.agenda-botoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.agenda-botoes button {
+  width: auto;
+  margin: 0;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+}
+
+.agenda-botao-icone {
+  padding: 7px 10px !important;
+  font-size: 0.95rem !important;
+  line-height: 1;
+}
+
+.agenda-botoes button:disabled {
+  opacity: 0.4;
+}
+
+/* Faixa de recado (conflito, sugestão de horário livre, falha ao salvar).
+   Fica no fluxo da página em vez de virar modal: o dono continua mexendo na
+   agenda enquanto lê. */
+.agenda-aviso {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  background: rgba(245, 166, 35, 0.12);
+  border: 1px solid rgba(245, 166, 35, 0.4);
+  color: var(--text);
+}
+
+.agenda-aviso.erro {
+  background: rgba(229, 72, 77, 0.12);
+  border-color: rgba(229, 72, 77, 0.45);
+}
+
+.agenda-aviso.ok {
+  background: rgba(62, 207, 142, 0.12);
+  border-color: rgba(62, 207, 142, 0.4);
+}
+
+.agenda-aviso button {
+  width: auto;
+  margin: 0;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+}
+
 .agenda-layout {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  margin-top: 14px;
 }
 
-.agenda-futuro {
+.agenda-calendario {
   flex: 1 1 auto;
   min-width: 0;
 }
 
+/* O que rola de verdade. A página em volta fica parada -- a linha do tempo
+   tem a própria rolagem, senão navegar no tempo levaria a página junto. */
+.agenda-viewport {
+  position: relative;
+  height: 62vh;
+  min-height: 380px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid #2c3153;
+  border-radius: 12px;
+  background: #141829;
+  overscroll-behavior: contain;
+}
+
+/* Altura definida pelo JS: é a janela de tempo desenhada no momento, não o
+   tempo todo (que é infinito). Ver "janela" em app.js. */
+.agenda-conteudo {
+  position: relative;
+  width: 100%;
+}
+
+/* Linhas de divisão do tempo. O rótulo mora na canaleta da esquerda. */
+.agenda-marca {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  pointer-events: none;
+}
+
+.agenda-marca-forte {
+  border-top-color: rgba(255, 255, 255, 0.16);
+}
+
+.agenda-marca-rotulo {
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  font-size: 0.66rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.agenda-marca-forte .agenda-marca-rotulo {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Faixa de fim de semana, só pra dar ritmo visual na escala larga. */
+.agenda-fimdesemana {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.022);
+  pointer-events: none;
+}
+
+/* "Agora": a referência mais importante da tela. */
+.agenda-agora {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px solid var(--error);
+  z-index: 4;
+  pointer-events: none;
+}
+
+.agenda-agora span {
+  position: absolute;
+  right: 6px;
+  top: -9px;
+  background: var(--error);
+  color: #fff;
+  font-size: 0.64rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* Blocos agendados. Ficam depois da canaleta dos rótulos. */
+.agenda-bloco {
+  position: absolute;
+  left: 58px;
+  right: 10px;
+  border-radius: 8px;
+  padding: 2px 8px;
+  overflow: hidden;
+  cursor: grab;
+  border: 1px solid var(--accent);
+  background: rgba(91, 141, 239, 0.28);
+  color: var(--text);
+  font-size: 0.74rem;
+  line-height: 1.25;
+  z-index: 3;
+  touch-action: none;
+  user-select: none;
+}
+
+/* Aguardando confirmação do cliente continua ocupando o horário -- só muda
+   a cor, pra dar pra ver de longe o que já está confirmado. */
+.agenda-bloco.aguardando {
+  border-color: var(--aviso);
+  border-style: dashed;
+  background: rgba(245, 166, 35, 0.2);
+}
+
+.agenda-bloco.andamento {
+  border-color: var(--ok);
+  background: rgba(62, 207, 142, 0.22);
+}
+
+.agenda-bloco.arrastando {
+  opacity: 0.3;
+  cursor: grabbing;
+}
+
+.agenda-bloco.alvo-troca {
+  outline: 2px solid var(--ok);
+  outline-offset: 1px;
+}
+
+.agenda-bloco-titulo {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agenda-bloco-linha {
+  color: rgba(238, 240, 248, 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Alça de esticar/encolher a duração. Só aparece quando o bloco é alto o
+   bastante pra ela não comer o texto inteiro. */
+.agenda-bloco-alca {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.agenda-bloco-alca.topo {
+  top: 0;
+}
+
+.agenda-bloco-alca.base {
+  bottom: 0;
+}
+
+.agenda-bloco-alca::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.agenda-bloco-alca.topo::after {
+  top: 2px;
+}
+
+.agenda-bloco-alca.base::after {
+  bottom: 2px;
+}
+
+/* Dia marcado mas sem horário exato: fica preso na linha do dia, com cara de
+   "ainda falta definir". Não ocupa horário nenhum. */
+.agenda-bloco-semhora {
+  position: absolute;
+  left: 58px;
+  right: 10px;
+  height: 22px;
+  border-radius: 6px;
+  padding: 2px 8px;
+  border: 1px dashed var(--aviso);
+  background: rgba(245, 166, 35, 0.14);
+  color: var(--text);
+  font-size: 0.7rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: grab;
+  z-index: 3;
+  touch-action: none;
+  user-select: none;
+}
+
+/* Onde o chamado vai cair se soltar agora. */
+.agenda-previa {
+  position: absolute;
+  left: 58px;
+  right: 10px;
+  border-radius: 8px;
+  border: 2px dashed var(--ok);
+  background: rgba(62, 207, 142, 0.16);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.agenda-previa.conflito {
+  border-color: var(--error);
+  background: rgba(229, 72, 77, 0.18);
+}
+
+/* Cópia do card colada no cursor enquanto arrasta. */
+.agenda-fantasma {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  max-width: 250px;
+  padding: 7px 11px;
+  border-radius: 9px;
+  background: var(--card);
+  border: 1px solid var(--accent);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+  font-size: 0.78rem;
+  color: var(--text);
+  opacity: 0.95;
+}
+
+.agenda-fantasma.conflito {
+  border-color: var(--error);
+}
+
+/* Menu de ações de um bloco (clique sem arrastar). */
+.agenda-menu {
+  position: fixed;
+  z-index: 55;
+  min-width: 190px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid #2c3153;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+}
+
+.agenda-menu p {
+  margin: 0 0 6px;
+  padding: 0 6px;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.agenda-menu strong {
+  display: block;
+  padding: 0 6px 4px;
+  font-size: 0.85rem;
+}
+
+.agenda-menu button {
+  width: 100%;
+  margin: 2px 0 0;
+  padding: 7px 10px;
+  text-align: left;
+  font-size: 0.8rem;
+  background: transparent;
+  color: var(--text);
+  border: none;
+  border-radius: 7px;
+}
+
+.agenda-menu button:hover {
+  background: rgba(91, 141, 239, 0.18);
+}
+
+/* Fila da direita: só o que ainda não tem lugar na agenda. */
 @media (min-width: 768px) {
   .agenda-layout {
     flex-direction: row;
@@ -1625,20 +2046,83 @@ button:active:not(:disabled) {
   }
 
   .agenda-painel {
-    flex: 0 0 400px;
-    max-width: 400px;
+    flex: 0 0 340px;
+    max-width: 340px;
   }
+}
+
+.agenda-painel {
+  border: 1px solid #2c3153;
+  border-radius: 12px;
+  padding: 12px 14px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+/* Soltar um chamado agendado aqui tira ele da agenda (sem excluir). */
+.agenda-painel.alvo-solta {
+  border-color: var(--ok);
+  background: rgba(62, 207, 142, 0.08);
+}
+
+.agenda-painel .titulo-bloco {
+  margin-top: 0;
 }
 
 /* Painel próprio que rola por dentro (a página em volta não rola junto) --
    pedido específico pra Agenda, diferente do resto do app, que sempre deixa
    a página inteira rolar. */
 .agenda-lista {
-  max-height: 65vh;
+  max-height: 52vh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   margin-top: 10px;
   padding-right: 4px;
+  overscroll-behavior: contain;
+}
+
+/* Card compacto da fila: é pra arrastar, então não leva botão nenhum dentro
+   (botão roubaria o clique do arrasto). As ações ficam no menu, pelo clique
+   simples. */
+.agenda-fila-card {
+  background: var(--card);
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  padding: 9px 11px;
+  margin-bottom: 8px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.agenda-fila-card:hover {
+  border-color: var(--accent);
+}
+
+.agenda-fila-card.arrastando {
+  opacity: 0.35;
+}
+
+.agenda-fila-card strong {
+  display: block;
+  font-size: 0.86rem;
+  margin-bottom: 2px;
+}
+
+.agenda-fila-card p {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda-fila-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
 }
 
 /* Separador simples entre grupos de datas próximas (hoje/ontem/essa semana/

@@ -1395,16 +1395,47 @@
       </div>
 
       <!-- ===================== Agenda ===================== -->
+      <!-- Linha do tempo vertical contínua na esquerda (rola no tempo e muda
+           de escala com o zoom) e, na direita, a fila de chamados que ainda
+           não têm lugar na agenda. Arrastar da fila pra linha do tempo é o
+           jeito principal de agendar. -->
       <div id="page-agenda" class="card page hidden">
-        <h1>Agenda</h1>
+        <div class="agenda-cabecalho">
+          <h1>Agenda</h1>
+
+          <div class="agenda-ferramentas">
+            <div class="agenda-zoom" role="group" aria-label="Escala de tempo">
+              <button type="button" id="agenda-zoom-menos" class="agenda-zoom-passo" aria-label="Afastar no tempo">−</button>
+              <button type="button" class="agenda-nivel" data-nivel="ano">Ano</button>
+              <button type="button" class="agenda-nivel" data-nivel="mes">Mês</button>
+              <button type="button" class="agenda-nivel" data-nivel="semana">Semana</button>
+              <button type="button" class="agenda-nivel" data-nivel="dia">Dia</button>
+              <button type="button" class="agenda-nivel" data-nivel="hora">Hora</button>
+              <button type="button" class="agenda-nivel" data-nivel="minuto">Minuto</button>
+              <button type="button" id="agenda-zoom-mais" class="agenda-zoom-passo" aria-label="Aproximar no tempo">+</button>
+            </div>
+
+            <div class="agenda-botoes">
+              <button type="button" id="agenda-agora" class="botao-secundario">Agora</button>
+              <button type="button" id="agenda-desfazer" class="botao-secundario agenda-botao-icone" title="Desfazer (Ctrl+Z)" aria-label="Desfazer">↶</button>
+              <button type="button" id="agenda-refazer" class="botao-secundario agenda-botao-icone" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer">↷</button>
+              <button type="button" id="agenda-atualizar" class="link-button">↻ Atualizar</button>
+            </div>
+          </div>
+        </div>
+
+        <p id="agenda-aviso" class="agenda-aviso hidden"></p>
 
         <div class="agenda-layout">
-          <!-- Reservado pra mais coisa numa rodada futura -- vazio de
-               propósito por enquanto. -->
-          <div id="agenda-futuro" class="agenda-futuro"></div>
+          <div class="agenda-calendario">
+            <div id="agenda-viewport" class="agenda-viewport">
+              <div id="agenda-conteudo" class="agenda-conteudo"></div>
+            </div>
+          </div>
 
           <div class="agenda-painel">
-            <button type="button" id="agenda-atualizar" class="link-button">↻ Atualizar</button>
+            <h2 class="titulo-bloco">Fila de chamados</h2>
+            <p class="doc-hint">Arraste um chamado para a linha do tempo pra agendar. Arraste de volta pra cá pra tirar da agenda.</p>
             <div id="agenda-lista" class="agenda-lista"></div>
           </div>
         </div>
@@ -1413,6 +1444,12 @@
   </div>
 
   <div id="toast" class="toast" aria-live="polite"></div>
+
+  <!-- Fantasma que acompanha o mouse durante o arrasto, e menu de ações de um
+       bloco da agenda. Ficam fora das páginas de propósito: são posicionados
+       em relação à janela (position: fixed), não ao cartão da página. -->
+  <div id="agenda-fantasma" class="agenda-fantasma hidden"></div>
+  <div id="agenda-menu" class="agenda-menu hidden"></div>
 
   <script src="config.js"></script>
   <script src="app.js"></script>

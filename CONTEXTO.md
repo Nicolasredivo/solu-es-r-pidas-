@@ -2998,6 +2998,129 @@ Confirmado por medição direta numa tela larga (1900px): coluna da
 esquerda com ~1148px vazios, painel da lista travado em 400px à
 direita — bate com a área que o dono circulou.
 
+### Agenda operacional: linha do tempo contínua com arrastar, zoom e conflito (14/09/2026)
+
+A área reservada da esquerda virou a Agenda de verdade: uma **linha do
+tempo vertical contínua** que muda de escala (Ano / Mês / Semana / Dia /
+Hora / Minuto) em vez de trocar de tela, com a **fila de chamados** na
+coluna da direita. Arrastar da fila pra linha do tempo é o jeito
+principal de agendar; arrastar de volta pra fila desagenda (nunca
+exclui).
+
+**Ideia que segura tudo:** a tela nunca desenha "o tempo todo". Desenha
+uma **janela** de umas 6 telas de tempo em volta de onde a pessoa está
+olhando (`agendaMontarJanela`), e quando a rolagem chega perto da borda,
+a janela é refeita em volta da posição atual e a rolagem é recolocada no
+mesmo instante de antes (`agendaConferirBordas`). Por isso a quantidade
+de elementos na tela fica quase igual em qualquer escala e em qualquer
+ano — de 2025 a 2030 continuam sendo ~150 linhas de grade. Sem isso, a
+escala de minutos em vários anos seria milhões de divisões no DOM.
+
+**Escalas** (`AGENDA_NIVEIS`, px por minuto): cada uma é pensada como "o
+que cabe numa tela de ~640px" — um ano, um mês, uma semana, um dia — e
+daí pra baixo o horário vai abrindo. Só as escalas Dia/Hora/Minuto têm
+`precisa: true`; nelas o encaixe é de **15 em 15 minutos**. Nas escalas
+largas (Semana/Mês/Ano) só dá pra escolher o **dia**, e o chamado fica
+marcado **sem horário** — pedido explícito do dono: não inventar um
+horário que ele não escolheu. Trocar de escala mantém o mesmo instante
+debaixo do mesmo ponto da tela (`agendaDefinirNivel` recebe o instante e
+a âncora), então aproximar aproxima, não pula pra hoje.
+
+**Um motor de arrasto só** cobre os quatro gestos: pegar da fila, mover
+um bloco, esticar/encolher pelas alças de cima e de baixo, e devolver
+pra fila. O bloco arrastado **não** é movido no DOM — o que segue o
+mouse é um fantasma (`#agenda-fantasma`, `position: fixed`) e o que
+mostra o destino é uma prévia redesenhada a cada movimento. Isso é o que
+deixa a janela ser reconstruída no meio do arrasto sem apagar o elemento
+que o dedo está segurando (foi exatamente o bug que a faixa de dias
+antiga tinha que evitar com cuidado).
+
+**Segurar perto da borda** faz a linha do tempo andar sozinha (mais
+rápido quanto mais colado na borda), em cadeia de `setTimeout` — o mesmo
+mecanismo da faixa antiga, que já tinha se provado testável sem depender
+de frames. Detalhe achado testando: **as esperas de "segurar parado"
+não podem depender de `pointermove`** — mouse parado não dispara evento
+nenhum, e por isso o tique do arrasto também chama
+`agendaAvaliarAlvoSobPonteiro()`. São duas esperas: ~0,45s em cima de um
+botão de escala **troca o zoom sem largar o chamado**, e ~0,9s em cima de
+outro bloco **oferece trocar os horários dos dois** (nunca automático —
+sempre pergunta antes, e recusa explicando quando as durações diferentes
+fariam o resultado bater num terceiro).
+
+**Conflito é a regra central:** uma agenda só, dois chamados nunca no
+mesmo intervalo. `novoInicio < outroFim && novoFim > outroInicio` —
+**encostado não é conflito** (um termina 10:00, o outro começa 10:00,
+pode). Vale pra soltar, mover, redimensionar e trocar. A tela mostra em
+tempo real (prévia verde/vermelha) e, ao soltar em cima de ocupado, não
+grava: mostra o conflito e **sugere** o próximo horário livre com a
+duração daquele chamado, num botão — nunca move sozinho. Aguardando
+confirmação **ocupa igual** a confirmado; dia sem horário exato não
+ocupa nada (ainda não é horário).
+
+**Persistência**: muda na tela na hora e manda pro n8n; se o servidor
+recusar (conflito, rede, erro), **volta tudo pro que era** e avisa
+discreto — nunca fica mostrando que deu certo quando não deu
+(`agendaAplicar`). **Desfazer/refazer** (Ctrl+Z / Ctrl+Shift+Z e os dois
+botões) guarda o estado de antes e de depois de cada chamado envolvido e
+reaplica pelo mesmo caminho — ou seja, desfazer também grava no banco, e
+também pode ser recusado se o horário antigo já tiver sido tomado.
+
+**Fuso**: tudo na Agenda é contado no relógio de Brasília (-03:00), o
+mesmo que o n8n grava, e não no fuso do aparelho ("parede" no código é o
+instante deslocado pro fuso fixo, pra poder usar `getUTC*` sem depender
+de onde o aparelho acha que está). Sem isso a linha do tempo deslizaria
+uma hora num aparelho com outro fuso.
+
+**Banco: nenhum campo novo.** `Reservado_Inicio` + `Reservado_Fim` +
+`Status` já davam conta:
+- fila = sem `Reservado_Inicio`;
+- dia marcado sem horário = `Reservado_Inicio` no dia 00:00 e
+  `Reservado_Fim` **vazio** (e por isso não ocupa faixa nenhuma);
+- na agenda aguardando = tem os dois, Status "Aguardando confirmação de
+  data"; confirmado = Status "Agendado". Dia sem horário nunca é
+  confirmado.
+
+**n8n — `App - Reagendar chamado` virou o endereço único de agendamento**
+(mesmo caminho `reagendar-chamado`, nada apagado; backup em
+`n8n/reagendar-chamado.json`). Passou de 15 pra 13 nós:
+- `Busca chamados ativos` novo, pra **checar conflito no servidor** e não
+  confiar só na tela;
+- `Recusou?` + `Responde recusa`: quando o pedido é inválido ou bate em
+  alguém, responde o motivo (com a lista de conflitos e a sugestão) **sem
+  gravar nada**;
+- modos novos: `desagendar`, `semHorario`, `confirmarData`,
+  `statusAgendamento`, e `dataFim` separado (sem ele, um serviço que
+  atravessa a meia-noite viraria "fim antes do início");
+- o par de nós do antigo "chamado empurrado" (que a tela não usava mais)
+  virou a **troca de horários**, e agora os dois chamados vão no **mesmo
+  PATCH** do Airtable: ou os dois mudam, ou nenhum muda — antes eram duas
+  gravações separadas, que podiam deixar metade da troca salva;
+- `alwaysOutputData` nas buscas: sem isso, um id que não existe (ou uma
+  troca vazia, que é o caso comum) parava a cadeia no meio e o app ficava
+  esperando uma resposta que nunca vinha.
+
+A fila da direita passou a mostrar **só o que ainda não tem lugar na
+agenda** (o que já está marcado aparece na linha do tempo, que é onde ele
+é organizado), mantendo os separadores por data de criação. Cards da fila
+não têm mais botões dentro (botão roubaria o clique do arrasto): clicar
+sem arrastar abre um menu com Confirmar data / Tirar da agenda / Editar
+chamado / Cancelar chamado.
+
+**Como foi testado.** Com chamados **falsos** e a rede trocada por uma
+falsa: arrastar da fila, conflito bloqueando, aceitar a sugestão,
+encostado sem conflito, esticar pela alça, mover, desfazer, refazer,
+trocar dois (e cancelar a troca sem mexer em nada), devolver pra fila,
+falha de servidor voltando tudo, rolagem automática nas duas bordas
+variando com a distância, zoom e troca com o **mouse parado**, nenhum
+temporizador sobrando depois de soltar, virada de mês, de ano e de
+meia-noite, e a janela se esticando ao rolar longe. Contra o n8n de
+verdade: senha errada, id falso e troca com parceiro inexistente (todos
+recusados sem gravar). E, com o **#12 autorizado pelo dono**: agendou,
+recarregou a página, continuou lá igual, o conflito contra ele foi
+recusado sem gravar, e no fim ele foi devolvido pra fila — os 5 chamados
+reais terminaram exatamente como estavam (só sobrou registro no campo
+Histórico).
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
@@ -3020,19 +3143,16 @@ direita — bate com a área que o dono circulou.
 
 - Painel de status das automações
 - Tela de chat/assistente
-- **Chamados/Agenda — a faixa de dias (Agenda + Criar) foi apagada em
-  14/09/2026 pra refazer do zero** (ver a seção "Faixa de dias apagada
-  pra refazer do zero" acima, e a memória
-  `chamados-rebuild-ideias-reaproveitar`). Ideias já discutidas com o
-  dono, ainda não detalhadas/planejadas pra essa reconstrução:
-  - Timeline mais rica: linha do "agora", legenda de cor, tocar num
-    espaço vazio da grade pra já abrir "Criar chamado" com aquele
-    horário, comprimir a régua em dias muito cheios.
-  - Ações rápidas: segurar (long-press) o balão pra um menu rápido
-    (ligar/WhatsApp, marcar "Em andamento", ver endereço) sem abrir o
-    formulário inteiro; deslizar o card da lista pra editar/cancelar
-    rápido.
-  - Lista de baixo ("Agenda", abaixo da faixa de dias) reorganizada:
-    agrupar por dia com cabeçalhos, busca por cliente, cards compactos
-    que expandem ao tocar — repensar se ela ainda faz sentido do jeito
-    atual ou vira um resumo ligado à própria faixa de dias.
+- **Agenda** (reconstruída em 14/09/2026 como linha do tempo contínua —
+  ver a seção "Agenda operacional" acima). O que ficou combinado de
+  **não** fazer agora, pra uma rodada futura: funcionários/técnicos/
+  equipes, agendas por pessoa, recursos em paralelo, permissão por
+  técnico, roteirização e mapa. Hoje existe **uma agenda operacional
+  só**, e a regra de conflito depende disso. Outras ideias já discutidas
+  e ainda não feitas:
+  - Tocar num espaço vazio da grade pra já abrir "Criar chamado" com
+    aquele horário; legenda de cor; comprimir a régua em dias cheios.
+  - Ações rápidas no menu do bloco (ligar/WhatsApp, marcar "Em
+    andamento", ver endereço) sem abrir o formulário inteiro.
+  - Refinar a aparência: o combinado foi "primeiro funcional, limpo e
+    profissional; depois a gente melhora o visual".

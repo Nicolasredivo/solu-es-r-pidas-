@@ -43,7 +43,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.14q";
+const APP_VERSION = "2026.09.14r";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4857,6 +4857,17 @@ const listaChamadosComData = document.getElementById("lista-chamados-com-data");
 const recarregarChamadosBotao = document.getElementById("recarregar-chamados");
 const agendaAtualizarBotao = document.getElementById("agenda-atualizar");
 const agendaListaEl = document.getElementById("agenda-lista");
+const agendaPainelEl = agendaListaEl.closest(".agenda-painel");
+const agendaViewport = document.getElementById("agenda-viewport");
+const agendaConteudo = document.getElementById("agenda-conteudo");
+const agendaAvisoEl = document.getElementById("agenda-aviso");
+const agendaFantasmaEl = document.getElementById("agenda-fantasma");
+const agendaMenuEl = document.getElementById("agenda-menu");
+const agendaAgoraBotao = document.getElementById("agenda-agora");
+const agendaDesfazerBotao = document.getElementById("agenda-desfazer");
+const agendaRefazerBotao = document.getElementById("agenda-refazer");
+const agendaZoomMenosBotao = document.getElementById("agenda-zoom-menos");
+const agendaZoomMaisBotao = document.getElementById("agenda-zoom-mais");
 
 const chamadoEditarBox = document.getElementById("chamado-editar-box");
 const chamadoEditarTitulo = document.getElementById("chamado-editar-titulo");
@@ -5269,9 +5280,15 @@ function montarCardChamado(c, comData) {
   card.className = "chamado-card";
 
   let horarioTexto = "";
-  if (comData) {
+  if (comData && c.reservadoInicio) {
     const dataFmt = new Date(c.reservadoInicio).toLocaleDateString("pt-BR");
-    horarioTexto = `<p class="chamado-card-horario">${dataFmt} · ${formatarHoraIso(c.reservadoInicio)} às ${formatarHoraIso(c.reservadoFim)}` +
+    // Dia marcado na Agenda mas sem horário exato ainda: o registro fica com
+    // Reservado_Inicio e SEM Reservado_Fim (ver CONTEXTO.md, Agenda
+    // operacional). Sem esse caso, a linha saía como "Invalid Date".
+    const horas = c.reservadoFim
+      ? `${formatarHoraIso(c.reservadoInicio)} às ${formatarHoraIso(c.reservadoFim)}`
+      : "horário ainda não definido";
+    horarioTexto = `<p class="chamado-card-horario">${dataFmt} · ${horas}` +
       `${c.horarioCombinadoCliente ? ` (combinado ${escapeHtml(c.horarioCombinadoCliente)})` : ""}</p>`;
   }
 
@@ -5371,25 +5388,1036 @@ function rotuloAgendaGrupo(iso, agora) {
   return String(d.getFullYear());
 }
 
-// Lista única de todos os chamados (com ou sem agendamento antigo),
-// ordenada do mais antigo pro mais recente pela data de criação -- rola
-// dentro do próprio painel (ver .agenda-lista), não a página inteira.
-function desenharAgenda() {
-  const todos = [...chamadosSemData, ...chamadosComData]
-    .filter((c) => c.criadoEm)
+// ===================== Agenda: linha do tempo =====================
+//
+// Uma linha do tempo vertical só, contínua, que MUDA DE ESCALA (ano até
+// minuto) em vez de trocar de tela. Nada é desenhado "pro tempo todo": a
+// tela desenha uma JANELA de tempo em volta de onde a pessoa está olhando,
+// e essa janela anda junto com a rolagem (ver agendaConferirBordas). Por
+// isso a quantidade de coisa na tela fica sempre parecida, em qualquer
+// escala e em qualquer ano.
+//
+// Tudo é contado no relógio de Brasília (-03:00), o mesmo fuso que o n8n
+// grava no Airtable -- não no fuso do aparelho. "Parede" abaixo quer dizer
+// justamente isso: o instante deslocado pro fuso fixo, pra poder usar
+// getUTCHours()/etc. sem depender de onde o aparelho acha que está.
+
+const AGENDA_FUSO_MIN = -180;
+const MS_MIN = 60000, MS_HORA = 3600000, MS_DIA = 86400000;
+
+const AGENDA_SNAP_MIN = 15;            // o encaixe pedido: 15 em 15 minutos
+const AGENDA_DURACAO_PADRAO_MIN = 60;  // chamado sem duração nasce com 1h
+const AGENDA_DIA_INICIO_H = 8;         // só pra SUGERIR horário livre
+const AGENDA_DIA_FIM_H = 18;
+const AGENDA_MARGEM_AUTO_PX = 70;      // perto da borda = rola sozinho
+const AGENDA_AUTO_ESPERA_MAX_MS = 70;  // longe da borda: devagar
+const AGENDA_AUTO_ESPERA_MIN_MS = 16;  // colado na borda: rápido
+const AGENDA_ESPERA_TROCA_MS = 900;    // segurar em cima de outro bloco
+const AGENDA_ESPERA_ZOOM_MS = 450;     // segurar em cima de um nível de zoom
+const AGENDA_ARRASTE_MINIMO_PX = 4;    // menos que isso ainda é um clique
+const AGENDA_TELAS_JANELA = 3;         // telas de tempo desenhadas por lado
+const AGENDA_HISTORICO_MAX = 60;
+
+// px por minuto de cada escala. Pensado como "o que cabe numa tela de ~640px":
+// um ano inteiro, um mês, uma semana, um dia -- e daí pra baixo o horário vai
+// abrindo até dar pra pegar de 15 em 15 minutos com folga.
+// `precisa` diz se naquela escala dá pra escolher HORÁRIO; nas escalas largas
+// só dá pra escolher o DIA, e aí o chamado fica marcado sem horário (o pedido
+// foi explícito: não inventar um horário que a pessoa não escolheu).
+const AGENDA_NIVEIS = [
+  { id: "ano", rotulo: "Ano", pxPorMin: 640 / (365 * 1440), precisa: false },
+  { id: "mes", rotulo: "Mês", pxPorMin: 640 / (30 * 1440), precisa: false },
+  { id: "semana", rotulo: "Semana", pxPorMin: 640 / (7 * 1440), precisa: false },
+  { id: "dia", rotulo: "Dia", pxPorMin: 640 / 1440, precisa: true },
+  { id: "hora", rotulo: "Hora", pxPorMin: 2, precisa: true },
+  { id: "minuto", rotulo: "Minuto", pxPorMin: 4, precisa: true },
+];
+
+// ----- relógio de Brasília -----
+
+function agParede(ms) { return ms + AGENDA_FUSO_MIN * MS_MIN; }
+function agAgora() { return agParede(Date.now()); }
+function agDeIso(iso) { return agParede(new Date(iso).getTime()); }
+function agDia(parede) { return Math.floor(parede / MS_DIA) * MS_DIA; }
+function agDataStr(parede) { return new Date(parede).toISOString().slice(0, 10); }
+function agHoraStr(parede) {
+  const d = new Date(parede);
+  return String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0");
+}
+// Formata sempre em UTC de propósito: "parede" já é o horário de Brasília
+// deslocado, então deixar o navegador aplicar o fuso dele de novo erraria.
+function agFmt(parede, opcoes) {
+  return new Date(parede).toLocaleDateString("pt-BR", Object.assign({ timeZone: "UTC" }, opcoes));
+}
+function agendaDuracaoTexto(ms) {
+  const min = Math.max(0, Math.round(ms / MS_MIN));
+  const h = Math.floor(min / 60), m = min % 60;
+  if (!h) return `${m}min`;
+  return m ? `${h}h${String(m).padStart(2, "0")}` : `${h}h`;
+}
+
+// ----- estado da tela -----
+
+let agendaNivelId = "hora";
+let agendaJanelaInicio = 0;   // parede ms
+let agendaJanelaFim = 0;      // parede ms
+let agendaAjustandoJanela = false;
+let agendaPosicionada = false;
+let agArraste = null;
+let agendaHistorico = [];
+let agendaHistoricoPos = 0;
+
+// Duas camadas dentro do container que rola: a grade (linhas de tempo, só
+// muda quando a janela/escala mudam) e os itens (blocos, prévia do arrasto,
+// linha do "agora" -- redesenhados a cada movimento do mouse). Separar as
+// duas evita refazer centenas de linhas a cada pixel arrastado.
+const agendaGradeEl = document.createElement("div");
+const agendaItensEl = document.createElement("div");
+agendaConteudo.appendChild(agendaGradeEl);
+agendaConteudo.appendChild(agendaItensEl);
+
+function agendaNivel() {
+  return AGENDA_NIVEIS.find((n) => n.id === agendaNivelId) || AGENDA_NIVEIS[4];
+}
+function agendaPxPorMin() { return agendaNivel().pxPorMin; }
+function agendaPxDoTempo(parede) { return ((parede - agendaJanelaInicio) / MS_MIN) * agendaPxPorMin(); }
+function agendaTempoDoPx(px) { return agendaJanelaInicio + (px / agendaPxPorMin()) * MS_MIN; }
+function agendaAlturaTela() { return Math.max(320, agendaViewport.clientHeight || 520); }
+
+// Encaixe: nas escalas com horário, de 15 em 15 minutos; nas escalas largas,
+// no dia (o epoch começa numa borda de 15min, então o arredondamento é exato).
+function agendaEncaixar(parede) {
+  if (!agendaNivel().precisa) return agDia(parede);
+  const passo = AGENDA_SNAP_MIN * MS_MIN;
+  return Math.round(parede / passo) * passo;
+}
+
+// ----- janela de tempo desenhada -----
+
+function agendaMontarJanela(centroParede) {
+  const minutosPorTela = agendaAlturaTela() / agendaPxPorMin();
+  const folga = minutosPorTela * AGENDA_TELAS_JANELA * MS_MIN;
+  agendaJanelaInicio = agDia(centroParede - folga);
+  agendaJanelaFim = agDia(centroParede + folga) + MS_DIA;
+}
+
+// Leva a tela pra um instante, deixando ele numa altura escolhida da janela
+// (por padrão no meio). É o que faz o zoom "não perder o lugar".
+function agendaIrPara(parede, ancoraPx) {
+  const ancora = ancoraPx === undefined ? agendaAlturaTela() / 2 : ancoraPx;
+  agendaMontarJanela(parede);
+  agendaDesenharGrade();
+  agendaDesenharItens();
+  agendaAjustandoJanela = true;
+  agendaViewport.scrollTop = agendaPxDoTempo(parede) - ancora;
+  agendaAjustandoJanela = false;
+  agendaPosicionada = true;
+}
+
+// Chegou perto da borda do que está desenhado: refaz a janela em volta de
+// onde a pessoa está e recoloca a rolagem no MESMO instante de antes, pra
+// não dar solavanco na tela.
+function agendaConferirBordas() {
+  if (agendaAjustandoJanela) return;
+  const v = agendaViewport;
+  const margem = v.clientHeight;
+  const sobraBaixo = v.scrollHeight - v.scrollTop - v.clientHeight;
+  if (v.scrollTop > margem && sobraBaixo > margem) return;
+
+  const paredeDoTopo = agendaTempoDoPx(v.scrollTop);
+  agendaMontarJanela(agendaTempoDoPx(v.scrollTop + v.clientHeight / 2));
+  agendaDesenharGrade();
+  agendaDesenharItens();
+  agendaAjustandoJanela = true;
+  v.scrollTop = agendaPxDoTempo(paredeDoTopo);
+  agendaAjustandoJanela = false;
+}
+
+// ----- linhas da grade -----
+
+function agendaMarcas() {
+  const ini = agendaJanelaInicio, fim = agendaJanelaFim;
+  const marcas = [];
+  const add = (t, forte, texto) => { if (t >= ini && t <= fim) marcas.push({ t, forte, texto }); };
+
+  if (agendaNivelId === "ano") {
+    const d0 = new Date(ini);
+    let t = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), 1);
+    while (t <= fim) {
+      const d = new Date(t);
+      const janeiro = d.getUTCMonth() === 0;
+      add(t, janeiro, janeiro ? String(d.getUTCFullYear()) : agFmt(t, { month: "short" }));
+      t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
+    }
+    return marcas;
+  }
+
+  if (agendaNivelId === "mes") {
+    for (let t = agDia(ini); t <= fim; t += MS_DIA) {
+      const d = new Date(t);
+      const primeiro = d.getUTCDate() === 1;
+      add(t, primeiro || d.getUTCDay() === 1,
+        primeiro ? agFmt(t, { day: "2-digit", month: "short" }) : agFmt(t, { day: "2-digit", month: "2-digit" }));
+    }
+    return marcas;
+  }
+
+  if (agendaNivelId === "semana") {
+    for (let t = agDia(ini); t <= fim; t += MS_HORA * 6) {
+      const meiaNoite = new Date(t).getUTCHours() === 0;
+      add(t, meiaNoite, meiaNoite ? agFmt(t, { weekday: "short", day: "2-digit", month: "2-digit" }) : "");
+    }
+    return marcas;
+  }
+
+  if (agendaNivelId === "dia") {
+    for (let t = agDia(ini); t <= fim; t += MS_HORA) {
+      const h = new Date(t).getUTCHours();
+      add(t, h === 0,
+        h === 0 ? agFmt(t, { weekday: "long", day: "2-digit", month: "2-digit" })
+          : (h % 2 === 0 ? `${String(h).padStart(2, "0")}h` : ""));
+    }
+    return marcas;
+  }
+
+  if (agendaNivelId === "hora") {
+    for (let t = agDia(ini); t <= fim; t += MS_MIN * 15) {
+      const d = new Date(t), h = d.getUTCHours(), m = d.getUTCMinutes();
+      if (!h && !m) add(t, true, agFmt(t, { weekday: "short", day: "2-digit", month: "2-digit" }));
+      else add(t, false, m === 0 ? agHoraStr(t) : "");
+    }
+    return marcas;
+  }
+
+  for (let t = agDia(ini); t <= fim; t += MS_MIN * 15) {
+    add(t, new Date(t).getUTCMinutes() === 0, agHoraStr(t));
+  }
+  return marcas;
+}
+
+function agendaDesenharGrade() {
+  const alturaTotal = ((agendaJanelaFim - agendaJanelaInicio) / MS_MIN) * agendaPxPorMin();
+  agendaConteudo.style.height = `${Math.round(alturaTotal)}px`;
+
+  let html = "";
+  // Sábado/domingo ganham um fundo levemente diferente, só pra dar ritmo. Na
+  // escala de ano seriam centenas de faixas de 2px -- não compensa.
+  if (agendaNivelId !== "ano") {
+    const alturaDia = (MS_DIA / MS_MIN) * agendaPxPorMin();
+    for (let t = agDia(agendaJanelaInicio); t < agendaJanelaFim; t += MS_DIA) {
+      const diaSemana = new Date(t).getUTCDay();
+      if (diaSemana !== 0 && diaSemana !== 6) continue;
+      html += `<div class="agenda-fimdesemana" style="top:${agendaPxDoTempo(t).toFixed(1)}px;height:${alturaDia.toFixed(1)}px"></div>`;
+    }
+  }
+
+  agendaMarcas().forEach((m) => {
+    html += `<div class="agenda-marca${m.forte ? " agenda-marca-forte" : ""}" style="top:${agendaPxDoTempo(m.t).toFixed(1)}px">` +
+      (m.texto ? `<span class="agenda-marca-rotulo">${escapeHtml(m.texto)}</span>` : "") +
+      `</div>`;
+  });
+
+  agendaGradeEl.innerHTML = html;
+}
+
+// ----- blocos -----
+
+function agendaClasseStatus(status) {
+  if (status === "Agendado") return "confirmado";
+  if (status === "Em andamento") return "andamento";
+  return "aguardando";
+}
+
+// Quanto mais espaço o bloco tem, mais ele conta. Em escala larga não adianta
+// espremer horário e número dentro de um retângulo de 8px de altura.
+function agendaConteudoBloco(c, ini, fim, alturaPx) {
+  const nome = escapeHtml(c.clienteNome || "Sem nome");
+  if (agendaNivelId === "ano") return `<div class="agenda-bloco-titulo">${nome}</div>`;
+  if (agendaNivelId === "mes") {
+    return `<div class="agenda-bloco-titulo">${agFmt(ini, { day: "2-digit", month: "2-digit" })} · ${nome}</div>`;
+  }
+  if (agendaNivelId === "semana") {
+    return `<div class="agenda-bloco-titulo">${agHoraStr(ini)} · ${nome}</div>`;
+  }
+
+  // Os cortes abaixo são a altura que cada linha a mais precisa de verdade
+  // (linha de ~15px + os 4px de recheio do bloco) -- antes a segunda linha
+  // entrava e ficava cortada pela metade num bloco de 1h na escala "Dia".
+  let html = `<div class="agenda-bloco-titulo">${nome}</div>`;
+  if (alturaPx >= 34) {
+    html += `<div class="agenda-bloco-linha">${agHoraStr(ini)} → ${agHoraStr(fim)} · ${agendaDuracaoTexto(fim - ini)}</div>`;
+  }
+  if (alturaPx >= 49) {
+    html += `<div class="agenda-bloco-linha">Chamado #${escapeHtml(String(c.numero))}` +
+      `${c.localExato ? ` · ${escapeHtml(c.localExato)}` : ""}</div>`;
+  }
+  if (alturaPx >= 64 && c.descricaoSolicitacao) {
+    html += `<div class="agenda-bloco-linha">${escapeHtml(c.descricaoSolicitacao)}</div>`;
+  }
+  return html;
+}
+
+function agendaDesenharItens() {
+  const arrastando = agArraste && agArraste.ativo ? agArraste : null;
+  const idArrastado = arrastando && arrastando.tipo !== "novo" ? arrastando.chamado.id : "";
+  let html = "";
+
+  chamadosComData.forEach((c) => {
+    if (!c.reservadoInicio) return;
+    const ini = agDeIso(c.reservadoInicio);
+
+    // Dia marcado, horário ainda não definido: fica preso na linha do dia,
+    // com cara de pendência. Não ocupa faixa de horário nenhuma.
+    if (!c.reservadoFim) {
+      if (ini + MS_DIA < agendaJanelaInicio || ini > agendaJanelaFim) return;
+      html += `<div class="agenda-bloco-semhora" data-id="${escapeHtml(c.id)}" data-semhora="1"` +
+        `${c.id === idArrastado ? ' style="opacity:.3;' : ' style="'}top:${(agendaPxDoTempo(ini) + 2).toFixed(1)}px">` +
+        `${escapeHtml(c.clienteNome || "Sem nome")} · horário a definir</div>`;
+      return;
+    }
+
+    const fim = agDeIso(c.reservadoFim);
+    if (fim < agendaJanelaInicio || ini > agendaJanelaFim) return;
+    const topo = agendaPxDoTempo(ini);
+    const altura = Math.max(14, agendaPxDoTempo(fim) - topo);
+    const classes = ["agenda-bloco", agendaClasseStatus(c.status)];
+    if (c.id === idArrastado) classes.push("arrastando");
+    if (arrastando && arrastando.trocaPronta && arrastando.trocaAlvo === c.id) classes.push("alvo-troca");
+
+    const podeAlca = agendaNivel().precisa && altura >= 26 && c.id !== idArrastado;
+    html += `<div class="${classes.join(" ")}" data-id="${escapeHtml(c.id)}" ` +
+      `style="top:${topo.toFixed(1)}px;height:${altura.toFixed(1)}px">` +
+      agendaConteudoBloco(c, ini, fim, altura) +
+      (podeAlca ? `<div class="agenda-bloco-alca topo" data-alca="topo"></div><div class="agenda-bloco-alca base" data-alca="base"></div>` : "") +
+      `</div>`;
+  });
+
+  // Prévia: onde o chamado cai se soltar agora, já dizendo se bate em alguém.
+  if (arrastando && arrastando.alvo) {
+    const a = arrastando.alvo;
+    const topo = agendaPxDoTempo(a.ini);
+    const conflito = arrastando.conflitos.length > 0 && !arrastando.trocaPronta && !arrastando.sobreFila;
+    const texto = a.semHorario
+      ? `${agFmt(a.ini, { day: "2-digit", month: "2-digit", year: "numeric" })} · horário a definir`
+      : `${agHoraStr(a.ini)} → ${agHoraStr(a.fim)} · ${agendaDuracaoTexto(a.fim - a.ini)}`;
+    const altura = a.semHorario ? 22 : Math.max(18, agendaPxDoTempo(a.fim) - topo);
+    html += `<div class="agenda-previa${conflito ? " conflito" : ""}" ` +
+      `style="top:${topo.toFixed(1)}px;height:${altura.toFixed(1)}px">${escapeHtml(texto)}</div>`;
+  }
+
+  const agora = agAgora();
+  if (agora >= agendaJanelaInicio && agora <= agendaJanelaFim) {
+    html += `<div class="agenda-agora" style="top:${agendaPxDoTempo(agora).toFixed(1)}px">` +
+      `<span>AGORA · ${agFmt(agora, { day: "2-digit", month: "2-digit" })} · ${agHoraStr(agora)}</span></div>`;
+  }
+
+  agendaItensEl.innerHTML = html;
+}
+
+// ----- conflito e sugestão -----
+
+// Um dia sem horário exato não entra: ele ainda não reservou faixa nenhuma.
+// Aguardando confirmação entra sim -- horário reservado é horário ocupado.
+function agendaOcupados(excluir) {
+  const fora = excluir || [];
+  return chamadosComData
+    .filter((c) => c.reservadoInicio && c.reservadoFim && !fora.includes(c.id))
+    .map((c) => ({ c, ini: agDeIso(c.reservadoInicio), fim: agDeIso(c.reservadoFim) }));
+}
+
+// Encostado não é conflito: um termina 10:00 e o outro começa 10:00 pode.
+function agendaConflitos(ini, fim, excluir) {
+  return agendaOcupados(excluir).filter((o) => ini < o.fim && o.ini < fim);
+}
+
+// Primeira folga com a duração pedida, olhando a partir de um instante e
+// andando dia a dia. Só sugere dentro do horário de trabalho -- é sugestão,
+// marcar fora continua permitido.
+function agendaProximoLivre(desde, duracaoMs, excluir) {
+  const ocupados = agendaOcupados(excluir).sort((a, b) => a.ini - b.ini);
+  const passo = AGENDA_SNAP_MIN * MS_MIN;
+  for (let d = 0; d < 60; d++) {
+    const dia = agDia(desde) + d * MS_DIA;
+    const abre = dia + AGENDA_DIA_INICIO_H * MS_HORA;
+    const fecha = dia + AGENDA_DIA_FIM_H * MS_HORA;
+    let cursor = d === 0 ? Math.max(abre, Math.ceil(desde / passo) * passo) : abre;
+    const doDia = ocupados.filter((o) => o.fim > dia && o.ini < dia + MS_DIA);
+    for (const o of doDia) {
+      if (o.ini - cursor >= duracaoMs) return { ini: cursor, fim: cursor + duracaoMs };
+      if (o.fim > cursor) cursor = Math.ceil(o.fim / passo) * passo;
+    }
+    if (fecha - cursor >= duracaoMs) return { ini: cursor, fim: cursor + duracaoMs };
+  }
+  return null;
+}
+
+// ----- faixa de recado -----
+
+function agendaEsconderAviso() {
+  agendaAvisoEl.className = "agenda-aviso hidden";
+  agendaAvisoEl.innerHTML = "";
+}
+
+function agendaMostrarAviso(tipo, texto, acoes) {
+  agendaAvisoEl.className = `agenda-aviso ${tipo || ""}`;
+  const span = document.createElement("span");
+  span.textContent = texto;
+  agendaAvisoEl.innerHTML = "";
+  agendaAvisoEl.appendChild(span);
+  (acoes || []).forEach((acao) => {
+    const botao = document.createElement("button");
+    botao.type = "button";
+    botao.className = "botao-secundario";
+    botao.textContent = acao.rotulo;
+    botao.addEventListener("click", () => { agendaEsconderAviso(); acao.aoClicar(); });
+    agendaAvisoEl.appendChild(botao);
+  });
+}
+
+// ----- salvar de verdade (com volta atrás se o servidor recusar) -----
+
+function agendaEstado(c) {
+  return {
+    reservadoInicio: c.reservadoInicio || "",
+    reservadoFim: c.reservadoFim || "",
+    status: c.status || "",
+  };
+}
+
+function agendaEstadoDeIntervalo(ini, fim, status) {
+  if (!ini) return { reservadoInicio: "", reservadoFim: "", status: "Aguardando confirmação de data" };
+  const iso = (parede) => new Date(parede - AGENDA_FUSO_MIN * MS_MIN).toISOString();
+  return {
+    reservadoInicio: iso(ini),
+    reservadoFim: fim ? iso(fim) : "",
+    status: fim ? (status || "Aguardando confirmação de data") : "Aguardando confirmação de data",
+  };
+}
+
+// Espelha o estado na memória da tela. O card muda de lista (fila <-> agenda)
+// conforme ganha ou perde horário.
+function agendaAplicarLocal(c, estado) {
+  c.reservadoInicio = estado.reservadoInicio;
+  c.reservadoFim = estado.reservadoFim;
+  c.status = estado.status;
+
+  const naComData = chamadosComData.indexOf(c);
+  const naSemData = chamadosSemData.indexOf(c);
+  if (c.reservadoInicio) {
+    if (naSemData >= 0) chamadosSemData.splice(naSemData, 1);
+    if (naComData < 0) chamadosComData.push(c);
+    chamadosComData.sort((a, b) => new Date(a.reservadoInicio) - new Date(b.reservadoInicio));
+  } else {
+    if (naComData >= 0) chamadosComData.splice(naComData, 1);
+    if (naSemData < 0) chamadosSemData.push(c);
+    chamadosSemData.sort((a, b) => new Date(a.criadoEm) - new Date(b.criadoEm));
+  }
+}
+
+// Vira o estado num pedido pro n8n. dataFim vai junto de propósito: sem ele,
+// um serviço que atravessa a meia-noite viraria "fim antes do início".
+function agendaPedidoDoEstado(c, estado) {
+  if (!estado.reservadoInicio) return { chamadoId: c.id, desagendar: "true" };
+  const ini = agDeIso(estado.reservadoInicio);
+  if (!estado.reservadoFim) return { chamadoId: c.id, data: agDataStr(ini), semHorario: "true" };
+  const fim = agDeIso(estado.reservadoFim);
+  return {
+    chamadoId: c.id,
+    data: agDataStr(ini),
+    dataFim: agDataStr(fim),
+    reservadoInicio: agHoraStr(ini),
+    reservadoFim: agHoraStr(fim),
+    statusAgendamento: estado.status === "Agendado" ? "confirmado" : "aguardando",
+  };
+}
+
+function agendaPedidoDaTroca(c, estado) {
+  const p = agendaPedidoDoEstado(c, estado);
+  if (p.desagendar) return { trocarComId: c.id, trocaDesagendar: "true" };
+  const corpo = { trocarComId: c.id, trocaData: p.data };
+  if (p.semHorario) { corpo.trocaSemHorario = "true"; return corpo; }
+  corpo.trocaDataFim = p.dataFim;
+  corpo.trocaInicio = p.reservadoInicio;
+  corpo.trocaFim = p.reservadoFim;
+  corpo.trocaStatus = p.statusAgendamento;
+  return corpo;
+}
+
+// Coração da persistência: muda na tela na hora (pra não ficar lento), manda
+// pro n8n e, se o servidor recusar, VOLTA tudo pro que era. Nunca fica
+// mostrando que deu certo quando não deu.
+async function agendaAplicar(alteracoes, descricao, registrar) {
+  alteracoes.forEach(({ chamado, depois }) => agendaAplicarLocal(chamado, depois));
+  agendaRedesenhar();
+
+  const corpo = agendaPedidoDoEstado(alteracoes[0].chamado, alteracoes[0].depois);
+  if (alteracoes[1]) Object.assign(corpo, agendaPedidoDaTroca(alteracoes[1].chamado, alteracoes[1].depois));
+
+  let resposta;
+  try {
+    resposta = await pedirAoN8n("reagendar-chamado", corpo);
+  } catch (err) {
+    resposta = null;
+  }
+
+  if (!resposta || !resposta.ok) {
+    alteracoes.forEach(({ chamado, antes }) => agendaAplicarLocal(chamado, antes));
+    agendaRedesenhar();
+    const acoes = [];
+    if (resposta && resposta.sugestao && resposta.sugestao.inicioIso) {
+      const s = resposta.sugestao;
+      acoes.push({
+        rotulo: `Usar ${agHoraStr(agDeIso(s.inicioIso))}`,
+        aoClicar: () => agendaMover(alteracoes[0].chamado, agDeIso(s.inicioIso), agDeIso(s.fimIso)),
+      });
+    }
+    agendaMostrarAviso("erro", (resposta && resposta.mensagem) || "Não consegui salvar — nada foi mudado.", acoes);
+    return false;
+  }
+
+  if (registrar !== false) {
+    agendaHistorico = agendaHistorico.slice(0, agendaHistoricoPos);
+    agendaHistorico.push({ descricao, alteracoes });
+    if (agendaHistorico.length > AGENDA_HISTORICO_MAX) agendaHistorico.shift();
+    agendaHistoricoPos = agendaHistorico.length;
+  }
+  agendaAtualizarBotoesHistorico();
+  agendaEsconderAviso();
+  mostrarToast(descricao);
+  return true;
+}
+
+function agendaMover(c, ini, fim) {
+  return agendaAplicar(
+    [{ chamado: c, antes: agendaEstado(c), depois: agendaEstadoDeIntervalo(ini, fim, c.status) }],
+    `Chamado #${c.numero} agendado`
+  );
+}
+
+// ----- desfazer / refazer -----
+
+function agendaAtualizarBotoesHistorico() {
+  agendaDesfazerBotao.disabled = agendaHistoricoPos === 0;
+  agendaRefazerBotao.disabled = agendaHistoricoPos >= agendaHistorico.length;
+}
+
+async function agendaDesfazer() {
+  if (agendaHistoricoPos === 0) return;
+  const entrada = agendaHistorico[agendaHistoricoPos - 1];
+  const inverso = entrada.alteracoes.map((a) => ({ chamado: a.chamado, antes: a.depois, depois: a.antes }));
+  if (await agendaAplicar(inverso, `Desfeito: ${entrada.descricao}`, false)) {
+    agendaHistoricoPos--;
+    agendaAtualizarBotoesHistorico();
+  }
+}
+
+async function agendaRefazer() {
+  if (agendaHistoricoPos >= agendaHistorico.length) return;
+  const entrada = agendaHistorico[agendaHistoricoPos];
+  if (await agendaAplicar(entrada.alteracoes, `Refeito: ${entrada.descricao}`, false)) {
+    agendaHistoricoPos++;
+    agendaAtualizarBotoesHistorico();
+  }
+}
+
+// ----- arrastar: um motor só pra tudo -----
+
+function agendaAcharChamado(id) {
+  return chamadosComData.find((c) => c.id === id) || chamadosSemData.find((c) => c.id === id) || null;
+}
+
+function agendaParedeDoPonteiro(clientY, deslocPx) {
+  const r = agendaViewport.getBoundingClientRect();
+  return agendaTempoDoPx(agendaViewport.scrollTop + (clientY - r.top) - (deslocPx || 0));
+}
+
+function agendaCalcularAlvo() {
+  const a = agArraste;
+  if (!a) return;
+  const passo = AGENDA_SNAP_MIN * MS_MIN;
+
+  if (a.tipo === "base") {
+    const fim = Math.max(a.iniOriginal + passo, agendaEncaixar(agendaParedeDoPonteiro(a.ponteiro.y, 0)));
+    a.alvo = { ini: a.iniOriginal, fim, semHorario: false };
+  } else if (a.tipo === "topo") {
+    const ini = Math.min(a.fimOriginal - passo, agendaEncaixar(agendaParedeDoPonteiro(a.ponteiro.y, 0)));
+    a.alvo = { ini, fim: a.fimOriginal, semHorario: false };
+  } else if (agendaNivel().precisa) {
+    const ini = agendaEncaixar(agendaParedeDoPonteiro(a.ponteiro.y, a.deslocPx));
+    a.alvo = { ini, fim: ini + a.duracaoMin * MS_MIN, semHorario: false };
+  } else {
+    // Escala larga: só dá pra escolher o dia. Não inventa horário.
+    const dia = agDia(agendaParedeDoPonteiro(a.ponteiro.y, a.deslocPx));
+    a.alvo = { ini: dia, fim: dia, semHorario: true };
+  }
+
+  a.conflitos = a.alvo.semHorario ? [] : agendaConflitos(a.alvo.ini, a.alvo.fim, [a.chamado.id]);
+}
+
+function agendaComecarArraste(c, evento, tipo, deslocPx) {
+  const ini = c.reservadoInicio ? agDeIso(c.reservadoInicio) : 0;
+  const fim = c.reservadoFim ? agDeIso(c.reservadoFim) : 0;
+  agArraste = {
+    tipo, chamado: c,
+    duracaoMin: ini && fim ? Math.round((fim - ini) / MS_MIN) : AGENDA_DURACAO_PADRAO_MIN,
+    iniOriginal: ini, fimOriginal: fim,
+    pegouEm: { x: evento.clientX, y: evento.clientY },
+    ponteiro: { x: evento.clientX, y: evento.clientY },
+    deslocPx: deslocPx || 0,
+    ativo: false, alvo: null, conflitos: [],
+    trocaAlvo: null, trocaDesde: 0, trocaPronta: false,
+    zoomHover: null, zoomDesde: 0,
+    sobreFila: false, autoTimer: null,
+  };
+  window.addEventListener("pointermove", agendaAoMover);
+  window.addEventListener("pointerup", agendaAoSoltar);
+  window.addEventListener("pointercancel", agendaCancelarArraste);
+}
+
+function agendaAtivarArraste() {
+  const a = agArraste;
+  a.ativo = true;
+  agendaFecharMenu();
+  agendaFantasmaEl.classList.remove("hidden");
+  a.autoTimer = setTimeout(agendaPassoAuto, AGENDA_AUTO_ESPERA_MAX_MS);
+  agendaMarcarCardsArrastando();
+}
+
+function agendaMarcarCardsArrastando() {
+  agendaListaEl.querySelectorAll(".agenda-fila-card").forEach((el) => {
+    el.classList.toggle("arrastando", Boolean(agArraste && agArraste.ativo && el.dataset.id === agArraste.chamado.id));
+  });
+}
+
+function agendaAoMover(evento) {
+  const a = agArraste;
+  if (!a) return;
+  a.ponteiro = { x: evento.clientX, y: evento.clientY };
+
+  if (!a.ativo) {
+    const dist = Math.abs(evento.clientX - a.pegouEm.x) + Math.abs(evento.clientY - a.pegouEm.y);
+    if (dist < AGENDA_ARRASTE_MINIMO_PX) return;
+    agendaAtivarArraste();
+  }
+  evento.preventDefault();
+  agendaAvaliarAlvoSobPonteiro();
+  agendaCalcularAlvo();
+  agendaDesenharItens();
+  agendaDesenharFantasma();
+}
+
+// O que está debaixo do cursor decide o que "soltar" vai significar: a fila
+// (tirar da agenda), um nível de zoom (trocar de escala sem largar o
+// chamado) ou outro bloco (trocar horários).
+//
+// Precisa ser chamado TAMBÉM pelo tique do arrasto, não só pelo pointermove:
+// as duas esperas abaixo são de segurar parado, e mouse parado não dispara
+// pointermove nenhum -- sem o tique, a espera nunca completava.
+// Devolve true quando alguma coisa mudou (pra evitar redesenho à toa).
+function agendaAvaliarAlvoSobPonteiro() {
+  const a = agArraste;
+  if (!a || !a.ativo) return false;
+  const antes = `${a.sobreFila}|${a.trocaAlvo}|${a.trocaPronta}`;
+
+  const sob = document.elementFromPoint(a.ponteiro.x, a.ponteiro.y);
+  const achar = (seletor) => (sob && sob.closest ? sob.closest(seletor) : null);
+
+  a.sobreFila = Boolean(achar(".agenda-painel")) && a.tipo === "mover";
+  agendaPainelEl.classList.toggle("alvo-solta", a.sobreFila);
+
+  const nivelEl = achar(".agenda-nivel");
+  document.querySelectorAll(".agenda-nivel.alvo-arraste").forEach((el) => el.classList.remove("alvo-arraste"));
+  if (nivelEl) {
+    nivelEl.classList.add("alvo-arraste");
+    if (a.zoomHover !== nivelEl.dataset.nivel) {
+      a.zoomHover = nivelEl.dataset.nivel;
+      a.zoomDesde = Date.now();
+    } else if (Date.now() - a.zoomDesde > AGENDA_ESPERA_ZOOM_MS && agendaNivelId !== a.zoomHover) {
+      agendaDefinirNivel(a.zoomHover);
+      a.zoomHover = null;
+      return true;
+    }
+  } else {
+    a.zoomHover = null;
+  }
+
+  // Trocar horários só depois de segurar de propósito quase um segundo em
+  // cima do outro bloco -- passar por cima correndo não pode fazer nada.
+  const blocoEl = achar(".agenda-bloco");
+  const outroId = blocoEl && blocoEl.dataset.id !== a.chamado.id ? blocoEl.dataset.id : null;
+  if (a.tipo === "mover" && a.iniOriginal && a.fimOriginal && outroId) {
+    if (a.trocaAlvo !== outroId) { a.trocaAlvo = outroId; a.trocaDesde = Date.now(); }
+    a.trocaPronta = Date.now() - a.trocaDesde > AGENDA_ESPERA_TROCA_MS;
+  } else {
+    a.trocaAlvo = null;
+    a.trocaPronta = false;
+  }
+
+  return antes !== `${a.sobreFila}|${a.trocaAlvo}|${a.trocaPronta}`;
+}
+
+function agendaDesenharFantasma() {
+  const a = agArraste;
+  if (!a || !a.ativo) return;
+  const c = a.chamado;
+  let texto;
+  if (a.sobreFila) texto = "Soltar aqui: tirar da agenda";
+  else if (a.trocaPronta) texto = "Soltar aqui: trocar horários";
+  else if (a.alvo && a.alvo.semHorario) {
+    texto = `${agFmt(a.alvo.ini, { day: "2-digit", month: "2-digit", year: "numeric" })} · horário a definir`;
+  } else if (a.alvo) {
+    texto = `${agFmt(a.alvo.ini, { day: "2-digit", month: "2-digit" })} · ${agHoraStr(a.alvo.ini)} → ${agHoraStr(a.alvo.fim)}`;
+  } else texto = "";
+
+  agendaFantasmaEl.innerHTML = `<strong>${escapeHtml(c.clienteNome || "Sem nome")}</strong><br>${escapeHtml(texto)}`;
+  agendaFantasmaEl.classList.toggle("conflito", a.conflitos.length > 0 && !a.trocaPronta && !a.sobreFila);
+  agendaFantasmaEl.style.left = `${a.ponteiro.x + 16}px`;
+  agendaFantasmaEl.style.top = `${a.ponteiro.y + 16}px`;
+}
+
+// Segurar o chamado perto da borda faz a linha do tempo andar sozinha: perto
+// de baixo avança no tempo, perto de cima volta. Quanto mais colado na borda,
+// mais rápido. Cadeia de setTimeout (não requestAnimationFrame) porque é o
+// mesmo mecanismo que já funcionava aqui e é testável sem depender de frames.
+function agendaPassoAuto() {
+  const a = agArraste;
+  if (!a || !a.ativo) return;
+
+  // Mouse parado em cima de um alvo também conta: ver agendaAvaliarAlvoSobPonteiro.
+  const mudouAlvo = agendaAvaliarAlvoSobPonteiro();
+
+  const r = agendaViewport.getBoundingClientRect();
+  const y = a.ponteiro.y;
+  let direcao = 0, proximidade = 0;
+  if (y < r.top + AGENDA_MARGEM_AUTO_PX && y > r.top - 200) {
+    direcao = -1;
+    proximidade = (r.top + AGENDA_MARGEM_AUTO_PX - y) / AGENDA_MARGEM_AUTO_PX;
+  } else if (y > r.bottom - AGENDA_MARGEM_AUTO_PX && y < r.bottom + 200) {
+    direcao = 1;
+    proximidade = (y - (r.bottom - AGENDA_MARGEM_AUTO_PX)) / AGENDA_MARGEM_AUTO_PX;
+  }
+
+  if (!direcao) {
+    if (mudouAlvo) { agendaCalcularAlvo(); agendaDesenharItens(); agendaDesenharFantasma(); }
+    a.autoTimer = setTimeout(agendaPassoAuto, AGENDA_AUTO_ESPERA_MAX_MS);
+    return;
+  }
+
+  proximidade = Math.min(1, Math.max(0.05, proximidade));
+  agendaViewport.scrollTop += direcao * (6 + proximidade * 36);
+  agendaConferirBordas();
+  agendaCalcularAlvo();
+  agendaDesenharItens();
+  agendaDesenharFantasma();
+
+  const espera = AGENDA_AUTO_ESPERA_MAX_MS - proximidade * (AGENDA_AUTO_ESPERA_MAX_MS - AGENDA_AUTO_ESPERA_MIN_MS);
+  a.autoTimer = setTimeout(agendaPassoAuto, espera);
+}
+
+// Todo jeito de sair do arrasto passa por aqui: senão sobra temporizador
+// rodando sozinho depois que o chamado já foi solto.
+function agendaLimparArraste() {
+  const a = agArraste;
+  agArraste = null;
+  if (a && a.autoTimer) clearTimeout(a.autoTimer);
+  window.removeEventListener("pointermove", agendaAoMover);
+  window.removeEventListener("pointerup", agendaAoSoltar);
+  window.removeEventListener("pointercancel", agendaCancelarArraste);
+  agendaFantasmaEl.classList.add("hidden");
+  agendaPainelEl.classList.remove("alvo-solta");
+  document.querySelectorAll(".agenda-nivel.alvo-arraste").forEach((el) => el.classList.remove("alvo-arraste"));
+  agendaMarcarCardsArrastando();
+  return a;
+}
+
+function agendaCancelarArraste() {
+  agendaLimparArraste();
+  agendaDesenharItens();
+}
+
+async function agendaAoSoltar(evento) {
+  const a = agendaLimparArraste();
+  if (!a) return;
+
+  // Não chegou a virar arrasto: foi um clique. Abre o menu do chamado.
+  if (!a.ativo) {
+    agendaAbrirMenu(a.chamado, evento.clientX, evento.clientY);
+    return;
+  }
+  agendaDesenharItens();
+
+  const c = a.chamado;
+
+  if (a.sobreFila) {
+    await agendaAplicar(
+      [{ chamado: c, antes: agendaEstado(c), depois: agendaEstadoDeIntervalo(0) }],
+      `Chamado #${c.numero} voltou pra fila`
+    );
+    return;
+  }
+
+  if (a.trocaPronta && a.trocaAlvo) {
+    const outro = agendaAcharChamado(a.trocaAlvo);
+    if (outro) agendaPerguntarTroca(c, outro);
+    return;
+  }
+
+  if (!a.alvo) return;
+
+  if (a.conflitos.length) {
+    const nomes = a.conflitos.map((o) => `#${o.c.numero}`).join(", ");
+    const livre = agendaProximoLivre(a.alvo.ini, a.alvo.fim - a.alvo.ini, [c.id]);
+    const acoes = livre ? [{
+      rotulo: `Usar ${agFmt(livre.ini, { day: "2-digit", month: "2-digit" })} ${agHoraStr(livre.ini)}`,
+      aoClicar: () => agendaMover(c, livre.ini, livre.fim),
+    }] : [];
+    agendaMostrarAviso("", `Conflito com ${nomes}. ${livre ? "Próximo horário livre sugerido ao lado." : "Não achei horário livre por perto."}`, acoes);
+    return;
+  }
+
+  const antes = agendaEstado(c);
+  const depois = a.alvo.semHorario
+    ? agendaEstadoDeIntervalo(a.alvo.ini, 0)
+    : agendaEstadoDeIntervalo(a.alvo.ini, a.alvo.fim, c.status);
+  const descricao = a.tipo === "novo" ? `Chamado #${c.numero} agendado`
+    : (a.tipo === "mover" ? `Chamado #${c.numero} movido` : `Chamado #${c.numero} redimensionado`);
+  await agendaAplicar([{ chamado: c, antes, depois }], descricao);
+}
+
+// A troca nunca acontece sozinha: sempre pergunta antes, e só depois de
+// conferir se os dois horários novos cabem de verdade.
+function agendaPerguntarTroca(a, b) {
+  const aIni = agDeIso(a.reservadoInicio), aFim = agDeIso(a.reservadoFim);
+  const bIni = agDeIso(b.reservadoInicio), bFim = b.reservadoFim ? agDeIso(b.reservadoFim) : 0;
+  if (!bFim) {
+    agendaMostrarAviso("erro", `Chamado #${b.numero} ainda não tem horário exato — não dá pra trocar.`);
+    return;
+  }
+
+  // Durações diferentes podem fazer o novo intervalo invadir um terceiro.
+  const novoA = { ini: bIni, fim: bIni + (aFim - aIni) };
+  const novoB = { ini: aIni, fim: aIni + (bFim - bIni) };
+  const bate = agendaConflitos(novoA.ini, novoA.fim, [a.id, b.id])
+    .concat(agendaConflitos(novoB.ini, novoB.fim, [a.id, b.id]));
+  if (bate.length) {
+    agendaMostrarAviso("erro", `Não dá pra trocar: as durações são diferentes e o resultado bateria em #${bate[0].c.numero}.`);
+    return;
+  }
+  if (novoA.ini < novoB.fim && novoB.ini < novoA.fim) {
+    agendaMostrarAviso("erro", "Não dá pra trocar: com essas durações os dois acabariam se cruzando.");
+    return;
+  }
+
+  agendaMostrarAviso("", `Trocar horários de #${a.numero} e #${b.numero}?`, [{
+    rotulo: "Trocar",
+    aoClicar: () => agendaAplicar([
+      { chamado: a, antes: agendaEstado(a), depois: agendaEstadoDeIntervalo(novoA.ini, novoA.fim, a.status) },
+      { chamado: b, antes: agendaEstado(b), depois: agendaEstadoDeIntervalo(novoB.ini, novoB.fim, b.status) },
+    ], `Horários de #${a.numero} e #${b.numero} trocados`),
+  }, {
+    rotulo: "Cancelar",
+    aoClicar: () => {},
+  }]);
+}
+
+// ----- menu de um chamado (clique sem arrastar) -----
+
+function agendaFecharMenu() {
+  agendaMenuEl.classList.add("hidden");
+  agendaMenuEl.innerHTML = "";
+}
+
+function agendaAbrirMenu(c, x, y) {
+  const agendado = Boolean(c.reservadoInicio);
+  const confirmado = c.status === "Agendado";
+
+  agendaMenuEl.innerHTML = `<strong>#${escapeHtml(String(c.numero))} — ${escapeHtml(c.clienteNome || "")}</strong>` +
+    `<p>${escapeHtml(c.status || "")}</p>`;
+
+  const opcao = (rotulo, aoClicar) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = rotulo;
+    b.addEventListener("click", () => { agendaFecharMenu(); aoClicar(); });
+    agendaMenuEl.appendChild(b);
+  };
+
+  if (agendado && c.reservadoFim) {
+    opcao(confirmado ? "Voltar pra aguardando confirmação" : "Confirmar data", () => {
+      const antes = agendaEstado(c);
+      agendaAplicar([{
+        chamado: c, antes,
+        depois: Object.assign({}, antes, { status: confirmado ? "Aguardando confirmação de data" : "Agendado" }),
+      }], confirmado ? `#${c.numero} voltou pra aguardando` : `Data do #${c.numero} confirmada`);
+    });
+  }
+  if (agendado) {
+    opcao("Tirar da agenda (volta pra fila)", () => {
+      agendaAplicar([{ chamado: c, antes: agendaEstado(c), depois: agendaEstadoDeIntervalo(0) }],
+        `Chamado #${c.numero} voltou pra fila`);
+    });
+  }
+  opcao("Editar chamado", () => {
+    const item = document.querySelector('.sidebar-item[data-page="consultar-chamados"]');
+    if (item) item.click();
+    abrirEdicaoChamado(c);
+  });
+  opcao("Cancelar chamado", () => {
+    if (!confirm(`Cancelar o Chamado #${c.numero} (${c.clienteNome})?`)) return;
+    cancelarChamado(c.id, null);
+  });
+
+  agendaMenuEl.classList.remove("hidden");
+  const larg = agendaMenuEl.offsetWidth, alt = agendaMenuEl.offsetHeight;
+  agendaMenuEl.style.left = `${Math.min(x, window.innerWidth - larg - 10)}px`;
+  agendaMenuEl.style.top = `${Math.min(y, window.innerHeight - alt - 10)}px`;
+}
+
+document.addEventListener("pointerdown", (evento) => {
+  if (agendaMenuEl.classList.contains("hidden")) return;
+  if (!agendaMenuEl.contains(evento.target)) agendaFecharMenu();
+}, true);
+
+// ----- pegar com o mouse -----
+
+agendaConteudo.addEventListener("pointerdown", (evento) => {
+  if (evento.button !== 0) return;
+  const alcaEl = evento.target.closest(".agenda-bloco-alca");
+  const blocoEl = evento.target.closest(".agenda-bloco, .agenda-bloco-semhora");
+  if (!blocoEl) return;
+  const c = agendaAcharChamado(blocoEl.dataset.id);
+  if (!c) return;
+
+  evento.preventDefault();
+  if (alcaEl) {
+    agendaComecarArraste(c, evento, alcaEl.dataset.alca, 0);
+  } else {
+    const r = blocoEl.getBoundingClientRect();
+    agendaComecarArraste(c, evento, "mover", evento.clientY - r.top);
+  }
+});
+
+agendaListaEl.addEventListener("pointerdown", (evento) => {
+  if (evento.button !== 0) return;
+  const cardEl = evento.target.closest(".agenda-fila-card");
+  if (!cardEl) return;
+  const c = agendaAcharChamado(cardEl.dataset.id);
+  if (!c) return;
+  evento.preventDefault();
+  agendaComecarArraste(c, evento, "novo", 0);
+});
+
+// ----- zoom e navegação -----
+
+function agendaMarcarNivel() {
+  document.querySelectorAll(".agenda-nivel").forEach((b) => {
+    b.classList.toggle("active", b.dataset.nivel === agendaNivelId);
+  });
+}
+
+// Trocar de escala mantém o mesmo instante debaixo do mesmo ponto da tela --
+// é o que faz "aproximar" parecer aproximar, e não pular pra outro lugar.
+function agendaDefinirNivel(id, paredeAlvo, ancoraPx) {
+  if (!AGENDA_NIVEIS.some((n) => n.id === id)) return;
+  const ancora = ancoraPx === undefined ? agendaViewport.clientHeight / 2 : ancoraPx;
+  const alvo = paredeAlvo === undefined ? agendaTempoDoPx(agendaViewport.scrollTop + ancora) : paredeAlvo;
+  agendaNivelId = id;
+  agendaMarcarNivel();
+  agendaIrPara(alvo, ancora);
+  if (agArraste && agArraste.ativo) {
+    agendaCalcularAlvo();
+    agendaDesenharItens();
+    agendaDesenharFantasma();
+  }
+}
+
+function agendaMudarZoom(passo, paredeAlvo, ancoraPx) {
+  const i = AGENDA_NIVEIS.findIndex((n) => n.id === agendaNivelId);
+  const novo = Math.min(AGENDA_NIVEIS.length - 1, Math.max(0, i + passo));
+  if (novo !== i) agendaDefinirNivel(AGENDA_NIVEIS[novo].id, paredeAlvo, ancoraPx);
+}
+
+document.querySelectorAll(".agenda-nivel").forEach((botao) => {
+  botao.addEventListener("click", () => agendaDefinirNivel(botao.dataset.nivel));
+});
+agendaZoomMaisBotao.addEventListener("click", () => agendaMudarZoom(1));
+agendaZoomMenosBotao.addEventListener("click", () => agendaMudarZoom(-1));
+agendaAgoraBotao.addEventListener("click", () => agendaIrPara(agAgora(), agendaAlturaTela() * 0.35));
+agendaDesfazerBotao.addEventListener("click", agendaDesfazer);
+agendaRefazerBotao.addEventListener("click", agendaRefazer);
+
+agendaViewport.addEventListener("scroll", () => {
+  agendaConferirBordas();
+  agendaFecharMenu();
+});
+
+// Ctrl + roda aproxima/afasta em volta do ponto onde o mouse está; a roda
+// sozinha continua rolando o tempo normalmente (inclusive durante o arrasto).
+agendaViewport.addEventListener("wheel", (evento) => {
+  if (!evento.ctrlKey) return;
+  evento.preventDefault();
+  const r = agendaViewport.getBoundingClientRect();
+  const ancora = evento.clientY - r.top;
+  agendaMudarZoom(evento.deltaY < 0 ? 1 : -1, agendaTempoDoPx(agendaViewport.scrollTop + ancora), ancora);
+}, { passive: false });
+
+document.addEventListener("keydown", (evento) => {
+  if (document.getElementById("page-agenda").classList.contains("hidden")) return;
+
+  if (evento.key === "Escape" && agArraste) {
+    agendaCancelarArraste();
+    return;
+  }
+  // Com o chamado na mão dá pra mudar de escala pelo teclado também.
+  if (agArraste && agArraste.ativo && (evento.key === "+" || evento.key === "=" || evento.key === "-")) {
+    evento.preventDefault();
+    agendaMudarZoom(evento.key === "-" ? -1 : 1);
+    return;
+  }
+
+  const alvo = evento.target;
+  const digitando = alvo && (alvo.tagName === "INPUT" || alvo.tagName === "TEXTAREA" || alvo.isContentEditable);
+  if (digitando || !(evento.ctrlKey || evento.metaKey)) return;
+  if (evento.key.toLowerCase() !== "z") return;
+  evento.preventDefault();
+  if (evento.shiftKey) agendaRefazer(); else agendaDesfazer();
+});
+
+// ----- fila da direita -----
+
+function montarCardFila(c) {
+  const card = document.createElement("div");
+  card.className = "agenda-fila-card";
+  card.dataset.id = c.id;
+  card.innerHTML = `
+    <div class="agenda-fila-topo">
+      <span class="chamado-numero">#${escapeHtml(String(c.numero))}</span>
+      <span class="chamado-status-badge ${statusClasseChamado(c.status)}">${escapeHtml(c.status)}</span>
+    </div>
+    <strong>${escapeHtml(c.clienteNome || "Sem nome")}</strong>
+    <p>${escapeHtml(c.enderecoCopia || "")}</p>
+    ${c.descricaoSolicitacao ? `<p>${escapeHtml(c.descricaoSolicitacao)}</p>` : ""}
+  `;
+  return card;
+}
+
+// Só o que ainda NÃO tem lugar na agenda. O que já está marcado aparece na
+// linha do tempo -- é lá que ele é organizado.
+function agendaDesenharFila() {
+  const fila = chamadosSemData
+    .slice()
     .sort((a, b) => new Date(a.criadoEm) - new Date(b.criadoEm));
 
   agendaListaEl.innerHTML = "";
-
-  if (!todos.length) {
-    agendaListaEl.innerHTML = `<p class="doc-hint">Nenhum chamado ainda.</p>`;
+  if (!fila.length) {
+    agendaListaEl.innerHTML = `<p class="doc-hint">Nenhum chamado esperando. Tudo que existe já está na linha do tempo.</p>`;
     return;
   }
 
   const agora = new Date();
   let grupoAtual = null;
-  todos.forEach((c) => {
-    const rotulo = rotuloAgendaGrupo(c.criadoEm, agora);
+  fila.forEach((c) => {
+    const rotulo = c.criadoEm ? rotuloAgendaGrupo(c.criadoEm, agora) : "Sem data de criação";
     if (rotulo !== grupoAtual) {
       grupoAtual = rotulo;
       const titulo = document.createElement("h2");
@@ -5397,9 +6425,48 @@ function desenharAgenda() {
       titulo.textContent = rotulo;
       agendaListaEl.appendChild(titulo);
     }
-    agendaListaEl.appendChild(montarCardChamado(c, Boolean(c.reservadoInicio)));
+    agendaListaEl.appendChild(montarCardFila(c));
   });
+  agendaMarcarCardsArrastando();
 }
+
+// "Consultar chamados" lê as MESMAS listas (chamadosSemData/chamadosComData),
+// então redesenha junto: sem isso, agendar aqui deixava a outra tela mostrando
+// o chamado no bloco errado até alguém apertar "Atualizar".
+function agendaRedesenhar() {
+  agendaDesenharFila();
+  agendaDesenharItens();
+  desenharListaChamados();
+}
+
+// Chamada por carregarChamados(): é o ponto de entrada da Agenda inteira.
+function desenharAgenda() {
+  if (!agendaJanelaFim) agendaMontarJanela(agAgora());
+  agendaMarcarNivel();
+  agendaDesenharGrade();
+  agendaRedesenhar();
+  agendaAtualizarBotoesHistorico();
+}
+
+// Ao abrir a aba: só aí a tela tem altura de verdade (escondida ela mede 0),
+// então é o momento certo de posicionar a linha do tempo no "agora".
+function agendaAoAbrir() {
+  agendaMarcarNivel();
+  if (!agendaPosicionada) agendaIrPara(agAgora(), agendaAlturaTela() * 0.35);
+  else { agendaDesenharGrade(); agendaRedesenhar(); }
+}
+
+// A linha do "agora" precisa andar sozinha — sem isso ela envelhece na tela.
+setInterval(() => {
+  if (document.getElementById("page-agenda").classList.contains("hidden")) return;
+  if (agArraste) return;
+  agendaDesenharItens();
+}, 30000);
+
+window.addEventListener("resize", () => {
+  if (document.getElementById("page-agenda").classList.contains("hidden")) return;
+  agendaConferirBordas();
+});
 
 async function carregarChamados() {
   mostrarChamadosListaStatus("neutral", "Carregando...");
@@ -5556,7 +6623,13 @@ function carregarChamadosSeNecessario() {
 }
 
 document.querySelector('.sidebar-item[data-page="consultar-chamados"]').addEventListener("click", carregarChamadosSeNecessario);
-document.querySelector('.sidebar-item[data-page="agenda"]').addEventListener("click", carregarChamadosSeNecessario);
+document.querySelector('.sidebar-item[data-page="agenda"]').addEventListener("click", () => {
+  // A ordem importa: quem troca de página é o ouvinte lá de cima, que roda
+  // antes deste. Então aqui a #page-agenda já está visível e tem altura de
+  // verdade -- é o que a linha do tempo precisa pra se posicionar direito.
+  agendaAoAbrir();
+  carregarChamadosSeNecessario();
+});
 
 // ----- Sair -----
 
@@ -5653,6 +6726,18 @@ sairBotao.addEventListener("click", () => {
   listaChamadosSemData.innerHTML = "";
   listaChamadosComData.innerHTML = "";
   chamadosListaClientes.innerHTML = "";
+
+  // Agenda: fila, linha do tempo e o histórico de desfazer somem junto — o
+  // próximo login não pode desfazer coisa do dono anterior.
+  agendaHistorico = [];
+  agendaHistoricoPos = 0;
+  agendaPosicionada = false;
+  agendaLimparArraste();
+  agendaFecharMenu();
+  agendaEsconderAviso();
+  agendaListaEl.innerHTML = "";
+  agendaItensEl.innerHTML = "";
+  agendaAtualizarBotoesHistorico();
   editChamadoAnexosLista.innerHTML = "";
   chamadoEditarBox.classList.add("hidden");
   mostrarChamadosListaStatus("neutral", "");
