@@ -2958,6 +2958,24 @@ Testado com dado falso cobrindo os 6 grupos (ano anterior até hoje) —
 ordem e rótulos corretos, e a rolagem interna confirmada (a página em
 volta fica parada, só a lista desliza).
 
+### Agenda usa a largura toda da tela, não fica num cartão estreito (14/09/2026)
+
+O dono mandou print com um círculo vermelho: a área que ele queria
+preenchida era o espaço vazio de um lado inteiro da tela (computador com
+monitor bem largo), não "o centro" onde o cartão ficava. Causa: `.page`
+já tinha um teto de 960px (posto numa rodada de agosto, pra parar de
+sobrar espaço vazio dos DOIS lados nas outras páginas — que fazem
+sentido estreitas, são formulário) — nessa tela específica, 960px ainda
+deixava uma faixa enorme vazia de um dos lados, porque a Agenda é lista
+pra rolar, não formulário, e se beneficia da largura toda.
+
+Corrigido com uma regra específica só pra ela, dentro do mesmo media
+query de telas largas: `#page-agenda { max-width: none; }` — sem mexer
+em `.page`/`.card`, que continuam valendo 960px pra todas as outras
+páginas exatamente como antes. Confirmado por medição direta (não só
+visual): `#page-agenda` passou a ocupar ~97% da largura de
+`.main-content`, contra os 960px fixos de antes.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

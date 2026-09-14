@@ -188,6 +188,14 @@ body {
     max-width: 960px;
   }
 
+  /* Agenda é lista pra rolar, não formulário -- usa a largura toda do
+     conteúdo em vez de ficar num cartão estreito centralizado. Em telas
+     bem largas, o teto de 960px ainda sobrava faixa vazia enorme de um
+     lado (o dono apontou isso direto na tela). */
+  #page-agenda {
+    max-width: none;
+  }
+
   /* Padrão do projeto: qualquer lista/coleção repetida vira grade aqui, e
      continua empilhada (uma coluna, rolando) no celular. auto-fill + minmax
      ajusta o número de colunas sozinho conforme a largura da tela. */
