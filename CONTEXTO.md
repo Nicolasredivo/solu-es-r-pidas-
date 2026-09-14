@@ -2855,6 +2855,24 @@ sobrescrevia a primeira silenciosamente (JS não avisa de redeclaração de
 função no mesmo escopo). Removida a órfã, sobrou só a do Financeiro — sem
 mudança de comportamento visível hoje, mas um bug latente a menos.
 
+### Botão × pra cancelar o cliente escolhido em Criar chamado (14/09/2026)
+
+O link "Trocar cliente" (texto pequeno abaixo do card do cliente
+escolhido) virou um botão × circular, no canto superior direito do
+próprio card — pedido do dono pra ter algo visível de "cancelar e voltar"
+depois de escolher um cadastro, seja por desistência ou por ter clicado
+no cadastro errado.
+
+Mudou também o comportamento, não só o visual: antes só trocava o
+cliente (`chamadoContatoEscolhidoId`/`chamadoLocalEscolhidoId` zerados,
+mas local exato/descrição/observações/anexos digitados ficavam como
+estavam, arriscando misturar dado de uma escolha errada com a certa).
+Agora chama `limparFormularioChamado()` — o mesmo reset completo usado
+depois de criar um chamado com sucesso — então volta pra busca 100%
+limpo. Sem confirmação em dois toques (diferente de excluir/cancelar
+chamado já salvo): nada foi gravado ainda nesse ponto, é só o que a
+pessoa tinha digitado na tela.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

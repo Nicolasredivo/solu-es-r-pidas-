@@ -1388,16 +1388,39 @@ button:active:not(:disabled) {
 }
 
 .chamado-cliente-card {
+  position: relative;
   background: var(--card);
   border: 1px solid #2c3153;
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 10px 40px 10px 12px;
   margin-bottom: 14px;
 }
 
 .chamado-cliente-card strong {
   display: block;
   margin-bottom: 2px;
+}
+
+/* Cancela o cliente escolhido e volta pra busca -- limpa tudo que já tinha
+   sido digitado (local exato, descrição, observações, anexos), não só o
+   cliente, pra não misturar dado de uma escolha errada com a certa. */
+.chamado-cliente-cancelar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid #2c3153;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.chamado-cliente-cancelar:active:not(:disabled) {
+  transform: scale(0.92);
 }
 
 /* Lista pra escolher entre opções do cadastro (contato ou endereço) quando

@@ -43,7 +43,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.14j";
+const APP_VERSION = "2026.09.14k";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -5060,12 +5060,7 @@ async function escolherClienteChamado(entidadeId) {
 }
 
 chamadoTrocarClienteBotao.addEventListener("click", () => {
-  chamadoClienteEscolhido = null;
-  chamadoContatoEscolhidoId = "";
-  chamadoLocalEscolhidoId = "";
-  chamadoClienteEscolhidoBox.classList.add("hidden");
-  chamadoPassoCliente.classList.remove("hidden");
-  chamadosBusca.value = "";
+  limparFormularioChamado();
   chamadosBusca.focus();
 });
 
