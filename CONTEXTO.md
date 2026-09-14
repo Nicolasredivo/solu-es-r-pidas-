@@ -2924,6 +2924,40 @@ criar a aba, sem colocar nada dentro ainda**. Nenhuma lógica nova em
 `app.js`, nenhum dado carregado; é literalmente uma casca vazia à espera
 de conteúdo numa rodada futura.
 
+### Agenda ganha a lista de chamados, agrupada por data, com rolagem própria (14/09/2026)
+
+Rodada seguinte, mesmo dia: a casca vazia acima ganhou conteúdo de
+verdade. Pedido do dono:
+- Lista de todos os chamados já criados, do mais antigo pro mais
+  recente.
+- A lista rola **dentro da própria janela** (painel com altura fixa,
+  `overflow-y: auto`) — diferente do resto do app, que sempre deixa a
+  página inteira rolar. Primeira vez que esse padrão aparece aqui.
+- Separação simples entre dia/semana/mês/ano, só pra situar chamados
+  com data de criação próxima.
+
+**Reaproveita o dado que já existia** (`chamadosSemData`/
+`chamadosComData`, carregados por `carregarChamados()` — o mesmo que já
+alimentava Consultar chamados) — nenhuma mudança de backend foi
+necessária, `criadoEm` já tinha sido exposto na rodada anterior
+("Data de criação no card"). `desenharAgenda()` junta as duas listas,
+ordena por `criadoEm` crescente, e insere um título de grupo
+(`.agenda-grupo-titulo`) toda vez que o rótulo muda enquanto percorre a
+lista — não é um calendário de verdade, só rótulos relativos: **Hoje /
+Ontem / Esta semana / Este mês / Este ano / <ano anterior>** (calculado
+por `rotuloAgendaGrupo`, comparando a data de criação com "agora").
+
+Os cards reaproveitam `montarCardChamado` (mesmo componente de Consultar
+chamados, com Editar/Cancelar funcionando igual) — sem criar um card
+"read-only" à parte. "Agenda" e "Consultar chamados" compartilham o
+gatilho de primeiro carregamento (`chamadosPaginaCarregada`,
+generalizado em `carregarChamadosSeNecessario()`): visitar qualquer um
+dos dois primeiro carrega os dados pra ambos.
+
+Testado com dado falso cobrindo os 6 grupos (ano anterior até hoje) —
+ordem e rótulos corretos, e a rolagem interna confirmada (a página em
+volta fica parada, só a lista desliza).
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

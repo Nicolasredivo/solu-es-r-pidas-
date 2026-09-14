@@ -43,7 +43,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.14n";
+const APP_VERSION = "2026.09.14o";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4855,6 +4855,8 @@ const chamadosSemDataBloco = document.getElementById("chamados-sem-data-bloco");
 const listaChamadosSemData = document.getElementById("lista-chamados-sem-data");
 const listaChamadosComData = document.getElementById("lista-chamados-com-data");
 const recarregarChamadosBotao = document.getElementById("recarregar-chamados");
+const agendaAtualizarBotao = document.getElementById("agenda-atualizar");
+const agendaListaEl = document.getElementById("agenda-lista");
 
 const chamadoEditarBox = document.getElementById("chamado-editar-box");
 const chamadoEditarTitulo = document.getElementById("chamado-editar-titulo");
@@ -5352,6 +5354,53 @@ function desenharListaChamados() {
   }
 }
 
+// Rótulo de grupo pra Agenda -- identifica o quão perto de hoje o chamado
+// foi criado, do jeito mais grosso que ainda faz sentido (dia/semana/mês/
+// ano). A lista está em ordem crescente (mais antigo primeiro), então o
+// rótulo muda conforme desenharAgenda percorre -- não é um calendário de
+// verdade, só o suficiente pra situar sem virar outra tela.
+function rotuloAgendaGrupo(iso, agora) {
+  const d = new Date(iso);
+  const inicioDia = (data) => new Date(data.getFullYear(), data.getMonth(), data.getDate());
+  const diffDias = Math.round((inicioDia(agora) - inicioDia(d)) / 86400000);
+  if (diffDias <= 0) return "Hoje";
+  if (diffDias === 1) return "Ontem";
+  if (diffDias < 7) return "Esta semana";
+  if (d.getFullYear() === agora.getFullYear() && d.getMonth() === agora.getMonth()) return "Este mês";
+  if (d.getFullYear() === agora.getFullYear()) return "Este ano";
+  return String(d.getFullYear());
+}
+
+// Lista única de todos os chamados (com ou sem agendamento antigo),
+// ordenada do mais antigo pro mais recente pela data de criação -- rola
+// dentro do próprio painel (ver .agenda-lista), não a página inteira.
+function desenharAgenda() {
+  const todos = [...chamadosSemData, ...chamadosComData]
+    .filter((c) => c.criadoEm)
+    .sort((a, b) => new Date(a.criadoEm) - new Date(b.criadoEm));
+
+  agendaListaEl.innerHTML = "";
+
+  if (!todos.length) {
+    agendaListaEl.innerHTML = `<p class="doc-hint">Nenhum chamado ainda.</p>`;
+    return;
+  }
+
+  const agora = new Date();
+  let grupoAtual = null;
+  todos.forEach((c) => {
+    const rotulo = rotuloAgendaGrupo(c.criadoEm, agora);
+    if (rotulo !== grupoAtual) {
+      grupoAtual = rotulo;
+      const titulo = document.createElement("h2");
+      titulo.className = "agenda-grupo-titulo";
+      titulo.textContent = rotulo;
+      agendaListaEl.appendChild(titulo);
+    }
+    agendaListaEl.appendChild(montarCardChamado(c, Boolean(c.reservadoInicio)));
+  });
+}
+
 async function carregarChamados() {
   mostrarChamadosListaStatus("neutral", "Carregando...");
   const dados = await pedirAoN8n("listar-chamados", {});
@@ -5362,10 +5411,12 @@ async function carregarChamados() {
   chamadosSemData = dados.semData || [];
   chamadosComData = dados.comData || [];
   desenharListaChamados();
+  desenharAgenda();
   mostrarChamadosListaStatus("neutral", "");
 }
 
 recarregarChamadosBotao.addEventListener("click", carregarChamados);
+agendaAtualizarBotao.addEventListener("click", carregarChamados);
 
 // ----- editar chamado -----
 //
@@ -5494,12 +5545,18 @@ editChamadoSalvarBotao.addEventListener("click", async () => {
   await salvarEdicaoChamado();
 });
 
-document.querySelector('.sidebar-item[data-page="consultar-chamados"]').addEventListener("click", () => {
+// "Consultar chamados" e "Agenda" mostram o mesmo dado carregado uma vez só
+// (chamadosSemData/chamadosComData), cada um do seu jeito -- qualquer um dos
+// dois dispara o carregamento na primeira vez.
+function carregarChamadosSeNecessario() {
   if (!chamadosPaginaCarregada) {
     chamadosPaginaCarregada = true;
     carregarChamados();
   }
-});
+}
+
+document.querySelector('.sidebar-item[data-page="consultar-chamados"]').addEventListener("click", carregarChamadosSeNecessario);
+document.querySelector('.sidebar-item[data-page="agenda"]').addEventListener("click", carregarChamadosSeNecessario);
 
 // ----- Sair -----
 

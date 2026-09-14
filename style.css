@@ -1593,3 +1593,34 @@ button:active:not(:disabled) {
   margin-top: 16px;
 }
 
+/* Painel próprio que rola por dentro (a página em volta não rola junto) --
+   pedido específico pra Agenda, diferente do resto do app, que sempre deixa
+   a página inteira rolar. */
+.agenda-lista {
+  max-height: 65vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: 10px;
+  padding-right: 4px;
+}
+
+/* Separador simples entre grupos de datas próximas (hoje/ontem/essa semana/
+   esse mês/esse ano/anos anteriores) -- só pra situar, sem virar calendário
+   de verdade. */
+.agenda-grupo-titulo {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 18px 0 8px;
+  padding-top: 10px;
+  border-top: 1px solid #2c3153;
+}
+
+.agenda-grupo-titulo:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
