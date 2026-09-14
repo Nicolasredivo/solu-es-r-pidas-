@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.14d";
+const APP_VERSION = "2026.09.14e";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -154,6 +154,7 @@ ligarAbasInternas("subtab-fin", "subfin", "subfin-", "subpage-fin");
 const documentoInput = document.getElementById("documento");
 const documentoHint = document.getElementById("documento-hint");
 const tentarReceitaBotao = document.getElementById("tentar-receita");
+const semDocumentoBotao = document.getElementById("sem-documento");
 const tipoCnpjBox = document.getElementById("tipo-cnpj");
 
 const avisoExiste = document.getElementById("aviso-existe");
@@ -317,9 +318,16 @@ function esconderFormulario() {
   formEntidade.classList.add("hidden");
   avisoExiste.classList.add("hidden");
   tentarReceitaBotao.classList.add("hidden");
+  semDocumentoBotao.classList.remove("hidden");
 }
 
+// Marcado pelo botão "cadastrar só com o nome" -- digitar de novo no campo
+// de documento desiste dessa opção e volta ao fluxo normal (ver
+// avaliarDocumento abaixo).
+let semDocumento = false;
+
 function avaliarDocumento(digitos) {
+  semDocumento = false;
   tipoCnpjBox.classList.add("hidden");
   grupoTipo.querySelectorAll(".opcao").forEach((b) => b.classList.remove("active"));
   esconderFormulario();
@@ -353,6 +361,26 @@ documentoInput.addEventListener("input", () => {
   const digitos = documentoInput.value.replace(/\D/g, "").slice(0, 14);
   documentoInput.value = digitos.length <= 11 ? formatarCPF(digitos) : formatarCNPJ(digitos);
   avaliarDocumento(digitos);
+});
+
+// Pra quando a pessoa não tem o CPF em mãos: abre o formulário direto, sem
+// consultar a Receita (não há o que consultar) e sem exigir documento —
+// "Razão social / Nome" já é obrigatório pelo próprio campo (required),
+// e o resto do cadastro (endereços, contatos etc.) continua igual. O CPF
+// pode ser completado depois, editando o cadastro na Consulta.
+semDocumentoBotao.addEventListener("click", () => {
+  documentoInput.value = "";
+  documentoAtual = "";
+  semDocumento = true;
+  tipoCnpjBox.classList.add("hidden");
+  grupoTipo.querySelectorAll(".opcao").forEach((b) => b.classList.remove("active"));
+  limparFormulario();
+  avisoExiste.classList.add("hidden");
+  tentarReceitaBotao.classList.add("hidden");
+  mostrarDica("neutral", "Sem CPF por enquanto — dá para completar depois, editando o cadastro.");
+  formEntidade.classList.remove("hidden");
+  semDocumentoBotao.classList.add("hidden");
+  razaoSocialInput.focus();
 });
 
 // Textarea não cresce sozinho. Mede o conteúdo e ajusta a altura, para o
@@ -662,6 +690,7 @@ async function consultarDocumento(digitos) {
     }
 
     formEntidade.classList.remove("hidden");
+    semDocumentoBotao.classList.add("hidden");
     // O endereço da Receita foi preenchido com o formulário ainda escondido.
     ajustarAlturasAuto(locaisBox);
   } catch (err) {
@@ -694,6 +723,7 @@ cancelarCadastroBotao.addEventListener("click", () => {
   esconderFormulario();
   documentoInput.value = "";
   documentoAtual = "";
+  semDocumento = false;
   tipoCnpjBox.classList.add("hidden");
   mostrarDica("neutral", "");
 });
@@ -703,7 +733,7 @@ formEntidade.addEventListener("submit", async (event) => {
   desarmarCancelamento();
 
   const tipo =
-    documentoAtual.length === 11 ? "CPF - Pessoa Física" : escolhaDoGrupo(grupoTipo);
+    semDocumento || documentoAtual.length === 11 ? "CPF - Pessoa Física" : escolhaDoGrupo(grupoTipo);
 
   if (!tipo) {
     salvarStatus.textContent = "Escolha se é condomínio ou empresa.";
@@ -746,7 +776,9 @@ formEntidade.addEventListener("submit", async (event) => {
       formEntidade.classList.add("hidden");
       documentoInput.value = "";
       documentoAtual = "";
+      semDocumento = false;
       tipoCnpjBox.classList.add("hidden");
+      semDocumentoBotao.classList.remove("hidden");
       mostrarDica("neutral", "");
     } else {
       salvarStatus.textContent = (dados && dados.mensagem) || "Não consegui salvar. Tente de novo.";
@@ -5616,6 +5648,7 @@ sairBotao.addEventListener("click", () => {
   esconderFormulario();
   documentoInput.value = "";
   documentoAtual = "";
+  semDocumento = false;
   tipoCnpjBox.classList.add("hidden");
   mostrarDica("neutral", "");
 

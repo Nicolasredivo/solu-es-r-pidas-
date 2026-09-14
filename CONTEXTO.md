@@ -44,8 +44,9 @@ Quem executa as automações de verdade é o **n8n**, e o app é só a "tela".
   - Adicionar: campo de CPF/CNPJ com formatação e validação de dígitos,
     detecção automática do tipo, consulta de duplicado + dados da Receita
     (incluindo endereço, que já vira o primeiro bloco preenchido), formulário
-    completo da tabela Entidades, endereços e contatos sem limite, e botões
-    Salvar/Cancelar
+    completo da tabela Entidades, endereços e contatos sem limite, botões
+    Salvar/Cancelar, e um jeito de cadastrar como CPF só com o nome, sem
+    documento nenhum, pra quando não tiver o CPF em mãos
   - Consultar: lista todos os cadastros, busca, abre/edita/exclui — inclusive
     endereços e contatos de um cadastro existente
 - Página **Financeiro**, com abas "Painel", "A pagar", "A receber",
@@ -851,6 +852,42 @@ Airtable **não apaga campo nem troca o tipo de um campo**; só cria.
 
 Contato sem nome usa o primeiro WhatsApp (ou e-mail) como título. Linha de
 canal em branco no meio da lista é descartada no envio.
+
+## Vários endereços por cadastro, na edição, já funcionava; CPF sem documento é novo (14/09/2026)
+
+O dono pediu duas coisas em Cadastro. Investigando antes de mexer:
+
+- **"Adicionar mais endereços quando quiser, na criação e editando, inclusive
+  nos que já existem"** — já estava pronto desde "Vários endereços por
+  cadastro" (15/08/2026, acima). `montarDetalhe` (a tela de edição da
+  Consulta) já tinha `botaoNovoLocal` funcionando pra qualquer cadastro, CPF
+  ou CNPJ, com quantos endereços já tivesse (inclusive zero) — não dependia
+  de nada específico do registro, então já valia pra tudo que já estava
+  cadastrado, sem precisar atualizar nada. Confirmado testando (dado falso):
+  abrir um cadastro sem nenhum endereço, entrar em editar, e conseguir
+  adicionar um novo normalmente. Nenhuma mudança de código aqui.
+- **"Cadastro CPF só com o nome, pra quando não tiver o CPF"** — este sim não
+  existia: o formulário inteiro ficava escondido até digitar um CPF ou CNPJ
+  válido (`avaliarDocumento`/`esconderFormulario`). Adicionado um botão
+  "Não sei o CPF agora — cadastrar só com o nome" ao lado do campo de
+  documento (`#sem-documento`) que abre o formulário direto (sem consultar a
+  Receita — não há o que consultar), força o tipo "CPF - Pessoa Física", e
+  deixa o campo Razão social/Nome (já `required` no HTML) como única
+  exigência. Digitar de novo no campo de documento desiste da opção e volta
+  ao fluxo normal.
+  - **Nenhuma mudança de backend foi necessária**: o Airtable já tinha
+    `CPF_CNPJ` como campo não-obrigatório, `documentoValido()` no app já
+    tolerava documento vazio ("cadastro antigo pode estar sem documento; não
+    trava por causa disso" — comentário que já previa exatamente este
+    caso), e `atualizar-cadastro` já pulava a checagem de duplicado quando o
+    documento vem vazio (`doc ? ... : 'FALSE()'`). Tudo isso já existia antes
+    de qualquer cadastro sem CPF ter sido criado pelo app — só faltava o
+    caminho na tela pra chegar lá.
+  - Testado (dado falso, `fetch` de `salvar-entidade` interceptado): botão
+    abre o formulário, salvar com só o nome manda `documento: ""` e
+    `tipo: "CPF - Pessoa Física"`, o fluxo normal de CPF/CNPJ digitado
+    continua funcionando igual, e digitar depois de clicar no botão cancela
+    a opção corretamente.
 
 ## Padrão de layout: grade no computador, coluna única no celular (24/08/2026)
 
