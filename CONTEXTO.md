@@ -2756,6 +2756,29 @@ mesma tela que era "Agenda" (lista + editar), só renomeada.
   seguiu o mesmo mecanismo, só trocando o seletor de
   `data-page="agenda"` pra `data-page="consultar-chamados"`.
 
+### Agendamento tirado de "Criar chamado" (14/09/2026)
+
+Pedido do dono: "não vamos realizar o agendamento mais por aqui" — tirar a
+caixa inteira de "Agendamento (opcional)" (Data, De/Até, Horário
+combinado, checagem de conflito com sugestão de "empurrar" outro chamado)
+de dentro de Criar chamado. Explicitamente pediu pra **não** adicionar
+agendamento em nenhuma outra tela como substituto — só guardar a ideia na
+memória do agente pra inspiração futura (feito, ver memória
+`chamados-rebuild-ideias-reaproveitar`).
+
+Chamado criado por aqui agora **sempre** nasce como "Aguardando
+confirmação de data" — quem quiser marcar data/horário faz isso depois,
+abrindo o chamado em Consultar chamados → Editar (`chamado-editar-box`),
+que continua com o agendamento completo e a checagem de conflito, **sem
+nenhuma mudança**.
+
+**Nenhuma mudança de backend**: o workflow `App - Criar chamado` já tinha
+`temAgenda = Boolean(data && reservadoInicio && reservadoFim)` — sem
+agenda, grava `Status: "Aguardando confirmação de data"` e não toca em
+`Reservado_Inicio`/`Reservado_Fim`. Confirmado lendo o workflow ao vivo
+antes de mexer no app — já estava pronto pra esse caminho, só faltava o
+app sempre mandar os três campos em branco.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

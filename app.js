@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.14g";
+const APP_VERSION = "2026.09.14h";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4982,13 +4982,6 @@ const chamadoAnexosDocInput = document.getElementById("chamado-anexos-doc");
 const chamadoAnexosFotoBotao = document.getElementById("chamado-anexos-foto-botao");
 const chamadoAnexosDocBotao = document.getElementById("chamado-anexos-doc-botao");
 const chamadoAnexosLista = document.getElementById("chamado-anexos-lista");
-const chamadoDataInput = document.getElementById("chamado-data");
-const chamadoHorarioCombinadoInput = document.getElementById("chamado-horario-combinado");
-const chamadoReservadoInicioInput = document.getElementById("chamado-reservado-inicio");
-const chamadoReservadoFimInput = document.getElementById("chamado-reservado-fim");
-const chamadoDataPassadoAviso = document.getElementById("chamado-data-passado-aviso");
-const chamadoDataFeriadoAviso = document.getElementById("chamado-data-feriado-aviso");
-const chamadoConflitoBox = document.getElementById("chamado-conflito");
 const chamadoForm = document.getElementById("chamado-form");
 const chamadoSalvarBotao = document.getElementById("chamado-salvar-botao");
 const chamadoStatus = document.getElementById("chamado-status");
@@ -5308,15 +5301,10 @@ function limparFormularioChamado() {
   chamadoDescricaoInput.value = "";
   chamadoObservacoesInput.value = "";
   chamadoAnexosLista.innerHTML = "";
-  chamadoDataInput.value = "";
-  chamadoHorarioCombinadoInput.value = "";
-  chamadoReservadoInicioInput.value = "08:00";
-  chamadoReservadoFimInput.value = "09:00";
-  limparConflitoBox(chamadoConflitoBox);
   mostrarChamadoStatus("neutral", "");
 }
 
-async function criarChamadoDeVerdade(chamadoEmpurradoId, sugestaoParaEmpurrado) {
+async function criarChamadoDeVerdade() {
   chamadoSalvarBotao.disabled = true;
   mostrarChamadoStatus("neutral", "Salvando...");
 
@@ -5326,10 +5314,14 @@ async function criarChamadoDeVerdade(chamadoEmpurradoId, sugestaoParaEmpurrado) 
     localExato: chamadoLocalExatoInput.value.trim(),
     descricaoSolicitacao: chamadoDescricaoInput.value.trim(),
     observacoesServico: chamadoObservacoesInput.value.trim(),
-    data: chamadoDataInput.value,
-    reservadoInicio: chamadoReservadoInicioInput.value,
-    reservadoFim: chamadoReservadoFimInput.value,
-    horarioCombinadoCliente: chamadoHorarioCombinadoInput.value,
+    // Chamado nasce sem agendamento -- ver CONTEXTO.md "Agendamento tirado
+    // de Criar chamado" (14/09/2026). Data/horário continuam existindo no
+    // registro (usados por Consultar chamados / editar), só não são mais
+    // preenchidos na criação.
+    data: "",
+    reservadoInicio: "",
+    reservadoFim: "",
+    horarioCombinadoCliente: "",
     // Viaja como texto JSON num campo só, mesmo padrão de "locais"/"contatos"
     // no Cadastro: URLSearchParams não sabe serializar um array de verdade.
     anexos: JSON.stringify(chamadosAnexosArquivos.map((a) => ({ filename: a.filename, contentType: a.contentType, base64: a.base64 }))),
@@ -5342,13 +5334,6 @@ async function criarChamadoDeVerdade(chamadoEmpurradoId, sugestaoParaEmpurrado) 
     chamadoSalvarBotao.disabled = false;
     mostrarChamadoStatus("error", "Não consegui falar com o servidor.");
     return;
-  }
-
-  if (resposta && resposta.ok && chamadoEmpurradoId && sugestaoParaEmpurrado) {
-    await pedirAoN8n("reagendar-chamado", {
-      chamadoId: chamadoEmpurradoId, data: sugestaoParaEmpurrado.data,
-      reservadoInicio: sugestaoParaEmpurrado.inicio, reservadoFim: sugestaoParaEmpurrado.fim,
-    });
   }
 
   chamadoSalvarBotao.disabled = false;
@@ -5364,45 +5349,10 @@ async function criarChamadoDeVerdade(chamadoEmpurradoId, sugestaoParaEmpurrado) 
 
 chamadoForm.addEventListener("submit", async (evento) => {
   evento.preventDefault();
-  limparConflitoBox(chamadoConflitoBox);
 
   if (!chamadoClienteEscolhido) {
     mostrarChamadoStatus("error", "Escolha um cliente primeiro.");
     return;
-  }
-
-  const temData = Boolean(chamadoDataInput.value);
-  if (temData && chamadoDataInput.value < primeiroDiaPermitidoParaAgendar()) {
-    avisaDataPassada(chamadoDataPassadoAviso);
-    mostrarChamadoStatus("error", "Não é possível agendar antes de hoje.");
-    return;
-  }
-  if (temData && (!chamadoReservadoInicioInput.value || !chamadoReservadoFimInput.value)) {
-    mostrarChamadoStatus("error", "Preencha o horário de início e fim do serviço.");
-    return;
-  }
-  if (temData && chamadoReservadoFimInput.value <= chamadoReservadoInicioInput.value) {
-    mostrarChamadoStatus("error", "O horário final precisa ser depois do início.");
-    return;
-  }
-
-  if (temData) {
-    const resultado = await checarConflito(chamadoDataInput.value, chamadoReservadoInicioInput.value, chamadoReservadoFimInput.value);
-    if (resultado && resultado.temConflito) {
-      mostrarConflitoBox(chamadoConflitoBox, resultado,
-        (sugestao) => {
-          chamadoDataInput.value = sugestao.data;
-          chamadoReservadoInicioInput.value = sugestao.inicio;
-          chamadoReservadoFimInput.value = sugestao.fim;
-          limparConflitoBox(chamadoConflitoBox);
-          criarChamadoDeVerdade();
-        },
-        (sugestao, conflito) => {
-          limparConflitoBox(chamadoConflitoBox);
-          criarChamadoDeVerdade(conflito.id, sugestao);
-        });
-      return;
-    }
   }
 
   await criarChamadoDeVerdade();
@@ -5529,24 +5479,12 @@ function atualizaAvisoFeriadoEm(elAviso, dataStr) {
     elAviso.classList.add("hidden");
   }
 }
-function atualizaAvisoFeriado(dataStr) {
-  atualizaAvisoFeriadoEm(chamadoDataFeriadoAviso, dataStr);
-}
-
 editChamadoData.addEventListener("change", () => {
   if (editChamadoData.value && editChamadoData.value < primeiroDiaPermitidoParaAgendar()) {
     avisaDataPassada(editChamadoDataPassadoAviso);
     editChamadoData.value = primeiroDiaPermitidoParaAgendar();
   }
   atualizaAvisoFeriadoEm(editChamadoDataFeriadoAviso, editChamadoData.value);
-});
-
-chamadoDataInput.addEventListener("change", () => {
-  if (chamadoDataInput.value && chamadoDataInput.value < primeiroDiaPermitidoParaAgendar()) {
-    avisaDataPassada(chamadoDataPassadoAviso);
-    chamadoDataInput.value = primeiroDiaPermitidoParaAgendar();
-  }
-  atualizaAvisoFeriado(chamadoDataInput.value);
 });
 
 async function carregarChamados() {

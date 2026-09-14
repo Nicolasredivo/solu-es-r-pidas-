@@ -1402,33 +1402,6 @@
               </div>
               <div id="chamado-anexos-lista"></div>
 
-              <div class="chamado-agendamento-caixa">
-                <h2 class="titulo-bloco">Agendamento (opcional)</h2>
-                <p class="doc-hint">Pode deixar em branco e marcar depois.</p>
-
-                <label for="chamado-data">Data</label>
-                <input type="date" id="chamado-data" />
-                <p id="chamado-data-passado-aviso" class="doc-hint error hidden"></p>
-                <p id="chamado-data-feriado-aviso" class="doc-hint aviso hidden"></p>
-
-                <label>Reservar o tempo de serviço</label>
-                <div class="chamado-horario-intervalo">
-                  <div>
-                    <label for="chamado-reservado-inicio">De</label>
-                    <input type="time" id="chamado-reservado-inicio" value="08:00" />
-                  </div>
-                  <div>
-                    <label for="chamado-reservado-fim">Até</label>
-                    <input type="time" id="chamado-reservado-fim" value="09:00" />
-                  </div>
-                </div>
-
-                <label for="chamado-horario-combinado">Horário combinado com o cliente (opcional)</label>
-                <input type="time" id="chamado-horario-combinado" />
-
-                <div id="chamado-conflito" class="aviso-caixa hidden"></div>
-              </div>
-
               <button type="submit" id="chamado-salvar-botao">Criar chamado</button>
               <button type="button" id="chamado-cancelar-botao" class="botao-secundario hidden">Cancelar</button>
               <div id="chamado-status" class="status"></div>
