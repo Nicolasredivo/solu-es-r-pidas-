@@ -939,6 +939,61 @@ isso de vez exigiria expor o `clienteId` (o vínculo `Cliente_Ref`) na
 resposta de `listar-chamados`, que hoje só devolve a cópia do documento.
 Fica pra quando/se isso incomodar de verdade.
 
+## Filtros e sugestões em Cadastro (14/09/2026)
+
+Dois pedidos do dono, na mesma rodada.
+
+### Filtros na Consulta
+
+Painel próprio (caixa com fundo levemente destacado) acima da lista, com um
+rótulo pequeno em maiúsculas por cima de cada controle — pedido explícito
+do dono depois de ver a primeira versão ("mais clean, mais cara de sistema
+profissional"), então a versão final tem `.filtro-item` (rótulo + controle)
+em vez do texto da primeira `<option>` fazer dupla função de rótulo, e
+"Limpar filtros" virou botão (`.botao-secundario`) em vez de link solto.
+
+- **Documento**: Todos / CPF / CNPJ — pelo tamanho do `documento` (11 ou 14
+  dígitos), não pelo campo `Tipo_Documento` (que distingue Condomínio vs
+  Empresa dentro de CNPJ, granularidade a mais do que o dono pediu aqui).
+- **Status**, **Contato**, **Administradora**, **Empresa de síndicos** —
+  `<select>` com as opções montadas a partir do que existe de verdade nos
+  cadastros carregados (`valoresDistintosCadastro`), não uma lista fixa que
+  ficaria desatualizada. "Contato" quebra o campo `contato` (que vem como
+  "Fulano, Beltrano" — um nome por vírgula) em nomes individuais.
+- Todos os filtros combinam entre si e com a busca por texto (E, não OU).
+
+### Sugestão de valor já usado, ao criar um cadastro
+
+No Adicionar, quatro campos que costumam se repetir entre cadastros
+diferentes (mesma administradora cuida de vários prédios, por exemplo)
+ganharam uma lista de sugestão ao focar/digitar: **E-mails**,
+**Administradora**, **Empresa de síndicos**, e o **Nome** de cada contato
+(inclusive contatos adicionados depois, e também no modo de editar da
+Consulta — é o mesmo `<template>` compartilhado). Clicar preenche o campo.
+
+Pedido explícito do dono: **cada campo só sugere valores DELE MESMO** — um
+contato nunca aparece na caixa de e-mail, nem vice-versa. Resolvido com
+`ligarSugestaoCampo(input, listaEl, coletaValores)`: quem decide o que
+aparece é sempre a função `coletaValores` passada por quem liga o campo, e
+cada um dos quatro usos passa uma função diferente (própria pra
+e-mails/administradora/empresa de síndicos/nomes de contato).
+
+A lista de cadastros usada tanto pelos filtros quanto pelas sugestões é uma
+só (`cadastros`/`listaCarregada`, os mesmos globais que já existiam pra
+Consulta) — `garantirCadastrosCarregados()` busca uma vez só e reaproveita
+entre Adicionar e Consulta, o mesmo padrão que Chamados já usava pra busca
+de cliente (`chamadosCadastros`/`carregarCadastrosParaChamados`).
+
+### Backend
+
+`listar-cadastros` só devolvia `documento`, `razaoSocial`, `nomeFantasia` e
+`contato` — o mínimo que a lista da Consulta mostrava até aqui. Ampliado
+(via API do n8n) pra também devolver `tipo`, `status`, `administradora`,
+`empresaSindicos` e `emails`, que os filtros e as sugestões precisam.
+Mudança só aditiva (mais campos na mesma resposta) — nada que já existia
+mudou. Testado com dado real (só leitura): os 39 cadastros continuam
+voltando certinho, agora com os campos novos preenchidos.
+
 ## Padrão de layout: grade no computador, coluna única no celular (24/08/2026)
 
 **Vale para o app inteiro, inclusive telas que ainda não existem.** O pedido do

@@ -126,16 +126,19 @@
             </div>
 
             <label for="emails">E-mails (financeiro / NF-e)</label>
-            <input type="text" id="emails" />
+            <input type="text" id="emails" autocomplete="off" />
+            <div id="emails-sugestao" class="sugestao-lista hidden"></div>
 
             <label for="whatsapp-cnpj">WhatsApp vinculado ao CNPJ</label>
             <input type="text" id="whatsapp-cnpj" />
 
             <label for="administradora">Administradora</label>
-            <input type="text" id="administradora" />
+            <input type="text" id="administradora" autocomplete="off" />
+            <div id="administradora-sugestao" class="sugestao-lista hidden"></div>
 
             <label for="empresa-sindicos">Empresa de síndicos</label>
-            <input type="text" id="empresa-sindicos" placeholder="Opcional" />
+            <input type="text" id="empresa-sindicos" placeholder="Opcional" autocomplete="off" />
+            <div id="empresa-sindicos-sugestao" class="sugestao-lista hidden"></div>
 
             <div class="grupo">
               <label>Status</label>
@@ -217,7 +220,8 @@
               </div>
 
               <label>Nome</label>
-              <input type="text" class="contato-nome" placeholder="Ex: Maria, do financeiro" />
+              <input type="text" class="contato-nome" placeholder="Ex: Maria, do financeiro" autocomplete="off" />
+              <div class="sugestao-lista hidden"></div>
 
               <label>Cargo / função</label>
               <select class="contato-cargo">
@@ -264,6 +268,45 @@
             <input type="text" id="busca-cadastro" autocomplete="off"
                    placeholder="Buscar por nome, CPF/CNPJ ou contato" />
             <button type="button" id="recarregar-lista" class="botao-secundario">Atualizar</button>
+          </div>
+
+          <div class="filtros-cadastro">
+            <div class="filtro-item">
+              <span class="filtro-rotulo">Documento</span>
+              <div class="opcoes" id="filtro-doc-tipo">
+                <button type="button" class="opcao active" data-valor="">Todos</button>
+                <button type="button" class="opcao" data-valor="cpf">CPF</button>
+                <button type="button" class="opcao" data-valor="cnpj">CNPJ</button>
+              </div>
+            </div>
+            <div class="filtro-item">
+              <span class="filtro-rotulo">Status</span>
+              <select id="filtro-status">
+                <option value="">Todos</option>
+                <option value="Ativo">Ativo</option>
+                <option value="Inativo">Inativo</option>
+                <option value="Arquivado">Arquivado</option>
+              </select>
+            </div>
+            <div class="filtro-item">
+              <span class="filtro-rotulo">Contato</span>
+              <select id="filtro-contato">
+                <option value="">Todos</option>
+              </select>
+            </div>
+            <div class="filtro-item">
+              <span class="filtro-rotulo">Administradora</span>
+              <select id="filtro-administradora">
+                <option value="">Todas</option>
+              </select>
+            </div>
+            <div class="filtro-item">
+              <span class="filtro-rotulo">Empresa de síndicos</span>
+              <select id="filtro-empresa-sindicos">
+                <option value="">Todas</option>
+              </select>
+            </div>
+            <button type="button" id="limpar-filtros-cadastro" class="botao-secundario filtro-limpar">Limpar filtros</button>
           </div>
 
           <p id="lista-status" class="doc-hint"></p>

@@ -31,7 +31,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.14f";
+const APP_VERSION = "2026.09.14g";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -571,6 +571,12 @@ function adicionarContato(caixa, comFoco, dados) {
   preencherCanais(whatsapps, "whatsapp", dados && dados.whatsapps);
   preencherCanais(emails, "email", dados && dados.emails);
 
+  ligarSugestaoCampo(
+    bloco.querySelector(".contato-nome"),
+    bloco.querySelector(".sugestao-lista"),
+    () => valoresDistintosCadastro("contato")
+  );
+
   bloco.querySelector(".adicionar-whatsapp")
     .addEventListener("click", () => adicionarCanal(whatsapps, "whatsapp", true));
   bloco.querySelector(".adicionar-email")
@@ -800,6 +806,12 @@ const listaStatus = document.getElementById("lista-status");
 const listaBox = document.getElementById("lista-cadastros");
 const modeloLinha = document.getElementById("modelo-linha");
 const modeloDetalhe = document.getElementById("modelo-detalhe");
+const filtroDocTipo = document.getElementById("filtro-doc-tipo");
+const filtroStatus = document.getElementById("filtro-status");
+const filtroContato = document.getElementById("filtro-contato");
+const filtroAdministradora = document.getElementById("filtro-administradora");
+const filtroEmpresaSindicos = document.getElementById("filtro-empresa-sindicos");
+const limparFiltrosCadastroBotao = document.getElementById("limpar-filtros-cadastro");
 
 let cadastros = [];
 let listaCarregada = false;
@@ -829,9 +841,28 @@ function documentoValido(digitos) {
   return false;
 }
 
+// Carrega os cadastros sem mexer na tela da Consulta -- usado pelas
+// sugestões do Adicionar (ver ligarSugestaoCampo), que precisam da mesma
+// lista mas não devem disparar "Carregando..."/erros na lista de baixo.
+// Se a Consulta já carregou antes, não busca de novo.
+async function garantirCadastrosCarregados() {
+  if (listaCarregada) return;
+  try {
+    const dados = await pedirAoN8n("listar-cadastros", {});
+    if (dados && dados.ok) {
+      cadastros = dados.cadastros || [];
+      listaCarregada = true;
+      atualizaFiltrosCadastro();
+    }
+  } catch (err) {
+    // Sugestão é um extra -- não trava o formulário se o n8n estiver fora.
+  }
+}
+
 async function carregarLista() {
   mostrarListaStatus("neutral", "Carregando...");
   listaBox.innerHTML = "";
+  listaCarregada = false; // "Atualizar" força buscar de novo, mesmo já tendo carregado
 
   try {
     const dados = await pedirAoN8n("listar-cadastros", {});
@@ -843,21 +874,112 @@ async function carregarLista() {
 
     cadastros = dados.cadastros || [];
     listaCarregada = true;
+    atualizaFiltrosCadastro();
     desenharLista();
   } catch (err) {
     mostrarListaStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
   }
 }
 
+// Um `<select>` de filtro por valor: monta as opções a partir do que existe
+// de verdade nos cadastros carregados (nada de lista fixa, que ficaria
+// desatualizada). Preserva a escolha atual se ela continuar valendo.
+function valoresDistintosCadastro(campo) {
+  const vistos = new Set();
+  cadastros.forEach((c) => {
+    if (campo === "contato") {
+      // "contato" vem como "Fulano, Beltrano" -- um nome por vírgula.
+      (c.contato || "").split(",").map((v) => v.trim()).filter(Boolean).forEach((v) => vistos.add(v));
+    } else {
+      const v = (c[campo] || "").trim();
+      if (v) vistos.add(v);
+    }
+  });
+  return [...vistos].sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+function preencherFiltroSelect(select, valores, rotuloTodos) {
+  const atual = select.value;
+  select.innerHTML = `<option value="">${rotuloTodos}</option>` +
+    valores.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
+  if (valores.includes(atual)) select.value = atual;
+}
+
+function atualizaFiltrosCadastro() {
+  preencherFiltroSelect(filtroContato, valoresDistintosCadastro("contato"), "Todos");
+  preencherFiltroSelect(filtroAdministradora, valoresDistintosCadastro("administradora"), "Todas");
+  preencherFiltroSelect(filtroEmpresaSindicos, valoresDistintosCadastro("empresaSindicos"), "Todas");
+}
+
+// Sugestão de valor já usado noutro cadastro, pro campo não ficar em branco
+// e a pessoa não digitar de novo o que já digitou pra outro cliente
+// (administradora, empresa de síndicos, e-mail e nome de contato costumam
+// se repetir bastante). `coletaValores()` decide QUAIS valores esse campo
+// específico sugere -- nunca mistura contato com e-mail, por exemplo,
+// porque cada chamada usa sua própria função de coleta.
+function ligarSugestaoCampo(input, listaEl, coletaValores) {
+  async function atualizar() {
+    await garantirCadastrosCarregados();
+    const termo = input.value.trim().toLowerCase();
+    const filtrados = coletaValores()
+      .filter((v) => v.toLowerCase() !== termo)
+      .filter((v) => !termo || v.toLowerCase().includes(termo))
+      .slice(0, 8);
+
+    listaEl.innerHTML = "";
+    if (!filtrados.length) {
+      listaEl.classList.add("hidden");
+      return;
+    }
+    filtrados.forEach((valor) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "sugestao-item";
+      item.textContent = valor;
+      // mousedown (não click) dispara antes do blur do campo, senão a lista
+      // já teria sumido quando o clique chegasse.
+      item.addEventListener("mousedown", (evento) => {
+        evento.preventDefault();
+        input.value = valor;
+        listaEl.classList.add("hidden");
+        input.focus();
+      });
+      listaEl.appendChild(item);
+    });
+    listaEl.classList.remove("hidden");
+  }
+
+  input.addEventListener("focus", atualizar);
+  input.addEventListener("input", atualizar);
+  input.addEventListener("blur", () => listaEl.classList.add("hidden"));
+}
+
+ligarSugestaoCampo(emailsInput, document.getElementById("emails-sugestao"), () => valoresDistintosCadastro("emails"));
+ligarSugestaoCampo(administradoraInput, document.getElementById("administradora-sugestao"), () => valoresDistintosCadastro("administradora"));
+ligarSugestaoCampo(empresaSindicosInput, document.getElementById("empresa-sindicos-sugestao"), () => valoresDistintosCadastro("empresaSindicos"));
+
 function desenharLista() {
   const termo = buscaInput.value.trim().toLowerCase();
   const digitos = termo.replace(/\D/g, "");
+  const docTipo = escolhaDoGrupo(filtroDocTipo);
+  const status = filtroStatus.value;
+  const contato = filtroContato.value;
+  const administradora = filtroAdministradora.value;
+  const empresaSindicos = filtroEmpresaSindicos.value;
 
   const visiveis = cadastros.filter((c) => {
-    if (!termo) return true;
-    const texto = `${c.razaoSocial} ${c.nomeFantasia} ${c.contato}`.toLowerCase();
-    // Procurar por número ignora a pontuação do CPF/CNPJ.
-    return texto.includes(termo) || (digitos !== "" && c.documento.includes(digitos));
+    if (termo) {
+      const texto = `${c.razaoSocial} ${c.nomeFantasia} ${c.contato}`.toLowerCase();
+      // Procurar por número ignora a pontuação do CPF/CNPJ.
+      if (!(texto.includes(termo) || (digitos !== "" && c.documento.includes(digitos)))) return false;
+    }
+    if (docTipo === "cpf" && c.documento.length !== 11) return false;
+    if (docTipo === "cnpj" && c.documento.length !== 14) return false;
+    if (status && c.status !== status) return false;
+    if (contato && !(c.contato || "").split(",").map((v) => v.trim()).includes(contato)) return false;
+    if (administradora && (c.administradora || "") !== administradora) return false;
+    if (empresaSindicos && (c.empresaSindicos || "") !== empresaSindicos) return false;
+    return true;
   });
 
   listaBox.innerHTML = "";
@@ -868,7 +990,9 @@ function desenharLista() {
   }
 
   if (!visiveis.length) {
-    mostrarListaStatus("neutral", `Nada encontrado para "${buscaInput.value.trim()}".`);
+    mostrarListaStatus("neutral", termo
+      ? `Nada encontrado para "${buscaInput.value.trim()}".`
+      : "Nada encontrado com esse filtro.");
     return;
   }
 
@@ -881,6 +1005,19 @@ function desenharLista() {
 
   visiveis.forEach((cadastro) => listaBox.appendChild(montarLinha(cadastro)));
 }
+
+configurarGrupo(filtroDocTipo, () => desenharLista());
+[filtroStatus, filtroContato, filtroAdministradora, filtroEmpresaSindicos].forEach((select) =>
+  select.addEventListener("change", desenharLista)
+);
+limparFiltrosCadastroBotao.addEventListener("click", () => {
+  filtroDocTipo.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === ""));
+  filtroStatus.value = "";
+  filtroContato.value = "";
+  filtroAdministradora.value = "";
+  filtroEmpresaSindicos.value = "";
+  desenharLista();
+});
 
 function atualizarResumo(linha, cadastro) {
   linha.querySelector(".cadastro-doc").textContent =

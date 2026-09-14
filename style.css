@@ -393,6 +393,81 @@ input[type="text"]:focus {
   color: white;
 }
 
+/* Filtros da Consulta: painel próprio (fundo levemente destacado do card),
+   um rótulo pequeno em maiúsculas acima de cada controle -- mesma ideia de
+   dashboard profissional, em vez do texto "Status: todos" dentro do select
+   fazendo dupla função de rótulo e opção. Quebra linha sozinho no celular. */
+.filtros-cadastro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+  margin: 10px 0;
+  padding: 12px 14px;
+  background: #12162a;
+  border-radius: 10px;
+}
+
+.filtro-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1 1 140px;
+}
+
+.filtro-rotulo {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.filtros-cadastro select {
+  width: 100%;
+  margin-bottom: 0;
+  padding: 9px 10px;
+  font-size: 0.85rem;
+}
+
+.filtros-cadastro .opcoes {
+  gap: 6px;
+}
+
+.filtros-cadastro .opcao {
+  flex: 1;
+  padding: 9px 6px;
+  font-size: 0.8rem;
+}
+
+.filtro-limpar {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 9px 16px;
+  font-size: 0.8rem;
+}
+
+/* Sugestão de valor já usado noutro cadastro (e-mail, administradora,
+   empresa de síndicos, nome de contato) -- mesmo visual dos resultados de
+   busca de cliente em Chamados, só que embutido no fluxo normal do
+   formulário (nunca sobrepõe o campo de baixo). Cada campo mostra só os
+   valores DELE MESMO; nunca mistura contato com e-mail, por exemplo. */
+.sugestao-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 16px;
+}
+
+.sugestao-item {
+  text-align: left;
+  background: var(--card);
+  border: 1px solid #2c3153;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
 /* Locais de atendimento: bloco que se repete, um por endereço */
 .locais-ajuda {
   margin: -2px 0 12px;

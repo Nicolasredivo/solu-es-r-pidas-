@@ -7,7 +7,7 @@
         "path": "listar-cadastros",
         "responseMode": "responseNode",
         "options": {
-          "allowedOrigins": "*"
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
         }
       },
       "id": "e0000000-0000-4000-8000-000000000001",
@@ -109,7 +109,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Uma linha por cadastro, so com o que a lista mostra.\nconst achados = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\n\nconst cadastros = achados.map((i) => {\n  const f = i.json.fields || {};\n  // Contatos_Nomes e um campo de busca do Airtable: vem como lista.\n  const contatos = Array.isArray(f.Contatos_Nomes) ? f.Contatos_Nomes.filter(Boolean) : [];\n  return {\n    id: i.json.id,\n    documento: f.CPF_CNPJ || '',\n    razaoSocial: f.Razao_Social_Nome || '',\n    nomeFantasia: f.Nome_Fantasia_Identificador || '',\n    contato: contatos.join(', '),\n  };\n});\n\ncadastros.sort((a, b) => (a.razaoSocial || '~').localeCompare(b.razaoSocial || '~', 'pt-BR'));\n\nreturn [{ json: { ok: true, total: cadastros.length, cadastros } }];"
+        "jsCode": "// Uma linha por cadastro, so com o que a lista mostra (e com o que os\n// filtros/sugestoes da tela de Cadastro precisam -- ver CONTEXTO.md\n// 'Filtros e sugestoes em Cadastro', 14/09/2026).\nconst achados = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\n\nconst cadastros = achados.map((i) => {\n  const f = i.json.fields || {};\n  // Contatos_Nomes e um campo de busca do Airtable: vem como lista.\n  const contatos = Array.isArray(f.Contatos_Nomes) ? f.Contatos_Nomes.filter(Boolean) : [];\n  return {\n    id: i.json.id,\n    documento: f.CPF_CNPJ || '',\n    razaoSocial: f.Razao_Social_Nome || '',\n    nomeFantasia: f.Nome_Fantasia_Identificador || '',\n    contato: contatos.join(', '),\n    tipo: f.Tipo_Documento || '',\n    status: f.Status || '',\n    administradora: f.Administradora || '',\n    empresaSindicos: f.Empresa_Sindicos || '',\n    emails: f.Emails_Financeiro_NFE || '',\n  };\n});\n\ncadastros.sort((a, b) => (a.razaoSocial || '~').localeCompare(b.razaoSocial || '~', 'pt-BR'));\n\nreturn [{ json: { ok: true, total: cadastros.length, cadastros } }];"
       },
       "id": "e0000000-0000-4000-8000-000000000007",
       "name": "Monta lista",
@@ -191,6 +191,5 @@
   },
   "settings": {
     "executionOrder": "v1"
-  },
-  "pinData": {}
+  }
 }
