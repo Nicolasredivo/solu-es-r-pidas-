@@ -2889,6 +2889,32 @@ inteira de propósito). O listener de foco do campo (`chamadosBusca`)
 passou a chamar `desenharResultadosBuscaChamado` depois de carregar os
 cadastros (`carregarCadastrosParaChamados`, que já existia e só busca
 uma vez), não só disparar o carregamento calado como antes.
+
+### Data de criação no card, chamados do mais antigo pro mais recente (14/09/2026)
+
+Dois pedidos ligados: mostrar em algum lugar do card **quando o chamado
+foi criado**, e manter os chamados **ordenados do mais antigo pro mais
+recente**. Fazia sentido pedir isso agora — sem agendamento nem em Criar
+nem em Editar (ver acima), a data de criação passou a ser a única
+referência de tempo que sobrou no card.
+
+Não precisou de campo novo no Airtable: todo registro já vem com
+`createdTime` sozinho, de graça, nativo da API — só não estava sendo
+lido. `listar-chamados` ("Monta lista") passou a devolver `criadoEm:
+j.createdTime` por chamado, e a ordenar "Aguardando confirmação de data"
+por `criadoEm` (antes ordenava por `Numero_Chamado`, que na prática dava
+no mesmo já que o número é sequencial — trocado mesmo assim pela fonte
+de verdade real, não por uma coincidência de que os dois concordam).
+"Agendados" continua ordenado por `reservadoInicio` (data marcada), não
+por criação — faz mais sentido pra uma lista de compromissos ver o que
+vem primeiro no calendário, não o que foi pedido primeiro.
+
+No card (`montarCardChamado`), nova linha discreta no rodapé — "Criado
+em DD/MM/AAAA às HH:MM" — mesmo padrão de formatação já usado pro
+horário agendado (`toLocaleDateString`/`formatarHoraIso`, fuso do
+navegador). Testado com dado falso (ordem, exibição) e confirmado com
+leitura real (só leitura, sem mexer em nada) antes deste commit.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

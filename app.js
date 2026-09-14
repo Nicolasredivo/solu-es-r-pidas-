@@ -43,7 +43,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.14l";
+const APP_VERSION = "2026.09.14m";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -5273,6 +5273,10 @@ function montarCardChamado(c, comData) {
       `${c.horarioCombinadoCliente ? ` (combinado ${escapeHtml(c.horarioCombinadoCliente)})` : ""}</p>`;
   }
 
+  const criadoTexto = c.criadoEm
+    ? `<p class="doc-hint chamado-card-criado">Criado em ${new Date(c.criadoEm).toLocaleDateString("pt-BR")} às ${formatarHoraIso(c.criadoEm)}</p>`
+    : "";
+
   card.innerHTML = `
     <div class="chamado-card-topo">
       <span class="chamado-numero">#${c.numero}</span>
@@ -5283,6 +5287,7 @@ function montarCardChamado(c, comData) {
     <p>${escapeHtml(c.descricaoSolicitacao)}</p>
     ${c.contatoNome ? `<p class="doc-hint">Contato: ${escapeHtml(c.contatoNome)}${c.contatoWhatsApp ? " · " + escapeHtml(c.contatoWhatsApp) : ""}</p>` : ""}
     ${horarioTexto}
+    ${criadoTexto}
     <div class="chamado-card-acoes">
       <button type="button" class="botao-secundario botao-editar-chamado">Editar</button>
       <button type="button" class="botao-secundario botao-cancelar-chamado">Cancelar chamado</button>

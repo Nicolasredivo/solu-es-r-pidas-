@@ -1571,6 +1571,12 @@ button:active:not(:disabled) {
   margin: 6px 0 0;
 }
 
+/* Rodapé do card -- metadado discreto, não é informação do serviço em si */
+.chamado-card-criado {
+  font-size: 0.72rem;
+  margin: 8px 0 0;
+}
+
 .chamado-card-acoes {
   display: flex;
   flex-wrap: wrap;
