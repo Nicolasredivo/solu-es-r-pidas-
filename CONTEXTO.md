@@ -2976,6 +2976,28 @@ páginas exatamente como antes. Confirmado por medição direta (não só
 visual): `#page-agenda` passou a ocupar ~97% da largura de
 `.main-content`, contra os 960px fixos de antes.
 
+### Agenda em duas colunas: lista só na direita, esquerda reservada (14/09/2026)
+
+Correção rápida em cima da anterior, mesmo dia: o dono mandou outro
+print, agora circulando de vermelho só a FAIXA da direita — a lista não
+devia tomar a largura toda que acabou de ganhar; essa largura toda era
+pra abrir espaço pra "mais coisa numa rodada futura" na esquerda, com a
+lista confinada numa coluna estreita à direita.
+
+`#page-agenda` ganhou `.agenda-layout` (flex): `#agenda-futuro` (vazio
+de propósito — reservado, sem conteúdo nenhum ainda) ocupa o espaço que
+sobra (`flex: 1 1 auto`), e `.agenda-painel` (com "↻ Atualizar" e a
+lista) fica travado em 400px (`flex: 0 0 400px`), só na tela larga
+(mesmo media query de min-width:768px de sempre). No celular,
+`.agenda-layout` empilha em coluna — `#agenda-futuro` vazio não ocupa
+espaço nenhum (div sem conteúdo colapsa), então na prática o celular
+continua mostrando só a lista, sem nenhuma mudança visual pra quem usa
+por ali.
+
+Confirmado por medição direta numa tela larga (1900px): coluna da
+esquerda com ~1148px vazios, painel da lista travado em 400px à
+direita — bate com a área que o dono circulou.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

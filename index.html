@@ -1398,9 +1398,16 @@
       <div id="page-agenda" class="card page hidden">
         <h1>Agenda</h1>
 
-        <button type="button" id="agenda-atualizar" class="link-button">↻ Atualizar</button>
+        <div class="agenda-layout">
+          <!-- Reservado pra mais coisa numa rodada futura -- vazio de
+               propósito por enquanto. -->
+          <div id="agenda-futuro" class="agenda-futuro"></div>
 
-        <div id="agenda-lista" class="agenda-lista"></div>
+          <div class="agenda-painel">
+            <button type="button" id="agenda-atualizar" class="link-button">↻ Atualizar</button>
+            <div id="agenda-lista" class="agenda-lista"></div>
+          </div>
+        </div>
       </div>
     </main>
   </div>

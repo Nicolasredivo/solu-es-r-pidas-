@@ -1601,6 +1601,35 @@ button:active:not(:disabled) {
   margin-top: 16px;
 }
 
+/* Agenda em duas colunas: a esquerda fica reservada pra mais coisa numa
+   rodada futura (vazia por enquanto, então não ocupa espaço nenhum no
+   celular -- só existe de verdade a partir da tela larga, onde tem espaço
+   sobrando pras duas colunas lado a lado). A lista fica só na coluna da
+   direita, num painel de largura fixa (o dono apontou isso direto na
+   tela: a lista não devia tomar a largura toda). */
+.agenda-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.agenda-futuro {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .agenda-layout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .agenda-painel {
+    flex: 0 0 400px;
+    max-width: 400px;
+  }
+}
+
 /* Painel próprio que rola por dentro (a página em volta não rola junto) --
    pedido específico pra Agenda, diferente do resto do app, que sempre deixa
    a página inteira rolar. */
