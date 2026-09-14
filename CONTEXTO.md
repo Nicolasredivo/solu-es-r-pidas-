@@ -2581,6 +2581,9 @@ Mudança só de organização de tela, nenhuma lógica nova:
   disparava ao clicar em "Chamados" pela primeira vez) passou a disparar
   ao clicar em "Agenda" — "Criar chamado" nunca precisou dessa lista (a
   checagem de conflito é sempre no servidor, via `checarConflito`).
+- Ordem no menu: dono pediu **Chamados antes de Agenda** (criar vem antes
+  de ver a agenda, na cabeça dele) — só troca de posição no HTML, sem
+  efeito em nada (a troca de página já é genérica, por `data-page`).
 
 ## Decisões já tomadas (não relitigar sem motivo)
 
