@@ -2510,6 +2510,56 @@ usavam ele certinho): `.chamado-card strong` vira bloco com uma margem
 de cima/baixo normal, e `.chamado-card p.doc-hint` sobrescreve a margem
 negativa herdada só ali dentro.
 
+### Faixa de dias (Agenda + linha do tempo de Criar) apagada pra refazer do zero (14/09/2026)
+
+O dono pediu pra apagar a área de agendamento visual — a faixa de dias
+rolável com arrasto (Agenda e a mesma faixa dentro de Criar chamado,
+construídas entre 03/09 e 03/09/2026, ver as seções acima) — pra
+recomeçar do zero, aproveitando as ideias boas já validadas com ele. As
+ideias e os cuidados técnicos que valeram a pena foram guardados na
+memória do agente (`chamados-rebuild-ideias-reaproveitar`), pra não se
+perder na reconstrução.
+
+**O que saiu** (só a faixa/timeline — o resto da área de Chamados
+continua igual, sem mudança nenhuma):
+- Toda a `.chamado-timeline-caixa` da Agenda (nav de mês/dia, campo de
+  data, a própria faixa rolável, aviso de folgas) — `index.html`.
+- A mesma caixa dentro de "Agendamento" em Criar chamado
+  (`#chamado-timeline-criar-caixa`) — `index.html`.
+- Todo o JS da faixa em `app.js`: as constantes `TIMELINE_*`,
+  `criaContextoFaixaDias` e toda a máquina de colunas/janela/expansão,
+  `ligarArrastarBlocoNaFaixa` e os dois wrappers (Agenda/Criar),
+  `confirmaNovoHorarioBloco`, `montaBlocosAgenda`/`montaBlocosCriar`,
+  `renderizarTimelineCriar`, `atualizaCabecalhoAgenda`/`Criar`, e as
+  funções auxiliares que só serviam a ela (`calculaIntervaloHoras`,
+  `desenhaGradeHoras`, `criaBlocoTimeline`, `calculaFolgasLivres`,
+  `hhmmParaMinutos`, etc.).
+- Todas as classes `.chamado-timeline-*` em `style.css`.
+
+**O que ficou** (validado testando com dado falso, rede sempre
+stubada — nada real tocado): busca de cliente, anexos (foto/PDF),
+observações/descrição, o formulário de Criar chamado com os campos
+simples de Data / De / Até / Horário combinado (sem a faixa visual, só
+os inputs — igual era antes da faixa existir), a validação de
+data passada e o aviso de feriado nesses campos (continuam funcionando,
+só sem estar mais amarrados à construção da faixa), a tela de Editar
+chamado (nunca teve faixa, não foi tocada), a lista "Agenda" de baixo
+(`montarCardChamado`/`desenharListaChamados`) com Editar/Cancelar, e a
+checagem de conflito no envio do formulário (`checarConflito`, via n8n).
+Backend (workflows do n8n, tabela Chamados no Airtable) também não foi
+mexido — só a camada de front saiu.
+
+Pequeno ajuste feito pra não perder comportamento: o campo Data de Criar
+chamado ganhou de volta um listener simples (bloqueia data passada +
+mostra aviso de feriado), já que antes essa validação morava dentro de
+`renderizarTimelineCriar` (removida). O auto-preenchimento da Data ao
+escolher o cliente (que existia só pra a faixa aparecer de cara) também
+saiu — Data volta a ficar em branco até o dono preencher, como o rótulo
+"Agendamento (opcional)" já dizia.
+
+Ainda não há uma reconstrução definida — só o combinado de que o
+reaproveitamento das ideias acontece na próxima rodada.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
@@ -2532,8 +2582,11 @@ negativa herdada só ali dentro.
 
 - Painel de status das automações
 - Tela de chat/assistente
-- **Chamados/Agenda — ideias já discutidas com o dono (03/09/2026), não
-  detalhadas/planejadas ainda**:
+- **Chamados/Agenda — a faixa de dias (Agenda + Criar) foi apagada em
+  14/09/2026 pra refazer do zero** (ver a seção "Faixa de dias apagada
+  pra refazer do zero" acima, e a memória
+  `chamados-rebuild-ideias-reaproveitar`). Ideias já discutidas com o
+  dono, ainda não detalhadas/planejadas pra essa reconstrução:
   - Timeline mais rica: linha do "agora", legenda de cor, tocar num
     espaço vazio da grade pra já abrir "Criar chamado" com aquele
     horário, comprimir a régua em dias muito cheios.
