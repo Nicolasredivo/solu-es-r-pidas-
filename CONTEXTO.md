@@ -2915,6 +2915,15 @@ horário agendado (`toLocaleDateString`/`formatarHoraIso`, fuso do
 navegador). Testado com dado falso (ordem, exibição) e confirmado com
 leitura real (só leitura, sem mexer em nada) antes deste commit.
 
+### Aba "Agenda" criada vazia, logo abaixo de Chamados (14/09/2026)
+
+Item novo no menu (`data-page="agenda"`, mesmo mecanismo genérico de
+sempre), logo abaixo do grupo "Chamados", com uma página própria
+(`#page-agenda`) só com o título — **pedido explícito do dono foi só
+criar a aba, sem colocar nada dentro ainda**. Nenhuma lógica nova em
+`app.js`, nenhum dado carregado; é literalmente uma casca vazia à espera
+de conteúdo numa rodada futura.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
