@@ -1564,9 +1564,12 @@ button:active:not(:disabled) {
   color: var(--aviso);
 }
 
+/* Verdinho de propósito: "Agendado" é o estado confirmado/positivo (o dono
+   apontou isso direto na tela -- antes usava a mesma cor azul de "tem
+   horário marcado, mas ainda não confirmado"). */
 .chamado-status-agendado {
-  background: rgba(91, 141, 239, 0.18);
-  color: var(--accent);
+  background: rgba(62, 207, 142, 0.18);
+  color: var(--ok);
 }
 
 .chamado-status-andamento {
@@ -1880,6 +1883,18 @@ button:active:not(:disabled) {
   outline-offset: 1px;
 }
 
+/* Clicou num card já agendado na lista da direita: pisca o bloco
+   correspondente na linha do tempo, pra achar mais fácil onde ele caiu. */
+.agenda-bloco.agenda-bloco-piscar,
+.agenda-bloco-semhora.agenda-bloco-piscar {
+  animation: agendaPiscarBloco 0.7s ease-in-out 2;
+}
+
+@keyframes agendaPiscarBloco {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(62, 207, 142, 0.7); }
+  50% { box-shadow: 0 0 0 5px rgba(62, 207, 142, 0); }
+}
+
 .agenda-bloco-titulo {
   font-weight: 600;
   white-space: nowrap;
@@ -2100,6 +2115,18 @@ button:active:not(:disabled) {
 
 .agenda-fila-card.arrastando {
   opacity: 0.35;
+}
+
+/* Já tem lugar na agenda: não arrasta mais daqui (isso é feito no próprio
+   bloco da linha do tempo) -- clicar pula até ele. */
+.agenda-fila-card.agendado {
+  cursor: pointer;
+}
+
+.agenda-fila-horario {
+  color: var(--text) !important;
+  font-weight: 600;
+  font-size: 0.78rem !important;
 }
 
 .agenda-fila-card strong {

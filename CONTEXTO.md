@@ -3121,6 +3121,32 @@ recusado sem gravar, e no fim ele foi devolvido pra fila — os 5 chamados
 reais terminaram exatamente como estavam (só sobrou registro no campo
 Histórico).
 
+### Lista da direita mostra os já agendados também, e "Agendado" fica verde (14/09/2026)
+
+O dono testou de verdade (agendou e confirmou um chamado) e reportou que
+ele sumia da lista da direita, que só mostrava "Aguardando confirmação de
+data" mesmo depois de confirmado — porque a lista (`agendaDesenharFila`)
+só desenhava `chamadosSemData`. Dois ajustes:
+
+- **A lista agora mostra TODOS os chamados**, fila e já agendados juntos
+  (mesmo agrupamento por data de criação de sempre). Quem já tem lugar na
+  agenda ganha uma linha `📅 dd/mm · HH:mm → HH:mm` (ou "horário a
+  definir") e **não arrasta mais dali** — arrastar continua sendo feito
+  no próprio bloco da linha do tempo; o card na lista só aceita **clique**.
+- **Clicar num já agendado pula direto pra ele** na linha do tempo
+  (`agendaPularPara`): centraliza no meio do intervalo (ou no meio do dia,
+  se ainda não tem horário exato), troca pra escala "Hora" se a escala
+  atual só permitisse escolher o dia, e pisca o bloco encontrado por um
+  instante (`.agenda-bloco-piscar`) pra ajudar a achar na tela.
+- `.chamado-status-agendado` (o selo "Agendado") passou de azul pra
+  **verde** (`var(--ok)`) — o dono apontou isso direto: "Agendado" é o
+  estado bom/confirmado e devia ser verdinho, não a mesma cor de "tem
+  horário mas ainda não confirmado". Isso muda o selo em qualquer lugar
+  que reusa `statusClasseChamado` (também em "Consultar chamados").
+  Detalhe pra próxima rodada: "Em andamento" também usa verde e hoje não
+  tem nenhum jeito de chegar nesse status pela tela — se um fluxo pra ele
+  for criado, as duas cores vão colidir e precisam ser diferenciadas.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

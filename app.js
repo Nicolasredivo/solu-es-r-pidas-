@@ -43,7 +43,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.14r";
+const APP_VERSION = "2026.09.14s";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -6300,11 +6300,20 @@ agendaConteudo.addEventListener("pointerdown", (evento) => {
 agendaListaEl.addEventListener("pointerdown", (evento) => {
   if (evento.button !== 0) return;
   const cardEl = evento.target.closest(".agenda-fila-card");
-  if (!cardEl) return;
+  // Já agendado: não arrasta daqui (arrastar é no próprio bloco da linha do
+  // tempo) -- o clique dele é tratado no listener de "click" logo abaixo.
+  if (!cardEl || cardEl.dataset.agendado === "1") return;
   const c = agendaAcharChamado(cardEl.dataset.id);
   if (!c) return;
   evento.preventDefault();
   agendaComecarArraste(c, evento, "novo", 0);
+});
+
+agendaListaEl.addEventListener("click", (evento) => {
+  const cardEl = evento.target.closest(".agenda-fila-card");
+  if (!cardEl || cardEl.dataset.agendado !== "1") return;
+  const c = agendaAcharChamado(cardEl.dataset.id);
+  if (c) agendaPularPara(c);
 });
 
 // ----- zoom e navegação -----
@@ -6386,37 +6395,58 @@ document.addEventListener("keydown", (evento) => {
 // ----- fila da direita -----
 
 function montarCardFila(c) {
+  const agendado = Boolean(c.reservadoInicio);
   const card = document.createElement("div");
-  card.className = "agenda-fila-card";
+  card.className = "agenda-fila-card" + (agendado ? " agendado" : "");
   card.dataset.id = c.id;
+  if (agendado) card.dataset.agendado = "1";
+
+  // Quem já tem lugar na agenda mostra onde -- é o que dá pra clicar em vez
+  // de arrastar (arrastar continua sendo feito no próprio bloco da linha do
+  // tempo, não daqui).
+  let linhaHorario = "";
+  if (agendado) {
+    const ini = agDeIso(c.reservadoInicio);
+    const dataTxt = agFmt(ini, { day: "2-digit", month: "2-digit" });
+    const horaTxt = c.reservadoFim
+      ? `${agHoraStr(ini)} → ${agHoraStr(agDeIso(c.reservadoFim))}`
+      : "horário a definir";
+    linhaHorario = `<p class="agenda-fila-horario">📅 ${escapeHtml(dataTxt)} · ${escapeHtml(horaTxt)}</p>`;
+  }
+
   card.innerHTML = `
     <div class="agenda-fila-topo">
       <span class="chamado-numero">#${escapeHtml(String(c.numero))}</span>
       <span class="chamado-status-badge ${statusClasseChamado(c.status)}">${escapeHtml(c.status)}</span>
     </div>
     <strong>${escapeHtml(c.clienteNome || "Sem nome")}</strong>
+    ${linhaHorario}
     <p>${escapeHtml(c.enderecoCopia || "")}</p>
     ${c.descricaoSolicitacao ? `<p>${escapeHtml(c.descricaoSolicitacao)}</p>` : ""}
   `;
   return card;
 }
 
-// Só o que ainda NÃO tem lugar na agenda. O que já está marcado aparece na
-// linha do tempo -- é lá que ele é organizado.
+// TODOS os chamados (fila + já agendados), não só quem ainda não tem lugar --
+// o dono apontou isso direto na tela: precisa continuar vendo o que já foi
+// marcado por aqui, só que agora como "agendado", não pra arrastar de novo
+// (isso se faz no próprio bloco da linha do tempo). Clicar num já marcado
+// pula pra ele (ver agendaPularPara); clicar/arrastar um da fila continua
+// igual.
 function agendaDesenharFila() {
-  const fila = chamadosSemData
+  const todos = chamadosSemData.concat(chamadosComData)
     .slice()
     .sort((a, b) => new Date(a.criadoEm) - new Date(b.criadoEm));
 
   agendaListaEl.innerHTML = "";
-  if (!fila.length) {
-    agendaListaEl.innerHTML = `<p class="doc-hint">Nenhum chamado esperando. Tudo que existe já está na linha do tempo.</p>`;
+  if (!todos.length) {
+    agendaListaEl.innerHTML = `<p class="doc-hint">Nenhum chamado ainda.</p>`;
     return;
   }
 
   const agora = new Date();
   let grupoAtual = null;
-  fila.forEach((c) => {
+  todos.forEach((c) => {
     const rotulo = c.criadoEm ? rotuloAgendaGrupo(c.criadoEm, agora) : "Sem data de criação";
     if (rotulo !== grupoAtual) {
       grupoAtual = rotulo;
@@ -6428,6 +6458,39 @@ function agendaDesenharFila() {
     agendaListaEl.appendChild(montarCardFila(c));
   });
   agendaMarcarCardsArrastando();
+}
+
+// Clique num card já agendado, na lista: pula pra ele na linha do tempo (em
+// vez de precisar rolar/procurar) e pisca o bloco um instante pra achar mais
+// fácil onde ele caiu.
+function agendaPularPara(c) {
+  if (!c.reservadoInicio) return;
+  const ini = agDeIso(c.reservadoInicio);
+  const ancora = agendaAlturaTela() * 0.4;
+
+  if (c.reservadoFim) {
+    const fim = agDeIso(c.reservadoFim);
+    const alvo = ini + (fim - ini) / 2;
+    if (!agendaNivel().precisa) agendaDefinirNivel("hora", alvo, ancora);
+    else agendaIrPara(alvo, ancora);
+  } else {
+    // Dia sem horário exato: não existe zoom "certo" pra ele, só centraliza
+    // no meio do dia marcado, na escala em que já estava.
+    agendaIrPara(ini + 12 * MS_HORA, ancora);
+  }
+
+  agendaFecharMenu();
+  const alvoEl = agendaItensEl.querySelector(`[data-id="${escapeCssAttr(c.id)}"]`);
+  if (alvoEl) {
+    alvoEl.classList.add("agenda-bloco-piscar");
+    setTimeout(() => alvoEl.classList.remove("agenda-bloco-piscar"), 1500);
+  }
+}
+
+// Escapa um valor pra uso dentro de um seletor [attr="valor"] -- os ids do
+// Airtable só têm letras/dígitos, mas mais vale não confiar nisso pra sempre.
+function escapeCssAttr(valor) {
+  return window.CSS && CSS.escape ? CSS.escape(valor) : String(valor).replace(/["\\]/g, "\\$&");
 }
 
 // "Consultar chamados" lê as MESMAS listas (chamadosSemData/chamadosComData),
