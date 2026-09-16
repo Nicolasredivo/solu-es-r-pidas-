@@ -367,11 +367,47 @@ img, svg { display: block; max-width: 100%; }
 .ciclo-item.saindo { opacity: 0; transform: translateY(-80%); }
 
 .hero-titulo { display: flex; flex-direction: column; gap: 14px; margin-bottom: 26px; }
+/* Uma palavra só precisa pesar como um cartaz: o tamanho e o peso fazem
+   quase todo o trabalho, e o resto do hero fica sendo a explicação dela. */
 .linha-forte {
-  font-size: clamp(2.05rem, 4.6vw, 3.35rem);
-  letter-spacing: -0.025em;
-  text-wrap: balance;
+  /* Encolhe até a largura da palavra (dentro do flex em coluna do título),
+     senão o traço de baixo atravessaria a faixa inteira. */
+  align-self: flex-start;
+  position: relative;
+  /* Fluido no celular (a palavra acompanha a largura da tela em vez de
+     ficar pequena no meio do vazio) e travado no teto a partir de ~600px,
+     onde ela já preenche a coluna de texto. */
+  font-size: clamp(2.6rem, 16.5vw, 6.2rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.035em;
+  line-height: 0.95;
+  color: var(--marinho);
+  /* Caixa alta em peso 900 tem folga à esquerda: puxa de volta pra palavra
+     nascer no mesmo prumo das linhas de baixo. */
+  margin-left: -0.035em;
+  padding-bottom: 0.13em;
 }
+
+/* É o ponto final que faz a palavra soar como ordem, e não como título
+   solto. Na cor de destaque pra ninguém ler esperando a frase continuar. */
+.linha-forte-ponto { color: var(--aco); }
+
+/* Traço que varre por baixo da palavra quando ela entra. */
+.linha-forte::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.072em;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--marinho), var(--aco));
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.85s var(--curva) 0.3s;
+}
+.hero-titulo.visivel .linha-forte::after { transform: scaleX(1); }
 .linha-media {
   font-size: clamp(1.02rem, 1.65vw, 1.24rem);
   font-family: "Inter", sans-serif;
@@ -946,6 +982,8 @@ img, svg { display: block; max-width: 100%; }
   .arte-camada { transform: none !important; }
   .hero-arte { transform: none !important; }
   .ciclo-item { transition: none; }
+  /* O traço do headline nasce inteiro, sem varrer. */
+  .linha-forte::after { transform: scaleX(1); }
   .marca-abertura-simbolo { animation: none; }
   /* Os pontos param de pulsar, mas continuam clicáveis e visíveis. */
   .ponto-halo { animation: none; opacity: 0.5; transform: none; }

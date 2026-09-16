@@ -3318,6 +3318,48 @@ travado dentro da área da arte — com o bico acompanhando quando ele
 precisa ser empurrado, e virando pra baixo quando o ponto é alto demais
 pra caber acima.
 
+### O headline do hero virou "PRIORIZE." (16/09/2026)
+
+O texto original do hero era `Seu tempo vale mais do que resolver
+manutenção.` e tinha sido marcado no pedido como **fixo, não alterável**.
+O dono voltou atrás e mandou trocar — então **esse trava-texto não vale
+mais**: quem mexer no hero depois não precisa preservar a frase antiga.
+
+O que estava errado na frase, e que motivou a conversa antes da troca (fica
+registrado porque o mesmo erro pode voltar em outro texto):
+
+- **"resolver manutenção" não é como se fala.** Em português se resolve um
+  *problema*, não "manutenção" — manutenção é o serviço.
+- **"resolver" aparecia duas vezes** no mesmo bloco, na primeira linha e no
+  fecho "A gente resolve", gastando justamente a melhor linha.
+- **"tempo vale mais" (linha 1) ecoava "mais tempo" (linha 2)**, então a
+  segunda linha soava como repetição da primeira em vez de avançar.
+
+A troca por uma palavra só resolveu os três de uma vez, sem mexer nas
+linhas 2 e 3: "resolver" e "tempo" agora aparecem uma vez cada, no lugar
+certo.
+
+Como foi feito (`index.html`, `landing.css`):
+
+- No HTML a palavra está escrita **em caixa baixa** (`Priorize`), e a
+  maiúscula vem de `text-transform` no CSS. Escrever tudo em maiúsculo no
+  HTML faz leitor de tela soletrar letra por letra.
+- O ponto final está num `<span class="linha-forte-ponto">` só pra receber
+  a cor de destaque — é ele que faz a palavra soar como ordem.
+- `.linha-forte` ganhou `align-self: flex-start` (dentro do flex em coluna
+  do `.hero-titulo`): sem isso ela ocuparia a faixa inteira e o traço
+  degradê de baixo (`::after`, que varre com `scaleX`) atravessaria a
+  página toda em vez de medir a palavra.
+- Peso 900 de Saira **precisou ser adicionado ao link do Google Fonts** (só
+  600 e 700 estavam carregados). Sem isso o navegador engorda a de 700 por
+  conta própria e fica com aparência suja. Conferido com
+  `document.fonts.check('900 60px Saira')`.
+- Tamanho em `clamp(2.6rem, 16.5vw, 6.2rem)`: fluido no celular (a palavra
+  acompanha a tela) e travado a partir de ~600px, onde já preenche a coluna.
+  Medido em 320 / 375 / 1010 / 1440px — nunca estoura e não cria barra
+  horizontal. O aperto maior é em 1010px (32px de folga), logo acima da
+  quebra pra uma coluna só.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
