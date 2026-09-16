@@ -3248,6 +3248,43 @@ valor inicial e a tela parece vazia/errada. Foi o que aconteceu aqui (hero
 o estado final direto (ou com a transição desligada) tudo aparece certo.
 Vale lembrar antes de sair caçando bug inexistente.
 
+### Marca no topo da landing e recursos interativos (16/09/2026)
+
+Pedido do dono: pôr a imagem da marca no topo do site "de forma limpa e
+organizada" e acrescentar recursos visuais interativos.
+
+**A marca no topo** virou uma abertura montada em elementos de verdade
+(`.marca-abertura`): símbolo + "SOLUÇÕES RÁPIDAS" + "MANUTENÇÃO PREDIAL"
+entre dois fios, que é exatamente o arranjo da imagem da marca. Feito
+assim em vez de colar a figura porque: fica nítido em qualquer tela, o
+texto continua sendo texto (busca e leitor de tela leem), acompanha o
+celular sem virar um bloco minúsculo, e pesa quase nada. O símbolo
+continua vindo de `imagens/logo.svg` — trocar pelo arquivo oficial segue
+sendo sobrescrever aquele arquivo, e a abertura inteira acompanha.
+
+**Pontos clicáveis no prédio** — o recurso principal. Cinco pontos
+marcados sobre o desenho ligam cada parte do prédio a um serviço (caixa
+d'água no topo, elétrica, hidráulica, aquecedores, esgoto na base). Os
+pontos ficam **dentro do `<svg>`** de propósito: fora dele sairiam do
+lugar a cada mudança de largura. O balão é HTML posicionado por medição
+na tela (`getBoundingClientRect`), porque a coordenada do desenho não diz
+onde o ponto está depois da escala. Funciona com mouse (passar por cima),
+toque (tocar abre, tocar fora fecha) e teclado (Tab + Enter/Espaço — o
+`<g>` do SVG não dispara clique sozinho, precisou de `keydown`).
+
+Outros acréscimos: barra fina de progresso da leitura no topo (anima
+`transform: scaleX`, não `width`, pra não refazer layout a cada pixel);
+a arte do hero inclina de leve seguindo o mouse (a inclinação vive no
+elemento pai, porque as camadas de dentro já usam `transform` pro
+parallax e não podem acumular dois efeitos); clarão que segue o cursor
+nos cards de diferenciais e serviços. Tudo só com `transform`/`opacity`,
+só em aparelho com mouse (`pointer: fine`) quando faz sentido, e
+desligado em `prefers-reduced-motion` — onde os pontos param de pulsar
+mas continuam clicáveis.
+
+No celular o nome escrito saiu do cabeçalho (só o símbolo fica): com a
+marca grande logo abaixo, os dois juntos entupiam a faixa de cima.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

@@ -25,10 +25,20 @@
 
   let precisaDesenhar = false;
 
+  const barraProgresso = document.getElementById("progresso-barra");
+
   function aoRolar() {
     const y = window.scrollY || window.pageYOffset;
 
     if (cabecalho) cabecalho.classList.toggle("preso", y > 12);
+
+    // Quanto da página já passou. O máximo pode dar 0 numa tela muito alta
+    // com pouco conteúdo -- dividir por zero deixaria a barra em NaN.
+    if (barraProgresso) {
+      const total = document.documentElement.scrollHeight - window.innerHeight;
+      const parte = total > 0 ? Math.min(1, Math.max(0, y / total)) : 0;
+      barraProgresso.style.transform = "scaleX(" + parte.toFixed(4) + ")";
+    }
 
     // Parallax: cada camada anda uma fração do scroll. Fração negativa
     // sobe enquanto a página desce -- é o que dá sensação de profundidade.
@@ -116,6 +126,127 @@
       { threshold: 0.5 }
     );
     contadores.forEach((el) => obsNumeros.observe(el));
+  }
+
+  /* ---------- Pontos do prédio ---------- */
+
+  const balao = document.getElementById("ponto-balao");
+  const arte = document.querySelector(".hero-arte");
+  const dicaArte = document.querySelector(".arte-dica");
+  const pontos = Array.from(document.querySelectorAll(".ponto"));
+  let pontoAberto = null;
+
+  // O convite muda conforme o aparelho: quem tem mouse não "toca".
+  if (dicaArte && window.matchMedia("(pointer: fine)").matches) {
+    dicaArte.textContent = "Passe o mouse pelos pontos do prédio";
+  }
+
+  function mostrarPonto(ponto) {
+    if (!balao || !arte) return;
+
+    pontos.forEach((p) => p.classList.toggle("aberto", p === ponto));
+    pontoAberto = ponto;
+
+    balao.innerHTML =
+      "<strong></strong><span></span>";
+    balao.querySelector("strong").textContent = ponto.dataset.titulo || "";
+    balao.querySelector("span").textContent = ponto.dataset.texto || "";
+    balao.classList.remove("hidden");
+
+    // O ponto vive dentro de um SVG que escala: a posição só dá pra saber
+    // medindo na tela, não pelas coordenadas do desenho.
+    const alvo = ponto.querySelector(".ponto-alvo").getBoundingClientRect();
+    const caixa = arte.getBoundingClientRect();
+    balao.style.left = (alvo.left + alvo.width / 2 - caixa.left) + "px";
+    balao.style.top = (alvo.top - caixa.top - 14) + "px";
+
+    // Um frame depois, pra transição de opacidade acontecer de verdade.
+    window.requestAnimationFrame(() => balao.classList.add("aparece"));
+    if (dicaArte) dicaArte.classList.add("some");
+  }
+
+  function esconderPonto() {
+    if (!balao) return;
+    pontos.forEach((p) => p.classList.remove("aberto"));
+    pontoAberto = null;
+    balao.classList.remove("aparece");
+    setTimeout(() => {
+      if (!pontoAberto) balao.classList.add("hidden");
+    }, 220);
+  }
+
+  pontos.forEach((ponto) => {
+    // No computador basta passar o mouse; no celular é o toque que abre.
+    ponto.addEventListener("pointerenter", () => {
+      if (ponto.matches(":hover")) mostrarPonto(ponto);
+    });
+    ponto.addEventListener("pointerleave", () => {
+      if (pontoAberto === ponto) esconderPonto();
+    });
+    ponto.addEventListener("focus", () => mostrarPonto(ponto));
+    ponto.addEventListener("blur", () => esconderPonto());
+    ponto.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (pontoAberto === ponto) esconderPonto();
+      else mostrarPonto(ponto);
+    });
+    // Teclado: o <g> do SVG não dispara clique com Enter/Espaço sozinho.
+    ponto.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      if (pontoAberto === ponto) esconderPonto();
+      else mostrarPonto(ponto);
+    });
+  });
+
+  // Tocar fora fecha o balão (no celular não existe "tirar o mouse").
+  document.addEventListener("click", () => {
+    if (pontoAberto) esconderPonto();
+  });
+
+  /* ---------- Arte do hero inclina de leve seguindo o mouse ---------- */
+
+  const pontoFino = window.matchMedia("(pointer: fine)").matches;
+
+  if (arte && pontoFino && !menosMovimento) {
+    let inclinacaoAgendada = false;
+    let ultimoEvento = null;
+
+    function aplicarInclinacao() {
+      inclinacaoAgendada = false;
+      if (!ultimoEvento) return;
+      const caixa = arte.getBoundingClientRect();
+      // -0.5 a 0.5 a partir do centro, virando alguns graus só.
+      const px = (ultimoEvento.clientX - caixa.left) / caixa.width - 0.5;
+      const py = (ultimoEvento.clientY - caixa.top) / caixa.height - 0.5;
+      arte.style.setProperty("--inclina-y", (px * 7).toFixed(2) + "deg");
+      arte.style.setProperty("--inclina-x", (-py * 5).toFixed(2) + "deg");
+    }
+
+    arte.addEventListener("pointermove", (e) => {
+      ultimoEvento = e;
+      if (inclinacaoAgendada) return;
+      inclinacaoAgendada = true;
+      window.requestAnimationFrame(aplicarInclinacao);
+    });
+
+    arte.addEventListener("pointerleave", () => {
+      arte.style.setProperty("--inclina-y", "0deg");
+      arte.style.setProperty("--inclina-x", "0deg");
+    });
+  }
+
+  /* ---------- Clarão dos cards seguindo o cursor ---------- */
+
+  if (pontoFino) {
+    const cards = Array.from(document.querySelectorAll(".dif, .serv"));
+    cards.forEach((card) => {
+      card.addEventListener("pointermove", (e) => {
+        const caixa = card.getBoundingClientRect();
+        card.style.setProperty("--mx", (e.clientX - caixa.left) + "px");
+        card.style.setProperty("--my", (e.clientY - caixa.top) + "px");
+      });
+    });
   }
 
   /* ---------- Palavra que troca na sobrancelha ---------- */

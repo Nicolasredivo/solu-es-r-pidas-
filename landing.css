@@ -125,6 +125,28 @@ img, svg { display: block; max-width: 100%; }
 }
 .botao:active { transform: translateY(0); }
 
+/* ---------- Barra de progresso da leitura ---------- */
+
+.progresso {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 60;
+  pointer-events: none;
+  background: transparent;
+}
+.progresso span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--aco), var(--azul));
+  /* Só a escala muda: mexer em width obrigaria o navegador a refazer
+     layout a cada pixel de rolagem. */
+  transform-origin: left center;
+}
+
 /* ---------- Cabeçalho ---------- */
 
 .cabecalho {
@@ -222,6 +244,82 @@ img, svg { display: block; max-width: 100%; }
   filter: blur(10px);
 }
 
+/* ---------- Abertura da marca ---------- */
+
+.marca-abertura {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding-bottom: 38px;
+  margin-bottom: 40px;
+}
+/* Fio fino embaixo, como na marca */
+.marca-abertura::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, 70%);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--linha) 22%, var(--linha) 78%, transparent);
+}
+
+.marca-abertura-simbolo {
+  height: clamp(62px, 9vw, 96px);
+  width: auto;
+  margin-bottom: 16px;
+  /* Some no primeiro toque de vida: a marca "assenta" ao abrir a página */
+  animation: marcaEntra 0.9s var(--curva) both;
+}
+@keyframes marcaEntra {
+  from { opacity: 0; transform: translateY(14px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+
+.marca-abertura-nome {
+  font-family: "Saira", sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.75rem, 5.6vw, 3.1rem);
+  line-height: 1;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+  color: var(--marinho);
+}
+.marca-abertura-nome em {
+  font-style: normal;
+  background: linear-gradient(100deg, var(--azul), var(--aco));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* "Manutenção predial" entre dois fios, igual à marca */
+.marca-abertura-sub {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 14px;
+  width: min(560px, 100%);
+}
+.marca-abertura-sub::before,
+.marca-abertura-sub::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--prata);
+}
+.marca-abertura-sub span {
+  font-size: clamp(0.66rem, 1.9vw, 0.85rem);
+  font-weight: 500;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--tinta-fraca);
+  white-space: nowrap;
+}
+
 .hero-interno {
   position: relative;
   display: grid;
@@ -310,7 +408,17 @@ img, svg { display: block; max-width: 100%; }
 
 /* ---------- Arte do hero ---------- */
 
-.hero-arte { position: relative; min-height: 440px; }
+.hero-arte {
+  position: relative;
+  min-height: 440px;
+  /* A inclinação que segue o mouse vive aqui, no pai: as camadas de dentro
+     já usam transform pro parallax e não podem acumular dois efeitos. */
+  transform: perspective(1100px)
+    rotateX(var(--inclina-x, 0deg))
+    rotateY(var(--inclina-y, 0deg));
+  transition: transform 0.35s var(--curva);
+  transform-style: preserve-3d;
+}
 .arte-camada {
   position: absolute;
   inset: 0;
@@ -321,6 +429,87 @@ img, svg { display: block; max-width: 100%; }
 }
 .arte-svg { width: 100%; height: auto; }
 .arte-tracos { pointer-events: none; }
+
+/* ---------- Pontos do prédio ---------- */
+
+.pontos { pointer-events: auto; }
+
+.ponto { cursor: pointer; outline: none; }
+.ponto-alvo {
+  fill: #ffffff;
+  stroke: var(--aco);
+  stroke-width: 3;
+  transition: r 0.2s var(--curva), stroke 0.2s var(--curva);
+}
+.ponto-halo {
+  fill: rgba(62, 143, 209, 0.28);
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: pontoPulsa 2.6s ease-out infinite;
+}
+@keyframes pontoPulsa {
+  0% { transform: scale(0.55); opacity: 0.85; }
+  70% { transform: scale(1.25); opacity: 0; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+
+.ponto:hover .ponto-alvo,
+.ponto:focus-visible .ponto-alvo,
+.ponto.aberto .ponto-alvo {
+  r: 10;
+  stroke: var(--marinho);
+}
+.ponto:focus-visible .ponto-alvo { stroke: var(--marinho); stroke-width: 4; }
+
+/* Balão que conta qual serviço é aquele ponto */
+.ponto-balao {
+  position: absolute;
+  z-index: 6;
+  width: max-content;
+  max-width: 230px;
+  padding: 11px 14px;
+  border-radius: 11px;
+  background: var(--marinho);
+  color: #fff;
+  box-shadow: 0 14px 34px rgba(11, 30, 61, 0.34);
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  opacity: 0;
+  transition: opacity 0.2s var(--curva);
+}
+.ponto-balao.aparece { opacity: 1; }
+.ponto-balao strong {
+  display: block;
+  font-family: "Saira", sans-serif;
+  font-size: 0.86rem;
+  margin-bottom: 3px;
+  color: #fff;
+}
+.ponto-balao span { font-size: 0.78rem; color: rgba(255, 255, 255, 0.75); line-height: 1.4; }
+/* Bico apontando pro ponto */
+.ponto-balao::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  background: var(--marinho);
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 2px;
+}
+
+.arte-dica {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  color: var(--tinta-fraca);
+  white-space: nowrap;
+  transition: opacity 0.3s var(--curva);
+}
+.arte-dica.some { opacity: 0; }
 
 .arte-selo { display: flex; align-items: flex-end; justify-content: flex-start; }
 .selo {
@@ -416,6 +605,34 @@ img, svg { display: block; max-width: 100%; }
 }
 .dif:hover { background: #fbfcfe; }
 .dif:hover::after { transform: scaleX(1); }
+
+/* Clarão suave que acompanha o cursor. As coordenadas vêm do JS em --mx/--my
+   e só existem enquanto o mouse está em cima (no celular nunca aparece). */
+.dif::before,
+.serv::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s var(--curva);
+  background: radial-gradient(
+    240px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(62, 143, 209, 0.16),
+    transparent 62%
+  );
+}
+.dif:hover::before,
+.serv:hover::before { opacity: 1; }
+.serv { position: relative; }
+.serv::before {
+  background: radial-gradient(
+    240px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(143, 196, 240, 0.2),
+    transparent 62%
+  );
+}
 
 .dif-icone {
   display: inline-flex;
@@ -670,15 +887,21 @@ img, svg { display: block; max-width: 100%; }
   .hero { padding: 124px 0 66px; }
 
   .cabecalho-interno { min-height: 64px; }
-  .marca-simbolo { height: 28px; max-width: 120px; }
-  .marca-nome { font-size: 0.92rem; }
-  .marca-sub { display: none; }
+  .marca-simbolo { height: 30px; max-width: 120px; }
+  /* No celular o nome escrito sai do cabeçalho: a marca grande da abertura
+     fica logo abaixo e os dois juntos entupiam a faixa de cima. Fora daqui
+     o símbolo sozinho já identifica, e sobra espaço pros dois botões. */
+  .cabecalho .marca-texto { display: none; }
   .botao { padding: 9px 14px; font-size: 0.85rem; }
   .cabecalho-acoes { gap: 7px; }
 
   .hero-arte { min-height: 300px; }
   .selo { padding: 12px 15px; }
   .selo-num { font-size: 1.85rem; }
+
+  .marca-abertura { padding-bottom: 28px; margin-bottom: 30px; }
+  .marca-abertura-sub { gap: 11px; }
+  .marca-abertura-sub span { letter-spacing: 0.24em; }
 
   .botao-whats { width: 100%; }
   .hero-acoes { align-self: stretch; width: 100%; }
@@ -698,6 +921,10 @@ img, svg { display: block; max-width: 100%; }
   html { scroll-behavior: auto; }
   .revelar { opacity: 1; transform: none; transition: none; }
   .arte-camada { transform: none !important; }
+  .hero-arte { transform: none !important; }
   .ciclo-item { transition: none; }
+  .marca-abertura-simbolo { animation: none; }
+  /* Os pontos param de pulsar, mas continuam clicáveis e visíveis. */
+  .ponto-halo { animation: none; opacity: 0.5; transform: none; }
   * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }

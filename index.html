@@ -20,6 +20,9 @@
 </head>
 <body>
 
+<!-- Barra fina que mostra o quanto da página já foi lida. -->
+<div class="progresso" aria-hidden="true"><span id="progresso-barra"></span></div>
+
 <!-- ===================== Cabeçalho ===================== -->
 <header class="cabecalho" id="cabecalho">
   <div class="faixa cabecalho-interno">
@@ -58,6 +61,17 @@
     <div class="hero-fundo" aria-hidden="true">
       <div class="hero-grade"></div>
       <div class="hero-brilho"></div>
+    </div>
+
+    <!-- Abertura da marca: é a imagem da marca montada em elementos de
+         verdade (símbolo + nome + assinatura entre fios), em vez de uma
+         figura achatada. Fica nítida em qualquer tela, o texto continua
+         sendo texto (busca e leitor de tela leem) e acompanha o celular
+         sem virar um bloco minúsculo. -->
+    <div class="faixa marca-abertura revelar">
+      <img class="marca-abertura-simbolo" src="imagens/logo.svg" alt="" width="150" height="104" />
+      <p class="marca-abertura-nome">Soluções <em>Rápidas</em></p>
+      <p class="marca-abertura-sub"><span>Manutenção predial</span></p>
     </div>
 
     <div class="faixa hero-interno">
@@ -133,6 +147,37 @@
               <rect x="226" y="276" width="28" height="18" /><rect x="268" y="296" width="28" height="18" />
               <rect x="226" y="326" width="28" height="18" /><rect x="268" y="346" width="28" height="18" />
             </g>
+
+            <!-- Pontos que ligam cada parte do prédio a um serviço. Ficam
+                 DENTRO do svg pra escalarem junto com o desenho: fora dele
+                 sairiam do lugar em toda mudança de largura. -->
+            <g class="pontos">
+              <g class="ponto" tabindex="0" role="button"
+                 data-titulo="Limpeza de caixas d'água" data-texto="Caixas d'água e cisternas, com o local entregue limpo.">
+                <circle class="ponto-halo" cx="200" cy="104" r="17" />
+                <circle class="ponto-alvo" cx="200" cy="104" r="7" />
+              </g>
+              <g class="ponto" tabindex="0" role="button"
+                 data-titulo="Manutenções elétricas" data-texto="Quadros, circuitos, iluminação e pontos de energia.">
+                <circle class="ponto-halo" cx="146" cy="214" r="17" />
+                <circle class="ponto-alvo" cx="146" cy="214" r="7" />
+              </g>
+              <g class="ponto" tabindex="0" role="button"
+                 data-titulo="Manutenções hidráulicas" data-texto="Vazamentos, redes novas, torneiras, chuveiros e pontos de água.">
+                <circle class="ponto-halo" cx="286" cy="266" r="17" />
+                <circle class="ponto-alvo" cx="286" cy="266" r="7" />
+              </g>
+              <g class="ponto" tabindex="0" role="button"
+                 data-titulo="Aquecedores e pressurizadores" data-texto="Instalação e manutenção, incluindo válvulas de transferência.">
+                <circle class="ponto-halo" cx="146" cy="336" r="17" />
+                <circle class="ponto-alvo" cx="146" cy="336" r="7" />
+              </g>
+              <g class="ponto" tabindex="0" role="button"
+                 data-titulo="Rede de esgoto" data-texto="Desobstrução, reparos e adequação da rede.">
+                <circle class="ponto-halo" cx="252" cy="412" r="17" />
+                <circle class="ponto-alvo" cx="252" cy="412" r="7" />
+              </g>
+            </g>
           </svg>
         </div>
 
@@ -152,6 +197,11 @@
             </g>
           </svg>
         </div>
+
+        <!-- Balão dos pontos do prédio. Vazio até alguém tocar num ponto. -->
+        <div class="ponto-balao hidden" id="ponto-balao" role="status"></div>
+
+        <p class="arte-dica">Toque nos pontos do prédio</p>
 
         <div class="arte-camada arte-selo" data-parallax="0.14">
           <div class="selo">
