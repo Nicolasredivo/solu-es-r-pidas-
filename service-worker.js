@@ -1,5 +1,5 @@
 // Sobe junto com o APP_VERSION do app.js a cada publicação.
-const CACHE_NAME = "solucoes-rapidas-2026.09.16h";
+const CACHE_NAME = "solucoes-rapidas-2026.09.16i";
 // "./" e "./index.html" são a landing institucional; "./sistema.html" é o
 // app de verdade (tela de senha + painel), que antes ocupava a raiz.
 const APP_SHELL = [
@@ -30,6 +30,15 @@ self.addEventListener("install", (event) => {
       Promise.all(APP_SHELL.map(async (url) => {
         const urlComVersao = url.includes("?") ? `${url}&v=${CACHE_NAME}` : `${url}?v=${CACHE_NAME}`;
         const resposta = await fetch(urlComVersao, { cache: "no-store" });
+        // cache.put() aceita qualquer resposta, inclusive um 404 ou a página
+        // de erro do CDN. Guardar isso sob a chave "./app.js" envenenava o
+        // cache: como o fetch abaixo serve o cache primeiro, o app passava a
+        // carregar a página de erro em vez do código -- e só saía disso na
+        // próxima virada de versão. Melhor a instalação falhar aqui e o
+        // service worker antigo continuar valendo.
+        if (!resposta.ok) {
+          throw new Error(`Não consegui baixar ${url} (HTTP ${resposta.status})`);
+        }
         await cache.put(url, resposta);
       }))
     )
@@ -61,7 +70,10 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Nunca cacheia chamadas para o n8n: sempre precisam ser em tempo real.
-  if (event.request.method !== "GET" || !url.pathname.match(/\.(html|css|js|json|png)$|\/$/)) {
+  // O .svg entra na lista porque o logo da landing está no APP_SHELL: sem ele
+  // aqui, o arquivo era baixado e guardado na instalação e mesmo assim toda
+  // visita ia buscar na rede -- e sem internet a marca do topo não aparecia.
+  if (event.request.method !== "GET" || !url.pathname.match(/\.(html|css|js|json|png|svg)$|\/$/)) {
     return;
   }
 

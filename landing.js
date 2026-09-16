@@ -27,6 +27,24 @@
 
   const barraProgresso = document.getElementById("progresso-barra");
 
+  // Ler scrollHeight obriga o navegador a recalcular o layout na hora, e isso
+  // estava sendo feito a cada frame de rolagem. A altura da página só muda
+  // quando a janela muda de tamanho ou quando algo é revelado, então basta
+  // medir nessas horas e guardar o valor.
+  let alturaRolavel = 0;
+  function medirAlturaRolavel() {
+    alturaRolavel = document.documentElement.scrollHeight - window.innerHeight;
+  }
+  medirAlturaRolavel();
+  window.addEventListener("resize", medirAlturaRolavel);
+  // A altura ainda muda depois do primeiro desenho: as fontes chegam da web e
+  // reflem o texto. O observador cobre isso; o "load" é a rede de segurança
+  // pra navegador sem ResizeObserver.
+  if ("ResizeObserver" in window) {
+    new ResizeObserver(medirAlturaRolavel).observe(document.body);
+  }
+  window.addEventListener("load", medirAlturaRolavel);
+
   function aoRolar() {
     const y = window.scrollY || window.pageYOffset;
 
@@ -35,8 +53,7 @@
     // Quanto da página já passou. O máximo pode dar 0 numa tela muito alta
     // com pouco conteúdo -- dividir por zero deixaria a barra em NaN.
     if (barraProgresso) {
-      const total = document.documentElement.scrollHeight - window.innerHeight;
-      const parte = total > 0 ? Math.min(1, Math.max(0, y / total)) : 0;
+      const parte = alturaRolavel > 0 ? Math.min(1, Math.max(0, y / alturaRolavel)) : 0;
       barraProgresso.style.transform = "scaleX(" + parte.toFixed(4) + ")";
     }
 

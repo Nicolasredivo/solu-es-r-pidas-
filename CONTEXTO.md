@@ -3418,6 +3418,76 @@ Todo o teste foi com chamados **falsos** injetados em `chamadosSemData`/
 `chamadosComData` e `pedirAoN8n` trocado por uma função que só dá erro.
 Nenhum registro real foi tocado.
 
+### Revisão geral do sistema (16/09/2026)
+
+Varredura pedida pelo dono: achar falhas, lentidão e bugs, corrigir e otimizar
+**sem mexer em funcionalidade nem configuração**. Nenhum workflow do n8n e
+nenhum campo do Airtable foi tocado. O que foi encontrado e corrigido:
+
+**Falhas de verdade**
+
+1. **`config.js` fora do ar derrubava o app inteiro.** `baseUrlN8n()` usava
+   `N8N_BASE_URL` como referência solta. Esse arquivo é buscado **sempre na
+   rede** (o endereço do túnel muda), então sem internet ele não carrega, a
+   constante nunca chega a existir e a referência estourava `ReferenceError`
+   — matando o resto do `app.js`, inclusive a entrada por senha guardada.
+   Agora passa por `typeof`. Confirmado no navegador: a forma antiga estoura,
+   a nova devolve `""`.
+2. **O service worker podia envenenar o próprio cache.** `cache.put()` aceita
+   qualquer resposta, inclusive um 404 ou a página de erro do CDN. Um tropeço
+   do GitHub Pages no meio do install gravava o erro sob a chave `./app.js`, e
+   como o `fetch` serve o cache primeiro, o app passava a carregar a página de
+   erro — **até a próxima virada de versão**. Agora o install confere
+   `resposta.ok` e falha de propósito, deixando o service worker anterior
+   valendo. Reproduzido nos dois sentidos antes de corrigir.
+3. **Anexos vazavam memória.** Cada foto vira um endereço de blob
+   (`URL.createObjectURL`) e o navegador segura o arquivo inteiro até alguém
+   devolver esse endereço — o que nunca acontecia. Num app que fica aberto o
+   dia todo, cada foto de 5MB ficava presa. Agora `soltarAnexo`/`soltarAnexos`
+   liberam ao remover um anexo, ao limpar o formulário, ao abrir outra edição
+   e ao sair. Testado: remover um anexo mata só o dele.
+4. **Três telas ficavam presas em "Carregando..." com o túnel fora do ar.**
+   `carregarChamados`, `escolherClienteChamado` e `carregarCadastrosParaChamados`
+   não tinham `try/catch`: a promessa rejeitada escapava sem dono e a mensagem
+   de carregando ficava pra sempre, sem dizer o que houve. As três agora
+   mostram erro. (É o mesmo cuidado que o Financeiro já tinha.)
+5. **`serviceWorker.register()` sem `.catch()`** — rejeição sem dono.
+6. **`.svg` era guardado no cache e nunca servido dele**: o `fetch` do service
+   worker só reconhecia html/css/js/json/png. O logo da landing era baixado na
+   instalação à toa e, sem internet, não aparecia.
+
+**Otimização**
+
+7. **`escapeHtml` criava um objeto novo a cada caractere trocado.** Com a busca
+   de chamados redesenhando a lista a cada tecla, virava milhares de objetos
+   descartáveis por segundo. A tabela saiu pra fora da função.
+8. **`landing.js` lia `scrollHeight` a cada frame de rolagem**, e essa leitura
+   obriga o navegador a recalcular o layout na hora. Agora mede uma vez e
+   remede só quando muda (resize, `load`, `ResizeObserver`). Conferido que a
+   barra de progresso continua exata (0.2471 / 0.4942 / 0.9884 batendo com o
+   esperado em cada posição).
+
+**Limpeza**
+
+9. `#chamado-cancelar-botao`: botão permanentemente `hidden` que nenhum código
+   jamais referenciava.
+10. A faixa de acentos em `normalizarTexto` estava escrita com os caracteres
+    combinantes **crus** (`[̀-ͯ]`). Funcionava, mas são invisíveis no editor e
+    qualquer conversão de codificação os apagaria em silêncio — o código
+    seguiria válido e só a comparação de nomes passaria a errar. Virou
+    `[̀-ͯ]`.
+
+**Achado que NÃO foi mexido, de propósito:** o ouvinte global de `input`
+reformata campo de telefone a cada tecla (`campo.value = formatarTelefone(...)`),
+e reatribuir `value` joga o cursor pro fim — editar no meio de um telefone é
+incômodo. Corrigir exige restaurar posição de cursor na mão, que é justamente
+o tipo de mexida que quebra digitação em celular. Fica registrado pra uma
+rodada própria, com teste dedicado.
+
+Tudo foi testado com dados **falsos** e `pedirAoN8n` trocado por uma função que
+só dá erro. Nenhum registro real foi tocado. As 6 páginas e as 8 abas internas
+foram percorridas com a rede desligada, sem um erro de JavaScript sequer.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

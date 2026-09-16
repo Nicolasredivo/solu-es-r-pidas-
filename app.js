@@ -33,7 +33,12 @@ function mostrarToast(mensagem) {
 // para você poder trocar o link do túnel sem depender de uma publicação.
 function baseUrlN8n() {
   const salvo = localStorage.getItem(CHAVE_URL);
-  return (salvo || N8N_BASE_URL || "").replace(/\/+$/, "");
+  // `typeof` em vez de usar N8N_BASE_URL direto: config.js é buscado sempre na
+  // rede (o endereço do túnel muda), então sem internet ele não carrega, a
+  // constante nunca chega a existir e a referência solta derrubaria o app.js
+  // inteiro com ReferenceError -- inclusive a tela de entrada.
+  const padrao = typeof N8N_BASE_URL === "string" ? N8N_BASE_URL : "";
+  return (salvo || padrao || "").replace(/\/+$/, "");
 }
 
 function urlWebhook(caminho) {
@@ -43,7 +48,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.16h";
+const APP_VERSION = "2026.09.16i";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -1530,6 +1535,10 @@ function normalizarTexto(texto) {
   return String(texto || "")
     .toLowerCase()
     .normalize("NFD")
+    // Faixa dos acentos soltos, escrita em código (̀-ͯ) e não com
+    // os caracteres crus: eles são invisíveis no editor, e qualquer conversão
+    // de codificação do arquivo os apagaria sem ninguém perceber -- o código
+    // continuaria válido e a comparação de nomes é que passaria a errar.
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
@@ -4838,10 +4847,16 @@ window.addEventListener("beforeunload", (event) => {
 // horário. Atendimento/execução, materiais, conclusão e cobrança ficam para
 // uma etapa futura — decisão do dono, para não inchar o escopo agora.
 
+// A tabela fica fora da função de propósito: antes ela era um objeto novo
+// criado a CADA caractere trocado. Com a busca de chamados redesenhando a
+// lista inteira a cada tecla, isso virava milhares de objetos descartáveis
+// por segundo só pra escapar texto.
+const HTML_ESCAPES = {
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+};
+
 function escapeHtml(texto) {
-  return String(texto ?? "").replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  })[c]);
+  return String(texto ?? "").replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
 }
 
 // YYYY-MM-DD a partir dos componentes LOCAIS do Date, não de toISOString()
@@ -4969,10 +4984,15 @@ function pontuaCadastroChamado(c, termo) {
 
 async function carregarCadastrosParaChamados() {
   if (chamadosCadastrosCarregados) return;
-  const dados = await pedirAoN8n("listar-cadastros", {});
-  if (dados && dados.ok) {
-    chamadosCadastros = dados.cadastros || [];
-    chamadosCadastrosCarregados = true;
+  try {
+    const dados = await pedirAoN8n("listar-cadastros", {});
+    if (dados && dados.ok) {
+      chamadosCadastros = dados.cadastros || [];
+      chamadosCadastrosCarregados = true;
+    }
+  } catch (err) {
+    // Falhar aqui só deixa a lista de clientes vazia -- quem chama segue em
+    // frente. O que não pode é a promessa rejeitada escapar sem dono.
   }
 }
 
@@ -5021,10 +5041,18 @@ async function escolherClienteChamado(entidadeId) {
 
   const cad = chamadosCadastros.find((c) => c.id === entidadeId);
 
-  const [locaisResp, contatosResp] = await Promise.all([
-    pedirAoN8n("listar-locais", { entidadeId }),
-    pedirAoN8n("listar-contatos", { entidadeId }),
-  ]);
+  let locaisResp, contatosResp;
+  try {
+    [locaisResp, contatosResp] = await Promise.all([
+      pedirAoN8n("listar-locais", { entidadeId }),
+      pedirAoN8n("listar-contatos", { entidadeId }),
+    ]);
+  } catch (err) {
+    // Sem isto, cair a rede aqui deixava "Carregando dados do cliente..."
+    // na tela pra sempre e o passo do cliente nunca terminava.
+    chamadoClienteStatus.textContent = "Não consegui carregar os dados desse cliente. Tente de novo.";
+    return;
+  }
 
   const listaLocais = (locaisResp && locaisResp.locais) || [];
   const listaContatos = (contatosResp && contatosResp.contatos) || [];
@@ -5096,6 +5124,18 @@ chamadoTrocarClienteBotao.addEventListener("click", () => {
 
 // ----- anexos -----
 
+// A miniatura de cada anexo é um endereço de blob criado por
+// URL.createObjectURL, e o navegador segura o arquivo inteiro na memória até
+// alguém devolver esse endereço. Sem isso, cada foto de 5MB tirada da lista
+// (ou deixada pra trás ao trocar de chamado) ficava presa até fechar o app.
+function soltarAnexo(anexo) {
+  if (anexo && anexo.url) URL.revokeObjectURL(anexo.url);
+}
+
+function soltarAnexos(lista) {
+  (lista || []).forEach(soltarAnexo);
+}
+
 function arquivoParaBase64(arquivo) {
   return new Promise((resolve, reject) => {
     const leitor = new FileReader();
@@ -5115,6 +5155,7 @@ function desenharAnexosChamado() {
       `<span class="chamado-anexo-nome">${escapeHtml(a.filename)}</span>` +
       `<button type="button" class="chamado-anexo-remover" aria-label="Remover">×</button>`;
     item.querySelector(".chamado-anexo-remover").addEventListener("click", () => {
+      soltarAnexo(chamadosAnexosArquivos[i]);
       chamadosAnexosArquivos.splice(i, 1);
       desenharAnexosChamado();
     });
@@ -5135,6 +5176,7 @@ function desenharAnexosNovosEdicao() {
       `<span class="chamado-anexo-nome">${escapeHtml(a.filename)}</span>` +
       `<button type="button" class="chamado-anexo-remover" aria-label="Remover">×</button>`;
     item.querySelector(".chamado-anexo-remover").addEventListener("click", () => {
+      soltarAnexo(chamadoEditAnexosNovos[i]);
       chamadoEditAnexosNovos.splice(i, 1);
       desenharAnexosNovosEdicao();
     });
@@ -5208,6 +5250,7 @@ function limparFormularioChamado() {
   chamadoClienteEscolhido = null;
   chamadoContatoEscolhidoId = "";
   chamadoLocalEscolhidoId = "";
+  soltarAnexos(chamadosAnexosArquivos);
   chamadosAnexosArquivos = [];
   chamadoClienteEscolhidoBox.classList.add("hidden");
   chamadoPassoCliente.classList.remove("hidden");
@@ -6767,7 +6810,15 @@ window.addEventListener("resize", () => {
 
 async function carregarChamados() {
   mostrarChamadosListaStatus("neutral", "Carregando...");
-  const dados = await pedirAoN8n("listar-chamados", {});
+  let dados;
+  try {
+    dados = await pedirAoN8n("listar-chamados", {});
+  } catch (err) {
+    // Sem isto a falha de rede virava uma promessa rejeitada sem dono e a
+    // tela ficava presa em "Carregando..." pra sempre, sem dizer o que houve.
+    mostrarChamadosListaStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+    return;
+  }
   if (!dados || !dados.ok) {
     mostrarChamadosListaStatus("error", (dados && dados.mensagem) || "Não consegui carregar os chamados.");
     return;
@@ -6797,6 +6848,7 @@ async function abrirEdicaoChamado(chamado) {
   editChamadoDescricao.value = chamado.descricaoSolicitacao || "";
   editChamadoObservacoes.value = chamado.observacoesServico || "";
 
+  soltarAnexos(chamadoEditAnexosNovos);
   chamadoEditAnexosNovos = [];
   editChamadoAnexosLista.innerHTML = "";
   if (chamado.anexos && chamado.anexos.length) {
@@ -7019,6 +7071,7 @@ sairBotao.addEventListener("click", () => {
   chamadosComData = [];
   chamadoEditandoAtual = null;
   chamadoEditContatoEscolhidoId = "";
+  soltarAnexos(chamadoEditAnexosNovos);
   chamadoEditAnexosNovos = [];
   listaChamadosSemData.innerHTML = "";
   listaChamadosComData.innerHTML = "";
@@ -7186,9 +7239,13 @@ if ("serviceWorker" in navigator) {
   });
 
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("service-worker.js").then((registration) => {
-      registration.update();
-    });
+    navigator.serviceWorker
+      .register("service-worker.js")
+      .then((registration) => registration.update())
+      // Sem o .catch, falhar aqui (arquivo fora do ar, origem sem HTTPS) vira
+      // promessa rejeitada sem dono. O app funciona sem service worker --
+      // só perde o cache --, então não vale interromper nada por isso.
+      .catch(() => {});
   });
 }
 
