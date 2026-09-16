@@ -411,20 +411,21 @@ img, svg { display: block; max-width: 100%; }
 .hero-arte {
   position: relative;
   min-height: 440px;
-  /* A inclinação que segue o mouse vive aqui, no pai: as camadas de dentro
-     já usam transform pro parallax e não podem acumular dois efeitos. */
-  transform: perspective(1100px)
-    rotateX(var(--inclina-x, 0deg))
-    rotateY(var(--inclina-y, 0deg));
-  transition: transform 0.35s var(--curva);
-  transform-style: preserve-3d;
+  /* `perspective` como PROPRIEDADE, não como função de transform: o balão
+     dos pontos é posicionado por medição na tela, e girar este elemento
+     (que é a referência da medição) jogava o balão pra longe do ponto.
+     Assim o efeito 3D existe, mas quem gira são só as camadas de dentro. */
+  perspective: 1100px;
 }
 .arte-camada {
   position: absolute;
   inset: 0;
-  /* O JS só escreve nesta variável — assim o parallax nunca briga com
-     outras transformações do elemento. */
-  transform: translate3d(0, var(--desloca, 0px), 0);
+  /* Parallax e inclinação no MESMO transform: são o mesmo elemento, e duas
+     declarações separadas de transform uma sobrescreveria a outra. */
+  transform: translate3d(0, var(--desloca, 0px), 0)
+    rotateX(var(--inclina-x, 0deg))
+    rotateY(var(--inclina-y, 0deg));
+  transition: transform 0.35s var(--curva);
   will-change: transform;
 }
 .arte-svg { width: 100%; height: auto; }
@@ -435,6 +436,15 @@ img, svg { display: block; max-width: 100%; }
 .pontos { pointer-events: auto; }
 
 .ponto { cursor: pointer; outline: none; }
+
+/* Alvo de clique de tamanho FIXO e invisível. O halo pulsante não pode ser
+   a área sensível: ele muda de tamanho o tempo todo, então o mouse ficava
+   entrando e saindo sozinho e o balão piscava. `transparent` recebe o
+   ponteiro; `none` não receberia. */
+.ponto-area { fill: transparent; }
+.ponto-alvo,
+.ponto-halo { pointer-events: none; }
+
 .ponto-alvo {
   fill: #ffffff;
   stroke: var(--aco);
@@ -486,11 +496,13 @@ img, svg { display: block; max-width: 100%; }
   color: #fff;
 }
 .ponto-balao span { font-size: 0.78rem; color: rgba(255, 255, 255, 0.75); line-height: 1.4; }
-/* Bico apontando pro ponto */
+/* Bico apontando pro ponto. --bico é o quanto o balão teve que ser
+   empurrado pra dentro da arte: o bico anda junto e continua apontando
+   pro lugar certo. */
 .ponto-balao::after {
   content: "";
   position: absolute;
-  left: 50%;
+  left: calc(50% + var(--bico, 0px));
   bottom: -6px;
   width: 12px;
   height: 12px;
@@ -498,6 +510,10 @@ img, svg { display: block; max-width: 100%; }
   transform: translateX(-50%) rotate(45deg);
   border-radius: 2px;
 }
+
+/* Ponto muito no alto: o balão vai pra baixo dele e o bico sobe. */
+.ponto-balao.abaixo { transform: translate(-50%, 0); }
+.ponto-balao.abaixo::after { bottom: auto; top: -6px; }
 
 .arte-dica {
   position: absolute;
@@ -511,7 +527,8 @@ img, svg { display: block; max-width: 100%; }
 }
 .arte-dica.some { opacity: 0; }
 
-.arte-selo { display: flex; align-items: flex-end; justify-content: flex-start; }
+/* Não pode roubar o clique de um ponto que passe por baixo dele. */
+.arte-selo { display: flex; align-items: flex-end; justify-content: flex-start; pointer-events: none; }
 .selo {
   display: flex;
   align-items: center;

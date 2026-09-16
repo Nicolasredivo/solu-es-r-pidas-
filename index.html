@@ -151,31 +151,41 @@
             <!-- Pontos que ligam cada parte do prédio a um serviço. Ficam
                  DENTRO do svg pra escalarem junto com o desenho: fora dele
                  sairiam do lugar em toda mudança de largura. -->
+            <!-- Cada ponto: halo pulsante (decoração), miolo branco e uma
+                 área de clique invisível de tamanho fixo. A ordem importa:
+                 a área de clique vem por último pra ficar por cima.
+                 Nenhum fica no canto de baixo à esquerda, que é onde o selo
+                 "23 anos" passa. -->
             <g class="pontos">
               <g class="ponto" tabindex="0" role="button"
                  data-titulo="Limpeza de caixas d'água" data-texto="Caixas d'água e cisternas, com o local entregue limpo.">
                 <circle class="ponto-halo" cx="200" cy="104" r="17" />
                 <circle class="ponto-alvo" cx="200" cy="104" r="7" />
+                <circle class="ponto-area" cx="200" cy="104" r="22" />
               </g>
               <g class="ponto" tabindex="0" role="button"
                  data-titulo="Manutenções elétricas" data-texto="Quadros, circuitos, iluminação e pontos de energia.">
-                <circle class="ponto-halo" cx="146" cy="214" r="17" />
-                <circle class="ponto-alvo" cx="146" cy="214" r="7" />
+                <circle class="ponto-halo" cx="128" cy="212" r="17" />
+                <circle class="ponto-alvo" cx="128" cy="212" r="7" />
+                <circle class="ponto-area" cx="128" cy="212" r="22" />
               </g>
               <g class="ponto" tabindex="0" role="button"
                  data-titulo="Manutenções hidráulicas" data-texto="Vazamentos, redes novas, torneiras, chuveiros e pontos de água.">
-                <circle class="ponto-halo" cx="286" cy="266" r="17" />
-                <circle class="ponto-alvo" cx="286" cy="266" r="7" />
+                <circle class="ponto-halo" cx="286" cy="248" r="17" />
+                <circle class="ponto-alvo" cx="286" cy="248" r="7" />
+                <circle class="ponto-area" cx="286" cy="248" r="22" />
               </g>
               <g class="ponto" tabindex="0" role="button"
                  data-titulo="Aquecedores e pressurizadores" data-texto="Instalação e manutenção, incluindo válvulas de transferência.">
-                <circle class="ponto-halo" cx="146" cy="336" r="17" />
-                <circle class="ponto-alvo" cx="146" cy="336" r="7" />
+                <circle class="ponto-halo" cx="286" cy="340" r="17" />
+                <circle class="ponto-alvo" cx="286" cy="340" r="7" />
+                <circle class="ponto-area" cx="286" cy="340" r="22" />
               </g>
               <g class="ponto" tabindex="0" role="button"
                  data-titulo="Rede de esgoto" data-texto="Desobstrução, reparos e adequação da rede.">
-                <circle class="ponto-halo" cx="252" cy="412" r="17" />
-                <circle class="ponto-alvo" cx="252" cy="412" r="7" />
+                <circle class="ponto-halo" cx="300" cy="408" r="17" />
+                <circle class="ponto-alvo" cx="300" cy="408" r="7" />
+                <circle class="ponto-area" cx="300" cy="408" r="22" />
               </g>
             </g>
           </svg>
@@ -203,7 +213,10 @@
 
         <p class="arte-dica">Toque nos pontos do prédio</p>
 
-        <div class="arte-camada arte-selo" data-parallax="0.14">
+        <!-- Mesmo fator do prédio de propósito: com fator diferente o selo
+             ia se afastando dele conforme a rolagem e acabava caindo em
+             cima de um ponto. -->
+        <div class="arte-camada arte-selo" data-parallax="0.06">
           <div class="selo">
             <span class="selo-num">23</span>
             <span class="selo-txt">anos cuidando<br />de infraestrutura</span>

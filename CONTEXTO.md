@@ -3285,6 +3285,39 @@ mas continuam clicáveis.
 No celular o nome escrito saiu do cabeçalho (só o símbolo fica): com a
 marca grande logo abaixo, os dois juntos entupiam a faixa de cima.
 
+### Bugs dos pontos do prédio (16/09/2026)
+
+O dono mandou print: o balão dos pontos aparecia no lugar errado e ficava
+piscando. Eram três causas somadas, todas na mesma rodada que criou os
+pontos:
+
+1. **O halo pulsante era a área de clique.** Ele muda de tamanho o tempo
+   todo (a animação vai de `scale(0.55)` a `scale(1.25)`) e, mesmo em
+   `opacity: 0`, continuava recebendo o ponteiro — então o mouse "entrava e
+   saía" sozinho várias vezes por segundo e o balão piscava junto. Agora
+   halo e miolo são `pointer-events: none`, e quem recebe o clique é um
+   círculo invisível de raio FIXO (`.ponto-area`, `fill: transparent` —
+   `none` não receberia evento nenhum).
+2. **A inclinação 3D girava a régua da medição.** O balão é posicionado
+   medindo a tela (`getBoundingClientRect`) e usando `.hero-arte` como
+   referência; como o `transform: rotate*` estava justamente nesse
+   elemento, a conta saía torta e o balão ia parar longe do ponto. A
+   inclinação desceu pras camadas de dentro (junto do parallax, no mesmo
+   `transform` — duas declarações separadas uma anularia a outra) e
+   `.hero-arte` ficou com `perspective` só como propriedade.
+3. **No celular o toque não fazia nada.** `pointerenter` dispara antes do
+   `click` no toque: um abria e o outro fechava na mesma batida. Agora
+   passar o mouse só é ligado em aparelho com mouse (`pointer: fine`), e o
+   clique-alterna só onde não tem.
+
+De quebra: o selo "23 anos" ganhou `pointer-events: none` e o mesmo fator
+de parallax do prédio (com fator diferente ele ia se afastando conforme a
+rolagem e acabava passando por cima de um ponto), os pontos foram
+redistribuídos pra longe do canto onde o selo passa, e o balão agora é
+travado dentro da área da arte — com o bico acompanhando quando ele
+precisa ser empurrado, e virando pra baixo quando o ponto é alto demais
+pra caber acima.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

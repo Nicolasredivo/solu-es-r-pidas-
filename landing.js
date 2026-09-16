@@ -157,8 +157,25 @@
     // medindo na tela, não pelas coordenadas do desenho.
     const alvo = ponto.querySelector(".ponto-alvo").getBoundingClientRect();
     const caixa = arte.getBoundingClientRect();
-    balao.style.left = (alvo.left + alvo.width / 2 - caixa.left) + "px";
-    balao.style.top = (alvo.top - caixa.top - 14) + "px";
+    const meioX = alvo.left + alvo.width / 2 - caixa.left;
+
+    // Não deixa o balão escapar pelos lados da arte.
+    const metade = balao.offsetWidth / 2;
+    const margem = 6;
+    const x = Math.min(Math.max(meioX, metade + margem), caixa.width - metade - margem);
+    balao.style.left = x + "px";
+
+    // Em cima do ponto por padrão; se não couber (ponto lá no alto), vai
+    // pra baixo dele e o bico vira pro outro lado.
+    const acima = alvo.top - caixa.top - 14;
+    const cabeAcima = acima - balao.offsetHeight > 0;
+    balao.classList.toggle("abaixo", !cabeAcima);
+    balao.style.top = cabeAcima
+      ? acima + "px"
+      : (alvo.bottom - caixa.top + 14) + "px";
+
+    // O bico acompanha o balão quando ele foi empurrado pra dentro.
+    balao.style.setProperty("--bico", (meioX - x) + "px");
 
     // Um frame depois, pra transição de opacidade acontecer de verdade.
     window.requestAnimationFrame(() => balao.classList.add("aparece"));
@@ -175,21 +192,28 @@
     }, 220);
   }
 
+  const temMouse = window.matchMedia("(pointer: fine)").matches;
+
   pontos.forEach((ponto) => {
-    // No computador basta passar o mouse; no celular é o toque que abre.
-    ponto.addEventListener("pointerenter", () => {
-      if (ponto.matches(":hover")) mostrarPonto(ponto);
-    });
-    ponto.addEventListener("pointerleave", () => {
-      if (pontoAberto === ponto) esconderPonto();
-    });
+    if (temMouse) {
+      // Com mouse é só passar por cima. Sem o "clique também alterna" aqui
+      // de propósito: no toque o pointerenter dispara ANTES do clique, e os
+      // dois juntos abriam e fechavam o balão na mesma batida -- o toque
+      // parecia não fazer nada.
+      ponto.addEventListener("pointerenter", () => mostrarPonto(ponto));
+      ponto.addEventListener("pointerleave", () => {
+        if (pontoAberto === ponto) esconderPonto();
+      });
+    } else {
+      ponto.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (pontoAberto === ponto) esconderPonto();
+        else mostrarPonto(ponto);
+      });
+    }
+
     ponto.addEventListener("focus", () => mostrarPonto(ponto));
     ponto.addEventListener("blur", () => esconderPonto());
-    ponto.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (pontoAberto === ponto) esconderPonto();
-      else mostrarPonto(ponto);
-    });
     // Teclado: o <g> do SVG não dispara clique com Enter/Espaço sozinho.
     ponto.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" && e.key !== " ") return;
