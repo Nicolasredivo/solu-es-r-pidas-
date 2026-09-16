@@ -1577,6 +1577,11 @@ button:active:not(:disabled) {
   color: var(--ok);
 }
 
+.chamado-status-cancelado {
+  background: rgba(229, 72, 77, 0.18);
+  color: var(--error);
+}
+
 .chamado-card-horario {
   font-weight: 600;
   margin: 6px 0 0;

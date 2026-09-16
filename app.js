@@ -43,7 +43,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.14s";
+const APP_VERSION = "2026.09.16a";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -5272,6 +5272,7 @@ function statusClasseChamado(status) {
   if (status === "Aguardando confirmação de data") return "chamado-status-aguardando";
   if (status === "Agendado") return "chamado-status-agendado";
   if (status === "Em andamento") return "chamado-status-andamento";
+  if (status === "Cancelado") return "chamado-status-cancelado";
   return "";
 }
 
@@ -5296,6 +5297,10 @@ function montarCardChamado(c, comData) {
     ? `<p class="doc-hint chamado-card-criado">Criado em ${new Date(c.criadoEm).toLocaleDateString("pt-BR")} às ${formatarHoraIso(c.criadoEm)}</p>`
     : "";
 
+  // Cancelado continua aparecendo na lista (não some mais) -- só não faz
+  // sentido oferecer "Cancelar chamado" de novo pra quem já está cancelado.
+  const jaCancelado = c.status === "Cancelado";
+
   card.innerHTML = `
     <div class="chamado-card-topo">
       <span class="chamado-numero">#${c.numero}</span>
@@ -5309,23 +5314,25 @@ function montarCardChamado(c, comData) {
     ${criadoTexto}
     <div class="chamado-card-acoes">
       <button type="button" class="botao-secundario botao-editar-chamado">Editar</button>
-      <button type="button" class="botao-secundario botao-cancelar-chamado">Cancelar chamado</button>
+      ${jaCancelado ? "" : `<button type="button" class="botao-secundario botao-cancelar-chamado">Cancelar chamado</button>`}
     </div>
   `;
 
   card.querySelector(".botao-editar-chamado").addEventListener("click", () => abrirEdicaoChamado(c));
 
   const cancelarBotao = card.querySelector(".botao-cancelar-chamado");
-  cancelarBotao.addEventListener("click", () => {
-    // Pergunta de verdade (confirm nativo) em vez do botão virar vermelho
-    // esperando um segundo toque -- esse formato ficava parecendo travado
-    // quando a pessoa não completava o segundo toque na hora (voltava
-    // depois e via só um botão vermelho sem explicação nenhuma).
-    if (!confirm(`Cancelar o Chamado #${c.numero} (${c.clienteNome})?`)) return;
-    cancelarBotao.disabled = true;
-    cancelarBotao.textContent = "Cancelando...";
-    cancelarChamado(c.id, cancelarBotao);
-  });
+  if (cancelarBotao) {
+    cancelarBotao.addEventListener("click", () => {
+      // Pergunta de verdade (confirm nativo) em vez do botão virar vermelho
+      // esperando um segundo toque -- esse formato ficava parecendo travado
+      // quando a pessoa não completava o segundo toque na hora (voltava
+      // depois e via só um botão vermelho sem explicação nenhuma).
+      if (!confirm(`Cancelar o Chamado #${c.numero} (${c.clienteNome})?`)) return;
+      cancelarBotao.disabled = true;
+      cancelarBotao.textContent = "Cancelando...";
+      cancelarChamado(c.id, cancelarBotao);
+    });
+  }
 
   return card;
 }
@@ -5338,14 +5345,15 @@ async function cancelarChamado(id, botao) {
     resposta = null;
   }
   if (resposta && resposta.ok) {
-    // Tira da tela na hora, sem esperar uma segunda rodada de rede -- o
-    // cancelamento já aconteceu de verdade no servidor, só falta refletir
-    // aqui (antes esperava um "listar-chamados" inteiro de novo pra sumir
-    // o card, o que dobrava o tempo de espera). Ainda assim recarrega de
-    // verdade em seguida, pra pegar qualquer outra mudança.
-    chamadosSemData = chamadosSemData.filter((c) => c.id !== id);
-    chamadosComData = chamadosComData.filter((c) => c.id !== id);
+    // Continua na tela, só muda de status (o dono pediu explicitamente: um
+    // chamado cancelado não some, fica marcado "Cancelado" em vermelho --
+    // ver CONTEXTO.md 16/09/2026). Atualiza na hora, sem esperar uma
+    // segunda rodada de rede, e ainda assim recarrega de verdade em
+    // seguida, pra pegar qualquer outra mudança.
+    const alvo = chamadosSemData.find((c) => c.id === id) || chamadosComData.find((c) => c.id === id);
+    if (alvo) alvo.status = "Cancelado";
     desenharListaChamados();
+    if (chamadosPaginaCarregada) agendaRedesenhar();
     await carregarChamados();
   } else {
     // Se deu errado, o botão precisa voltar a funcionar -- senão fica
@@ -5663,7 +5671,10 @@ function agendaDesenharItens() {
   let html = "";
 
   chamadosComData.forEach((c) => {
-    if (!c.reservadoInicio) return;
+    // Cancelado não ocupa mais lugar na agenda -- continua visível em
+    // "Consultar chamados" (ver CONTEXTO.md 16/09/2026), mas aqui é como se
+    // nunca tivesse sido marcado.
+    if (!c.reservadoInicio || c.status === "Cancelado") return;
     const ini = agDeIso(c.reservadoInicio);
 
     // Dia marcado, horário ainda não definido: fica preso na linha do dia,
@@ -5721,7 +5732,7 @@ function agendaDesenharItens() {
 function agendaOcupados(excluir) {
   const fora = excluir || [];
   return chamadosComData
-    .filter((c) => c.reservadoInicio && c.reservadoFim && !fora.includes(c.id))
+    .filter((c) => c.reservadoInicio && c.reservadoFim && c.status !== "Cancelado" && !fora.includes(c.id))
     .map((c) => ({ c, ini: agDeIso(c.reservadoInicio), fim: agDeIso(c.reservadoFim) }));
 }
 
@@ -6427,15 +6438,16 @@ function montarCardFila(c) {
   return card;
 }
 
-// TODOS os chamados (fila + já agendados), não só quem ainda não tem lugar --
-// o dono apontou isso direto na tela: precisa continuar vendo o que já foi
-// marcado por aqui, só que agora como "agendado", não pra arrastar de novo
-// (isso se faz no próprio bloco da linha do tempo). Clicar num já marcado
-// pula pra ele (ver agendaPularPara); clicar/arrastar um da fila continua
-// igual.
+// TODOS os chamados ativos (fila + já agendados), não só quem ainda não tem
+// lugar -- o dono apontou isso direto na tela: precisa continuar vendo o que
+// já foi marcado por aqui, só que agora como "agendado", não pra arrastar de
+// novo (isso se faz no próprio bloco da linha do tempo). Clicar num já
+// marcado pula pra ele (ver agendaPularPara); clicar/arrastar um da fila
+// continua igual. Cancelado não entra aqui -- continua só em "Consultar
+// chamados" (ver CONTEXTO.md 16/09/2026).
 function agendaDesenharFila() {
   const todos = chamadosSemData.concat(chamadosComData)
-    .slice()
+    .filter((c) => c.status !== "Cancelado")
     .sort((a, b) => new Date(a.criadoEm) - new Date(b.criadoEm));
 
   agendaListaEl.innerHTML = "";

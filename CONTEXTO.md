@@ -3147,6 +3147,47 @@ só desenhava `chamadosSemData`. Dois ajustes:
   tem nenhum jeito de chegar nesse status pela tela — se um fluxo pra ele
   for criado, as duas cores vão colidir e precisam ser diferenciadas.
 
+### Chamado cancelado: continua em Consultar chamados (vermelho), some da Agenda (16/09/2026)
+
+O dono apontou (print circulando "Aguardando confirmação de data" e
+"Agendado" no canto do card) que cancelar um chamado o fazia sumir da
+tela inteira — não dava pra ver que ele tinha sido cancelado. Pediu pra
+continuar aparecendo em Consultar chamados com "Cancelado" em vermelho,
+no mesmo estilo dos outros selos, **mas** deixando claro (pergunta minha,
+respondida direto) que na Agenda deveria seguir sumindo, inclusive
+liberando o horário se já estivesse marcado — pra outro chamado poder
+ocupar aquele lugar.
+
+- `cancelarChamado` não tira mais o chamado das listas — só muda o
+  `status` local pra "Cancelado" e redesenha (antes: `filter` removendo
+  de `chamadosSemData`/`chamadosComData`).
+- Selo novo `.chamado-status-cancelado` (vermelho, `var(--error)`) em
+  `statusClasseChamado` — vale em qualquer lugar que usa esse selo
+  (Consultar chamados e a lista da Agenda).
+- `montarCardChamado` esconde o botão "Cancelar chamado" quando o
+  chamado já está cancelado (cancelar de novo não faz sentido); "Editar"
+  continua disponível.
+- **Agenda passou a ignorar cancelado inteiramente**: não aparece na
+  lista "Chamados" da direita (`agendaDesenharFila`), não vira bloco na
+  linha do tempo (`agendaDesenharItens`), e não conta mais como horário
+  ocupado pra checagem de conflito no frontend (`agendaOcupados`) — um
+  chamado cancelado que já tinha data marcada libera aquele horário na
+  hora, sem precisar de nenhuma ação extra.
+- **Backend**: o workflow `App - Listar chamados` (nó "Busca chamados
+  ativos") excluía `Status = 'Cancelado'` da busca no Airtable — por isso
+  cancelado sumia até da tela, não só ficava com aparência errada. Filtro
+  mudou de `AND({Status}!='Concluído', {Status}!='Cancelado')` pra só
+  `{Status}!='Concluído'`. **O workflow `App - Reagendar chamado`
+  continua excluindo Cancelado da checagem de conflito** (nó próprio,
+  não mexido) — certo, é isso que libera o horário de verdade no
+  servidor também, não só na tela.
+- Testado com dados falsos: selo vermelho + sem botão duplicado em
+  Consultar chamados; cancelado nunca aparece na Agenda; cancelar um
+  chamado que ocupava 09:00-10:00 libera esse horário pra outro na
+  mesma sessão. Conferido com leitura real (sem escrever) que o
+  Airtable já tinha 10 chamados cancelados que agora aparecem na
+  listagem (antes ficavam invisíveis pro app).
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

@@ -86,7 +86,7 @@
           "mode": "list",
           "cachedResultName": "Chamados"
         },
-        "filterByFormula": "AND({Status}!='Concluído', {Status}!='Cancelado')",
+        "filterByFormula": "{Status}!='Concluído'",
         "returnAll": true,
         "options": {}
       },
