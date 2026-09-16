@@ -3188,6 +3188,66 @@ ocupar aquele lugar.
   Airtable já tinha 10 chamados cancelados que agora aparecem na
   listagem (antes ficavam invisíveis pro app).
 
+### Site institucional na raiz; o sistema virou sistema.html (16/09/2026)
+
+Até aqui o endereço raiz abria direto na tela de senha. Agora a raiz é a
+**landing page institucional** e o sistema fica "dentro" do site, aberto
+pelo botão **Entrar** do cabeçalho. Mesmo endereço, mesmo projeto — nada
+de domínio novo nem de framework novo (segue HTML/CSS/JS puro).
+
+**Duas coisas que o pedido presumia e não batiam com o projeto real** (vale
+registrar, porque a decisão veio daí):
+
+1. **Não existia "rota de login"** pra apontar o botão. O login não tinha
+   endereço próprio: ele *era* a raiz. Como a raiz tinha que virar a
+   landing, o sistema precisou ganhar um endereço — virou
+   **`sistema.html`**, por `git mv index.html sistema.html`. Escolhido
+   arquivo plano em vez de pasta `/entrar/` de propósito: assim **todo
+   caminho relativo continua idêntico** (`style.css`, `app.js`,
+   `config.js`, `icons/`, `service-worker.js`) e `app.js` não precisou de
+   uma linha de mudança — o app está em uso diário, não podia quebrar.
+2. **O logo não estava no projeto.** Só havia `icons/icon-192.png` e
+   `icon-512.png`, que são um círculo azul de exemplo. Foi desenhado um
+   monograma SVG em `imagens/logo.svg` a partir da imagem da marca, nas
+   cores dela — **é substituto, não a marca oficial**. Trocar = sobrescrever
+   esse arquivo (ou salvar `.png` e mudar a extensão no `<img>` do
+   `index.html`). Nada mais precisa mudar.
+
+**PWA**: `manifest.json` teve o `start_url` mudado pra `./sistema.html`.
+Sem isso, o app instalado no celular passaria a abrir na página de
+marketing em vez da tela de senha. O `scope` continua `./`, e o
+`service-worker.js` agora guarda os dois lados (landing + sistema).
+
+**A landing** (`index.html` + `landing.css` + `landing.js`): cabeçalho fixo,
+hero com headline fixa do dono, diferenciais, serviços, forma de trabalho,
+números e rodapé com espaços reservados pra contato/redes. CTA único pro
+WhatsApp (`wa.me/554792081047`), com comentário no código marcando onde
+entra o `?text=`. Linguagem visual de planta baixa (grade fina, numeração
+`01/02/03`, malha de linhas em vez de cartões soltos com sombra), pra não
+ter cara de template de SaaS.
+
+Movimento com moderação e sempre em `transform`/`opacity`: palavra ciclando
+na sobrancelha (não dentro do headline, que é texto fixo), parallax leve na
+arte do hero, revelação em scroll com escalonamento curto, contadores
+animados. Tudo desligado em `prefers-reduced-motion`.
+
+**Dois bugs achados e corrigidos durante a construção**, os dois de
+especificidade/medida em CSS:
+- `.trab p` (classe + elemento) era mais específico que `.trab-num`
+  (uma classe) e anulava o `position: absolute` do número de marca d'água —
+  ele saía como texto miúdo no meio do card. Virou `.trab .trab-num`,
+  declarado depois.
+- A palavra que cicla era cortada pelo `overflow: hidden` que o efeito de
+  deslizar exige. Resolvido com uma cópia invisível da palavra mais longa
+  no fluxo normal, que trava a largura da caixa.
+
+**Armadilha de teste que voltou a aparecer**: com o painel do navegador
+oculto, o navegador não gera frames — transições e contadores congelam no
+valor inicial e a tela parece vazia/errada. Foi o que aconteceu aqui (hero
+"em branco", contadores parados em 2/+3/+12). Não é bug da página: medindo
+o estado final direto (ou com a transição desligada) tudo aparece certo.
+Vale lembrar antes de sair caçando bug inexistente.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

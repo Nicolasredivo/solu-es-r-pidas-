@@ -8,7 +8,9 @@ Uma tela simples com campo de senha e um botão "Testar conexão", só para conf
 que o app consegue falar com o n8n (rodando no computador, exposto por um
 Cloudflare Tunnel).
 
-- `index.html`, `style.css`, `app.js` — a tela do app
+- `index.html`, `landing.css`, `landing.js` — o site institucional (a raiz `/`)
+- `sistema.html`, `style.css`, `app.js` — o sistema (senha + painel), aberto
+  pelo botão "Entrar" do site
 - `config.js` — **o único arquivo que você precisa editar**: o endereço do túnel
 - `manifest.json`, `service-worker.js`, `icons/` — o que torna o app instalável
 - `n8n/*.json` — os workflows prontos para importar no n8n

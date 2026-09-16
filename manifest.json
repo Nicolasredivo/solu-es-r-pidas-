@@ -2,7 +2,7 @@
   "name": "Soluções Rápidas",
   "short_name": "Sol. Rápidas",
   "description": "Interface para acionar e acompanhar automações do n8n.",
-  "start_url": "./index.html",
+  "start_url": "./sistema.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0f1220",

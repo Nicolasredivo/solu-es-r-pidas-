@@ -3,1455 +3,399 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Soluções Rápidas</title>
-  <meta name="theme-color" content="#0f1220" />
-  <link rel="manifest" href="manifest.json" />
+  <title>Soluções Rápidas — Manutenção predial em Joinville e região</title>
+  <meta name="description" content="Manutenção predial para condomínios residenciais e comerciais, síndicos, administradoras e empresas em Joinville e região. Atendimento planejado, serviço limpo e histórico completo do imóvel." />
+  <meta name="theme-color" content="#0B1E3D" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css" />
+
+  <!-- Duas famílias só, e poucos pesos: a página tem que abrir rápido no
+       celular. Saira ecoa o formato quadrado/geométrico do logo; Inter
+       carrega o texto corrido. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Saira:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="landing.css" />
 </head>
 <body>
-  <div id="gate-view" class="gate-view">
-    <div class="card">
-      <h1>Soluções Rápidas</h1>
-      <p class="subtitle">Digite a senha para acessar</p>
 
-      <form id="test-form">
-        <label for="password">Senha de acesso</label>
-        <input type="password" id="password" placeholder="Digite a senha" required />
+<!-- ===================== Cabeçalho ===================== -->
+<header class="cabecalho" id="cabecalho">
+  <div class="faixa cabecalho-interno">
 
-        <label class="checkbox-linha">
-          <input type="checkbox" id="lembrar-senha" />
-          <span>Lembrar neste aparelho</span>
-        </label>
+    <a class="marca" href="./" aria-label="Soluções Rápidas — página inicial">
+      <!-- COMO COLOCAR O LOGO DE VERDADE: sobrescreva imagens/logo.svg pelo
+           arquivo original da marca (ou salve como .png e troque a extensão
+           abaixo). Mais nada precisa mudar.
 
-        <button type="submit" id="test-button">Entrar</button>
-      </form>
+           O que está lá hoje é um SUBSTITUTO desenhado a partir da imagem da
+           marca -- o logo original não estava no projeto, só havia os dois
+           ícones de PWA, que são um círculo azul de exemplo. -->
+      <img class="marca-simbolo" src="imagens/logo.svg" alt="" width="150" height="104" />
 
-      <div id="status" class="status"></div>
-
-      <button type="button" id="toggle-config" class="link-button">⚙ Endereço do n8n</button>
-
-      <div id="config-box" class="config-box hidden">
-        <label for="n8n-url">Endereço do túnel (Cloudflare)</label>
-        <input type="text" id="n8n-url" placeholder="https://algo.trycloudflare.com" autocomplete="off" />
-        <div class="config-acoes">
-          <button type="button" id="salvar-url">Salvar</button>
-          <button type="button" id="restaurar-url" class="botao-secundario">Restaurar padrão</button>
-        </div>
-        <p id="config-hint" class="config-hint"></p>
-      </div>
-    </div>
-  </div>
-
-  <div id="app-view" class="app-view hidden">
-    <div class="topbar">
-      <button type="button" id="menu-button" class="menu-button" aria-label="Abrir menu" aria-expanded="false">☰</button>
-      <span class="topbar-title">Soluções Rápidas</span>
-      <span id="conexao" class="conexao" title="Conexão com o n8n">
-        <span class="conexao-ponto"></span>
-        <span class="conexao-texto">conectado</span>
+      <span class="marca-texto">
+        <span class="marca-nome">Soluções <em>Rápidas</em></span>
+        <span class="marca-sub">Manutenção predial</span>
       </span>
-    </div>
+    </a>
 
-    <div id="sidebar-overlay" class="sidebar-overlay"></div>
-
-    <nav id="sidebar" class="sidebar">
-      <button type="button" class="sidebar-item active" data-page="inicio">Início</button>
-      <button type="button" class="sidebar-item" data-page="cadastro">Cadastro</button>
-      <button type="button" class="sidebar-item" data-page="financeiro">Financeiro</button>
-      <div class="sidebar-grupo">
-        <button type="button" class="sidebar-item sidebar-grupo-cabecalho" id="chamados-grupo-botao" aria-expanded="false">
-          <span>Chamados</span>
-          <span class="sidebar-grupo-mais" aria-hidden="true">+</span>
-        </button>
-        <div id="chamados-grupo-itens" class="sidebar-grupo-itens hidden">
-          <button type="button" class="sidebar-item sidebar-subitem" data-page="chamados">Criar chamado</button>
-          <button type="button" class="sidebar-item sidebar-subitem" data-page="consultar-chamados">Consultar chamados</button>
-        </div>
-      </div>
-      <button type="button" class="sidebar-item" data-page="agenda">Agenda</button>
-
-      <div class="sidebar-rodape">
-        <button type="button" id="sair" class="sidebar-item sair">Sair</button>
-        <p id="versao-app" class="versao-app"></p>
-      </div>
+    <nav class="cabecalho-acoes" aria-label="Acesso ao sistema">
+      <!-- O sistema (tela de senha + painel) mora em sistema.html, no mesmo
+           endereço do site: antes ele ocupava a raiz "/" sozinho. -->
+      <a class="botao botao-linha" href="sistema.html">Entrar</a>
+      <!-- Placeholder: criar conta ainda não existe. -->
+      <a class="botao botao-cheio" href="#">Criar conta</a>
     </nav>
 
-    <main class="main-content">
-      <div id="page-inicio" class="card page">
-        <h1>Início</h1>
-        <p class="subtitle">Conectado com sucesso ✅</p>
-        <p class="placeholder-text">Em breve, mais opções aparecem aqui.</p>
-      </div>
+  </div>
+</header>
 
-      <div id="page-cadastro" class="card page hidden">
-        <h1>Cadastro</h1>
+<main>
 
-        <div class="subtabs">
-          <button type="button" class="subtab active" data-subpage="adicionar">Adicionar</button>
-          <button type="button" class="subtab" data-subpage="consultar">Consultar</button>
-        </div>
+  <!-- ===================== Hero ===================== -->
+  <section class="hero">
+    <div class="hero-fundo" aria-hidden="true">
+      <div class="hero-grade"></div>
+      <div class="hero-brilho"></div>
+    </div>
 
-        <div id="subpage-adicionar" class="subpage">
-          <label for="documento">CPF ou CNPJ</label>
-          <input type="text" id="documento" inputmode="numeric" autocomplete="off"
-                 placeholder="Digite o CPF ou CNPJ" />
-          <div id="documento-hint" class="doc-hint"></div>
-          <button type="button" id="tentar-receita" class="link-button hidden">Tentar de novo</button>
-          <button type="button" id="sem-documento" class="link-button">Não sei o CPF agora — cadastrar só com o nome</button>
+    <div class="faixa hero-interno">
+      <div class="hero-texto">
+        <p class="sobrancelha revelar">
+          Manutenção predial para
+          <!-- Frase curta ciclando. Fica na sobrancelha, e não dentro do
+               headline: o texto do headline é fixo e não pode mudar. -->
+          <span class="ciclo" id="ciclo" aria-live="off">
+            <!-- Esta cópia invisível fica no fluxo normal só pra dar largura
+                 à caixa: sem ela, a palavra mais longa era cortada pelo
+                 overflow que o efeito de deslizar precisa ter. -->
+            <span class="ciclo-medida" aria-hidden="true">administradoras</span>
+            <span class="ciclo-item ativo">condomínios</span>
+          </span>
+        </p>
 
-          <div id="tipo-cnpj" class="grupo hidden">
-            <label>É condomínio ou empresa?</label>
-            <div class="opcoes" id="grupo-tipo">
-              <button type="button" class="opcao" data-valor="CNPJ - Condomínio">Condomínio</button>
-              <button type="button" class="opcao" data-valor="CNPJ - Empresa">Empresa</button>
-            </div>
-          </div>
+        <h1 class="hero-titulo revelar">
+          <span class="linha-forte">Seu tempo vale mais do que resolver manutenção.</span>
+          <span class="linha-media">Menos problemas na agenda, mais tempo para cuidar do que realmente depende de você.</span>
+          <span class="linha-fecho">Delegue com confiança. A gente resolve.</span>
+        </h1>
 
-          <div id="aviso-existe" class="aviso hidden"></div>
+        <p class="hero-apoio revelar">
+          Serviço feito com qualidade e organização, deixando o local limpo
+          como estava. Trabalhamos com o mínimo de interferência possível na
+          rotina do condomínio e na vida de quem mora ou trabalha ali.
+        </p>
 
-          <form id="form-entidade" class="hidden">
-            <label for="razao-social">Razão social / Nome</label>
-            <input type="text" id="razao-social" required />
-
-            <label for="nome-fantasia">Nome fantasia / Identificador</label>
-            <input type="text" id="nome-fantasia" />
-
-            <div class="grupo">
-              <label>Exigência fiscal</label>
-              <div class="opcoes" id="grupo-exigencia">
-                <button type="button" class="opcao" data-valor="Exige Nota Fiscal">Nota fiscal</button>
-                <button type="button" class="opcao" data-valor="Apenas Recibo">Apenas recibo</button>
-              </div>
-            </div>
-
-            <label for="emails">E-mails (financeiro / NF-e)</label>
-            <input type="text" id="emails" autocomplete="off" />
-            <div id="emails-sugestao" class="sugestao-lista hidden"></div>
-
-            <label for="whatsapp-cnpj">WhatsApp vinculado ao CNPJ</label>
-            <input type="text" id="whatsapp-cnpj" />
-
-            <label for="administradora">Administradora</label>
-            <input type="text" id="administradora" autocomplete="off" />
-            <div id="administradora-sugestao" class="sugestao-lista hidden"></div>
-
-            <label for="empresa-sindicos">Empresa de síndicos</label>
-            <input type="text" id="empresa-sindicos" placeholder="Opcional" autocomplete="off" />
-            <div id="empresa-sindicos-sugestao" class="sugestao-lista hidden"></div>
-
-            <div class="grupo">
-              <label>Status</label>
-              <div class="opcoes" id="grupo-status">
-                <button type="button" class="opcao active" data-valor="Ativo">Ativo</button>
-                <button type="button" class="opcao" data-valor="Inativo">Inativo</button>
-              </div>
-            </div>
-
-            <label for="observacoes">Observações</label>
-            <textarea id="observacoes" rows="3"></textarea>
-
-            <div class="grupo">
-              <label>Locais de atendimento</label>
-              <p class="placeholder-text locais-ajuda">
-                Opcional. Dá para acrescentar quantos endereços precisar.
-              </p>
-              <div id="locais" class="grade-responsiva"></div>
-              <button type="button" id="adicionar-local" class="botao-secundario">
-                + Adicionar endereço
-              </button>
-            </div>
-
-            <div class="grupo">
-              <label>Contatos / solicitantes</label>
-              <p class="placeholder-text locais-ajuda">
-                Opcional. Quem abre chamado por este cliente. Cada contato aceita
-                quantos WhatsApps e e-mails precisar.
-              </p>
-              <div id="contatos" class="grade-responsiva"></div>
-              <button type="button" id="adicionar-contato" class="botao-secundario">
-                + Adicionar contato
-              </button>
-            </div>
-
-            <button type="submit" id="salvar-entidade">Salvar cadastro</button>
-            <button type="button" id="cancelar-cadastro" class="botao-secundario">Cancelar</button>
-            <div id="salvar-status" class="status"></div>
-          </form>
-
-          <!-- Molde de um endereço. Não aparece na tela: o app clona quando
-               você toca em "Adicionar endereço". -->
-          <template id="modelo-local">
-            <div class="local">
-              <div class="local-topo">
-                <span class="local-titulo">Endereço</span>
-                <button type="button" class="remover-local link-button">Remover</button>
-              </div>
-
-              <label>Nome do local</label>
-              <input type="text" class="local-nome" placeholder="Ex: Torre A, Matriz" />
-
-              <label>Endereço completo</label>
-              <textarea class="local-endereco auto-altura" rows="1"
-                        placeholder="Rua, número, complemento"></textarea>
-
-              <label>Bairro / Cidade</label>
-              <input type="text" class="local-bairro" />
-
-              <label>Observações de acesso</label>
-              <textarea class="local-acesso" rows="2" placeholder="Ex: falar com o zelador"></textarea>
-
-              <label class="rotulo-espacado">Status</label>
-              <select class="local-status">
-                <option>Ativo</option>
-                <option>Inativo</option>
-                <option>Arquivado</option>
-              </select>
-            </div>
-          </template>
-
-          <!-- Molde de um contato. Os WhatsApps e e-mails dele são listas que
-               crescem sem limite, montadas com o molde de linha abaixo. -->
-          <template id="modelo-contato">
-            <div class="contato">
-              <div class="contato-topo">
-                <span class="contato-titulo">Contato</span>
-                <button type="button" class="remover-contato link-button">Remover</button>
-              </div>
-
-              <label>Nome</label>
-              <input type="text" class="contato-nome" placeholder="Ex: Maria, do financeiro" autocomplete="off" />
-              <div class="sugestao-lista hidden"></div>
-
-              <label>Cargo / função</label>
-              <select class="contato-cargo">
-                <option value="">Escolha...</option>
-                <option>Síndico</option>
-                <option>Administradora</option>
-                <option>Gerente</option>
-                <option>Zelador</option>
-                <option>Proprietário</option>
-                <option>Outro</option>
-              </select>
-
-              <label>WhatsApps</label>
-              <div class="contato-whatsapps"></div>
-              <button type="button" class="adicionar-whatsapp link-button">+ Adicionar WhatsApp</button>
-
-              <label class="rotulo-espacado">E-mails</label>
-              <div class="contato-emails"></div>
-              <button type="button" class="adicionar-email link-button">+ Adicionar e-mail</button>
-
-              <label class="rotulo-espacado">Observações</label>
-              <textarea class="contato-obs" rows="2"></textarea>
-
-              <label class="rotulo-espacado">Status</label>
-              <select class="contato-status">
-                <option>Ativo</option>
-                <option>Inativo</option>
-                <option>Arquivado</option>
-              </select>
-            </div>
-          </template>
-
-          <!-- Uma linha de WhatsApp ou e-mail, com o botão de tirar do lado -->
-          <template id="modelo-canal">
-            <div class="canal">
-              <input type="text" class="canal-valor" />
-              <button type="button" class="remover-canal" aria-label="Remover">×</button>
-            </div>
-          </template>
-        </div>
-
-        <div id="subpage-consultar" class="subpage hidden">
-          <div class="busca-linha">
-            <input type="text" id="busca-cadastro" autocomplete="off"
-                   placeholder="Buscar por nome, CPF/CNPJ ou contato" />
-            <button type="button" id="recarregar-lista" class="botao-secundario">Atualizar</button>
-          </div>
-
-          <div class="filtros-cadastro">
-            <div class="filtro-item">
-              <span class="filtro-rotulo">Documento</span>
-              <div class="opcoes" id="filtro-doc-tipo">
-                <button type="button" class="opcao active" data-valor="">Todos</button>
-                <button type="button" class="opcao" data-valor="cpf">CPF</button>
-                <button type="button" class="opcao" data-valor="cnpj">CNPJ</button>
-              </div>
-            </div>
-            <div class="filtro-item">
-              <span class="filtro-rotulo">Status</span>
-              <select id="filtro-status">
-                <option value="">Todos</option>
-                <option value="Ativo">Ativo</option>
-                <option value="Inativo">Inativo</option>
-                <option value="Arquivado">Arquivado</option>
-              </select>
-            </div>
-            <div class="filtro-item">
-              <span class="filtro-rotulo">Contato</span>
-              <select id="filtro-contato">
-                <option value="">Todos</option>
-              </select>
-            </div>
-            <div class="filtro-item">
-              <span class="filtro-rotulo">Administradora</span>
-              <select id="filtro-administradora">
-                <option value="">Todas</option>
-              </select>
-            </div>
-            <div class="filtro-item">
-              <span class="filtro-rotulo">Empresa de síndicos</span>
-              <select id="filtro-empresa-sindicos">
-                <option value="">Todas</option>
-              </select>
-            </div>
-            <button type="button" id="limpar-filtros-cadastro" class="botao-secundario filtro-limpar">Limpar filtros</button>
-          </div>
-
-          <p id="lista-status" class="doc-hint"></p>
-          <div id="lista-cadastros" class="grade-responsiva"></div>
-
-          <!-- Molde de uma linha da lista -->
-          <template id="modelo-linha">
-            <div class="cadastro">
-              <button type="button" class="cadastro-resumo">
-                <span class="cadastro-doc"></span>
-                <span class="cadastro-razao"></span>
-                <span class="cadastro-extra"></span>
-              </button>
-              <div class="cadastro-detalhe hidden"></div>
-            </div>
-          </template>
-
-          <!-- Molde do cadastro aberto. Os campos nascem travados; o lápis
-               destrava, e só então o botão Salvar aparece. -->
-          <template id="modelo-detalhe">
-            <div class="detalhe">
-              <div class="detalhe-acoes">
-                <button type="button" class="acao-editar" title="Editar cadastro">✏️</button>
-                <button type="button" class="acao-salvar botao-secundario hidden">Salvar</button>
-                <button type="button" class="acao-cancelar botao-secundario hidden">Cancelar</button>
-                <button type="button" class="acao-excluir botao-secundario">Excluir</button>
-                <button type="button" class="acao-fechar botao-secundario">Fechar</button>
-              </div>
-
-              <div class="detalhe-status status"></div>
-
-              <label>CPF / CNPJ</label>
-              <input type="text" class="d-documento" disabled />
-
-              <label>Razão social / Nome</label>
-              <input type="text" class="d-razao" disabled />
-
-              <label>Nome fantasia / Identificador</label>
-              <input type="text" class="d-fantasia" disabled />
-
-              <label>Tipo</label>
-              <select class="d-tipo" disabled>
-                <option value="">—</option>
-                <option>CNPJ - Condomínio</option>
-                <option>CNPJ - Empresa</option>
-                <option>CPF - Pessoa Física</option>
-              </select>
-
-              <label>Exigência fiscal</label>
-              <select class="d-exigencia" disabled>
-                <option value="">—</option>
-                <option>Exige Nota Fiscal</option>
-                <option>Apenas Recibo</option>
-              </select>
-
-              <label>E-mails (financeiro / NF-e)</label>
-              <input type="text" class="d-emails" disabled />
-
-              <label>WhatsApp vinculado ao CNPJ</label>
-              <input type="text" class="d-whatsapp-cnpj" disabled />
-
-              <label>Administradora</label>
-              <input type="text" class="d-administradora" disabled />
-
-              <label>Empresa de síndicos</label>
-              <input type="text" class="d-empresa-sindicos" disabled />
-
-              <label>Status</label>
-              <select class="d-status" disabled>
-                <option>Ativo</option>
-                <option>Inativo</option>
-              </select>
-
-              <label>Observações</label>
-              <textarea class="d-observacoes" rows="3" disabled></textarea>
-
-              <label class="rotulo-espacado">Endereços</label>
-              <div class="d-locais grade-responsiva"></div>
-              <button type="button" class="d-adicionar-local botao-secundario hidden">
-                + Adicionar endereço
-              </button>
-
-              <label class="rotulo-espacado">Contatos</label>
-              <div class="d-contatos grade-responsiva"></div>
-              <button type="button" class="d-adicionar-contato botao-secundario hidden">
-                + Adicionar contato
-              </button>
-            </div>
-          </template>
+        <div class="hero-acoes revelar">
+          <!-- CTA único. A mensagem automática entra aqui depois, como
+               ?text=<mensagem codificada na URL> no fim do link. -->
+          <a class="botao botao-whats" href="https://wa.me/554792081047" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path fill="currentColor" d="M12.04 2c-5.5 0-9.96 4.46-9.96 9.96 0 1.76.46 3.48 1.34 5L2 22l5.2-1.36a9.9 9.9 0 0 0 4.84 1.24h.01c5.5 0 9.96-4.46 9.96-9.96 0-2.66-1.04-5.16-2.92-7.04A9.88 9.88 0 0 0 12.04 2m0 1.9c2.15 0 4.17.84 5.69 2.36a7.99 7.99 0 0 1 2.36 5.7c0 4.44-3.61 8.05-8.06 8.05a8.03 8.03 0 0 1-4.1-1.12l-.3-.18-3.05.8.81-2.97-.19-.31a7.96 7.96 0 0 1-1.22-4.27c0-4.44 3.62-8.06 8.06-8.06M8.5 7.3c-.17 0-.44.07-.67.31-.23.25-.88.86-.88 2.1 0 1.23.9 2.42 1.02 2.59.13.16 1.75 2.79 4.32 3.8 2.13.84 2.57.67 3.03.63.46-.04 1.49-.61 1.7-1.2.21-.59.21-1.09.15-1.2-.07-.1-.23-.16-.48-.29-.25-.12-1.49-.73-1.72-.82-.23-.08-.4-.12-.56.13-.17.24-.64.81-.79.98-.14.16-.29.19-.54.06-.25-.12-1.06-.39-2.02-1.25-.75-.66-1.25-1.48-1.4-1.73-.14-.25-.01-.38.11-.5.11-.11.25-.29.37-.44.12-.14.16-.25.25-.41.08-.17.04-.31-.02-.44-.06-.12-.55-1.37-.77-1.87-.2-.48-.41-.42-.56-.42z"/>
+            </svg>
+            Falar no WhatsApp
+          </a>
+          <p class="hero-nota">Joinville e região · Atendimento a condomínios e empresas</p>
         </div>
       </div>
 
-      <div id="page-financeiro" class="card page hidden">
-        <h1>Financeiro</h1>
-
-        <div class="subtabs">
-          <button type="button" class="subtab-fin active" data-subfin="painel">Painel</button>
-          <button type="button" class="subtab-fin" data-subfin="despesas">A pagar</button>
-          <button type="button" class="subtab-fin" data-subfin="receber">A receber</button>
-          <button type="button" class="subtab-fin" data-subfin="fixas">Contas fixas</button>
-          <button type="button" class="subtab-fin" data-subfin="divisao">Divisão</button>
-          <button type="button" class="subtab-fin" data-subfin="ajustes">Ajustes</button>
+      <!-- Gráfico abstrato: planos geométricos formando uma silhueta de
+           prédio. Sem foto de banco de imagem, e cada camada anda numa
+           velocidade diferente no scroll (parallax). -->
+      <div class="hero-arte" aria-hidden="true">
+        <div class="arte-camada" data-parallax="0.06">
+          <svg viewBox="0 0 420 480" class="arte-svg">
+            <defs>
+              <linearGradient id="predio-a" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#1C4E85" />
+                <stop offset="100%" stop-color="#0B1E3D" />
+              </linearGradient>
+              <linearGradient id="predio-b" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#3E8FD1" />
+                <stop offset="100%" stop-color="#1C4E85" />
+              </linearGradient>
+              <linearGradient id="predio-c" x1="1" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#B9C2C9" />
+                <stop offset="100%" stop-color="#E4E9ED" />
+              </linearGradient>
+            </defs>
+            <polygon points="60,150 200,80 200,430 60,430" fill="url(#predio-a)" />
+            <polygon points="200,80 330,150 330,430 200,430" fill="url(#predio-b)" opacity=".92" />
+            <polygon points="330,210 392,246 392,430 330,430" fill="url(#predio-c)" opacity=".75" />
+            <g fill="#FFFFFF" opacity=".16">
+              <rect x="86" y="196" width="28" height="18" /><rect x="128" y="176" width="28" height="18" />
+              <rect x="86" y="246" width="28" height="18" /><rect x="128" y="226" width="28" height="18" />
+              <rect x="86" y="296" width="28" height="18" /><rect x="128" y="276" width="28" height="18" />
+              <rect x="86" y="346" width="28" height="18" /><rect x="128" y="326" width="28" height="18" />
+              <rect x="226" y="176" width="28" height="18" /><rect x="268" y="196" width="28" height="18" />
+              <rect x="226" y="226" width="28" height="18" /><rect x="268" y="246" width="28" height="18" />
+              <rect x="226" y="276" width="28" height="18" /><rect x="268" y="296" width="28" height="18" />
+              <rect x="226" y="326" width="28" height="18" /><rect x="268" y="346" width="28" height="18" />
+            </g>
+          </svg>
         </div>
 
-        <!-- Listas que alimentam os campos de digitar: são preenchidas com o que
-             já foi salvo antes, para o mesmo fornecedor/descrição não entrar
-             escrito de dez jeitos diferentes. -->
-        <datalist id="lista-fornecedores"></datalist>
-        <datalist id="lista-descricoes"></datalist>
-        <datalist id="lista-categorias"></datalist>
-
-        <!-- ===================== Contas a pagar ===================== -->
-        <!-- ========================= Painel =========================
-             A visão de cima: quanto existe, quanto já tem dono, quanto sobra,
-             e se vai faltar dinheiro nos próximos meses. Tudo calculado a
-             partir do que já está lançado — nada aqui se digita. -->
-        <div id="subfin-painel" class="subpage-fin">
-          <p id="painel-status" class="doc-hint"></p>
-
-          <div id="painel-configurar" class="aviso-caixa hidden">
-            <strong>Falta dizer quanto você tem em caixa.</strong>
-            Sem isso o painel não consegue calcular seu saldo. Vá em
-            <em>Ajustes</em>, informe o saldo de hoje e a data — daí em diante o
-            sistema acompanha sozinho.
-          </div>
-
-          <div id="painel-conteudo" class="hidden">
-            <!-- Contas no cartão vencendo hoje ou já vencidas: um clique confirma
-                 o grupo inteiro de uma vez, agrupado pela data de vencimento
-                 (ainda não existe uma tabela de cartões, então a data faz esse
-                 papel — despesas do mesmo dia contam como a mesma fatura). -->
-            <div id="faturas-bloco" class="hidden">
-              <h2 class="titulo-bloco">Fatura do cartão venceu</h2>
-              <div id="faturas-lista"></div>
-            </div>
-
-            <!-- Itens 1, 2, 3, 6 e 7: o mesmo dinheiro, mostrando quanto já tem dono -->
-            <h2 class="titulo-bloco">O seu dinheiro hoje</h2>
-            <div class="cascata">
-              <div class="cascata-linha cascata-topo">
-                <span>Saldo em caixa</span>
-                <strong id="p-saldo"></strong>
-              </div>
-              <div class="cascata-linha">
-                <span>− Impostos<em id="p-impostos-nota" class="cascata-nota"></em></span>
-                <span id="p-impostos"></span>
-              </div>
-              <div class="cascata-linha">
-                <span>− Folha e encargos</span>
-                <span id="p-folha"></span>
-              </div>
-              <div class="cascata-linha">
-                <span>− Reserva de emergência<em id="p-reserva-nota" class="cascata-nota"></em></span>
-                <span id="p-reserva"></span>
-              </div>
-              <div class="cascata-linha">
-                <span>− Capital de giro</span>
-                <span id="p-giro"></span>
-              </div>
-              <div class="cascata-linha cascata-final">
-                <span>= Livre para usar</span>
-                <strong id="p-livre"></strong>
-              </div>
-            </div>
-            <p id="p-livre-aviso" class="doc-hint"></p>
-
-            <!-- Itens 4 e 5 -->
-            <h2 class="titulo-bloco">Entra e sai</h2>
-            <div class="resumo-financeiro">
-              <div class="resumo-item">
-                <span class="resumo-rotulo">A receber</span>
-                <strong id="p-receber" class="resumo-valor resumo-positivo"></strong>
-                <span id="p-receber-atraso" class="resumo-nota"></span>
-              </div>
-              <div class="resumo-item">
-                <span class="resumo-rotulo">A pagar</span>
-                <strong id="p-pagar" class="resumo-valor resumo-alerta"></strong>
-                <span id="p-pagar-atraso" class="resumo-nota"></span>
-              </div>
-              <div class="resumo-item">
-                <span class="resumo-rotulo">Sobrou no mês</span>
-                <strong id="p-mes" class="resumo-valor"></strong>
-                <span id="p-mes-nota" class="resumo-nota"></span>
-              </div>
-            </div>
-
-            <!-- Item 11: onde o dinheiro acaba, se acabar -->
-            <h2 class="titulo-bloco">Previsão dos próximos meses</h2>
-            <p class="doc-hint">
-              O que ainda vai entrar menos o que vai sair, mês a mês, somando as
-              contas fixas. Vermelho é mês em que o caixa fica negativo.
-            </p>
-            <div class="tabela-rolavel">
-              <table class="tabela-fin">
-                <thead>
-                  <tr><th>Mês</th><th>Entra</th><th>Sai</th><th>Sobra no caixa</th></tr>
-                </thead>
-                <tbody id="p-previsao"></tbody>
-              </table>
-            </div>
-
-            <!-- Item 8 -->
-            <h2 class="titulo-bloco">Fluxo de caixa</h2>
-            <p class="doc-hint">O que de fato entrou e saiu, mês a mês.</p>
-            <div class="tabela-rolavel">
-              <table class="tabela-fin">
-                <thead>
-                  <tr><th>Mês</th><th>Entrou</th><th>Saiu</th><th>Resultado</th></tr>
-                </thead>
-                <tbody id="p-fluxo"></tbody>
-              </table>
-            </div>
-
-            <!-- Item 6, parte MEI: o limite anual -->
-            <div id="p-teto-bloco" class="hidden">
-              <h2 class="titulo-bloco">Limite do MEI neste ano</h2>
-              <div class="barra-linha">
-                <span class="barra-rotulo" id="p-teto-ano"></span>
-                <span class="barra-trilho"><span class="barra-cheia" id="p-teto-barra"></span></span>
-                <span class="barra-valor" id="p-teto-valor"></span>
-              </div>
-              <p id="p-teto-nota" class="doc-hint"></p>
-            </div>
-
-            <!-- Item 9 -->
-            <h2 class="titulo-bloco">Conferência com o banco</h2>
-            <p id="p-conferencia" class="doc-hint"></p>
-            <button type="button" id="abrir-conferencia" class="botao-secundario">
-              Conferir com o banco
-            </button>
-
-            <form id="form-conferencia" class="hidden">
-              <p class="doc-hint">
-                O sistema calculou <strong id="conf-calculado"></strong>. Abra o
-                aplicativo do banco e diga quanto tem lá de verdade.
-              </p>
-              <label for="conf-informado">Saldo que o banco mostra</label>
-              <input type="text" id="conf-informado" inputmode="numeric" placeholder="R$ 0,00" />
-              <label for="conf-observacoes">O que explica a diferença?</label>
-              <textarea id="conf-observacoes" rows="2" placeholder="Ex: tarifa, compra sem lançar"></textarea>
-              <button type="submit" id="salvar-conferencia">Registrar conferência</button>
-              <button type="button" id="cancelar-conferencia" class="botao-secundario">Cancelar</button>
-              <div id="conferencia-status-msg" class="status"></div>
-            </form>
-
-            <!-- Vinham da antiga aba Resumo -->
-            <h2 class="titulo-bloco">Em aberto por categoria</h2>
-            <div id="grafico-categorias"></div>
-
-            <h2 class="titulo-bloco">Em aberto por fornecedor</h2>
-            <p id="sem-fornecedores" class="doc-hint hidden">
-              Nenhuma conta em aberto tem fornecedor informado.
-            </p>
-            <div id="grafico-fornecedores"></div>
-          </div>
-
-          <template id="modelo-barra">
-            <div class="barra-linha">
-              <span class="barra-rotulo"></span>
-              <span class="barra-trilho"><span class="barra-cheia"></span></span>
-              <span class="barra-valor"></span>
-            </div>
-          </template>
-
-          <template id="modelo-fatura">
-            <div class="aviso-caixa fatura-aviso">
-              <strong class="fatura-titulo"></strong>
-              <p class="fatura-subtitulo doc-hint"></p>
-              <ul class="fatura-itens"></ul>
-
-              <!-- O valor vem calculado, mas dá para corrigir: a fatura real
-                   pode ter compras que ainda não foram lançadas aqui. -->
-              <div class="fatura-valor-linha">
-                <label class="fatura-valor-rotulo">Valor a pagar</label>
-                <input type="text" class="fatura-valor-campo" inputmode="numeric" />
-              </div>
-              <p class="fatura-diferenca doc-hint"></p>
-
-              <button type="button" class="fatura-pagar">
-                Pagar por PIX agora
-              </button>
-
-              <!-- Para cartão sem chave PIX fixa (o banco manda um código
-                   diferente por fatura, tipo boleto): cola o código aqui. -->
-              <div class="fatura-boleto-bloco">
-                <label class="fatura-valor-rotulo">
-                  Ou cole o código de barras / linha digitável desta fatura
-                </label>
-                <textarea class="fatura-boleto-campo" rows="2"
-                          placeholder="Copie da fatura do banco (PDF, app ou e-mail)"></textarea>
-                <button type="button" class="fatura-pagar-boleto botao-secundario">
-                  Pagar este boleto agora
-                </button>
-              </div>
-
-              <button type="button" class="fatura-confirmar botao-secundario">
-                Já paguei por fora — só marcar como pago
-              </button>
-              <p class="fatura-status status"></p>
-            </div>
-          </template>
+        <!-- Traços técnicos, tipo planta: reforça "infraestrutura" sem foto -->
+        <div class="arte-camada arte-tracos" data-parallax="-0.1">
+          <svg viewBox="0 0 420 480" class="arte-svg">
+            <g stroke="#3E8FD1" stroke-width="1.5" fill="none" opacity=".55">
+              <path d="M24 392 L120 392 L120 300 L206 300" />
+              <circle cx="24" cy="392" r="5" fill="#3E8FD1" stroke="none" />
+              <circle cx="206" cy="300" r="5" fill="#3E8FD1" stroke="none" />
+              <path d="M396 120 L300 120 L300 200" />
+              <circle cx="396" cy="120" r="5" fill="#3E8FD1" stroke="none" />
+            </g>
+            <g stroke="#B9C2C9" stroke-width="1" fill="none" opacity=".8">
+              <path d="M40 58 L40 44 L380 44 L380 58" />
+              <path d="M210 44 L210 30" />
+            </g>
+          </svg>
         </div>
 
-        <div id="subfin-despesas" class="subpage-fin hidden">
-          <div id="resumo-despesas" class="resumo-financeiro hidden">
-            <div class="resumo-item">
-              <span class="resumo-rotulo">Em aberto</span>
-              <strong id="resumo-aberto" class="resumo-valor"></strong>
-            </div>
-            <div class="resumo-item">
-              <span class="resumo-rotulo">Vencidas</span>
-              <strong id="resumo-vencidas" class="resumo-valor resumo-alerta"></strong>
-            </div>
-            <div class="resumo-item">
-              <span class="resumo-rotulo">Pago no mês</span>
-              <strong id="resumo-pago" class="resumo-valor"></strong>
-            </div>
+        <div class="arte-camada arte-selo" data-parallax="0.14">
+          <div class="selo">
+            <span class="selo-num">23</span>
+            <span class="selo-txt">anos cuidando<br />de infraestrutura</span>
           </div>
-
-          <button type="button" id="nova-despesa" class="botao-secundario">+ Nova despesa</button>
-
-          <form id="form-despesa" class="hidden">
-            <label for="despesa-descricao">Descrição</label>
-            <input type="text" id="despesa-descricao" list="lista-descricoes"
-                   autocomplete="off" placeholder="Ex: Cimento, aluguel de agosto" />
-            <p id="despesa-descricao-hint" class="doc-hint"></p>
-
-            <label for="despesa-valor">Valor</label>
-            <input type="text" id="despesa-valor" inputmode="numeric" placeholder="R$ 0,00" />
-
-            <label for="despesa-fornecedor">Fornecedor</label>
-            <input type="text" id="despesa-fornecedor" list="lista-fornecedores"
-                   autocomplete="off" placeholder="Nome ou CNPJ (opcional)" />
-            <p id="despesa-fornecedor-hint" class="doc-hint"></p>
-
-            <label for="despesa-servico">É material de algum serviço?</label>
-            <select id="despesa-servico">
-              <option value="">Não — é despesa da empresa</option>
-            </select>
-            <p class="doc-hint">
-              Amarrando a compra a um serviço, ela sai do lucro daquele serviço
-              antes da divisão. Deixe em "Não" para as contas da empresa.
-            </p>
-
-            <label for="despesa-vencimento">Vencimento</label>
-            <input type="date" id="despesa-vencimento" />
-
-            <label for="despesa-categoria">Categoria</label>
-            <select id="despesa-categoria">
-              <option>Material</option>
-              <option>Veículo</option>
-              <option>Salário</option>
-              <option>Aluguel</option>
-              <option selected>Outros</option>
-            </select>
-
-            <div id="linha-categoria-outra" class="hidden">
-              <label for="despesa-categoria-outra">Qual categoria?</label>
-              <input type="text" id="despesa-categoria-outra" list="lista-categorias"
-                     autocomplete="off" placeholder="Ex: Ferramentas, Impostos" />
-            </div>
-
-            <label for="despesa-forma">Forma de pagamento</label>
-            <select id="despesa-forma">
-              <option value="">Não informado</option>
-              <option>PIX</option>
-              <option>Boleto</option>
-              <option>Dinheiro</option>
-              <option>Depósito</option>
-              <option>Cartão de débito</option>
-              <option>Cartão de crédito</option>
-            </select>
-
-            <div id="linha-cartao" class="hidden">
-              <label for="despesa-cartao">Em qual cartão?</label>
-              <select id="despesa-cartao">
-                <option value="">Não informado</option>
-              </select>
-              <p id="despesa-cartao-hint" class="doc-hint"></p>
-            </div>
-
-            <div id="linha-parcelas" class="hidden">
-              <label for="despesa-parcelas">Em quantas vezes?</label>
-              <input type="number" id="despesa-parcelas" min="1" max="60" step="1" value="1" />
-              <p id="despesa-parcelas-hint" class="doc-hint"></p>
-            </div>
-
-            <label for="despesa-status">Status</label>
-            <select id="despesa-status">
-              <option>Pendente</option>
-              <option>Pago</option>
-            </select>
-
-            <div id="linha-data-pagamento" class="hidden">
-              <label for="despesa-data-pagamento">Data do pagamento</label>
-              <input type="date" id="despesa-data-pagamento" />
-            </div>
-
-            <label for="despesa-observacoes">Observações</label>
-            <textarea id="despesa-observacoes" rows="2"></textarea>
-
-            <button type="submit" id="salvar-despesa">Salvar despesa</button>
-            <button type="button" id="cancelar-despesa" class="botao-secundario">Cancelar</button>
-            <div id="despesa-status-msg" class="status"></div>
-          </form>
-
-          <div class="busca-linha">
-            <input type="text" id="busca-despesa" autocomplete="off"
-                   placeholder="Buscar por descrição ou fornecedor" />
-            <button type="button" id="recarregar-despesas" class="botao-secundario">Atualizar</button>
-          </div>
-
-          <div class="filtros-linha">
-            <select id="filtro-situacao" aria-label="Situação">
-              <option value="abertas">Em aberto</option>
-              <option value="vencidas">Vencidas</option>
-              <option value="pagas">Pagas</option>
-              <option value="todas">Todas</option>
-            </select>
-            <select id="filtro-mes" aria-label="Mês do vencimento">
-              <option value="">Qualquer mês</option>
-            </select>
-          </div>
-
-          <p id="lista-despesas-status" class="doc-hint"></p>
-          <div id="lista-despesas" class="grade-responsiva"></div>
-
-          <template id="modelo-despesa">
-            <div class="despesa">
-              <button type="button" class="despesa-resumo">
-                <span class="despesa-topo">
-                  <span class="despesa-descricao"></span>
-                  <span class="despesa-valor"></span>
-                </span>
-                <span class="despesa-extra"></span>
-              </button>
-              <div class="despesa-acoes hidden">
-                <button type="button" class="despesa-pagar botao-secundario">Marcar como paga</button>
-                <button type="button" class="despesa-editar botao-secundario">✏️ Editar</button>
-                <button type="button" class="despesa-excluir botao-secundario">Excluir</button>
-                <button type="button" class="despesa-excluir-grupo botao-secundario hidden">
-                  Excluir todas as parcelas
-                </button>
-              </div>
-            </div>
-          </template>
         </div>
+      </div>
+    </div>
+  </section>
 
-        <!-- ====================== Contas fixas ====================== -->
-        <div id="subfin-fixas" class="subpage-fin hidden">
-          <p class="doc-hint">
-            Cadastre aqui o que se repete todo mês. O sistema lança a conta sozinho
-            no dia certo e já mostra na previsão dos próximos meses.
+  <!-- ===================== Diferenciais ===================== -->
+  <section class="secao secao-diferenciais" id="diferenciais">
+    <div class="faixa">
+      <header class="secao-topo">
+        <p class="rotulo revelar"><span>01</span> Para quem trabalhamos</p>
+        <h2 class="secao-titulo revelar">Manutenção que acompanha o prédio, não só o problema do dia.</h2>
+      </header>
+
+      <ul class="grade-diferenciais">
+        <li class="dif revelar">
+          <span class="dif-icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M8 10h2m4 0h2M8 13.5h2m4 0h2"/></svg>
+          </span>
+          <h3>Condomínios residenciais e comerciais</h3>
+          <p>Atendimento a síndicos e administradoras, com rotina previsível e comunicação direta.</p>
+        </li>
+
+        <li class="dif revelar">
+          <span class="dif-icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3 21h18M4 21V5h10v16M14 21V10h6v11M7 8h4M7 12h4M7 16h4M17 14h1M17 17.5h1"/></svg>
+          </span>
+          <h3>Empresas</h3>
+          <p>Manutenção contínua do espaço físico, para a operação não parar por causa da estrutura.</p>
+        </li>
+
+        <li class="dif revelar">
+          <span class="dif-icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M8 3v3m8-3v3M4 8.5h16M5 6h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Zm4.5 8.5 2 2 4-4"/></svg>
+          </span>
+          <h3>Atendimento planejado</h3>
+          <p>Serviço agendado e organizado: mais eficiência e menos improviso no seu dia.</p>
+        </li>
+
+        <li class="dif revelar">
+          <span class="dif-icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M12 3 4.5 6v6c0 4.5 3.2 7.8 7.5 9 4.3-1.2 7.5-4.5 7.5-9V6L12 3Zm-3 8.8 2.2 2.2L15.5 10"/></svg>
+          </span>
+          <h3>Segurança e confiabilidade</h3>
+          <p>Equipe conhecida, serviço documentado e responsabilidade com o patrimônio do cliente.</p>
+        </li>
+
+        <li class="dif dif-destaque revelar">
+          <span class="dif-icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 0 0 12 8.5Z"/></svg>
+          </span>
+          <h3>Histórico inteligente com IA</h3>
+          <p>O sistema aprende os padrões do seu prédio, avisa antes do problema aparecer e fica disponível pra consulta a qualquer momento.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== Serviços ===================== -->
+  <section class="secao secao-servicos" id="servicos">
+    <div class="faixa">
+      <header class="secao-topo">
+        <p class="rotulo rotulo-claro revelar"><span>02</span> O que fazemos</p>
+        <h2 class="secao-titulo secao-titulo-claro revelar">Do ponto de água ao quadro de energia.</h2>
+        <p class="secao-apoio revelar">Uma visão geral do que atendemos hoje. O catálogo completo, com detalhe de cada serviço, vem em breve.</p>
+      </header>
+
+      <ul class="grade-servicos">
+        <li class="serv revelar">
+          <span class="serv-icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M7 3v5a3 3 0 0 0 3 3h1v3m0 0a3 3 0 1 0 2 0m-2 0V11M4 3h6M14.5 6h5M17 3.5v5"/></svg>
+          </span>
+          <h3>Manutenções hidráulicas</h3>
+          <p>Vazamentos, redes novas, torneiras, chuveiros e pontos de água.</p>
+        </li>
+        <li class="serv revelar">
+          <span class="serv-icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12L13 2Z"/></svg>
+          </span>
+          <h3>Manutenções elétricas</h3>
+          <p>Quadros, circuitos, iluminação e pontos de energia.</p>
+        </li>
+        <li class="serv revelar">
+          <span class="serv-icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M6 3h12v11a6 6 0 0 1-12 0V3Zm3 3.5v5m6-5v5M9.5 21h5"/></svg>
+          </span>
+          <h3>Aquecedores e pressurizadores</h3>
+          <p>Instalação e manutenção, incluindo válvulas de transferência.</p>
+        </li>
+        <li class="serv revelar">
+          <span class="serv-icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M5 8h14v10a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V8Zm2-4h10l2 4H5l2-4Zm2 9c1.5 1.5 4.5 1.5 6 0"/></svg>
+          </span>
+          <h3>Limpeza de caixas d'água</h3>
+          <p>Caixas d'água e cisternas, com processo cuidadoso e local entregue limpo.</p>
+        </li>
+        <li class="serv revelar">
+          <span class="serv-icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M4 6h5a3 3 0 0 1 3 3v6a3 3 0 0 0 3 3h5M4 4v4m16 10v4m-3-2 3 2 3-2"/></svg>
+          </span>
+          <h3>Rede de esgoto</h3>
+          <p>Desobstrução, reparos e adequação da rede.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== Forma de trabalho ===================== -->
+  <section class="secao secao-trabalho" id="como-trabalhamos">
+    <div class="faixa">
+      <header class="secao-topo secao-topo-centro">
+        <p class="rotulo revelar"><span>03</span> Como trabalhamos</p>
+        <h2 class="secao-titulo revelar">
+          Uma nova geração de manutenção predial: inteligência artificial
+          integrada do chamado à execução.
+        </h2>
+      </header>
+
+      <div class="grade-trabalho">
+        <article class="trab revelar">
+          <p class="trab-num" aria-hidden="true">01</p>
+          <h3>Você sabe exatamente o que está pagando</h3>
+          <p>
+            O orçamento se ajusta ao nível de exigência de cada cliente, e o
+            serviço termina com relatório técnico completo — material aplicado,
+            mão de obra e nota fiscal. Sem surpresa no fim.
           </p>
+        </article>
 
-          <button type="button" id="nova-recorrente" class="botao-secundario">+ Nova conta fixa</button>
-
-          <form id="form-recorrente" class="hidden">
-            <label for="recorrente-descricao">Descrição</label>
-            <input type="text" id="recorrente-descricao" list="lista-descricoes"
-                   autocomplete="off" placeholder="Ex: Aluguel do galpão, internet" />
-
-            <label for="recorrente-valor">Valor por mês</label>
-            <input type="text" id="recorrente-valor" inputmode="numeric" placeholder="R$ 0,00" />
-
-            <label for="recorrente-fornecedor">Fornecedor</label>
-            <input type="text" id="recorrente-fornecedor" list="lista-fornecedores"
-                   autocomplete="off" placeholder="Nome ou CNPJ (opcional)" />
-            <p id="recorrente-fornecedor-hint" class="doc-hint"></p>
-
-            <label for="recorrente-dia">Dia do mês</label>
-            <input type="number" id="recorrente-dia" min="1" max="31" step="1" value="10" />
-            <p class="doc-hint">
-              Se o mês não tiver o dia escolhido (31 em fevereiro, por exemplo),
-              a conta cai no último dia do mês.
-            </p>
-
-            <label class="linha-caixinha">
-              <input type="checkbox" id="recorrente-sem-fim" />
-              <span>Não tem data para acabar</span>
-            </label>
-
-            <div id="linha-restantes">
-              <label for="recorrente-restantes">Quantas ainda faltam?</label>
-              <input type="number" id="recorrente-restantes" min="1" max="600" step="1" value="12" />
-            </div>
-
-            <label for="recorrente-categoria">Categoria</label>
-            <select id="recorrente-categoria">
-              <option>Material</option>
-              <option>Veículo</option>
-              <option>Salário</option>
-              <option selected>Aluguel</option>
-              <option>Outros</option>
-            </select>
-
-            <div id="linha-recorrente-categoria-outra" class="hidden">
-              <label for="recorrente-categoria-outra">Qual categoria?</label>
-              <input type="text" id="recorrente-categoria-outra" list="lista-categorias"
-                     autocomplete="off" />
-            </div>
-
-            <label for="recorrente-forma">Forma de pagamento</label>
-            <select id="recorrente-forma">
-              <option value="">Não informado</option>
-              <option>PIX</option>
-              <option>Boleto</option>
-              <option>Dinheiro</option>
-              <option>Depósito</option>
-              <option>Cartão de débito</option>
-              <option>Cartão de crédito</option>
-            </select>
-
-            <label for="recorrente-observacoes">Observações</label>
-            <textarea id="recorrente-observacoes" rows="2"
-                      placeholder="Ex: chave PIX, número do contrato"></textarea>
-
-            <button type="submit" id="salvar-recorrente">Salvar conta fixa</button>
-            <button type="button" id="cancelar-recorrente" class="botao-secundario">Cancelar</button>
-            <div id="recorrente-status-msg" class="status"></div>
-          </form>
-
-          <p id="lista-recorrentes-status" class="doc-hint"></p>
-          <div id="lista-recorrentes" class="grade-responsiva"></div>
-
-          <template id="modelo-recorrente">
-            <div class="despesa">
-              <button type="button" class="despesa-resumo">
-                <span class="despesa-topo">
-                  <span class="despesa-descricao"></span>
-                  <span class="despesa-valor"></span>
-                </span>
-                <span class="despesa-extra"></span>
-              </button>
-              <div class="despesa-acoes hidden">
-                <button type="button" class="recorrente-editar botao-secundario">✏️ Editar</button>
-                <button type="button" class="recorrente-encerrar botao-secundario">Encerrar</button>
-                <button type="button" class="recorrente-excluir botao-secundario">Excluir</button>
-              </div>
-            </div>
-          </template>
-        </div>
-
-        <!-- ========================= Resumo ========================= -->
-        <!-- ====================== A receber ======================
-             Item 5. Mesma estrutura da aba "A pagar", de propósito: quem
-             aprendeu uma sabe usar a outra. -->
-        <div id="subfin-receber" class="subpage-fin hidden">
-          <div id="resumo-receber" class="resumo-financeiro hidden">
-            <div class="resumo-item">
-              <span class="resumo-rotulo">A receber</span>
-              <strong id="r-aberto" class="resumo-valor resumo-positivo"></strong>
-            </div>
-            <div class="resumo-item">
-              <span class="resumo-rotulo">Atrasadas</span>
-              <strong id="r-atrasadas" class="resumo-valor resumo-alerta"></strong>
-            </div>
-            <div class="resumo-item">
-              <span class="resumo-rotulo">Recebido no mês</span>
-              <strong id="r-recebido" class="resumo-valor"></strong>
-            </div>
-          </div>
-
-          <button type="button" id="nova-receita" class="botao-secundario">+ Nova conta a receber</button>
-
-          <form id="form-receita" class="hidden">
-            <label for="receita-descricao">Descrição</label>
-            <input type="text" id="receita-descricao" list="lista-descricoes-receita"
-                   autocomplete="off" placeholder="Ex: Manutenção do elevador - agosto" />
-            <datalist id="lista-descricoes-receita"></datalist>
-
-            <label for="receita-valor">Valor</label>
-            <input type="text" id="receita-valor" inputmode="numeric" placeholder="R$ 0,00" />
-
-            <label for="receita-cliente">Cliente</label>
-            <input type="text" id="receita-cliente" list="lista-clientes"
-                   autocomplete="off" placeholder="Nome ou CPF/CNPJ" />
-            <datalist id="lista-clientes"></datalist>
-            <p id="receita-cliente-hint" class="doc-hint"></p>
-
-            <label for="receita-material">Material gasto neste serviço</label>
-            <input type="text" id="receita-material" inputmode="numeric" placeholder="R$ 0,00" />
-            <p class="doc-hint">
-              Só o que você <strong>não</strong> lançou em "A pagar". Compras
-              lançadas lá e amarradas a este serviço já entram sozinhas — não
-              conte duas vezes. É isto que define o lucro a dividir.
-            </p>
-
-            <label for="receita-vencimento">Vencimento</label>
-            <input type="date" id="receita-vencimento" />
-
-            <label for="receita-forma">Como vai receber</label>
-            <select id="receita-forma">
-              <option value="">Não informado</option>
-              <option>PIX</option>
-              <option>Boleto</option>
-              <option>Dinheiro</option>
-              <option>Transferência</option>
-              <option>Cartão</option>
-            </select>
-
-            <label for="receita-status">Status</label>
-            <select id="receita-status">
-              <option>Pendente</option>
-              <option>Recebido</option>
-              <option>Cancelado</option>
-            </select>
-
-            <div id="linha-data-recebimento" class="hidden">
-              <label for="receita-data-recebimento">Data do recebimento</label>
-              <input type="date" id="receita-data-recebimento" />
-            </div>
-
-            <label for="receita-observacoes">Observações</label>
-            <textarea id="receita-observacoes" rows="2"></textarea>
-
-            <button type="submit" id="salvar-receita">Salvar</button>
-            <button type="button" id="cancelar-receita" class="botao-secundario">Cancelar</button>
-            <div id="receita-status-msg" class="status"></div>
-          </form>
-
-          <div class="busca-linha">
-            <input type="text" id="busca-receita" autocomplete="off"
-                   placeholder="Buscar por descrição ou cliente" />
-            <button type="button" id="recarregar-receitas" class="botao-secundario">Atualizar</button>
-          </div>
-
-          <div class="filtros-linha">
-            <select id="filtro-situacao-receita" aria-label="Situação">
-              <option value="abertas">Em aberto</option>
-              <option value="atrasadas">Atrasadas</option>
-              <option value="recebidas">Recebidas</option>
-              <option value="todas">Todas</option>
-            </select>
-            <select id="filtro-mes-receita" aria-label="Mês do vencimento">
-              <option value="">Qualquer mês</option>
-            </select>
-          </div>
-
-          <p id="lista-receitas-status" class="doc-hint"></p>
-          <div id="lista-receitas" class="grade-responsiva"></div>
-
-          <template id="modelo-receita">
-            <div class="despesa receita">
-              <button type="button" class="despesa-resumo">
-                <span class="despesa-topo">
-                  <span class="despesa-descricao"></span>
-                  <span class="despesa-valor"></span>
-                </span>
-                <span class="despesa-extra"></span>
-              </button>
-              <div class="despesa-acoes hidden">
-                <button type="button" class="receita-receber botao-secundario">Marcar como recebida</button>
-                <button type="button" class="receita-editar botao-secundario">✏️ Editar</button>
-                <button type="button" class="receita-excluir botao-secundario">Excluir</button>
-              </div>
-            </div>
-          </template>
-        </div>
-
-        <!-- ======================== Ajustes ========================
-             O que o painel usa para calcular. Mexe-se aqui de vez em quando,
-             não todo dia. -->
-        <!-- ======================== Divisão ========================
-             O lucro de cada serviço (recebido menos material) é repartido
-             entre os sócios e a empresa. Esta tela mostra quanto cabe a cada
-             um, quanto já saiu, e — o mais importante — se o caixa aguenta
-             pagar isso agora sem deixar conta descoberta. -->
-        <div id="subfin-divisao" class="subpage-fin hidden">
-          <p id="divisao-vazio" class="doc-hint hidden">
-            Nenhum serviço recebido ainda. A divisão aparece quando o dinheiro
-            de um serviço entra.
+        <article class="trab revelar">
+          <p class="trab-num" aria-hidden="true">02</p>
+          <h3>Contratar e pagar sem burocracia</h3>
+          <p>
+            Chame pelo WhatsApp ou abra um chamado direto no site. Na hora de
+            pagar, do jeito que couber: pix, boleto, transferência, dinheiro,
+            débito e crédito — com parcelamento combinado antes, nunca depois.
           </p>
+        </article>
 
-          <div id="divisao-conteudo" class="hidden">
-            <h2 class="titulo-bloco">Quanto cabe a cada um</h2>
-            <div id="divisao-socios"></div>
+        <article class="trab revelar">
+          <p class="trab-num" aria-hidden="true">03</p>
+          <h3>Seu prédio ganha memória — e a IA usa ela</h3>
+          <p>
+            Todo atendimento entra num histórico do imóvel que você consulta
+            quando quiser. A inteligência artificial identifica os padrões
+            daquele local, antecipa manutenções preventivas antes do problema
+            aparecer e envia lembretes periódicos.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
 
-            <div class="cascata">
-              <div class="cascata-linha cascata-final">
-                <span>O caixa aguenta tirar agora</span>
-                <strong id="d-pode-tirar"></strong>
-              </div>
-            </div>
-            <p id="d-pode-tirar-nota" class="doc-hint"></p>
+  <!-- ===================== Números ===================== -->
+  <section class="secao secao-numeros" id="numeros">
+    <div class="faixa">
+      <header class="secao-topo secao-topo-centro">
+        <p class="rotulo rotulo-claro revelar"><span>04</span> Nossa história</p>
+        <h2 class="secao-titulo secao-titulo-claro revelar">Construída um atendimento de cada vez.</h2>
+      </header>
 
-            <button type="button" id="abrir-retirada" class="botao-secundario">
-              Registrar uma retirada
-            </button>
-
-            <form id="form-retirada" class="hidden">
-              <label for="ret-socio">De quem é a retirada</label>
-              <select id="ret-socio"></select>
-
-              <label for="ret-valor">Valor</label>
-              <input type="text" id="ret-valor" inputmode="numeric" placeholder="R$ 0,00" />
-              <p id="ret-valor-hint" class="doc-hint"></p>
-
-              <label for="ret-data">Data</label>
-              <input type="date" id="ret-data" />
-
-              <label for="ret-observacoes">Observações</label>
-              <textarea id="ret-observacoes" rows="2" placeholder="Ex: PIX, adiantamento"></textarea>
-
-              <button type="submit" id="salvar-retirada">Registrar retirada</button>
-              <button type="button" id="cancelar-retirada" class="botao-secundario">Cancelar</button>
-              <div id="retirada-status-msg" class="status"></div>
-            </form>
-
-            <!-- A parte que costuma passar despercebida: o terço da empresa é
-                 o que banca aluguel, combustível e imposto. Se ele não cobre,
-                 a empresa encolhe mesmo com os serviços dando lucro. -->
-            <h2 class="titulo-bloco">A parte da empresa</h2>
-            <div class="cascata">
-              <div class="cascata-linha cascata-topo">
-                <span>Coube à empresa nos serviços</span>
-                <strong id="d-empresa-coube"></strong>
-              </div>
-              <div class="cascata-linha">
-                <span>− Contas pagas que não são material</span>
-                <span id="d-empresa-gastou"></span>
-              </div>
-              <div class="cascata-linha cascata-final">
-                <span>= Sobrou para a empresa</span>
-                <strong id="d-empresa-sobrou"></strong>
-              </div>
-            </div>
-            <p id="d-empresa-nota" class="doc-hint"></p>
-
-            <h2 class="titulo-bloco">Lucro de cada serviço</h2>
-            <div class="tabela-rolavel">
-              <table class="tabela-fin">
-                <thead>
-                  <tr><th>Serviço</th><th>Recebido</th><th>Material</th><th>Lucro</th><th>Cada sócio</th></tr>
-                </thead>
-                <tbody id="d-servicos"></tbody>
-              </table>
-            </div>
-
-            <h2 class="titulo-bloco">Retiradas já feitas</h2>
-            <p id="lista-retiradas-status" class="doc-hint"></p>
-            <div id="lista-retiradas" class="grade-responsiva"></div>
-
-            <template id="modelo-retirada">
-              <div class="despesa retirada">
-                <button type="button" class="despesa-resumo">
-                  <span class="despesa-topo">
-                    <span class="despesa-descricao"></span>
-                    <span class="despesa-valor"></span>
-                  </span>
-                  <span class="despesa-extra"></span>
-                </button>
-                <div class="despesa-acoes hidden">
-                  <button type="button" class="retirada-excluir botao-secundario">Excluir</button>
-                </div>
-              </div>
-            </template>
-
-            <template id="modelo-socio">
-              <div class="socio-cartao">
-                <div class="socio-nome"></div>
-                <div class="cascata-linha">
-                  <span>Direito acumulado</span>
-                  <span class="socio-direito"></span>
-                </div>
-                <div class="cascata-linha">
-                  <span>Já retirou</span>
-                  <span class="socio-retirado"></span>
-                </div>
-                <div class="cascata-linha cascata-final">
-                  <span>A retirar</span>
-                  <strong class="socio-a-retirar"></strong>
-                </div>
-              </div>
-            </template>
-          </div>
+      <div class="grade-numeros">
+        <div class="num revelar">
+          <p class="num-valor"><span class="contador" data-ate="23">0</span></p>
+          <p class="num-rotulo">anos de história</p>
+          <p class="num-nota">De prestador autônomo a empresa familiar formalizada.</p>
         </div>
-
-        <div id="subfin-ajustes" class="subpage-fin hidden">
-          <form id="form-ajustes">
-            <h2 class="titulo-bloco">Ponto de partida</h2>
-            <p class="doc-hint">
-              Informe uma vez quanto tinha em caixa e em que dia. Daí em diante o
-              sistema soma o que entra e subtrai o que sai sozinho.
-            </p>
-
-            <label for="aj-saldo-inicial">Saldo em caixa naquele dia</label>
-            <input type="text" id="aj-saldo-inicial" inputmode="numeric" placeholder="R$ 0,00" />
-
-            <label for="aj-data-saldo">A partir de que dia</label>
-            <input type="date" id="aj-data-saldo" />
-
-            <h2 class="titulo-bloco">Dinheiro que não pode ser gasto</h2>
-            <p class="doc-hint">
-              É o que separa "tenho dinheiro na conta" de "posso gastar". Deixe
-              zero enquanto não quiser usar.
-            </p>
-
-            <label for="aj-reserva">Reserva de emergência</label>
-            <input type="text" id="aj-reserva" inputmode="numeric" placeholder="R$ 0,00" />
-            <p class="doc-hint">
-              O costume é guardar de 3 a 6 meses de custo fixo. Toque no botão
-              abaixo para usar o seu custo fixo real como base.
-            </p>
-            <button type="button" id="sugerir-reserva" class="botao-secundario">
-              Sugerir a partir das minhas contas fixas
-            </button>
-
-            <label for="aj-giro">Capital de giro</label>
-            <input type="text" id="aj-giro" inputmode="numeric" placeholder="R$ 0,00" />
-            <p class="doc-hint">
-              Quanto precisa ficar parado para bancar material e combustível
-              enquanto o cliente ainda não pagou.
-            </p>
-
-            <h2 class="titulo-bloco">Impostos</h2>
-            <label for="aj-regime">Regime</label>
-            <select id="aj-regime">
-              <option>MEI</option>
-              <option>Simples Nacional</option>
-              <option>Outro</option>
-            </select>
-
-            <div id="linha-mei">
-              <label for="aj-das">DAS por mês</label>
-              <input type="text" id="aj-das" inputmode="numeric" placeholder="R$ 0,00" />
-              <p class="doc-hint">O boleto fixo do MEI. Deixe zero se ainda não paga.</p>
-
-              <label for="aj-teto">Limite de faturamento do ano</label>
-              <input type="text" id="aj-teto" inputmode="numeric" placeholder="R$ 0,00" />
-              <p class="doc-hint">
-                <strong>Confirme o valor vigente</strong> — ele já mudou de tempos
-                em tempos. Passar do limite obriga a virar ME e cobra imposto
-                para trás, então o painel avisa antes de você chegar perto.
-              </p>
-            </div>
-
-            <div id="linha-simples" class="hidden">
-              <label for="aj-aliquota">Quanto sai de imposto sobre o que você fatura (%)</label>
-              <input type="text" id="aj-aliquota" inputmode="decimal" placeholder="Ex: 6" />
-              <p class="doc-hint">
-                O sistema separa essa parte de cada recebimento automaticamente.
-              </p>
-            </div>
-
-            <h2 class="titulo-bloco">Folha e encargos</h2>
-            <label for="aj-folha">Quanto por mês</label>
-            <input type="text" id="aj-folha" inputmode="numeric" placeholder="R$ 0,00" />
-            <p class="doc-hint">
-              Zero quando não há funcionário registrado. Ajudante que vem de vez
-              em quando entra como despesa comum, na aba "A pagar".
-            </p>
-
-            <label class="linha-caixinha">
-              <input type="checkbox" id="aj-provisiona" />
-              <span>Guardar também para 13º e férias</span>
-            </label>
-            <p class="doc-hint">
-              Só faz sentido com funcionário registrado. Guarda cerca de 19% a
-              mais por mês, para dezembro não dar susto.
-            </p>
-
-            <h2 class="titulo-bloco">Cartões de crédito</h2>
-            <p class="doc-hint">
-              O sistema usa o fechamento e o vencimento para saber em qual
-              fatura cada compra cai. A chave PIX é <strong>para onde o dinheiro
-              vai</strong> na hora de pagar a fatura — confira com atenção,
-              porque PIX não volta.
-            </p>
-
-            <p id="lista-cartoes-status" class="doc-hint"></p>
-            <div id="lista-cartoes" class="grade-responsiva"></div>
-
-            <button type="button" id="novo-cartao" class="botao-secundario">+ Adicionar cartão</button>
-
-            <div id="form-cartao" class="hidden bloco-cartao">
-              <label for="cartao-nome">Nome do cartão</label>
-              <input type="text" id="cartao-nome" autocomplete="off" placeholder="Ex: Nubank PJ" />
-
-              <label for="cartao-banco">Banco que emitiu</label>
-              <input type="text" id="cartao-banco" autocomplete="off" placeholder="Ex: Nubank" />
-
-              <label for="cartao-bandeira">Bandeira</label>
-              <select id="cartao-bandeira">
-                <option value="">Não informado</option>
-                <option>Visa</option>
-                <option>Mastercard</option>
-                <option>Elo</option>
-                <option>American Express</option>
-                <option>Hipercard</option>
-                <option>Outra</option>
-              </select>
-
-              <label for="cartao-final">Final do cartão</label>
-              <input type="text" id="cartao-final" inputmode="numeric" maxlength="4" placeholder="4 últimos números" />
-
-              <label for="cartao-fechamento">Dia em que a fatura fecha</label>
-              <input type="number" id="cartao-fechamento" min="1" max="31" step="1" value="1" />
-
-              <label for="cartao-vencimento">Dia em que a fatura vence</label>
-              <input type="number" id="cartao-vencimento" min="1" max="31" step="1" value="10" />
-              <p id="cartao-ciclo-hint" class="doc-hint"></p>
-
-              <label for="cartao-chave">Chave PIX da conta do cartão</label>
-              <input type="text" id="cartao-chave" autocomplete="off" placeholder="Para onde o PIX da fatura vai" />
-
-              <label for="cartao-tipo-chave">Tipo da chave</label>
-              <select id="cartao-tipo-chave">
-                <option value="">Não informado</option>
-                <option value="CNPJ">CNPJ</option>
-                <option value="CPF">CPF</option>
-                <option value="EMAIL">E-mail</option>
-                <option value="PHONE">Telefone</option>
-                <option value="EVP">Chave aleatória</option>
-              </select>
-              <p class="doc-hint">
-                Sem a chave PIX o cartão funciona normalmente, mas o sistema não
-                consegue pagar a fatura sozinho — só avisar você.
-              </p>
-
-              <label for="cartao-limite">Limite (opcional)</label>
-              <input type="text" id="cartao-limite" inputmode="numeric" placeholder="R$ 0,00" />
-
-              <label for="cartao-observacoes">Observações</label>
-              <textarea id="cartao-observacoes" rows="2"></textarea>
-
-              <button type="button" id="salvar-cartao">Salvar cartão</button>
-              <button type="button" id="cancelar-cartao" class="botao-secundario">Cancelar</button>
-              <div id="cartao-status-msg" class="status"></div>
-            </div>
-
-            <template id="modelo-cartao">
-              <div class="despesa cartao-item">
-                <button type="button" class="despesa-resumo">
-                  <span class="despesa-topo">
-                    <span class="despesa-descricao"></span>
-                    <span class="despesa-valor"></span>
-                  </span>
-                  <span class="despesa-extra"></span>
-                </button>
-                <div class="despesa-acoes hidden">
-                  <button type="button" class="cartao-editar botao-secundario">✏️ Editar</button>
-                  <button type="button" class="cartao-excluir botao-secundario">Excluir</button>
-                </div>
-              </div>
-            </template>
-
-            <h2 class="titulo-bloco">Divisão do lucro</h2>
-            <p class="doc-hint">
-              O lucro de cada serviço (o que o cliente pagou, menos o material)
-              é repartido. O que sobra depois das duas fatias fica com a
-              empresa, e é o que banca aluguel, combustível e imposto.
-            </p>
-
-            <label for="aj-socio1-nome">Primeiro sócio</label>
-            <input type="text" id="aj-socio1-nome" autocomplete="off" placeholder="Nome" />
-            <label for="aj-socio1-pct">Fatia dele (%)</label>
-            <input type="text" id="aj-socio1-pct" inputmode="decimal" placeholder="33,3333" />
-
-            <label for="aj-socio2-nome">Segundo sócio</label>
-            <input type="text" id="aj-socio2-nome" autocomplete="off" placeholder="Nome" />
-            <label for="aj-socio2-pct">Fatia dele (%)</label>
-            <input type="text" id="aj-socio2-pct" inputmode="decimal" placeholder="33,3333" />
-
-            <p id="aj-empresa-fatia" class="doc-hint"></p>
-
-            <button type="submit" id="salvar-ajustes">Salvar ajustes</button>
-            <div id="ajustes-status-msg" class="status"></div>
-          </form>
+        <div class="num revelar">
+          <p class="num-valor"><span class="num-mais">+</span><span class="contador" data-ate="40">0</span></p>
+          <p class="num-rotulo">clientes cadastrados</p>
+          <p class="num-nota">Condomínios e empresas em Joinville.</p>
+        </div>
+        <div class="num revelar">
+          <p class="num-valor"><span class="num-mais">+</span><span class="contador" data-ate="175">0</span></p>
+          <p class="num-rotulo">atendimentos em 2025</p>
+          <p class="num-nota">Serviços executados ao longo do ano.</p>
         </div>
       </div>
 
-      <!-- ===================== Agenda ===================== -->
-      <div id="page-consultar-chamados" class="card page hidden">
-        <h1>Consultar chamados</h1>
+      <p class="numeros-fecho revelar">
+        Empresa familiar. O que nos trouxe até aqui foi honestidade e
+        qualidade no que a gente entrega — e é isso que continua guiando cada
+        atendimento.
+      </p>
+    </div>
+  </section>
 
-        <p id="chamados-status" class="doc-hint"></p>
-        <button type="button" id="recarregar-chamados" class="link-button">↻ Atualizar</button>
+  <!-- ===================== Assinatura ===================== -->
+  <section class="assinatura">
+    <div class="faixa">
+      <p class="assinatura-texto revelar">Infraestrutura funcionando sem preocupações</p>
+    </div>
+  </section>
 
-        <div id="chamados-sem-data-bloco" class="hidden">
-          <h2 class="titulo-bloco">Aguardando confirmação de data</h2>
-          <div id="lista-chamados-sem-data"></div>
-        </div>
+</main>
 
-        <h2 class="titulo-bloco">Agendados</h2>
-        <div id="lista-chamados-com-data"></div>
+<!-- ===================== Rodapé ===================== -->
+<!-- Estrutura pronta e vazia de propósito: os dados reais (e-mail, telefone e
+     redes) entram nos espaços marcados quando forem definidos. -->
+<footer class="rodape">
+  <div class="faixa rodape-interno">
 
-        <!-- Um formulário só, reaproveitado por qualquer card ao clicar em
-             "Editar" — evita duplicar os mesmos campos em cada item da
-             lista. Cobre tudo do chamado, não só a data. -->
-        <div id="chamado-editar-box" class="chamado-editar-box hidden">
-          <h2 class="titulo-bloco" id="chamado-editar-titulo">Editar chamado</h2>
+    <div class="rodape-marca">
+      <span class="marca-nome">Soluções <em>Rápidas</em></span>
+      <span class="marca-sub">Manutenção predial · Joinville e região</span>
+    </div>
 
-          <div id="edit-chamado-contato-escolha" class="hidden">
-            <label>Quem pediu o serviço?</label>
-            <div id="edit-chamado-lista-contatos" class="chamado-lista-picker"></div>
-          </div>
+    <div class="rodape-bloco">
+      <h4>Contato</h4>
+      <ul class="rodape-lista">
+        <!-- E-MAIL: <li><a href="mailto:...">...</a></li> -->
+        <!-- TELEFONE: <li><a href="tel:...">...</a></li> -->
+        <li class="rodape-vazio">Em breve</li>
+      </ul>
+    </div>
 
-          <div id="edit-chamado-local-escolha" class="hidden">
-            <label>Endereço de atendimento</label>
-            <div id="edit-chamado-lista-locais" class="chamado-lista-picker"></div>
-          </div>
+    <div class="rodape-bloco">
+      <h4>Redes</h4>
+      <!-- ÍCONES DE REDES SOCIAIS entram aqui (Instagram, Facebook, etc.) -->
+      <ul class="rodape-redes">
+        <li class="rodape-vazio">Em breve</li>
+      </ul>
+    </div>
 
-          <label for="edit-chamado-local-exato">Local exato (opcional)</label>
-          <input type="text" id="edit-chamado-local-exato" placeholder="Ex: teto da garagem, subsolo" autocomplete="off" />
+    <div class="rodape-bloco">
+      <h4>Sistema</h4>
+      <ul class="rodape-lista">
+        <li><a href="sistema.html">Entrar</a></li>
+        <li><a href="#">Criar conta</a></li>
+      </ul>
+    </div>
 
-          <label for="edit-chamado-descricao">O que precisa ser feito</label>
-          <textarea id="edit-chamado-descricao" rows="3"></textarea>
-
-          <label for="edit-chamado-observacoes">Observações do serviço (interno)</label>
-          <textarea id="edit-chamado-observacoes" rows="2"></textarea>
-
-          <div id="edit-chamado-anexos-atuais-bloco" class="hidden">
-            <label>Anexos já salvos</label>
-            <div id="edit-chamado-anexos-atuais"></div>
-          </div>
-
-          <label>Adicionar mais fotos/documentos (opcional, até 5MB cada)</label>
-          <div class="chamado-anexos-botoes">
-            <label id="edit-chamado-anexos-foto-botao" for="edit-chamado-anexos-foto" class="botao-secundario chamado-anexo-botao" tabindex="0">📷 Adicionar foto</label>
-            <input type="file" id="edit-chamado-anexos-foto" accept="image/*" multiple class="hidden" />
-            <label id="edit-chamado-anexos-doc-botao" for="edit-chamado-anexos-doc" class="botao-secundario chamado-anexo-botao" tabindex="0">📄 Adicionar PDF</label>
-            <input type="file" id="edit-chamado-anexos-doc" accept="application/pdf" multiple class="hidden" />
-          </div>
-          <div id="edit-chamado-anexos-lista"></div>
-
-          <button type="button" id="edit-chamado-salvar">Salvar</button>
-          <button type="button" id="edit-chamado-cancelar-form" class="botao-secundario">Fechar</button>
-          <div id="edit-chamado-status" class="status"></div>
-        </div>
-      </div>
-
-      <!-- ===================== Chamados (Criar chamado) ===================== -->
-      <div id="page-chamados" class="card page hidden">
-        <h1>Criar chamado</h1>
-
-        <form id="chamado-form">
-            <div id="chamado-passo-cliente">
-              <label for="chamado-busca-cliente">Cliente</label>
-              <input type="text" id="chamado-busca-cliente" placeholder="Nome, CNPJ/CPF ou contato" autocomplete="off" />
-              <div id="chamado-lista-clientes" class="chamado-resultados"></div>
-              <p id="chamado-cliente-status" class="doc-hint"></p>
-            </div>
-
-            <div id="chamado-cliente-escolhido" class="hidden">
-              <div class="chamado-cliente-card">
-                <button type="button" id="chamado-trocar-cliente" class="chamado-cliente-cancelar" aria-label="Cancelar e trocar cliente">×</button>
-                <strong id="chamado-cliente-nome"></strong>
-                <p id="chamado-cliente-endereco" class="doc-hint"></p>
-              </div>
-
-              <div id="chamado-contato-escolha" class="hidden">
-                <label>Quem pediu o serviço desta vez?</label>
-                <div id="chamado-lista-contatos" class="chamado-lista-picker"></div>
-              </div>
-
-              <div id="chamado-local-escolha" class="hidden">
-                <label>Qual endereço?</label>
-                <div id="chamado-lista-locais" class="chamado-lista-picker"></div>
-              </div>
-
-              <label for="chamado-local-exato">Local exato (opcional)</label>
-              <input type="text" id="chamado-local-exato" placeholder="Ex: teto da garagem, subsolo" autocomplete="off" />
-
-              <label for="chamado-descricao">O que precisa ser feito</label>
-              <textarea id="chamado-descricao" rows="3" placeholder="Resumo do pedido do cliente"></textarea>
-
-              <label for="chamado-observacoes">Observações do serviço (interno)</label>
-              <textarea id="chamado-observacoes" rows="2" placeholder="Material a comprar, ferramenta a alugar, restrição de acesso..."></textarea>
-
-              <label>Fotos ou documentos (opcional, até 5MB cada)</label>
-              <div class="chamado-anexos-botoes">
-                <label id="chamado-anexos-foto-botao" for="chamado-anexos-foto" class="botao-secundario chamado-anexo-botao" tabindex="0">📷 Adicionar foto</label>
-                <input type="file" id="chamado-anexos-foto" accept="image/*" multiple class="hidden" />
-                <label id="chamado-anexos-doc-botao" for="chamado-anexos-doc" class="botao-secundario chamado-anexo-botao" tabindex="0">📄 Adicionar PDF</label>
-                <input type="file" id="chamado-anexos-doc" accept="application/pdf" multiple class="hidden" />
-              </div>
-              <div id="chamado-anexos-lista"></div>
-
-              <button type="submit" id="chamado-salvar-botao">Criar chamado</button>
-              <button type="button" id="chamado-cancelar-botao" class="botao-secundario hidden">Cancelar</button>
-              <div id="chamado-status" class="status"></div>
-            </div>
-          </form>
-      </div>
-
-      <!-- ===================== Agenda ===================== -->
-      <!-- Linha do tempo vertical contínua na esquerda (rola no tempo e muda
-           de escala com o zoom) e, na direita, a fila de chamados que ainda
-           não têm lugar na agenda. Arrastar da fila pra linha do tempo é o
-           jeito principal de agendar. -->
-      <div id="page-agenda" class="card page hidden">
-        <div class="agenda-cabecalho">
-          <h1>Agenda</h1>
-
-          <div class="agenda-ferramentas">
-            <div class="agenda-zoom" role="group" aria-label="Escala de tempo">
-              <button type="button" id="agenda-zoom-menos" class="agenda-zoom-passo" aria-label="Afastar no tempo">−</button>
-              <button type="button" class="agenda-nivel" data-nivel="ano">Ano</button>
-              <button type="button" class="agenda-nivel" data-nivel="mes">Mês</button>
-              <button type="button" class="agenda-nivel" data-nivel="semana">Semana</button>
-              <button type="button" class="agenda-nivel" data-nivel="dia">Dia</button>
-              <button type="button" class="agenda-nivel" data-nivel="hora">Hora</button>
-              <button type="button" class="agenda-nivel" data-nivel="minuto">Minuto</button>
-              <button type="button" id="agenda-zoom-mais" class="agenda-zoom-passo" aria-label="Aproximar no tempo">+</button>
-            </div>
-
-            <div class="agenda-botoes">
-              <button type="button" id="agenda-agora" class="botao-secundario">Agora</button>
-              <button type="button" id="agenda-desfazer" class="botao-secundario agenda-botao-icone" title="Desfazer (Ctrl+Z)" aria-label="Desfazer">↶</button>
-              <button type="button" id="agenda-refazer" class="botao-secundario agenda-botao-icone" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer">↷</button>
-              <button type="button" id="agenda-atualizar" class="link-button">↻ Atualizar</button>
-            </div>
-          </div>
-        </div>
-
-        <p id="agenda-aviso" class="agenda-aviso hidden"></p>
-
-        <div class="agenda-layout">
-          <div class="agenda-calendario">
-            <div id="agenda-viewport" class="agenda-viewport">
-              <div id="agenda-conteudo" class="agenda-conteudo"></div>
-            </div>
-          </div>
-
-          <div class="agenda-painel">
-            <h2 class="titulo-bloco">Chamados</h2>
-            <p class="doc-hint">Arraste um chamado da fila para a linha do tempo pra agendar. Arraste de volta pra cá pra tirar da agenda. Clique num que já está marcado pra pular até ele.</p>
-            <div id="agenda-lista" class="agenda-lista"></div>
-          </div>
-        </div>
-      </div>
-    </main>
   </div>
 
-  <div id="toast" class="toast" aria-live="polite"></div>
+  <div class="faixa rodape-base">
+    <p>© <span id="ano">2026</span> Soluções Rápidas — Manutenção predial.</p>
+  </div>
+</footer>
 
-  <!-- Fantasma que acompanha o mouse durante o arrasto, e menu de ações de um
-       bloco da agenda. Ficam fora das páginas de propósito: são posicionados
-       em relação à janela (position: fixed), não ao cartão da página. -->
-  <div id="agenda-fantasma" class="agenda-fantasma hidden"></div>
-  <div id="agenda-menu" class="agenda-menu hidden"></div>
-
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+<script src="landing.js"></script>
 </body>
 </html>
