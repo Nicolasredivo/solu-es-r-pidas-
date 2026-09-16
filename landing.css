@@ -370,6 +370,7 @@ img, svg { display: block; max-width: 100%; }
 .linha-forte {
   font-size: clamp(2.05rem, 4.6vw, 3.35rem);
   letter-spacing: -0.025em;
+  text-wrap: balance;
 }
 .linha-media {
   font-size: clamp(1.02rem, 1.65vw, 1.24rem);
@@ -582,7 +583,12 @@ img, svg { display: block; max-width: 100%; }
   letter-spacing: 0.05em;
 }
 
-.secao-titulo { font-size: clamp(1.6rem, 3vw, 2.3rem); }
+/* Distribui as linhas por igual em vez de deixar uma palavra sozinha na
+   última (o navegador que não conhece a regra simplesmente ignora). */
+.secao-titulo {
+  font-size: clamp(1.6rem, 3vw, 2.3rem);
+  text-wrap: balance;
+}
 .secao-apoio { margin-top: 16px; color: var(--tinta-media); }
 
 .rotulo-claro { color: rgba(255, 255, 255, 0.62); }
