@@ -3360,6 +3360,64 @@ Como foi feito (`index.html`, `landing.css`):
   horizontal. O aperto maior é em 1010px (32px de folga), logo acima da
   quebra pra uma coluna só.
 
+### Busca e filtros em "Consultar chamados" (16/09/2026)
+
+Peneira **no navegador**, em cima de `chamadosSemData`/`chamadosComData`, que
+já vêm inteiras do `listar-chamados`. Nenhuma ida ao n8n a cada tecla — por
+isso responde na hora e continua funcionando com o túnel fora do ar. Nada
+mudou no backend nem no Airtable.
+
+O que a busca entende (`textoBuscavelChamado` junta tudo num texto só):
+número, cliente, endereço, local exato, descrição, contato, WhatsApp,
+**status** e a data já formatada em dd/mm/aaaa.
+
+- **Sem acento e sem caixa**: "sao" acha "São", "MARCIA" acha "Márcia".
+- **Várias palavras é E, não OU**: "opera garagem" só traz quem tem as duas.
+- **"#11" e "11" são a mesma busca** (o `#` é descartado do termo).
+- **Número com pontuação**: além do termo a termo, os dígitos da busca
+  inteira são comparados com os dígitos do chamado. É isso que faz
+  "(47) 98417-1428" — que o split por espaço quebraria em dois pedaços
+  inúteis — achar "5547984171428". Mínimo de 3 dígitos, senão "47" casaria
+  com meia lista.
+- **Status entra na busca de propósito**: digitar "cancelado" ou "agendado"
+  já filtra. Por isso os botões de filtro são só de **tempo** (Todos, Hoje,
+  7 dias, Sem data, Cancelados) — repetir status em botão seria ruído.
+
+Os filtros por tempo **nunca** mostram cancelado: ele não ocupa mais espaço
+na agenda, então não é "o que tem pra hoje".
+
+Realce dos trechos encontrados (`realcar`): escapa o texto **e** insere o
+`<mark>` na mesma passada. Tem que ser junto — escapar depois comeria as
+marcas, e marcar depois de escapar poderia acertar dentro de um `&amp;`.
+Como tirar acento muda o tamanho da string, `normalizarComMapa` guarda de
+qual letra original veio cada letra normalizada; é esse mapa que deixa
+realçar "Márcia" tendo procurado "marcia". Faixas que se sobrepõem são
+juntadas antes, senão sairia `<mark>` dentro de `<mark>`. Testado com um
+chamado falso cujo nome tinha `<script>`: vira texto, não vira tag.
+
+**Duas pegadinhas que custaram tempo aqui, pra não repetir:**
+
+1. **Especificidade**: `.campo-busca-entrada` sozinha perde de
+   `input[type="text"] { padding: 12px 14px; margin-bottom: 16px }` — tipo +
+   atributo pesa mais que uma classe. O padding da lupa e a margem zerada
+   simplesmente não valiam, e o texto digitado ficava por cima da lupa. O
+   seletor agora é `input[type="text"].campo-busca-entrada`. Mesma
+   armadilha do `.trab p` vs `.trab-num` na landing.
+2. **`translateY(-50%)` em `<svg>` não centraliza**: dentro de SVG a
+   porcentagem do `transform` se resolve pela viewBox, não pela caixa do
+   elemento. A lupa usa `top: 0; bottom: 0; margin: auto 0`. E `.campo-busca`
+   virou `display: flex` porque `<input>` é inline e a linha em volta dele
+   deixava ~15px de sobra embaixo, jogando lupa e × pra baixo do centro.
+
+Detalhe de layout: os dois blocos da lista (`#chamados-sem-data-bloco` e
+`#chamados-com-data-bloco`) agora são irmãos, cada um com o seu `<h2>`
+dentro. Como `.titulo-bloco:first-child` zera a margem de cima, o respiro
+entre eles passou a vir do próprio bloco (`margin-top: 20px`).
+
+Todo o teste foi com chamados **falsos** injetados em `chamadosSemData`/
+`chamadosComData` e `pedirAoN8n` trocado por uma função que só dá erro.
+Nenhum registro real foi tocado.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

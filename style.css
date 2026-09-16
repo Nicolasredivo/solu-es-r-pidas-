@@ -1516,6 +1516,140 @@ button:active:not(:disabled) {
   padding: 4px 8px;
 }
 
+/* ----- Busca e filtros de "Consultar chamados" ----- */
+
+.chamados-busca {
+  margin: 14px 0 4px;
+}
+
+.campo-busca {
+  position: relative;
+  /* flex pra caixa ter exatamente a altura do campo. Como <input> é inline,
+     a linha de texto em volta dele sobrava ~15px embaixo, e a lupa e o ×
+     -- que se centram pela caixa -- desciam junto. */
+  display: flex;
+}
+
+.campo-busca-lupa {
+  position: absolute;
+  left: 13px;
+  /* Centraliza por margem automática, e não por translateY(-50%): dentro de
+     um <svg> a porcentagem do transform se resolve pela viewBox e não pela
+     caixa do elemento, e a lupa descia pro pé do campo. */
+  top: 0;
+  bottom: 0;
+  margin: auto 0;
+  width: 17px;
+  height: 17px;
+  color: var(--muted);
+  /* Se a lupa recebesse o clique, tocar nela não focaria o campo. */
+  pointer-events: none;
+}
+
+/* Os dois blocos da lista agora são irmãos, cada um com o seu <h2> dentro.
+   Como o .titulo-bloco:first-child zera a margem de cima, o respiro entre
+   um bloco e outro passa a vir do próprio bloco. Bloco escondido é
+   display:none, então não sobra espaço vazio quando um dos dois some. */
+#chamados-sem-data-bloco,
+#chamados-com-data-bloco {
+  margin-top: 20px;
+}
+
+/* Herda o visual dos outros campos de texto: só abre espaço pra lupa e pro
+   × e tira a margem de baixo, porque o que vem embaixo são os filtros e não
+   outro campo de formulário.
+
+   O seletor precisa do input[type="text"] junto: sozinha, a classe perde de
+   `input[type="text"] { padding: 12px 14px; margin-bottom: 16px }` -- tipo +
+   atributo tem mais peso que uma classe -- e nem o espaço da lupa nem a
+   margem zerada valiam. É a mesma pegadinha de especificidade do .trab-num
+   na landing (ver CONTEXTO.md). */
+input[type="text"].campo-busca-entrada {
+  padding-left: 38px;
+  padding-right: 40px;
+  margin-bottom: 0;
+}
+
+.campo-busca-limpar {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.campo-busca-limpar:hover {
+  background: #2c3153;
+  color: var(--text);
+}
+
+.chamados-filtros {
+  display: flex;
+  gap: 7px;
+  margin-top: 10px;
+  /* Em tela estreita os filtros deslizam de lado, em vez de quebrar em
+     várias linhas e empurrar a lista inteira pra baixo. */
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.chamados-filtros::-webkit-scrollbar {
+  display: none;
+}
+
+.filtro-chip {
+  width: auto;
+  flex: 0 0 auto;
+  padding: 6px 13px;
+  border-radius: 20px;
+  border: 1px solid #2c3153;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.filtro-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.filtro-chip.ativo {
+  background: rgba(91, 141, 239, 0.16);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.chamados-contagem {
+  margin: 9px 0 0;
+}
+
+.chamados-vazio {
+  margin-top: 16px;
+}
+
+.chamados-vazio .link-button {
+  margin-top: 4px;
+}
+
+/* Trecho que a busca encontrou. Fica dentro do card só pra não pintar
+   nenhum <mark> de outra tela sem querer. */
+.chamado-card mark {
+  background: rgba(91, 141, 239, 0.32);
+  color: var(--text);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
 .chamado-card {
   background: var(--card);
   border: 1px solid #2c3153;

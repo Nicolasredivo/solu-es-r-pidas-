@@ -1287,13 +1287,53 @@
         <p id="chamados-status" class="doc-hint"></p>
         <button type="button" id="recarregar-chamados" class="link-button">↻ Atualizar</button>
 
+        <!-- Busca e filtros. Tudo é peneirado aqui no navegador, em cima
+             das listas que já foram carregadas: digitar não dispara nenhuma
+             ida ao n8n. -->
+        <div class="chamados-busca">
+          <div class="campo-busca">
+            <!-- Lupa desenhada, e não o caractere "⌕": em Windows ele sai
+                 minúsculo e desalinhado, dependendo da fonte instalada. -->
+            <svg class="campo-busca-lupa" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2" />
+              <line x1="16.3" y1="16.3" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <input type="text" id="chamados-busca" class="campo-busca-entrada"
+                   placeholder="Buscar por número, cliente, endereço, descrição..."
+                   autocomplete="off" aria-label="Buscar chamado" />
+            <button type="button" id="chamados-busca-limpar" class="campo-busca-limpar hidden"
+                    aria-label="Limpar busca">×</button>
+          </div>
+
+          <!-- Os filtros são só de TEMPO e situação: buscar por status já
+               funciona digitando ("cancelado", "agendado"), porque o status
+               entra no texto procurado. Repetir isso em botão seria ruído. -->
+          <div class="chamados-filtros" id="chamados-filtros" role="group"
+               aria-label="Filtrar chamados">
+            <button type="button" class="filtro-chip ativo" data-filtro="todos" aria-pressed="true">Todos</button>
+            <button type="button" class="filtro-chip" data-filtro="hoje" aria-pressed="false">Hoje</button>
+            <button type="button" class="filtro-chip" data-filtro="semana" aria-pressed="false">7 dias</button>
+            <button type="button" class="filtro-chip" data-filtro="sem-data" aria-pressed="false">Sem data</button>
+            <button type="button" class="filtro-chip" data-filtro="cancelado" aria-pressed="false">Cancelados</button>
+          </div>
+
+          <p class="doc-hint chamados-contagem" id="chamados-contagem" aria-live="polite"></p>
+        </div>
+
+        <div id="chamados-vazio" class="chamados-vazio hidden">
+          <p class="doc-hint" id="chamados-vazio-texto"></p>
+          <button type="button" id="chamados-limpar-tudo" class="link-button hidden">Limpar busca e filtros</button>
+        </div>
+
         <div id="chamados-sem-data-bloco" class="hidden">
           <h2 class="titulo-bloco">Aguardando confirmação de data</h2>
           <div id="lista-chamados-sem-data"></div>
         </div>
 
-        <h2 class="titulo-bloco">Agendados</h2>
-        <div id="lista-chamados-com-data"></div>
+        <div id="chamados-com-data-bloco">
+          <h2 class="titulo-bloco">Agendados</h2>
+          <div id="lista-chamados-com-data"></div>
+        </div>
 
         <!-- Um formulário só, reaproveitado por qualquer card ao clicar em
              "Editar" — evita duplicar os mesmos campos em cada item da

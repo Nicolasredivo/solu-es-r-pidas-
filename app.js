@@ -43,7 +43,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.16g";
+const APP_VERSION = "2026.09.16h";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4855,6 +4855,14 @@ const chamadosSemDataBloco = document.getElementById("chamados-sem-data-bloco");
 const listaChamadosSemData = document.getElementById("lista-chamados-sem-data");
 const listaChamadosComData = document.getElementById("lista-chamados-com-data");
 const recarregarChamadosBotao = document.getElementById("recarregar-chamados");
+const chamadosComDataBloco = document.getElementById("chamados-com-data-bloco");
+const chamadosBuscaInput = document.getElementById("chamados-busca");
+const chamadosBuscaLimpar = document.getElementById("chamados-busca-limpar");
+const chamadosFiltrosEl = document.getElementById("chamados-filtros");
+const chamadosContagemEl = document.getElementById("chamados-contagem");
+const chamadosVazioEl = document.getElementById("chamados-vazio");
+const chamadosVazioTexto = document.getElementById("chamados-vazio-texto");
+const chamadosLimparTudoBotao = document.getElementById("chamados-limpar-tudo");
 const agendaAtualizarBotao = document.getElementById("agenda-atualizar");
 const agendaListaEl = document.getElementById("agenda-lista");
 const agendaPainelEl = agendaListaEl.closest(".agenda-painel");
@@ -5276,7 +5284,7 @@ function statusClasseChamado(status) {
   return "";
 }
 
-function montarCardChamado(c, comData) {
+function montarCardChamado(c, comData, termos = []) {
   const card = document.createElement("div");
   card.className = "chamado-card";
 
@@ -5301,15 +5309,19 @@ function montarCardChamado(c, comData) {
   // sentido oferecer "Cancelar chamado" de novo pra quem já está cancelado.
   const jaCancelado = c.status === "Cancelado";
 
+  // realcar() = escapeHtml() + <mark> nos trechos que a busca encontrou. Com
+  // a busca vazia ele se comporta igual ao escapeHtml de antes.
+  const rc = (t) => realcar(t, termos);
+
   card.innerHTML = `
     <div class="chamado-card-topo">
-      <span class="chamado-numero">#${c.numero}</span>
+      <span class="chamado-numero">#${rc(c.numero)}</span>
       <span class="chamado-status-badge ${statusClasseChamado(c.status)}">${escapeHtml(c.status)}</span>
     </div>
-    <strong>${escapeHtml(c.clienteNome)}</strong>
-    <p class="doc-hint">${escapeHtml(c.enderecoCopia)}${c.localExato ? " · " + escapeHtml(c.localExato) : ""}</p>
-    <p>${escapeHtml(c.descricaoSolicitacao)}</p>
-    ${c.contatoNome ? `<p class="doc-hint">Contato: ${escapeHtml(c.contatoNome)}${c.contatoWhatsApp ? " · " + escapeHtml(c.contatoWhatsApp) : ""}</p>` : ""}
+    <strong>${rc(c.clienteNome)}</strong>
+    <p class="doc-hint">${rc(c.enderecoCopia)}${c.localExato ? " · " + rc(c.localExato) : ""}</p>
+    <p>${rc(c.descricaoSolicitacao)}</p>
+    ${c.contatoNome ? `<p class="doc-hint">Contato: ${rc(c.contatoNome)}${c.contatoWhatsApp ? " · " + rc(c.contatoWhatsApp) : ""}</p>` : ""}
     ${horarioTexto}
     ${criadoTexto}
     <div class="chamado-card-acoes">
@@ -5366,18 +5378,228 @@ async function cancelarChamado(id, botao) {
   }
 }
 
-function desenharListaChamados() {
-  chamadosSemDataBloco.classList.toggle("hidden", chamadosSemData.length === 0);
-  listaChamadosSemData.innerHTML = "";
-  chamadosSemData.forEach((c) => listaChamadosSemData.appendChild(montarCardChamado(c, false)));
+// ----- Busca e filtros de "Consultar chamados" -----
+// Peneira no navegador, em cima das listas que já vieram do n8n: digitar
+// não pede nada pela rede. Por isso a busca continua funcionando com o
+// túnel fora do ar, e responde na hora.
 
-  listaChamadosComData.innerHTML = "";
-  if (!chamadosComData.length) {
-    listaChamadosComData.innerHTML = `<p class="doc-hint">Nenhum chamado agendado.</p>`;
-  } else {
-    chamadosComData.forEach((c) => listaChamadosComData.appendChild(montarCardChamado(c, true)));
-  }
+let chamadosFiltroAtivo = "todos";
+
+// Tira acento e caixa. "sao" acha "São", "MONTE" acha "monte".
+function normalizarBusca(texto) {
+  return String(texto ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
+
+// Mesma normalização, mas devolvendo junto o mapa de posições: cada letra do
+// texto normalizado aponta pra letra que a originou. Tirar acento muda o
+// tamanho da string ("ç" vira "c" + um acento que some), então sem esse mapa
+// os índices do trecho encontrado não serviriam pra realçar o texto original.
+function normalizarComMapa(original) {
+  let normal = "";
+  const mapa = [];
+  for (let i = 0; i < original.length; i++) {
+    const limpo = original[i].normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    for (let j = 0; j < limpo.length; j++) {
+      normal += limpo[j];
+      mapa.push(i);
+    }
+  }
+  return { normal, mapa };
+}
+
+// Cada palavra digitada é um termo, e todos precisam bater (não é "ou").
+// O "#" some porque "#11" e "11" são a mesma busca pra quem digita.
+function termosDaBusca(texto) {
+  return normalizarBusca(texto)
+    .split(/\s+/)
+    .map((t) => t.replace(/^#/, ""))
+    .filter(Boolean);
+}
+
+// Tudo que dá pra procurar num chamado, junto. A data entra já formatada
+// (dd/mm/aaaa) pra quem digita "16/09" achar o dia, e o status entra pra
+// "cancelado"/"agendado" funcionarem como busca sem precisar de botão.
+function textoBuscavelChamado(c) {
+  return [
+    "#" + c.numero,
+    c.clienteNome,
+    c.enderecoCopia,
+    c.localExato,
+    c.descricaoSolicitacao,
+    c.contatoNome,
+    c.contatoWhatsApp,
+    c.status,
+    c.horarioCombinadoCliente,
+    c.reservadoInicio ? new Date(c.reservadoInicio).toLocaleDateString("pt-BR") : "",
+  ].filter(Boolean).join(" ");
+}
+
+// Só os dígitos do que foi digitado, tudo junto. É o que faz um telefone
+// copiado com máscara -- "(47) 98417-1428", que o split por espaço quebraria
+// em dois pedaços inúteis -- achar "5547984171428" mesmo assim.
+function digitosDaBusca(texto) {
+  return String(texto ?? "").replace(/\D/g, "");
+}
+
+function chamadoCombina(c, termos, digitosBusca) {
+  if (!termos.length) return true;
+  const alvo = normalizarBusca(textoBuscavelChamado(c));
+  const digitos = alvo.replace(/\D/g, "");
+
+  // Atalho pra número digitado com pontuação: vale sozinho, antes da regra
+  // palavra por palavra. A partir de 3 dígitos pra "47" não casar com meia
+  // lista por acaso.
+  if (digitosBusca.length >= 3 && digitos.includes(digitosBusca)) return true;
+
+  return termos.every((t) => {
+    if (alvo.includes(t)) return true;
+    const so = t.replace(/\D/g, "");
+    return so.length >= 3 && digitos.includes(so);
+  });
+}
+
+function chamadoPassaFiltro(c) {
+  if (chamadosFiltroAtivo === "todos") return true;
+  if (chamadosFiltroAtivo === "cancelado") return c.status === "Cancelado";
+  if (chamadosFiltroAtivo === "sem-data") return !c.reservadoInicio && c.status !== "Cancelado";
+
+  // Daqui pra baixo são os filtros por tempo. Cancelado nunca entra: ele não
+  // ocupa mais espaço na agenda, então não é "o que tem pra hoje".
+  if (c.status === "Cancelado" || !c.reservadoInicio) return false;
+  const inicio = new Date(c.reservadoInicio);
+  const dia = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate());
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  if (chamadosFiltroAtivo === "hoje") return dia.getTime() === hoje.getTime();
+  if (chamadosFiltroAtivo === "semana") {
+    const limite = new Date(hoje);
+    limite.setDate(limite.getDate() + 7);
+    return dia >= hoje && dia < limite;
+  }
+  return true;
+}
+
+// Escapa o texto e marca o que a busca encontrou, numa passada só. Tem que
+// ser junto: escapar depois comeria as marcas, e marcar depois de escapar
+// poderia acertar dentro de um "&amp;" e quebrar o HTML.
+function realcar(texto, termos) {
+  const bruto = String(texto ?? "");
+  if (!termos || !termos.length || !bruto) return escapeHtml(bruto);
+
+  const { normal, mapa } = normalizarComMapa(bruto);
+  const faixas = [];
+  termos.forEach((t) => {
+    let de = 0;
+    for (;;) {
+      const achou = normal.indexOf(t, de);
+      if (achou < 0) break;
+      const fim = mapa[achou + t.length - 1];
+      faixas.push([mapa[achou], (fim === undefined ? bruto.length - 1 : fim) + 1]);
+      de = achou + 1;
+    }
+  });
+  if (!faixas.length) return escapeHtml(bruto);
+
+  // Termos que se sobrepõem virariam <mark> dentro de <mark>: junta antes.
+  faixas.sort((a, b) => a[0] - b[0]);
+  const juntas = [faixas[0]];
+  for (let i = 1; i < faixas.length; i++) {
+    const ultima = juntas[juntas.length - 1];
+    if (faixas[i][0] <= ultima[1]) ultima[1] = Math.max(ultima[1], faixas[i][1]);
+    else juntas.push(faixas[i]);
+  }
+
+  let saida = "";
+  let pos = 0;
+  juntas.forEach(([ini, fim]) => {
+    saida += escapeHtml(bruto.slice(pos, ini)) + "<mark>" + escapeHtml(bruto.slice(ini, fim)) + "</mark>";
+    pos = fim;
+  });
+  return saida + escapeHtml(bruto.slice(pos));
+}
+
+function limparBuscaEFiltros() {
+  chamadosBuscaInput.value = "";
+  chamadosFiltroAtivo = "todos";
+  marcarFiltroAtivo();
+  desenharListaChamados();
+}
+
+function marcarFiltroAtivo() {
+  chamadosFiltrosEl.querySelectorAll(".filtro-chip").forEach((b) => {
+    const ativo = b.dataset.filtro === chamadosFiltroAtivo;
+    b.classList.toggle("ativo", ativo);
+    b.setAttribute("aria-pressed", ativo ? "true" : "false");
+  });
+}
+
+function desenharListaChamados() {
+  const termos = termosDaBusca(chamadosBuscaInput.value);
+  const digitosBusca = digitosDaBusca(chamadosBuscaInput.value);
+  const peneirando = termos.length > 0 || chamadosFiltroAtivo !== "todos";
+  const cabe = (c) => chamadoPassaFiltro(c) && chamadoCombina(c, termos, digitosBusca);
+
+  const semData = chamadosSemData.filter(cabe);
+  const comData = chamadosComData.filter(cabe);
+
+  // Monta fora da tela e encaixa de uma vez: com a lista inteira sendo
+  // redesenhada a cada tecla, um appendChild por card faria o navegador
+  // recalcular o layout N vezes por letra digitada.
+  chamadosSemDataBloco.classList.toggle("hidden", semData.length === 0);
+  const pedacoSemData = document.createDocumentFragment();
+  semData.forEach((c) => pedacoSemData.appendChild(montarCardChamado(c, false, termos)));
+  listaChamadosSemData.innerHTML = "";
+  listaChamadosSemData.appendChild(pedacoSemData);
+
+  chamadosComDataBloco.classList.toggle("hidden", comData.length === 0);
+  const pedacoComData = document.createDocumentFragment();
+  comData.forEach((c) => pedacoComData.appendChild(montarCardChamado(c, true, termos)));
+  listaChamadosComData.innerHTML = "";
+  listaChamadosComData.appendChild(pedacoComData);
+
+  const total = chamadosSemData.length + chamadosComData.length;
+  const mostrando = semData.length + comData.length;
+
+  // "Não achei" e "não tem nenhum" são situações diferentes, e quem lê
+  // precisa saber qual das duas é -- senão parece que sumiu tudo.
+  chamadosVazioEl.classList.toggle("hidden", mostrando > 0);
+  chamadosVazioTexto.textContent = peneirando
+    ? "Nenhum chamado bate com essa busca."
+    : "Nenhum chamado por aqui ainda.";
+  chamadosLimparTudoBotao.classList.toggle("hidden", !peneirando);
+
+  chamadosContagemEl.textContent = peneirando && total
+    ? `${mostrando} de ${total} ${total === 1 ? "chamado" : "chamados"}`
+    : "";
+
+  chamadosBuscaLimpar.classList.toggle("hidden", !chamadosBuscaInput.value);
+}
+
+chamadosBuscaInput.addEventListener("input", desenharListaChamados);
+
+chamadosBuscaInput.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !chamadosBuscaInput.value) return;
+  chamadosBuscaInput.value = "";
+  desenharListaChamados();
+});
+
+chamadosBuscaLimpar.addEventListener("click", () => {
+  chamadosBuscaInput.value = "";
+  chamadosBuscaInput.focus();
+  desenharListaChamados();
+});
+
+// Um ouvinte no grupo todo, não um por botão: assim não sobra listener
+// pendurado se algum filtro for adicionado ou tirado do HTML depois.
+chamadosFiltrosEl.addEventListener("click", (event) => {
+  const chip = event.target.closest(".filtro-chip");
+  if (!chip) return;
+  chamadosFiltroAtivo = chip.dataset.filtro;
+  marcarFiltroAtivo();
+  desenharListaChamados();
+});
+
+chamadosLimparTudoBotao.addEventListener("click", limparBuscaEFiltros);
 
 // Rótulo de grupo pra Agenda -- identifica o quão perto de hoje o chamado
 // foi criado, do jeito mais grosso que ainda faz sentido (dia/semana/mês/
