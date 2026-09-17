@@ -8,6 +8,11 @@
   --error: #e5484d;
   /* Amarelo para o que merece atenção mas não é erro: o cadastro segue. */
   --aviso: #f5a623;
+
+  /* Uma transição só, curta, pra tudo que muda ao passar o mouse/tocar --
+     rápida o bastante pra nunca atrapalhar (não é uma animação, é só tirar
+     o "salto seco" de uma mudança de estado). */
+  --transicao: 0.15s ease;
 }
 
 * {
@@ -308,6 +313,33 @@ input[type="text"]:focus {
   font-weight: 500;
   font-size: 0.85rem;
   white-space: nowrap;
+  transition: border-color var(--transicao), color var(--transicao), background var(--transicao);
+}
+
+/* Fundo transparente não reage a brightness() -- contorno e cor próprios,
+   só nesta variante (a genérica de <button> continua valendo em cima). */
+@media (hover: hover) and (pointer: fine) {
+  .botao-secundario:not(:disabled):hover {
+    border-color: var(--accent);
+    color: var(--text);
+    filter: none;
+  }
+}
+
+/* Ação que não tem volta (excluir um registro, cancelar um chamado já
+   criado) -- vermelho só sutil, pra avisar sem gritar. Continua sendo um
+   .botao-secundario por baixo; isto só muda a cor. */
+.botao-perigo {
+  border-color: rgba(229, 72, 77, 0.35);
+  color: var(--error);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .botao-perigo:not(:disabled):hover {
+    border-color: var(--error);
+    color: var(--error);
+    background: rgba(229, 72, 77, 0.08);
+  }
 }
 
 .config-hint {
@@ -752,6 +784,7 @@ button {
      o botão por um instante) fica estranho em cima das cores próprias
      de cada botão -- tira e deixa só o :active (scale) abaixo */
   -webkit-tap-highlight-color: transparent;
+  transition: filter var(--transicao), transform var(--transicao), border-color var(--transicao), background var(--transicao);
 }
 
 button:disabled {
@@ -759,8 +792,17 @@ button:disabled {
   cursor: default;
 }
 
+/* Só em quem tem mouse de verdade: no toque, :hover gruda ligado depois do
+   dedo sair, e o botão ficava "aceso" até a próxima tocada em outro lugar. */
+@media (hover: hover) and (pointer: fine) {
+  button:not(:disabled):hover {
+    filter: brightness(1.08);
+  }
+}
+
 button:active:not(:disabled) {
   transform: scale(0.98);
+  filter: brightness(0.96);
 }
 
 /* Contorno próprio pra quem navega só com teclado (Tab) -- sem isto, cada
@@ -2391,6 +2433,17 @@ input[type="text"].campo-busca-entrada {
   background: rgba(91, 141, 239, 0.18);
 }
 
+/* .agenda-menu button (elemento+classe) tem mais peso que .botao-perigo
+   sozinha (só classe) -- sem repetir aqui, o texto ficava na cor padrão do
+   menu, não na vermelha. Mesma armadilha de especificidade de sempre neste
+   projeto (ver .trab .trab-num na landing). */
+.agenda-menu button.botao-perigo {
+  color: var(--error);
+}
+.agenda-menu button.botao-perigo:hover {
+  background: rgba(229, 72, 77, 0.14);
+}
+
 /* Fila da direita: só o que ainda não tem lugar na agenda. */
 @media (min-width: 768px) {
   .agenda-layout {
@@ -2445,6 +2498,15 @@ input[type="text"].campo-busca-entrada {
   cursor: grab;
   touch-action: none;
   user-select: none;
+  transition: border-color var(--transicao);
+}
+
+/* Só com mouse de verdade -- no toque, arrastar já é o próprio gesto, não
+   precisa de dica extra de que dá pra mexer. */
+@media (hover: hover) and (pointer: fine) {
+  .agenda-fila-card:hover {
+    border-color: var(--accent);
+  }
 }
 
 .agenda-fila-card:hover {

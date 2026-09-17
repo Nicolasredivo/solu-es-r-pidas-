@@ -66,7 +66,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.17b";
+const APP_VERSION = "2026.09.17c";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -5410,7 +5410,7 @@ function montarCardChamado(c, comData, termos = []) {
     <div class="chamado-card-acoes">
       <button type="button" class="botao-secundario botao-editar-chamado">Editar</button>
       ${podeAgir ? `<button type="button" class="botao-secundario botao-concluir-chamado">Marcar concluído</button>` : ""}
-      ${podeAgir ? `<button type="button" class="botao-secundario botao-cancelar-chamado">Cancelar chamado</button>` : ""}
+      ${podeAgir ? `<button type="button" class="botao-secundario botao-perigo botao-cancelar-chamado">Cancelar chamado</button>` : ""}
     </div>
   `;
 
@@ -6617,10 +6617,11 @@ function agendaAbrirMenu(c, x, y) {
   agendaMenuEl.innerHTML = `<strong>#${escapeHtml(String(c.numero))} — ${escapeHtml(c.clienteNome || "")}</strong>` +
     `<p>${escapeHtml(c.status || "")}</p>`;
 
-  const opcao = (rotulo, aoClicar) => {
+  const opcao = (rotulo, aoClicar, classeExtra) => {
     const b = document.createElement("button");
     b.type = "button";
     b.textContent = rotulo;
+    if (classeExtra) b.classList.add(classeExtra);
     b.addEventListener("click", () => { agendaFecharMenu(); aoClicar(); });
     agendaMenuEl.appendChild(b);
   };
@@ -6652,7 +6653,7 @@ function agendaAbrirMenu(c, x, y) {
   opcao("Cancelar chamado", () => {
     if (!confirm(`Cancelar o Chamado #${c.numero} (${c.clienteNome})?`)) return;
     cancelarChamado(c.id, null);
-  });
+  }, "botao-perigo");
 
   agendaMenuEl.classList.remove("hidden");
   const larg = agendaMenuEl.offsetWidth, alt = agendaMenuEl.offsetHeight;

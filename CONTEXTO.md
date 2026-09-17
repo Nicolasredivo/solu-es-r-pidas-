@@ -3697,6 +3697,73 @@ console (conferido numa aba nova, sem histórico de teste). O erro/rejeição
 de teste foram disparados de propósito (`throw`/`Promise.reject`) só pra
 confirmar que o aviso aparece; nada tocou dado real.
 
+### Acabamento visual e hierarquia dos botões (17/09/2026)
+
+Pedido do dono: "mais bonito, mais fluido, mais profissional, menos cara de
+sistema feito por IA, mais rápido" -- sem mudar funcionamento nem
+complicar. Diferente das duas rodadas anteriores, desta vez ele deu a
+instrução direto (não pediu blocos de pergunta), então implementei e testei
+antes de trazer de volta, só confirmando o commit/push no final.
+
+**O que a investigação mostrou** (antes de mexer em qualquer coisa):
+
+- `style.css` tinha só variáveis de cor -- nenhuma de espaçamento, raio de
+  borda ou transição. 12 valores diferentes de `border-radius` espalhados
+  meio ao acaso (2px a 20px), e só 12 regras `:hover` em 2400+ linhas de CSS
+  -- a maioria delas da própria rodada de lembretes de ontem. Botões não
+  tinham NENHUM feedback ao passar o mouse, só o `:active` (scale) ao clicar.
+- **Nenhum botão tinha hierarquia visual por tipo de ação**: "Editar",
+  "Marcar concluído" e "Cancelar chamado" ficavam com a cor exata, lado a
+  lado, sem nada dizendo qual delas não tem volta. Isso é provavelmente o
+  maior motivo de "cara de sistema feito por IA" -- ações destrutivas
+  precisam parecer diferentes das neutras.
+- **Duas suspeitas que investiguei e descartei por serem falsas** (documento
+  aqui pra não repetir a mesma checagem incompleta de novo):
+  - Achei que `<h1>` não tinha estilo nenhum (só o padrão do navegador) --
+    mas na verdade `.card h1` já cobre isso, porque toda `.page` também tem
+    a classe `card`. Conferido com `getComputedStyle` antes de mexer; não
+    precisou de nada.
+  - Cogitei adicionar *debounce* nos campos de busca achando que ajudaria
+    a "velocidade" -- mas pra uma lista pequena (o tamanho real deste
+    negócio), filtrar em memória já é instantâneo (bem menos de 1ms); um
+    debounce só atrasaria o resultado aparecer, deixando a busca **mais
+    lenta** na prática, não mais rápida. Não fiz.
+  - Não existe nenhum atraso artificial (`setTimeout` de espera sem motivo)
+    em lugar nenhum do app -- a única espera "de verdade" fora da Agenda é
+    o piscar de 1,5s ao pular pra um chamado, que é um efeito visual
+    proposital, não uma demora escondida.
+
+**O que foi feito:**
+
+1. `--transicao: 0.15s ease` como token único, usado em todo botão e nos
+   elementos de card/linha que ganharam hover. Curto de propósito -- rápido
+   o bastante pra nunca parecer devagar, só tirar o "salto seco".
+2. Todo `<button>` ganhou `:hover` (clareia levemente, só com
+   `@media (hover: hover) and (pointer: fine)` -- no toque isso nunca
+   dispara, então não fica "grudado aceso" depois do dedo sair) e
+   `transition` em filter/transform/border-color/background.
+3. **`.botao-perigo`**: vermelho sutil (borda e texto, não um botão sólido
+   vermelho -- "sem exagero"), só nas ações que apagam ou cancelam de
+   verdade: excluir cadastro/despesa/conta fixa/receita/retirada/cartão, e
+   cancelar chamado (tanto no card de Consultar chamados quanto no menu
+   rápido da Agenda). "Marcar concluído", "Tirar da agenda" e qualquer
+   "Cancelar" que só fecha um formulário sem salvar continuam neutros --
+   não é destrutivo, é só desistir de uma ação que nem tinha acontecido
+   ainda.
+4. O menu rápido da Agenda tinha a mesma armadilha de especificidade já
+   documentada neste projeto (`.trab p` vs `.trab-num` na landing):
+   `.agenda-menu button` (elemento+classe) pesa mais que `.botao-perigo`
+   sozinha, então o vermelho não aparecia sem repetir o seletor com mais
+   peso (`.agenda-menu button.botao-perigo`).
+5. `.agenda-fila-card` (draggable, mas sem nenhum feedback ao passar o
+   mouse) ganhou uma borda que acende sutilmente, só com mouse de verdade.
+
+Testado nas 6 páginas, com captura de tela de Consultar chamados/Agenda/
+Cadastro/Financeiro em desktop e mobile (375px), console limpo numa aba
+nova, e conferido por `getComputedStyle` que a cor/classe de cada botão
+bateu com o esperado antes de aceitar como pronto. Nenhum dado real
+tocado; nenhuma funcionalidade mudou -- só cor, transição e hover.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
