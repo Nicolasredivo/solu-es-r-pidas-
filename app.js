@@ -48,7 +48,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.16i";
+const APP_VERSION = "2026.09.16j";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4701,7 +4701,10 @@ salvarUrlBotao.addEventListener("click", () => {
 
 restaurarUrlBotao.addEventListener("click", () => {
   localStorage.removeItem(CHAVE_URL);
-  n8nUrlInput.value = N8N_BASE_URL;
+  // Passa por baseUrlN8n() em vez de ler N8N_BASE_URL solto: era a última
+  // referência direta que sobrou, e sem config.js carregado ela estouraria
+  // ReferenceError bem aqui (mesmo caso já corrigido na revisão anterior).
+  n8nUrlInput.value = baseUrlN8n();
   mostrarConfigHint("ok", "Voltou para o endereço padrão.");
 });
 
@@ -5153,7 +5156,9 @@ function desenharAnexosChamado() {
     const ehImagem = a.contentType.startsWith("image/");
     item.innerHTML = (ehImagem ? `<img src="${a.url}" alt="" />` : `<span class="chamado-anexo-icone">📄</span>`) +
       `<span class="chamado-anexo-nome">${escapeHtml(a.filename)}</span>` +
-      `<button type="button" class="chamado-anexo-remover" aria-label="Remover">×</button>`;
+      // O nome do arquivo entra no rótulo porque com vários anexos na lista
+      // um "Remover" solto não diz qual deles o botão remove.
+      `<button type="button" class="chamado-anexo-remover" title="Remover ${escapeHtml(a.filename)}" aria-label="Remover ${escapeHtml(a.filename)}">×</button>`;
     item.querySelector(".chamado-anexo-remover").addEventListener("click", () => {
       soltarAnexo(chamadosAnexosArquivos[i]);
       chamadosAnexosArquivos.splice(i, 1);
@@ -5174,7 +5179,9 @@ function desenharAnexosNovosEdicao() {
     const ehImagem = a.contentType.startsWith("image/");
     item.innerHTML = (ehImagem ? `<img src="${a.url}" alt="" />` : `<span class="chamado-anexo-icone">📄</span>`) +
       `<span class="chamado-anexo-nome">${escapeHtml(a.filename)}</span>` +
-      `<button type="button" class="chamado-anexo-remover" aria-label="Remover">×</button>`;
+      // O nome do arquivo entra no rótulo porque com vários anexos na lista
+      // um "Remover" solto não diz qual deles o botão remove.
+      `<button type="button" class="chamado-anexo-remover" title="Remover ${escapeHtml(a.filename)}" aria-label="Remover ${escapeHtml(a.filename)}">×</button>`;
     item.querySelector(".chamado-anexo-remover").addEventListener("click", () => {
       soltarAnexo(chamadoEditAnexosNovos[i]);
       chamadoEditAnexosNovos.splice(i, 1);

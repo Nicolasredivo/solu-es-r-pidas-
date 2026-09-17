@@ -3488,6 +3488,60 @@ Tudo foi testado com dados **falsos** e `pedirAoN8n` trocado por uma função qu
 só dá erro. Nenhum registro real foi tocado. As 6 páginas e as 8 abas internas
 foram percorridas com a rede desligada, sem um erro de JavaScript sequer.
 
+### Rótulos e dicas nos botões (16/09/2026)
+
+O dono levantou quatro frentes (rótulos/dicas, renderização, paginação e
+"backend cheio de N+1") e pediu só a primeira depois da conversa. O que a
+conversa apurou, pra não voltar à tona sem motivo:
+
+- **N+1 não existe neste backend.** Os 13 workflows `listar-*` têm todos a
+  mesma forma: webhook → confere senha → **uma** busca no Airtable → um Code
+  monta a lista → responde. `listar-contatos` e `listar-locais` têm duas
+  buscas, mas sequenciais (acha a entidade, filtra), não por registro. No
+  frontend também não há chamada dentro de laço.
+- **O problema real é o oposto**: todo listar usa `returnAll: true`, ou seja,
+  traz a tabela inteira. Cresce em linha reta com o volume.
+- **Paginar não é mudança isolada.** A busca e os filtros de Consultar
+  chamados funcionam porque o navegador tem *todos* os chamados. Paginar o
+  backend obriga a mover busca e filtro pro servidor, e aí cada tecla vira
+  ida ao n8n. Ficou combinado adiar até o volume justificar, e **medir antes**
+  (quantos registros por tabela, quanto tempo cada listagem leva).
+
+O que foi feito:
+
+- Auditoria dos 118 `<button>`: os 6 "sem rótulo" estão todos dentro de
+  `<template>` e recebem texto de verdade do JS — não eram problema. Sobrava
+  **um** botão com falha real (o ✏️ de editar cadastro, com `title` mas sem
+  `aria-label`). Corrigido; agora são 0 botões só-ícone sem rótulo.
+- Cobertura de dica subiu de 3 para 24 `title`. **Critério: só onde o texto
+  do botão não conta a história toda.** Dica que repete o próprio rótulo é
+  ruído e não foi colocada — por isso "Salvar cadastro", "Cancelar",
+  "Pagar por PIX agora" e os passos de zoom nomeados seguem sem `title`.
+- O × de cada anexo passou a nomear o arquivo (`aria-label="Remover foto
+  da caixa.png"`): com vários anexos, três "Remover" iguais não diziam qual.
+- Sobrou uma leitura direta de `N8N_BASE_URL` no botão "Restaurar padrão" —
+  mesmo ReferenceError corrigido na revisão anterior. Agora passa por
+  `baseUrlN8n()`, e não existe mais nenhuma leitura solta dessa constante.
+
+**Cada dica foi conferida no código antes de ser escrita**, porque dica errada
+é pior que dica nenhuma. As que afirmam algo concreto:
+
+- "Encerrar" vs "Excluir" em conta fixa: encerrar faz `PATCH Ativo: false`
+  (para de gerar, guarda o histórico); excluir faz `DELETE` da regra. Era a
+  distinção menos óbvia do app inteiro.
+- "Marcar como paga"/"recebida" gravam `dataPagamento`/`dataRecebimento` com
+  `hojeISO()` — daí a dica dizer "com a data de hoje".
+- "Agora", na Agenda, só rola a linha do tempo (`agendaIrPara`); não agenda
+  nada. O nome sozinho deixava dúvida.
+- Apagar retirada "devolve o valor ao caixa" porque o saldo é
+  `saldoInicial + entrou − saiu − tirado`.
+
+**Limite conhecido:** `title` não aparece em celular (não existe "passar o
+mouse"), e o app é usado principalmente no telefone. As dicas ajudam no
+desktop; o que vale nos dois é o `aria-label`. Se em algum momento a dica
+precisar chegar no celular, aí é outro mecanismo (toque longo, ou um "?"
+próprio), e isso não foi feito.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

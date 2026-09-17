@@ -30,14 +30,14 @@
 
       <div id="status" class="status"></div>
 
-      <button type="button" id="toggle-config" class="link-button">⚙ Endereço do n8n</button>
+      <button type="button" id="toggle-config" class="link-button" title="Onde o app busca os dados. O endereço muda toda vez que o túnel é reiniciado.">⚙ Endereço do n8n</button>
 
       <div id="config-box" class="config-box hidden">
         <label for="n8n-url">Endereço do túnel (Cloudflare)</label>
         <input type="text" id="n8n-url" placeholder="https://algo.trycloudflare.com" autocomplete="off" />
         <div class="config-acoes">
           <button type="button" id="salvar-url">Salvar</button>
-          <button type="button" id="restaurar-url" class="botao-secundario">Restaurar padrão</button>
+          <button type="button" id="restaurar-url" class="botao-secundario" title="Esquece o endereço salvo neste aparelho e volta ao que vem no código.">Restaurar padrão</button>
         </div>
         <p id="config-hint" class="config-hint"></p>
       </div>
@@ -268,7 +268,7 @@
           <div class="busca-linha">
             <input type="text" id="busca-cadastro" autocomplete="off"
                    placeholder="Buscar por nome, CPF/CNPJ ou contato" />
-            <button type="button" id="recarregar-lista" class="botao-secundario">Atualizar</button>
+            <button type="button" id="recarregar-lista" class="botao-secundario" title="Busca a lista de novo no servidor.">Atualizar</button>
           </div>
 
           <div class="filtros-cadastro">
@@ -330,10 +330,10 @@
           <template id="modelo-detalhe">
             <div class="detalhe">
               <div class="detalhe-acoes">
-                <button type="button" class="acao-editar" title="Editar cadastro">✏️</button>
+                <button type="button" class="acao-editar" title="Editar cadastro" aria-label="Editar cadastro">✏️</button>
                 <button type="button" class="acao-salvar botao-secundario hidden">Salvar</button>
                 <button type="button" class="acao-cancelar botao-secundario hidden">Cancelar</button>
-                <button type="button" class="acao-excluir botao-secundario">Excluir</button>
+                <button type="button" class="acao-excluir botao-secundario" title="Apaga este cadastro de vez.">Excluir</button>
                 <button type="button" class="acao-fechar botao-secundario">Fechar</button>
               </div>
 
@@ -717,7 +717,7 @@
           <div class="busca-linha">
             <input type="text" id="busca-despesa" autocomplete="off"
                    placeholder="Buscar por descrição ou fornecedor" />
-            <button type="button" id="recarregar-despesas" class="botao-secundario">Atualizar</button>
+            <button type="button" id="recarregar-despesas" class="botao-secundario" title="Busca a lista de novo no servidor.">Atualizar</button>
           </div>
 
           <div class="filtros-linha">
@@ -745,9 +745,9 @@
                 <span class="despesa-extra"></span>
               </button>
               <div class="despesa-acoes hidden">
-                <button type="button" class="despesa-pagar botao-secundario">Marcar como paga</button>
+                <button type="button" class="despesa-pagar botao-secundario" title="Registra o pagamento com a data de hoje.">Marcar como paga</button>
                 <button type="button" class="despesa-editar botao-secundario">✏️ Editar</button>
-                <button type="button" class="despesa-excluir botao-secundario">Excluir</button>
+                <button type="button" class="despesa-excluir botao-secundario" title="Apaga só esta conta.">Excluir</button>
                 <button type="button" class="despesa-excluir-grupo botao-secundario hidden">
                   Excluir todas as parcelas
                 </button>
@@ -844,8 +844,8 @@
               </button>
               <div class="despesa-acoes hidden">
                 <button type="button" class="recorrente-editar botao-secundario">✏️ Editar</button>
-                <button type="button" class="recorrente-encerrar botao-secundario">Encerrar</button>
-                <button type="button" class="recorrente-excluir botao-secundario">Excluir</button>
+                <button type="button" class="recorrente-encerrar botao-secundario" title="Para de gerar contas novas e mantém as que já saíram.">Encerrar</button>
+                <button type="button" class="recorrente-excluir botao-secundario" title="Apaga a regra de vez. Use quando foi cadastro errado.">Excluir</button>
               </div>
             </div>
           </template>
@@ -932,7 +932,7 @@
           <div class="busca-linha">
             <input type="text" id="busca-receita" autocomplete="off"
                    placeholder="Buscar por descrição ou cliente" />
-            <button type="button" id="recarregar-receitas" class="botao-secundario">Atualizar</button>
+            <button type="button" id="recarregar-receitas" class="botao-secundario" title="Busca a lista de novo no servidor.">Atualizar</button>
           </div>
 
           <div class="filtros-linha">
@@ -960,9 +960,9 @@
                 <span class="despesa-extra"></span>
               </button>
               <div class="despesa-acoes hidden">
-                <button type="button" class="receita-receber botao-secundario">Marcar como recebida</button>
+                <button type="button" class="receita-receber botao-secundario" title="Registra o recebimento com a data de hoje.">Marcar como recebida</button>
                 <button type="button" class="receita-editar botao-secundario">✏️ Editar</button>
-                <button type="button" class="receita-excluir botao-secundario">Excluir</button>
+                <button type="button" class="receita-excluir botao-secundario" title="Apaga esta conta a receber.">Excluir</button>
               </div>
             </div>
           </template>
@@ -1061,7 +1061,7 @@
                   <span class="despesa-extra"></span>
                 </button>
                 <div class="despesa-acoes hidden">
-                  <button type="button" class="retirada-excluir botao-secundario">Excluir</button>
+                  <button type="button" class="retirada-excluir botao-secundario" title="Apaga esta retirada e devolve o valor ao caixa.">Excluir</button>
                 </div>
               </div>
             </template>
@@ -1250,7 +1250,7 @@
                 </button>
                 <div class="despesa-acoes hidden">
                   <button type="button" class="cartao-editar botao-secundario">✏️ Editar</button>
-                  <button type="button" class="cartao-excluir botao-secundario">Excluir</button>
+                  <button type="button" class="cartao-excluir botao-secundario" title="Apaga este cartão do cadastro.">Excluir</button>
                 </div>
               </div>
             </template>
@@ -1285,7 +1285,7 @@
         <h1>Consultar chamados</h1>
 
         <p id="chamados-status" class="doc-hint"></p>
-        <button type="button" id="recarregar-chamados" class="link-button">↻ Atualizar</button>
+        <button type="button" id="recarregar-chamados" class="link-button" title="Busca os chamados de novo no servidor.">↻ Atualizar</button>
 
         <!-- Busca e filtros. Tudo é peneirado aqui no navegador, em cima
              das listas que já foram carregadas: digitar não dispara nenhuma
@@ -1312,8 +1312,8 @@
                aria-label="Filtrar chamados">
             <button type="button" class="filtro-chip ativo" data-filtro="todos" aria-pressed="true">Todos</button>
             <button type="button" class="filtro-chip" data-filtro="hoje" aria-pressed="false">Hoje</button>
-            <button type="button" class="filtro-chip" data-filtro="semana" aria-pressed="false">7 dias</button>
-            <button type="button" class="filtro-chip" data-filtro="sem-data" aria-pressed="false">Sem data</button>
+            <button type="button" class="filtro-chip" data-filtro="semana" aria-pressed="false" title="De hoje até sete dias à frente.">7 dias</button>
+            <button type="button" class="filtro-chip" data-filtro="sem-data" aria-pressed="false" title="Chamados que ainda não foram para a agenda.">Sem data</button>
             <button type="button" class="filtro-chip" data-filtro="cancelado" aria-pressed="false">Cancelados</button>
           </div>
 
@@ -1444,21 +1444,21 @@
 
           <div class="agenda-ferramentas">
             <div class="agenda-zoom" role="group" aria-label="Escala de tempo">
-              <button type="button" id="agenda-zoom-menos" class="agenda-zoom-passo" aria-label="Afastar no tempo">−</button>
+              <button type="button" id="agenda-zoom-menos" class="agenda-zoom-passo" aria-label="Afastar no tempo" title="Afastar no tempo">−</button>
               <button type="button" class="agenda-nivel" data-nivel="ano">Ano</button>
               <button type="button" class="agenda-nivel" data-nivel="mes">Mês</button>
               <button type="button" class="agenda-nivel" data-nivel="semana">Semana</button>
               <button type="button" class="agenda-nivel" data-nivel="dia">Dia</button>
               <button type="button" class="agenda-nivel" data-nivel="hora">Hora</button>
               <button type="button" class="agenda-nivel" data-nivel="minuto">Minuto</button>
-              <button type="button" id="agenda-zoom-mais" class="agenda-zoom-passo" aria-label="Aproximar no tempo">+</button>
+              <button type="button" id="agenda-zoom-mais" class="agenda-zoom-passo" aria-label="Aproximar no tempo" title="Aproximar no tempo">+</button>
             </div>
 
             <div class="agenda-botoes">
-              <button type="button" id="agenda-agora" class="botao-secundario">Agora</button>
+              <button type="button" id="agenda-agora" class="botao-secundario" title="Leva a linha do tempo para o horário de agora.">Agora</button>
               <button type="button" id="agenda-desfazer" class="botao-secundario agenda-botao-icone" title="Desfazer (Ctrl+Z)" aria-label="Desfazer">↶</button>
               <button type="button" id="agenda-refazer" class="botao-secundario agenda-botao-icone" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer">↷</button>
-              <button type="button" id="agenda-atualizar" class="link-button">↻ Atualizar</button>
+              <button type="button" id="agenda-atualizar" class="link-button" title="Busca os chamados de novo no servidor.">↻ Atualizar</button>
             </div>
           </div>
         </div>
