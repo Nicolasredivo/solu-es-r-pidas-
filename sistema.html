@@ -1381,6 +1381,35 @@
           <button type="button" id="edit-chamado-cancelar-form" class="botao-secundario">Fechar</button>
           <div id="edit-chamado-status" class="status"></div>
         </div>
+
+        <!-- Só aparece pra chamado de Orçamento -- preenche o preço combinado
+             e os detalhes, sem mexer em endereço/descrição (isso continua no
+             "Editar chamado" de sempre, que já cobre qualquer tipo). -->
+        <div id="orcamento-box" class="chamado-editar-box hidden">
+          <h2 class="titulo-bloco" id="orcamento-titulo">Finalizar orçamento</h2>
+          <p class="doc-hint">Preencha o que já foi combinado com o cliente. Dá pra
+            voltar aqui e ajustar quantas vezes precisar antes de fechar negócio.</p>
+
+          <label for="orcamento-valor-material">Valor do material (opcional)</label>
+          <input type="text" id="orcamento-valor-material" inputmode="numeric" placeholder="R$ 0,00" />
+
+          <label for="orcamento-valor-mao-obra">Valor da mão de obra (opcional)</label>
+          <input type="text" id="orcamento-valor-mao-obra" inputmode="numeric" placeholder="R$ 0,00" />
+
+          <label for="orcamento-valor-aproximado">Valor aproximado (se ainda não quebrou em material/mão
+            de obra)</label>
+          <input type="text" id="orcamento-valor-aproximado" inputmode="numeric" placeholder="R$ 0,00" />
+
+          <label for="orcamento-forma-pagamento">Forma de pagamento combinada (opcional)</label>
+          <input type="text" id="orcamento-forma-pagamento" placeholder="Ex: 50% entrada, resto na entrega · Pix" autocomplete="off" />
+
+          <label for="orcamento-detalhes">O que está incluso</label>
+          <textarea id="orcamento-detalhes" rows="3" placeholder="O que será feito por esse valor -- ajuda a evitar mal-entendido depois"></textarea>
+
+          <button type="button" id="orcamento-salvar">Finalizar orçamento</button>
+          <button type="button" id="orcamento-cancelar-form" class="botao-secundario">Fechar</button>
+          <div id="orcamento-status" class="status"></div>
+        </div>
       </div>
 
       <!-- ===================== Chamados (Criar chamado) ===================== -->
@@ -1388,6 +1417,22 @@
         <h1>Criar chamado</h1>
 
         <form id="chamado-form">
+            <div class="grupo">
+              <label>Tipo de chamado</label>
+              <div class="opcoes" id="chamado-grupo-tipo">
+                <button type="button" class="opcao active" data-valor="Atendimento">Atendimento</button>
+                <button type="button" class="opcao" data-valor="Orçamento">Orçamento</button>
+              </div>
+              <!-- Some sozinho se o tipo escolhido for Atendimento (o padrão de
+                   sempre) -- só aparece pra lembrar o que muda ao escolher
+                   Orçamento, sem crescer o formulário à toa. -->
+              <p id="chamado-tipo-dica" class="doc-hint hidden">
+                Cria como pedido de orçamento: sem preço ainda. Dá pra colocar na
+                agenda (visita ao local) ou deixar na fila e orçar à distância —
+                depois, um botão finaliza com o valor combinado.
+              </p>
+            </div>
+
             <div id="chamado-passo-cliente">
               <label for="chamado-busca-cliente">Cliente</label>
               <input type="text" id="chamado-busca-cliente" placeholder="Nome, CNPJ/CPF ou contato" autocomplete="off" />

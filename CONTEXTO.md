@@ -3764,6 +3764,92 @@ nova, e conferido por `getComputedStyle` que a cor/classe de cada botão
 bateu com o esperado antes de aceitar como pronto. Nenhum dado real
 tocado; nenhuma funcionalidade mudou -- só cor, transição e hover.
 
+### Chamado de orçamento (17/09/2026)
+
+Segundo tipo de chamado, pedido em paralelo com um documento de contexto
+pra brainstorm (em voz, numa conversa separada) do próximo passo grande do
+sistema, "iniciar atendimento" -- esse documento ficou fora do
+repositório, de propósito (tem informação sobre como o dono trabalha, não
+é código nem faz parte do site publicado). Chamado de orçamento foi
+pedido com liberdade de desenho ("elabore da melhor forma possível, você
+sabe como fazer isso bem feito") -- decisões abaixo, pra não re-perguntar
+depois.
+
+**Modelo de dados**: um campo novo, `Tipo_Chamado` (singleSelect:
+"Atendimento" | "Orçamento"). Em branco conta como Atendimento -- todo
+chamado de antes deste campo existir continua funcionando sem precisar de
+backfill nenhum (nem escrita em dado real). Chamado de orçamento é o MESMO
+registro/tabela de sempre -- cliente, endereço, agenda, anexos, histórico,
+tudo funciona igual. Cinco campos novos, só usados quando o tipo é
+Orçamento: `Orcamento_Valor_Material`, `Orcamento_Valor_MaoDeObra`,
+`Orcamento_Valor_Aproximado` (número vazio vira `null`, não `0` -- "não
+informado" é diferente de "custa zero"), `Orcamento_Forma_Pagamento`,
+`Orcamento_Detalhes`, `Orcamento_Situacao` ("Finalizado" ou vazio).
+
+**Por que "pode ser colocado na agenda ou não" não precisou de nada novo**:
+desde a rodada de 14/09, todo chamado NASCE sem agendamento (isso foi
+tirado de "Criar chamado" de propósito) -- agendar é sempre um passo
+separado, via arrastar na Agenda. Um orçamento segue exatamente o mesmo
+caminho: pode ficar na fila (orçamento à distância) ou ser arrastado pra
+um horário (visita ao local pra avaliar), sem nenhuma lógica extra.
+
+**Três ações novas, todas reaproveitando webhooks que já existiam**, em vez
+de criar endpoint novo pra cada uma:
+- **Criar chamado**: ganhou um seletor "Tipo de chamado" (Atendimento
+  ativo por padrão, igual sempre foi). O corpo do pedido leva
+  `tipoChamado`; o backend valida contra uma lista de valores aceitos e
+  cai em Atendimento pra qualquer coisa que não reconheça.
+- **Finalizar orçamento**: reaproveita `editar-chamado` com uma flag nova
+  (`finalizarOrcamento=true`). Formulário PRÓPRIO (`#orcamento-box`),
+  separado do "Editar chamado" de sempre -- mas como os dois usam o MESMO
+  webhook, e esse webhook sempre regrava `Local_Exato`/
+  `Descricao_Solicitacao`/`Observacoes_Servico` a partir do que vier no
+  pedido (nunca de forma condicional), o formulário de orçamento reenvia
+  esses três campos com o valor ATUAL do chamado, sem mudar nada -- senão
+  finalizar um orçamento apagaria a descrição do serviço. Validação de
+  "pelo menos um valor preenchido" é só no navegador (a tela é a única
+  porta de entrada dessa ação, não precisa duplicar no servidor).
+- **Transformar em atendimento**: reaproveita `reagendar-chamado` com uma
+  flag nova (`transformarEmAtendimento=true`), no mesmo lugar de
+  cancelar/concluir -- é a mesma família de transição de estado. Só muda
+  `Tipo_Chamado` pra "Atendimento" e registra no Histórico. Sem volta por
+  esse botão de propósito (decisão rara, não ação do dia a dia).
+
+**Regras de tela** (nenhuma dessas é imposta pelo Airtable, são só lógica
+de exibição): "Marcar concluído" some pra um chamado que ainda É orçamento
+(concluir um pedido de preço não faz sentido -- primeiro alguém aceita e
+vira atendimento, depois é que se conclui); "Cancelar chamado" continua
+disponível pros dois tipos (recusar um orçamento é cancelar, igual
+sempre); "Transformar em atendimento" só aparece depois de finalizado (não
+faz sentido virar atendimento sem preço). Uma vez transformado,
+`tipoChamado` vira "Atendimento" e o card volta a mostrar os botões
+normais -- nada de código extra pra isso, é consequência direta do mesmo
+`if` que já decidia o que mostrar.
+
+**Selo visual**: contorno (não preenchido), não uma quinta cor -- as
+quatro cores de status (aguardando/agendado/concluído/cancelado) já usam
+toda a paleta semântica que faz sentido reaproveitar; tipo é uma categoria
+diferente de status, então precisa ler como "outra coisa", não como mais
+uma cor competindo. Atendimento (o padrão, a maioria dos chamados) não
+leva selo nenhum -- só Orçamento aparece marcado, pra não empapelar a tela
+com informação óbvia.
+
+**Achado no meio do caminho, corrigido antes de publicar**: ao puxar os
+workflows ao vivo da API pra editar, uma tentativa inicial de gravar o
+backup salvou o campo `activeVersion` (metadado da API do n8n que carrega
+uma cópia inteira da versão anterior) -- que tinha a senha real dentro.
+Corrigido reconstruindo os 4 backups no formato limpo de sempre
+(`name`/`nodes`/`connections`/`settings`), com varredura no repositório
+inteiro confirmando que a senha real não sobrou em lugar nenhum antes do
+commit. Mesmo cuidado já documentado na rodada de 17/09 anterior (trava de
+passado) -- registrado de novo aqui porque quase aconteceu segunda vez.
+
+Testado com chamados falsos e stubs de `pedirAoN8n` que respondem por
+caminho (incluindo o reenvio de endereço/descrição inalterado ao
+finalizar, e a troca de tipo persistindo de verdade no estado em memória).
+Backend publicado e verificado com senha errada nos 4 webhooks antes do
+commit. Nenhum dado real tocado.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

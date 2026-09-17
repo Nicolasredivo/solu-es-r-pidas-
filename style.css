@@ -1962,6 +1962,28 @@ input[type="text"].campo-busca-entrada {
   margin: 6px 0 0;
 }
 
+/* Contorno, não preenchido -- as quatro cores de status (aguardando/
+   agendado/concluído/cancelado) já usam todo o resto da paleta. Isto é uma
+   categoria, não um status, então precisa ler como algo diferente, não como
+   uma quinta cor competindo com as outras. */
+.chamado-tipo-badge {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 20px;
+  border: 1px solid var(--muted);
+  color: var(--muted);
+}
+
+.chamado-card-orcamento {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--ok);
+  margin: 6px 0 0;
+}
+
 /* Rodapé do card -- metadado discreto, não é informação do serviço em si */
 .chamado-card-criado {
   font-size: 0.72rem;

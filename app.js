@@ -66,7 +66,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.17c";
+const APP_VERSION = "2026.09.17d";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -4945,6 +4945,20 @@ const editChamadoSalvarBotao = document.getElementById("edit-chamado-salvar");
 const editChamadoCancelarFormBotao = document.getElementById("edit-chamado-cancelar-form");
 const editChamadoStatus = document.getElementById("edit-chamado-status");
 
+const orcamentoBox = document.getElementById("orcamento-box");
+const orcamentoTitulo = document.getElementById("orcamento-titulo");
+const orcamentoValorMaterialInput = document.getElementById("orcamento-valor-material");
+const orcamentoValorMaoObraInput = document.getElementById("orcamento-valor-mao-obra");
+const orcamentoValorAproximadoInput = document.getElementById("orcamento-valor-aproximado");
+const orcamentoFormaPagamentoInput = document.getElementById("orcamento-forma-pagamento");
+const orcamentoDetalhesInput = document.getElementById("orcamento-detalhes");
+const orcamentoSalvarBotao = document.getElementById("orcamento-salvar");
+const orcamentoCancelarFormBotao = document.getElementById("orcamento-cancelar-form");
+const orcamentoStatus = document.getElementById("orcamento-status");
+ligarMascaraDinheiro(orcamentoValorMaterialInput);
+ligarMascaraDinheiro(orcamentoValorMaoObraInput);
+ligarMascaraDinheiro(orcamentoValorAproximadoInput);
+
 const chamadosBusca = document.getElementById("chamado-busca-cliente");
 const chamadosListaClientes = document.getElementById("chamado-lista-clientes");
 const chamadoClienteStatus = document.getElementById("chamado-cliente-status");
@@ -4968,6 +4982,14 @@ const chamadoAnexosLista = document.getElementById("chamado-anexos-lista");
 const chamadoForm = document.getElementById("chamado-form");
 const chamadoSalvarBotao = document.getElementById("chamado-salvar-botao");
 const chamadoStatus = document.getElementById("chamado-status");
+const chamadoGrupoTipo = document.getElementById("chamado-grupo-tipo");
+const chamadoTipoDica = document.getElementById("chamado-tipo-dica");
+
+// A dica só existe pra explicar o que muda ao escolher Orçamento -- em
+// Atendimento (o padrão de sempre) o formulário fica exatamente como já era.
+configurarGrupo(chamadoGrupoTipo, (botao) => {
+  chamadoTipoDica.classList.toggle("hidden", botao.dataset.valor !== "Orçamento");
+});
 
 let chamadosCadastros = [];
 let chamadosCadastrosCarregados = false;
@@ -4990,6 +5012,10 @@ function mostrarChamadoStatus(tipo, mensagem) {
 function mostrarEditChamadoStatus(tipo, mensagem) {
   editChamadoStatus.textContent = mensagem;
   editChamadoStatus.className = `status show ${tipo}`;
+}
+function mostrarOrcamentoStatus(tipo, mensagem) {
+  orcamentoStatus.textContent = mensagem;
+  orcamentoStatus.className = `status show ${tipo}`;
 }
 function mostrarChamadosListaStatus(tipo, mensagem) {
   chamadosStatusEl.textContent = mensagem;
@@ -5297,6 +5323,10 @@ function limparFormularioChamado() {
   chamadoObservacoesInput.value = "";
   chamadoAnexosLista.innerHTML = "";
   mostrarChamadoStatus("neutral", "");
+  // Volta pro padrão (Atendimento) -- não deixa o próximo chamado nascer
+  // Orçamento só porque foi o último tipo escolhido.
+  chamadoGrupoTipo.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === "Atendimento"));
+  chamadoTipoDica.classList.add("hidden");
 }
 
 async function criarChamadoDeVerdade() {
@@ -5307,6 +5337,7 @@ async function criarChamadoDeVerdade() {
     clienteId: chamadoClienteEscolhido.id,
     contatoId: chamadoContatoEscolhidoId,
     localId: chamadoLocalEscolhidoId,
+    tipoChamado: escolhaDoGrupo(chamadoGrupoTipo) || "Atendimento",
     localExato: chamadoLocalExatoInput.value.trim(),
     descricaoSolicitacao: chamadoDescricaoInput.value.trim(),
     observacoesServico: chamadoObservacoesInput.value.trim(),
@@ -5392,29 +5423,64 @@ function montarCardChamado(c, comData, termos = []) {
   const jaConcluido = c.status === "Concluído";
   const podeAgir = !jaCancelado && !jaConcluido;
 
+  // Orçamento é o mesmo registro, só com um campo de tipo a mais -- em
+  // branco conta como Atendimento (chamado de antes deste campo existir).
+  // "Concluir" não faz sentido pra um orçamento que ainda não virou
+  // atendimento de verdade (ver CONTEXTO.md, chamado de orçamento).
+  const ehOrcamento = c.tipoChamado === "Orçamento";
+  const orcamentoPronto = c.orcamentoSituacao === "Finalizado";
+
   // realcar() = escapeHtml() + <mark> nos trechos que a busca encontrou. Com
   // a busca vazia ele se comporta igual ao escapeHtml de antes.
   const rc = (t) => realcar(t, termos);
+
+  let orcamentoTexto = "";
+  if (ehOrcamento && orcamentoPronto) {
+    const material = Number(c.orcamentoValorMaterial) || 0;
+    const maoDeObra = Number(c.orcamentoValorMaoDeObra) || 0;
+    const quebrado = material + maoDeObra;
+    const valor = quebrado > 0 ? quebrado : (Number(c.orcamentoValorAproximado) || 0);
+    orcamentoTexto = `<p class="chamado-card-orcamento">${escapeHtml(dinheiro(valor))}` +
+      `${c.orcamentoFormaPagamento ? " · " + rc(c.orcamentoFormaPagamento) : ""}</p>`;
+    if (c.orcamentoDetalhes) orcamentoTexto += `<p class="doc-hint">${rc(c.orcamentoDetalhes)}</p>`;
+  }
 
   card.innerHTML = `
     <div class="chamado-card-topo">
       <span class="chamado-numero">#${rc(c.numero)}</span>
       <span class="chamado-status-badge ${statusClasseChamado(c.status)}">${escapeHtml(c.status)}</span>
     </div>
+    ${ehOrcamento ? `<span class="chamado-tipo-badge">Orçamento${orcamentoPronto ? "" : " · em aberto"}</span>` : ""}
     <strong>${rc(c.clienteNome)}</strong>
     <p class="doc-hint">${rc(c.enderecoCopia)}${c.localExato ? " · " + rc(c.localExato) : ""}</p>
     <p>${rc(c.descricaoSolicitacao)}</p>
     ${c.contatoNome ? `<p class="doc-hint">Contato: ${rc(c.contatoNome)}${c.contatoWhatsApp ? " · " + rc(c.contatoWhatsApp) : ""}</p>` : ""}
     ${horarioTexto}
+    ${orcamentoTexto}
     ${criadoTexto}
     <div class="chamado-card-acoes">
       <button type="button" class="botao-secundario botao-editar-chamado">Editar</button>
-      ${podeAgir ? `<button type="button" class="botao-secundario botao-concluir-chamado">Marcar concluído</button>` : ""}
+      ${ehOrcamento && podeAgir ? `<button type="button" class="botao-secundario botao-finalizar-orcamento">${orcamentoPronto ? "Editar orçamento" : "Finalizar orçamento"}</button>` : ""}
+      ${ehOrcamento && podeAgir && orcamentoPronto ? `<button type="button" class="botao-secundario botao-transformar-atendimento">Transformar em atendimento</button>` : ""}
+      ${!ehOrcamento && podeAgir ? `<button type="button" class="botao-secundario botao-concluir-chamado">Marcar concluído</button>` : ""}
       ${podeAgir ? `<button type="button" class="botao-secundario botao-perigo botao-cancelar-chamado">Cancelar chamado</button>` : ""}
     </div>
   `;
 
   card.querySelector(".botao-editar-chamado").addEventListener("click", () => abrirEdicaoChamado(c));
+
+  const finalizarBotao = card.querySelector(".botao-finalizar-orcamento");
+  if (finalizarBotao) finalizarBotao.addEventListener("click", () => abrirFinalizarOrcamento(c));
+
+  const transformarBotao = card.querySelector(".botao-transformar-atendimento");
+  if (transformarBotao) {
+    transformarBotao.addEventListener("click", () => {
+      if (!confirm(`Cliente aceitou o orçamento do Chamado #${c.numero} (${c.clienteNome})? Ele vai virar um atendimento normal.`)) return;
+      transformarBotao.disabled = true;
+      transformarBotao.textContent = "Transformando...";
+      transformarEmAtendimento(c.id, transformarBotao);
+    });
+  }
 
   const concluirBotao = card.querySelector(".botao-concluir-chamado");
   if (concluirBotao) {
@@ -5464,6 +5530,31 @@ async function concluirChamado(id, botao) {
       botao.textContent = "Marcar concluído";
     }
     mostrarChamadosListaStatus("error", (resposta && resposta.mensagem) || "Não consegui marcar como concluído.");
+  }
+}
+
+// Mesmo formato de cancelar/concluir -- muda na tela na hora, recarrega de
+// verdade em seguida. Sem volta por aqui de propósito (ver comentário no
+// workflow reagendar-chamado.json).
+async function transformarEmAtendimento(id, botao) {
+  let resposta;
+  try {
+    resposta = await pedirAoN8n("reagendar-chamado", { chamadoId: id, transformarEmAtendimento: "true" });
+  } catch (err) {
+    resposta = null;
+  }
+  if (resposta && resposta.ok) {
+    const alvo = chamadosSemData.find((c) => c.id === id) || chamadosComData.find((c) => c.id === id);
+    if (alvo) alvo.tipoChamado = "Atendimento";
+    desenharListaChamados();
+    if (chamadosPaginaCarregada) agendaRedesenhar();
+    await carregarChamados();
+  } else {
+    if (botao) {
+      botao.disabled = false;
+      botao.textContent = "Transformar em atendimento";
+    }
+    mostrarChamadosListaStatus("error", (resposta && resposta.mensagem) || "Não consegui transformar em atendimento.");
   }
 }
 
@@ -5549,6 +5640,7 @@ function textoBuscavelChamado(c) {
     c.contatoNome,
     c.contatoWhatsApp,
     c.status,
+    c.tipoChamado === "Orçamento" ? "Orçamento" : "",
     c.horarioCombinadoCliente,
     c.reservadoInicio ? new Date(c.reservadoInicio).toLocaleDateString("pt-BR") : "",
   ].filter(Boolean).join(" ");
@@ -6809,6 +6901,7 @@ function montarCardFila(c, termos = []) {
       <span class="chamado-numero">#${rc(String(c.numero))}</span>
       <span class="chamado-status-badge ${statusClasseChamado(c.status)}">${escapeHtml(c.status)}</span>
     </div>
+    ${c.tipoChamado === "Orçamento" ? `<span class="chamado-tipo-badge">Orçamento</span>` : ""}
     <strong>${rc(c.clienteNome || "Sem nome")}</strong>
     ${linhaHorario}
     <p>${rc(c.enderecoCopia || "")}</p>
@@ -7280,6 +7373,86 @@ async function salvarEdicaoChamado() {
 
 editChamadoSalvarBotao.addEventListener("click", async () => {
   await salvarEdicaoChamado();
+});
+
+// ----- finalizar orçamento -----
+//
+// Preenche o preço/detalhes combinados. Reaproveita o MESMO webhook de
+// editar-chamado (flag finalizarOrcamento=true) -- por isso manda de volta
+// o endereço/descrição/observações sem mudar nada: esse webhook sempre
+// regrava os três a partir do que vier no pedido, e sem reenviar o valor
+// atual eles seriam apagados.
+let orcamentoEditando = null;
+
+function abrirFinalizarOrcamento(chamado) {
+  orcamentoEditando = chamado;
+  orcamentoTitulo.textContent = `Orçamento #${chamado.numero} — ${chamado.clienteNome}`;
+  porValorNoCampo(orcamentoValorMaterialInput, chamado.orcamentoValorMaterial);
+  porValorNoCampo(orcamentoValorMaoObraInput, chamado.orcamentoValorMaoDeObra);
+  porValorNoCampo(orcamentoValorAproximadoInput, chamado.orcamentoValorAproximado);
+  orcamentoFormaPagamentoInput.value = chamado.orcamentoFormaPagamento || "";
+  orcamentoDetalhesInput.value = chamado.orcamentoDetalhes || "";
+  mostrarOrcamentoStatus("neutral", "");
+  orcamentoBox.classList.remove("hidden");
+  orcamentoBox.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+orcamentoCancelarFormBotao.addEventListener("click", () => {
+  orcamentoBox.classList.add("hidden");
+  orcamentoEditando = null;
+});
+
+async function salvarOrcamento() {
+  const material = valorDoCampo(orcamentoValorMaterialInput);
+  const maoDeObra = valorDoCampo(orcamentoValorMaoObraInput);
+  const aproximado = valorDoCampo(orcamentoValorAproximadoInput);
+  // Finalizar sem preço nenhum não faz sentido -- é justamente o que essa
+  // tela existe pra registrar. Confere aqui, na hora, sem ida nenhuma ao
+  // servidor: mais rápido pra quem digitou errado perceber.
+  if (!material && !maoDeObra && !aproximado) {
+    mostrarOrcamentoStatus("error", "Informe pelo menos um valor (material, mão de obra ou aproximado).");
+    return;
+  }
+
+  orcamentoSalvarBotao.disabled = true;
+  mostrarOrcamentoStatus("neutral", "Salvando...");
+
+  const corpo = {
+    chamadoId: orcamentoEditando.id,
+    finalizarOrcamento: "true",
+    orcamentoValorMaterial: String(material),
+    orcamentoValorMaoDeObra: String(maoDeObra),
+    orcamentoValorAproximado: String(aproximado),
+    orcamentoFormaPagamento: orcamentoFormaPagamentoInput.value.trim(),
+    orcamentoDetalhes: orcamentoDetalhesInput.value.trim(),
+    // Reenviados sem mudar -- ver comentário acima.
+    localExato: orcamentoEditando.localExato || "",
+    descricaoSolicitacao: orcamentoEditando.descricaoSolicitacao || "",
+    observacoesServico: orcamentoEditando.observacoesServico || "",
+  };
+
+  let resposta;
+  try {
+    resposta = await pedirAoN8n("editar-chamado", corpo);
+  } catch (err) {
+    orcamentoSalvarBotao.disabled = false;
+    mostrarOrcamentoStatus("error", "Não consegui falar com o servidor.");
+    return;
+  }
+  orcamentoSalvarBotao.disabled = false;
+  if (!resposta || !resposta.ok) {
+    mostrarOrcamentoStatus("error", (resposta && resposta.mensagem) || "Não consegui salvar.");
+    return;
+  }
+
+  mostrarToast("Orçamento finalizado!");
+  orcamentoBox.classList.add("hidden");
+  orcamentoEditando = null;
+  await carregarChamados();
+}
+
+orcamentoSalvarBotao.addEventListener("click", async () => {
+  await salvarOrcamento();
 });
 
 // "Consultar chamados" e "Agenda" mostram o mesmo dado carregado uma vez só
