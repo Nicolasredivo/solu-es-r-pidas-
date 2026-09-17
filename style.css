@@ -763,6 +763,15 @@ button:active:not(:disabled) {
   transform: scale(0.98);
 }
 
+/* Contorno próprio pra quem navega só com teclado (Tab) -- sem isto, cada
+   navegador desenha o seu padrão em cima do tema escuro, que varia de quase
+   invisível a destoante. :focus-visible só aparece por teclado, nunca ao
+   clicar com o mouse/tocar na tela. */
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .status {
   margin-top: 18px;
   padding: 12px 14px;
@@ -816,6 +825,70 @@ button:active:not(:disabled) {
 .toast.show {
   opacity: 1;
   transform: translate(-50%, 0);
+}
+
+/* Rede de segurança pra erro inesperado -- faixa no topo, não some sozinha
+   (diferente do toast, que é uma confirmação e passa rápido). Fica escondida
+   o tempo todo; só aparece no caso raro de algo quebrar de verdade. */
+.erro-inesperado {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--error);
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.erro-inesperado #erro-inesperado-recarregar {
+  width: auto;
+  padding: 5px 12px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 0.8rem;
+}
+
+.erro-inesperado #erro-inesperado-recarregar:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+/* Mesma faixa no topo, mesmo formato -- só a cor muda (aviso, não erro) e
+   nunca recarrega sozinha, só quando tocada. z-index um degrau abaixo do
+   erro, pro caso raríssimo dos dois coincidirem. */
+.atualizacao-disponivel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 99;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.atualizacao-disponivel #atualizacao-aplicar {
+  width: auto;
+  padding: 5px 12px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 0.8rem;
+}
+
+.atualizacao-disponivel #atualizacao-aplicar:hover {
+  background: rgba(255, 255, 255, 0.32);
 }
 
 /* ----- Lembretes flutuantes (chamados chegando, atrasados, resumo das 6h) -----

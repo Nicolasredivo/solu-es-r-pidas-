@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Soluções Rápidas</title>
+  <!-- Sistema interno, atrás de senha -- não deve aparecer em busca nenhuma.
+       A landing (index.html) continua livre pra ser indexada normalmente. -->
+  <meta name="robots" content="noindex, nofollow" />
   <meta name="theme-color" content="#0f1220" />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
@@ -131,7 +134,7 @@
             <div id="emails-sugestao" class="sugestao-lista hidden"></div>
 
             <label for="whatsapp-cnpj">WhatsApp vinculado ao CNPJ</label>
-            <input type="text" id="whatsapp-cnpj" />
+            <input type="text" id="whatsapp-cnpj" inputmode="tel" />
 
             <label for="administradora">Administradora</label>
             <input type="text" id="administradora" autocomplete="off" />
@@ -1496,6 +1499,21 @@
   </div>
 
   <div id="toast" class="toast" aria-live="polite"></div>
+
+  <!-- Rede de segurança pra erro que ninguém previu -- fica escondido o
+       tempo todo, só aparece se algo realmente quebrar (ver app.js). Sem
+       isso, um erro assim travava a tela muda, sem nenhum aviso. -->
+  <div id="erro-inesperado" class="erro-inesperado hidden" role="alert">
+    <span>Algo deu errado.</span>
+    <button type="button" id="erro-inesperado-recarregar">Recarregar</button>
+  </div>
+
+  <!-- Uma versão nova chegou sozinha, em segundo plano -- só recarrega
+       quando você tocar aqui, nunca no meio do que você estiver fazendo. -->
+  <div id="atualizacao-disponivel" class="atualizacao-disponivel hidden" role="status">
+    <span>Nova versão disponível.</span>
+    <button type="button" id="atualizacao-aplicar">Atualizar agora</button>
+  </div>
 
   <!-- Lembretes flutuantes: chamados chegando, atrasados, e o resumo das 6h.
        Fora de qualquer página de propósito -- position:fixed, visível em

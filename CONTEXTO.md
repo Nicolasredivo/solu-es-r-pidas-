@@ -3641,6 +3641,62 @@ passado e a troca foram testadas chamando as funções internas direto
 (`agendaCalcularAlvo`, `agendaAoSoltar`, `agendaPerguntarTroca`) com estado
 forçado, sem depender de simular arrasto de ponteiro pixel a pixel.
 
+### Acabamento profissional (17/09/2026)
+
+Revisão pedida explicitamente pelo dono: só "o que todo sistema profissional
+tem", sem mudar funcionamento nem complicar. Fui apresentando achado por
+achado (em blocos de pergunta pra ele clicar) antes de mexer em qualquer
+coisa. Sete propostas, seis aprovadas e feitas, uma descartada por engano
+meu (ver abaixo).
+
+1. **Ícones do PWA eram uma bolinha azul genérica** (nem era a marca "SR" já
+   usada na landing). Gerados de novo a partir do mesmo desenho de
+   `imagens/logo.svg` — não deu pra usar ferramenta de linha de comando
+   nenhuma (sem ImageMagick/rsvg-convert/sharp instalados), então o desenho
+   foi renderizado num `<canvas>` dentro do próprio navegador (o SVG embutido
+   direto no HTML, sem `fetch`, porque `file://`/local bloqueia isso) e
+   exportado com `canvas.toDataURL('image/png')`. Logo ocupando ~58% da
+   largura do quadrado, com respiro generoso nas quatro bordas -- serve tanto
+   pro ícone normal quanto pro "maskable" do Android (que corta o ícone
+   dentro de um círculo/quadrado arredondado sem aviso nenhum). `manifest.json`
+   ganhou `"purpose": "any maskable"` nos dois ícones -- a mesma imagem serve
+   pros dois casos, sem precisar de 4 arquivos.
+2. **`<meta name="robots" content="noindex, nofollow">` só em `sistema.html`**
+   -- a landing (`index.html`) continua indexável, sem mudar nada nela.
+3. **Rede de segurança pra erro inesperado**: `window.addEventListener("error"
+   | "unhandledrejection", ...)` no topo do `app.js`, mostrando uma faixa
+   vermelha fixa no topo ("Algo deu errado. Recarregar.") só nesse caso raro
+   -- antes, um erro de JS não previsto travava a tela muda, sem nenhum
+   aviso. Um elemento **separado** do `#toast` de sucesso de propósito (não
+   reaproveitado): significados diferentes, um auto-some rápido e o outro
+   fica até a pessoa tocar em recarregar.
+4. **`button:focus-visible { outline: 2px solid var(--accent) }`** -- botões
+   não tinham nenhum estilo de foco próprio, dependiam do padrão de cada
+   navegador (inconsistente/quase invisível no tema escuro). `:focus-visible`
+   só aparece navegando por teclado, nunca ao clicar/tocar.
+5. **Teclado do celular**: só faltava `inputmode="tel"` no campo estático
+   `#whatsapp-cnpj`. Os campos dinâmicos de contato (`adicionarCanal`, perto
+   da linha 540) **já** faziam isso certo há tempos -- o comentário no
+   próprio código já dizia "Teclado do celular já abre no formato certo."
+6. **Atualização em segundo plano não recarrega mais sozinha.** Antes,
+   `controllerchange` disparava `window.location.reload()` na hora --
+   se alguém estivesse no meio de preencher algo bem no momento em que uma
+   atualização chegasse, perdia sem nenhum aviso (diferente de fechar a aba,
+   que já avisa). Agora só mostra uma faixa azul ("Nova versão disponível.
+   Atualizar agora") e o recarregamento só acontece se a pessoa tocar.
+7. **Descartado, e por quê**: a proposta de "contagem de itens" pra Despesas/
+   Contas fixas/Contas a receber/Cadastros partiu de um engano meu -- minha
+   primeira varredura só leu as ~15 primeiras linhas de cada função e não viu
+   que as quatro **já** mostram contagem (`desenharDespesas`,
+   `desenharRecorrentes`, `desenharReceitas`, `desenharLista` -- todas têm a
+   linha de resumo, só mais abaixo na função). Não mudei nada aqui; o dono foi
+   avisado da correção antes de eu prosseguir.
+
+Testado com `pedirAoN8n` bloqueado, nas 6 páginas + 8 abas, sem erro de
+console (conferido numa aba nova, sem histórico de teste). O erro/rejeição
+de teste foram disparados de propósito (`throw`/`Promise.reject`) só pra
+confirmar que o aviso aparece; nada tocou dado real.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

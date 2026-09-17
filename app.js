@@ -29,6 +29,24 @@ function mostrarToast(mensagem) {
   toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2200);
 }
 
+// ----- Rede de segurança pra erro que ninguém previu -----
+// Fica no topo do arquivo de propósito, pra pegar erro mesmo o mais cedo
+// possível. Sem isso, um erro de JS não tratado travava a tela muda, sem
+// nenhum aviso -- a pessoa ficava sem saber se precisava recarregar ou só
+// esperar. Não muda nenhum comportamento normal do sistema: só aparece
+// nesse caso raro.
+const erroInesperadoEl = document.getElementById("erro-inesperado");
+let erroInesperadoMostrado = false;
+function mostrarErroInesperado() {
+  if (erroInesperadoMostrado) return; // um aviso já basta, não empilha
+  erroInesperadoMostrado = true;
+  erroInesperadoEl.classList.remove("hidden");
+}
+document.getElementById("erro-inesperado-recarregar").addEventListener("click", () => window.location.reload());
+document.getElementById("atualizacao-aplicar").addEventListener("click", () => window.location.reload());
+window.addEventListener("error", mostrarErroInesperado);
+window.addEventListener("unhandledrejection", mostrarErroInesperado);
+
 // O endereço salvo no aparelho tem prioridade sobre o padrão do config.js,
 // para você poder trocar o link do túnel sem depender de uma publicação.
 function baseUrlN8n() {
@@ -48,7 +66,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.17a";
+const APP_VERSION = "2026.09.17b";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -7535,15 +7553,19 @@ document.addEventListener(
 );
 
 if ("serviceWorker" in navigator) {
-  // Só recarrega quando um service worker ATIVO é substituído por um novo
+  // Só avisa quando um service worker ATIVO é substituído por um novo
   // (atualização de verdade) — não na primeira vez que o app é aberto, que
   // também dispara este evento mas não deve interromper o que o usuário
   // está fazendo (ex: acabou de digitar a senha).
   let hadController = Boolean(navigator.serviceWorker.controller);
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
+    // Antes recarregava sozinho, na hora -- se a atualização chegasse
+    // enquanto alguém estava no meio de preencher algo, perdia sem nenhum
+    // aviso (diferente de fechar a aba, que já avisa). Agora só mostra o
+    // aviso; quem decide a hora de recarregar é a pessoa.
     if (hadController) {
-      window.location.reload();
+      document.getElementById("atualizacao-disponivel").classList.remove("hidden");
     }
     hadController = true;
   });
