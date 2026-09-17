@@ -48,7 +48,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.16j";
+const APP_VERSION = "2026.09.17a";
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
@@ -1528,20 +1528,28 @@ function despesaVencida(despesa) {
   return String(despesa.vencimento).slice(0, 10) < hojeISO();
 }
 
+// Tira os acentos que o NFD separa do caractere base (chamados de
+// "combinantes"). Feito por CONTA do código do caractere (0x0300-0x036f), não
+// por uma faixa escrita com os caracteres em si dentro de uma regex: digitar
+// ou colar esse acento cru é fácil de fazer sem querer -- foi exatamente o que
+// aconteceu numa correção anterior desta mesma função, que continuou com o
+// caractere de verdade apesar do comentário dizer o contrário -- e ele é
+// invisível no editor. Comparar números não tem esse risco.
+function semAcento(texto) {
+  let saida = "";
+  for (const ch of String(texto)) {
+    const cp = ch.codePointAt(0);
+    if (cp < 0x0300 || cp > 0x036f) saida += ch;
+  }
+  return saida;
+}
+
 // Acentuação e pontuação fora, para "Cimento CP-II" e "cimento cp ii" caírem
 // no mesmo texto e a gente conseguir avisar que é a mesma coisa escrita de
 // outro jeito.
 function normalizarTexto(texto) {
-  return String(texto || "")
-    .toLowerCase()
-    .normalize("NFD")
-    // Faixa dos acentos soltos, escrita em código (̀-ͯ) e não com
-    // os caracteres crus: eles são invisíveis no editor, e qualquer conversão
-    // de codificação do arquivo os apagaria sem ninguém perceber -- o código
-    // continuaria válido e a comparação de nomes é que passaria a errar.
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  const semAcentos = semAcento(String(texto || "").toLowerCase().normalize("NFD"));
+  return semAcentos.replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 // O campo de valor se comporta como calculadora: os dígitos entram pela
@@ -4658,6 +4666,10 @@ async function entrar(senha) {
       gateView.classList.add("hidden");
       appView.classList.remove("hidden");
       backupDoDia(senha);
+      // Carrega os chamados em segundo plano já ao entrar, sem esperar a
+      // pessoa abrir Consultar chamados ou a Agenda -- os lembretes flutuantes
+      // precisam disso pra funcionar em qualquer aba, desde o início.
+      carregarChamadosSeNecessario();
     } else {
       // Senha recusada: não adianta manter a que estava guardada.
       localStorage.removeItem(CHAVE_SENHA);
@@ -5331,6 +5343,7 @@ function statusClasseChamado(status) {
   if (status === "Agendado") return "chamado-status-agendado";
   if (status === "Em andamento") return "chamado-status-andamento";
   if (status === "Cancelado") return "chamado-status-cancelado";
+  if (status === "Concluído") return "chamado-status-concluido";
   return "";
 }
 
@@ -5355,9 +5368,11 @@ function montarCardChamado(c, comData, termos = []) {
     ? `<p class="doc-hint chamado-card-criado">Criado em ${new Date(c.criadoEm).toLocaleDateString("pt-BR")} às ${formatarHoraIso(c.criadoEm)}</p>`
     : "";
 
-  // Cancelado continua aparecendo na lista (não some mais) -- só não faz
-  // sentido oferecer "Cancelar chamado" de novo pra quem já está cancelado.
+  // Cancelado e Concluído continuam aparecendo na lista -- só não fazem
+  // sentido os botões de novo pra quem já chegou num dos dois.
   const jaCancelado = c.status === "Cancelado";
+  const jaConcluido = c.status === "Concluído";
+  const podeAgir = !jaCancelado && !jaConcluido;
 
   // realcar() = escapeHtml() + <mark> nos trechos que a busca encontrou. Com
   // a busca vazia ele se comporta igual ao escapeHtml de antes.
@@ -5376,11 +5391,22 @@ function montarCardChamado(c, comData, termos = []) {
     ${criadoTexto}
     <div class="chamado-card-acoes">
       <button type="button" class="botao-secundario botao-editar-chamado">Editar</button>
-      ${jaCancelado ? "" : `<button type="button" class="botao-secundario botao-cancelar-chamado">Cancelar chamado</button>`}
+      ${podeAgir ? `<button type="button" class="botao-secundario botao-concluir-chamado">Marcar concluído</button>` : ""}
+      ${podeAgir ? `<button type="button" class="botao-secundario botao-cancelar-chamado">Cancelar chamado</button>` : ""}
     </div>
   `;
 
   card.querySelector(".botao-editar-chamado").addEventListener("click", () => abrirEdicaoChamado(c));
+
+  const concluirBotao = card.querySelector(".botao-concluir-chamado");
+  if (concluirBotao) {
+    concluirBotao.addEventListener("click", () => {
+      if (!confirm(`Marcar o Chamado #${c.numero} (${c.clienteNome}) como concluído?`)) return;
+      concluirBotao.disabled = true;
+      concluirBotao.textContent = "Marcando...";
+      concluirChamado(c.id, concluirBotao);
+    });
+  }
 
   const cancelarBotao = card.querySelector(".botao-cancelar-chamado");
   if (cancelarBotao) {
@@ -5397,6 +5423,30 @@ function montarCardChamado(c, comData, termos = []) {
   }
 
   return card;
+}
+
+// Mesmo formato do cancelar: muda na tela na hora (sem esperar outra rodada
+// de rede) e ainda assim recarrega de verdade em seguida.
+async function concluirChamado(id, botao) {
+  let resposta;
+  try {
+    resposta = await pedirAoN8n("reagendar-chamado", { chamadoId: id, concluir: "true" });
+  } catch (err) {
+    resposta = null;
+  }
+  if (resposta && resposta.ok) {
+    const alvo = chamadosSemData.find((c) => c.id === id) || chamadosComData.find((c) => c.id === id);
+    if (alvo) alvo.status = "Concluído";
+    desenharListaChamados();
+    if (chamadosPaginaCarregada) agendaRedesenhar();
+    await carregarChamados();
+  } else {
+    if (botao) {
+      botao.disabled = false;
+      botao.textContent = "Marcar concluído";
+    }
+    mostrarChamadosListaStatus("error", (resposta && resposta.mensagem) || "Não consegui marcar como concluído.");
+  }
 }
 
 async function cancelarChamado(id, botao) {
@@ -5435,9 +5485,11 @@ async function cancelarChamado(id, botao) {
 
 let chamadosFiltroAtivo = "todos";
 
-// Tira acento e caixa. "sao" acha "São", "MONTE" acha "monte".
+// Tira acento e caixa. "sao" acha "São", "MONTE" acha "monte". (semAcento()
+// está definida lá em cima, perto de normalizarTexto -- mesma função, os dois
+// lugares que precisavam disso.)
 function normalizarBusca(texto) {
-  return String(texto ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  return semAcento(String(texto ?? "").normalize("NFD")).toLowerCase();
 }
 
 // Mesma normalização, mas devolvendo junto o mapa de posições: cada letra do
@@ -5448,7 +5500,7 @@ function normalizarComMapa(original) {
   let normal = "";
   const mapa = [];
   for (let i = 0; i < original.length; i++) {
-    const limpo = original[i].normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const limpo = semAcento(original[i].normalize("NFD")).toLowerCase();
     for (let j = 0; j < limpo.length; j++) {
       normal += limpo[j];
       mapa.push(i);
@@ -5513,9 +5565,10 @@ function chamadoPassaFiltro(c) {
   if (chamadosFiltroAtivo === "cancelado") return c.status === "Cancelado";
   if (chamadosFiltroAtivo === "sem-data") return !c.reservadoInicio && c.status !== "Cancelado";
 
-  // Daqui pra baixo são os filtros por tempo. Cancelado nunca entra: ele não
-  // ocupa mais espaço na agenda, então não é "o que tem pra hoje".
-  if (c.status === "Cancelado" || !c.reservadoInicio) return false;
+  // Daqui pra baixo são os filtros por tempo. Cancelado e Concluído nunca
+  // entram: nenhum dos dois ocupa mais espaço na agenda, então não são "o
+  // que tem pra hoje".
+  if (c.status === "Cancelado" || c.status === "Concluído" || !c.reservadoInicio) return false;
   const inicio = new Date(c.reservadoInicio);
   const dia = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate());
   const hoje = new Date();
@@ -5943,10 +5996,10 @@ function agendaDesenharItens() {
   let html = "";
 
   chamadosComData.forEach((c) => {
-    // Cancelado não ocupa mais lugar na agenda -- continua visível em
-    // "Consultar chamados" (ver CONTEXTO.md 16/09/2026), mas aqui é como se
-    // nunca tivesse sido marcado.
-    if (!c.reservadoInicio || c.status === "Cancelado") return;
+    // Cancelado e Concluído não ocupam mais lugar na agenda -- continuam
+    // visíveis em "Consultar chamados" (ver CONTEXTO.md 16 e 17/09/2026), mas
+    // aqui é como se nunca tivessem sido marcados.
+    if (!c.reservadoInicio || c.status === "Cancelado" || c.status === "Concluído") return;
     const ini = agDeIso(c.reservadoInicio);
 
     // Dia marcado, horário ainda não definido: fica preso na linha do dia,
@@ -5979,12 +6032,15 @@ function agendaDesenharItens() {
   if (arrastando && arrastando.alvo) {
     const a = arrastando.alvo;
     const topo = agendaPxDoTempo(a.ini);
-    const conflito = arrastando.conflitos.length > 0 && !arrastando.trocaPronta && !arrastando.sobreFila;
-    const texto = a.semHorario
-      ? `${agFmt(a.ini, { day: "2-digit", month: "2-digit", year: "numeric" })} · horário a definir`
-      : `${agHoraStr(a.ini)} → ${agHoraStr(a.fim)} · ${agendaDuracaoTexto(a.fim - a.ini)}`;
+    const invalido = (arrastando.conflitos.length > 0 && !arrastando.trocaPronta && !arrastando.sobreFila)
+      || (a.noPassado && !arrastando.sobreFila);
+    const texto = a.noPassado
+      ? "Não dá pra marcar no passado"
+      : (a.semHorario
+        ? `${agFmt(a.ini, { day: "2-digit", month: "2-digit", year: "numeric" })} · horário a definir`
+        : `${agHoraStr(a.ini)} → ${agHoraStr(a.fim)} · ${agendaDuracaoTexto(a.fim - a.ini)}`);
     const altura = a.semHorario ? 22 : Math.max(18, agendaPxDoTempo(a.fim) - topo);
-    html += `<div class="agenda-previa${conflito ? " conflito" : ""}" ` +
+    html += `<div class="agenda-previa${invalido ? " conflito" : ""}" ` +
       `style="top:${topo.toFixed(1)}px;height:${altura.toFixed(1)}px">${escapeHtml(texto)}</div>`;
   }
 
@@ -6003,8 +6059,11 @@ function agendaDesenharItens() {
 // Aguardando confirmação entra sim -- horário reservado é horário ocupado.
 function agendaOcupados(excluir) {
   const fora = excluir || [];
+  // Concluído libera o horário igual Cancelado -- é o mesmo filtro que o
+  // backend já usa pra achar quem está "ativo" (ver reagendar-chamado.json).
   return chamadosComData
-    .filter((c) => c.reservadoInicio && c.reservadoFim && c.status !== "Cancelado" && !fora.includes(c.id))
+    .filter((c) => c.reservadoInicio && c.reservadoFim
+      && c.status !== "Cancelado" && c.status !== "Concluído" && !fora.includes(c.id))
     .map((c) => ({ c, ini: agDeIso(c.reservadoInicio), fim: agDeIso(c.reservadoFim) }));
 }
 
@@ -6214,27 +6273,34 @@ function agendaParedeDoPonteiro(clientY, deslocPx) {
   return agendaTempoDoPx(agendaViewport.scrollTop + (clientY - r.top) - (deslocPx || 0));
 }
 
+// Um novo início não pode cair no passado -- nem em outro dia, nem mais cedo
+// hoje do que agora. A alça de baixo (só muda o fim) fica de fora: ela nunca
+// move o início, então nunca cria um agendamento novo pra trás; é só editar a
+// duração de um chamado que pode já estar no passado de antes desta regra
+// existir, e isso continua permitido.
 function agendaCalcularAlvo() {
   const a = agArraste;
   if (!a) return;
   const passo = AGENDA_SNAP_MIN * MS_MIN;
+  const agora = agAgora();
 
   if (a.tipo === "base") {
     const fim = Math.max(a.iniOriginal + passo, agendaEncaixar(agendaParedeDoPonteiro(a.ponteiro.y, 0)));
-    a.alvo = { ini: a.iniOriginal, fim, semHorario: false };
+    a.alvo = { ini: a.iniOriginal, fim, semHorario: false, noPassado: false };
   } else if (a.tipo === "topo") {
     const ini = Math.min(a.fimOriginal - passo, agendaEncaixar(agendaParedeDoPonteiro(a.ponteiro.y, 0)));
-    a.alvo = { ini, fim: a.fimOriginal, semHorario: false };
+    a.alvo = { ini, fim: a.fimOriginal, semHorario: false, noPassado: ini < agora };
   } else if (agendaNivel().precisa) {
     const ini = agendaEncaixar(agendaParedeDoPonteiro(a.ponteiro.y, a.deslocPx));
-    a.alvo = { ini, fim: ini + a.duracaoMin * MS_MIN, semHorario: false };
+    a.alvo = { ini, fim: ini + a.duracaoMin * MS_MIN, semHorario: false, noPassado: ini < agora };
   } else {
-    // Escala larga: só dá pra escolher o dia. Não inventa horário.
+    // Escala larga: só dá pra escolher o dia. Não inventa horário -- e "hoje"
+    // conta como válido inteiro, só um dia ANTES de hoje é que é passado.
     const dia = agDia(agendaParedeDoPonteiro(a.ponteiro.y, a.deslocPx));
-    a.alvo = { ini: dia, fim: dia, semHorario: true };
+    a.alvo = { ini: dia, fim: dia, semHorario: true, noPassado: dia < agDia(agora) };
   }
 
-  a.conflitos = a.alvo.semHorario ? [] : agendaConflitos(a.alvo.ini, a.alvo.fim, [a.chamado.id]);
+  a.conflitos = (a.alvo.semHorario || a.alvo.noPassado) ? [] : agendaConflitos(a.alvo.ini, a.alvo.fim, [a.chamado.id]);
 }
 
 function agendaComecarArraste(c, evento, tipo, deslocPx) {
@@ -6447,6 +6513,13 @@ async function agendaAoSoltar(evento) {
 
   if (!a.alvo) return;
 
+  if (a.alvo.noPassado) {
+    agendaMostrarAviso("erro", a.alvo.semHorario
+      ? "Não dá pra marcar num dia que já passou."
+      : "Não dá pra marcar num horário que já passou.");
+    return;
+  }
+
   if (a.conflitos.length) {
     const nomes = a.conflitos.map((o) => `#${o.c.numero}`).join(", ");
     const livre = agendaProximoLivre(a.alvo.ini, a.alvo.fim - a.alvo.ini, [c.id]);
@@ -6480,6 +6553,15 @@ function agendaPerguntarTroca(a, b) {
   // Durações diferentes podem fazer o novo intervalo invadir um terceiro.
   const novoA = { ini: bIni, fim: bIni + (aFim - aIni) };
   const novoB = { ini: aIni, fim: aIni + (bFim - bIni) };
+
+  // Um dos dois pode já estar no passado de antes desta regra existir (ela só
+  // trava agendamento NOVO, não obriga mover o que já estava lá) -- mas
+  // trocar não pode usar essa folga pra empurrar o OUTRO chamado pra trás.
+  if (novoA.ini < agAgora() || novoB.ini < agAgora()) {
+    agendaMostrarAviso("erro", "Não dá pra trocar: um dos horários resultantes já passou.");
+    return;
+  }
+
   const bate = agendaConflitos(novoA.ini, novoA.fim, [a.id, b.id])
     .concat(agendaConflitos(novoB.ini, novoB.fim, [a.id, b.id]));
   if (bate.length) {
@@ -6544,6 +6626,10 @@ function agendaAbrirMenu(c, x, y) {
     const item = document.querySelector('.sidebar-item[data-page="consultar-chamados"]');
     if (item) item.click();
     abrirEdicaoChamado(c);
+  });
+  opcao("Marcar concluído", () => {
+    if (!confirm(`Marcar o Chamado #${c.numero} (${c.clienteNome}) como concluído?`)) return;
+    concluirChamado(c.id, null);
   });
   opcao("Cancelar chamado", () => {
     if (!confirm(`Cancelar o Chamado #${c.numero} (${c.clienteNome})?`)) return;
@@ -6677,12 +6763,14 @@ document.addEventListener("keydown", (evento) => {
 
 // ----- fila da direita -----
 
-function montarCardFila(c) {
+function montarCardFila(c, termos = []) {
   const agendado = Boolean(c.reservadoInicio);
   const card = document.createElement("div");
   card.className = "agenda-fila-card" + (agendado ? " agendado" : "");
   card.dataset.id = c.id;
   if (agendado) card.dataset.agendado = "1";
+
+  const rc = (t) => realcar(t, termos);
 
   // Quem já tem lugar na agenda mostra onde -- é o que dá pra clicar em vez
   // de arrastar (arrastar continua sendo feito no próprio bloco da linha do
@@ -6699,13 +6787,13 @@ function montarCardFila(c) {
 
   card.innerHTML = `
     <div class="agenda-fila-topo">
-      <span class="chamado-numero">#${escapeHtml(String(c.numero))}</span>
+      <span class="chamado-numero">#${rc(String(c.numero))}</span>
       <span class="chamado-status-badge ${statusClasseChamado(c.status)}">${escapeHtml(c.status)}</span>
     </div>
-    <strong>${escapeHtml(c.clienteNome || "Sem nome")}</strong>
+    <strong>${rc(c.clienteNome || "Sem nome")}</strong>
     ${linhaHorario}
-    <p>${escapeHtml(c.enderecoCopia || "")}</p>
-    ${c.descricaoSolicitacao ? `<p>${escapeHtml(c.descricaoSolicitacao)}</p>` : ""}
+    <p>${rc(c.enderecoCopia || "")}</p>
+    ${c.descricaoSolicitacao ? `<p>${rc(c.descricaoSolicitacao)}</p>` : ""}
   `;
   return card;
 }
@@ -6717,14 +6805,28 @@ function montarCardFila(c) {
 // marcado pula pra ele (ver agendaPularPara); clicar/arrastar um da fila
 // continua igual. Cancelado não entra aqui -- continua só em "Consultar
 // chamados" (ver CONTEXTO.md 16/09/2026).
+const agendaFilaBuscaInput = document.getElementById("agenda-fila-busca");
+const agendaFilaBuscaLimpar = document.getElementById("agenda-fila-busca-limpar");
+
+// Mesmo motor de busca de "Consultar chamados" (termosDaBusca/chamadoCombina/
+// realcar, lá em cima) -- só muda ONDE ele filtra. Concluído some daqui igual
+// Cancelado: já não é mais "chamado ativo" pra agendar/ajustar.
 function agendaDesenharFila() {
-  const todos = chamadosSemData.concat(chamadosComData)
-    .filter((c) => c.status !== "Cancelado")
+  const termos = termosDaBusca(agendaFilaBuscaInput.value);
+  const digitosBusca = digitosDaBusca(agendaFilaBuscaInput.value);
+  agendaFilaBuscaLimpar.classList.toggle("hidden", !agendaFilaBuscaInput.value);
+
+  const ativos = chamadosSemData.concat(chamadosComData)
+    .filter((c) => c.status !== "Cancelado" && c.status !== "Concluído");
+  const todos = ativos
+    .filter((c) => chamadoCombina(c, termos, digitosBusca))
     .sort((a, b) => new Date(a.criadoEm) - new Date(b.criadoEm));
 
   agendaListaEl.innerHTML = "";
   if (!todos.length) {
-    agendaListaEl.innerHTML = `<p class="doc-hint">Nenhum chamado ainda.</p>`;
+    agendaListaEl.innerHTML = `<p class="doc-hint">${
+      ativos.length ? "Nenhum chamado bate com essa busca." : "Nenhum chamado ainda."
+    }</p>`;
     return;
   }
 
@@ -6739,10 +6841,17 @@ function agendaDesenharFila() {
       titulo.textContent = rotulo;
       agendaListaEl.appendChild(titulo);
     }
-    agendaListaEl.appendChild(montarCardFila(c));
+    agendaListaEl.appendChild(montarCardFila(c, termos));
   });
   agendaMarcarCardsArrastando();
 }
+
+agendaFilaBuscaInput.addEventListener("input", agendaDesenharFila);
+agendaFilaBuscaLimpar.addEventListener("click", () => {
+  agendaFilaBuscaInput.value = "";
+  agendaFilaBuscaInput.focus();
+  agendaDesenharFila();
+});
 
 // Clique num card já agendado, na lista: pula pra ele na linha do tempo (em
 // vez de precisar rolar/procurar) e pisca o bloco um instante pra achar mais
@@ -6834,11 +6943,197 @@ async function carregarChamados() {
   chamadosComData = dados.comData || [];
   desenharListaChamados();
   desenharAgenda();
+  lembreteAtualizar();
   mostrarChamadosListaStatus("neutral", "");
 }
 
 recarregarChamadosBotao.addEventListener("click", carregarChamados);
 agendaAtualizarBotao.addEventListener("click", carregarChamados);
+
+// ----- lembretes flutuantes -----
+//
+// Só funciona com o app aberto -- decisão explícita (ver CONTEXTO.md
+// 17/09/2026): nada de notificação do celular, o balão só existe enquanto a
+// aba está de pé. Olha só pro que já está em chamadosComData (carregado por
+// carregarChamados, mais abaixo isso passa a rodar já ao entrar, não só ao
+// abrir Consultar/Agenda) -- não bate no n8n de novo pra isso.
+//
+// Três avisos, um único balão:
+//   - "atrasado": confirmado (Agendado) e o horário já passou de verdade.
+//   - "chegando": confirmado, faltam 2h ou 1h pro início (o mais próximo
+//     ganha, não os dois juntos pro mesmo chamado).
+//   - "resumo diário": uma vez por dia a partir das 6h, com tudo de hoje.
+//
+// "Ainda não executado" hoje é só "status = Agendado": não existe outro jeito
+// de sair desse status a não ser Cancelado (que já não entra, filtrado em
+// lembreteElegivel) ou o novo Concluído (idem).
+
+// Do mais perto pro mais longe de propósito: um chamado a 45min do início
+// bate tanto em "<= 60" quanto em "<= 120", e quem tem que ganhar é o mais
+// perto (senão o aviso de 2h nunca aparecia atualizado pra 1h -- ficava
+// preso no primeiro que a busca encontrasse na ordem errada).
+const LEMBRETE_ANTECEDENCIA_MIN = [60, 120]; // 1h e 2h antes
+const CHAVE_LEMBRETE_RESUMO = "lembrete_resumo_diario_ultimo";
+const CHAVE_LEMBRETE_MINIMIZADO = "lembrete_minimizado";
+
+const lembreteBalaoEl = document.getElementById("lembrete-balao");
+const lembreteListaEl = document.getElementById("lembrete-lista");
+const lembretePillEl = document.getElementById("lembrete-pill");
+const lembretePillContagemEl = document.getElementById("lembrete-pill-contagem");
+const lembreteMinimizarBotao = document.getElementById("lembrete-minimizar");
+const lembreteFecharBotao = document.getElementById("lembrete-fechar");
+
+let lembreteAtivos = [];
+// Chaves de lembrete já mostradas nesta sessão -- é o que diferencia "ainda é
+// o mesmo aviso de antes" (não reabre sozinho se foi fechado) de "isso é
+// novo" (reabre mesmo fechado, exceto se só estava minimizado).
+let lembreteChavesVistas = new Set();
+let lembreteEstado = sessionStorage.getItem(CHAVE_LEMBRETE_MINIMIZADO) === "1" ? "minimizado" : "expandido";
+
+function lembreteElegivel(c) {
+  return c.status === "Agendado" && c.reservadoInicio && c.reservadoFim;
+}
+
+function lembreteCalcularAtivos() {
+  const agora = agAgora();
+  const hojeBrasilia = agDataStr(agDia(agora));
+  const itens = [];
+
+  chamadosComData.filter(lembreteElegivel).forEach((c) => {
+    const ini = agDeIso(c.reservadoInicio);
+    const fim = agDeIso(c.reservadoFim);
+
+    if (fim < agora) {
+      itens.push({
+        chave: `atrasado:${c.id}`,
+        classe: "atrasado",
+        texto: `Chamado #${c.numero} (${c.clienteNome || "sem nome"}) era pra ter acontecido às ${agHoraStr(ini)}. Foi?`,
+        chamado: c,
+      });
+      return;
+    }
+
+    const faltamMin = (ini - agora) / MS_MIN;
+    // O mais próximo primeiro: se faltam 90min, já passou dos 120 mas não
+    // dos 60 -- não faz sentido os dois avisos juntos pro mesmo chamado.
+    for (const antecedenciaMin of LEMBRETE_ANTECEDENCIA_MIN) {
+      if (faltamMin > 0 && faltamMin <= antecedenciaMin) {
+        itens.push({
+          chave: `chegando:${antecedenciaMin}:${c.id}`,
+          classe: "chegando",
+          texto: `Chamado #${c.numero} (${c.clienteNome || "sem nome"}) às ${agHoraStr(ini)} — em ${agendaDuracaoTexto(ini - agora)}.`,
+          chamado: c,
+        });
+        break;
+      }
+    }
+  });
+
+  // Resumo diário: a partir das 6h da manhã (hora de Brasília), o dia
+  // inteiro -- fica na lista até acabar o dia (não só no instante em que
+  // apareceu). Quem decide se ele conta como "novidade" pra reabrir um balão
+  // fechado é lembreteAtualizar(), olhando o localStorage; aqui ele SEMPRE
+  // entra depois das 6h, senão sumia da lista sozinho no próximo recálculo.
+  const horaAgora = new Date(agora).getUTCHours();
+  if (horaAgora >= 6) {
+    const doDia = chamadosComData
+      .filter((c) => lembreteElegivel(c) && agDataStr(agDia(agDeIso(c.reservadoInicio))) === hojeBrasilia)
+      .sort((a, b) => agDeIso(a.reservadoInicio) - agDeIso(b.reservadoInicio));
+    itens.push({
+      chave: `resumo:${hojeBrasilia}`,
+      classe: "resumo",
+      resumoDiario: true,
+      texto: doDia.length
+        ? `Hoje: ${doDia.length} chamado${doDia.length > 1 ? "s" : ""} confirmado${doDia.length > 1 ? "s" : ""} na agenda — ${
+            doDia.map((c) => `#${c.numero} às ${agHoraStr(agDeIso(c.reservadoInicio))}`).join(", ")
+          }.`
+        : "Hoje não tem nenhum chamado confirmado na agenda.",
+    });
+  }
+
+  return itens;
+}
+
+function lembreteAplicarEstado() {
+  const temItens = lembreteAtivos.length > 0;
+  lembreteBalaoEl.classList.toggle("hidden", !temItens || lembreteEstado !== "expandido");
+  lembretePillEl.classList.toggle("hidden", !temItens || lembreteEstado !== "minimizado");
+}
+
+function lembreteDesenhar() {
+  lembretePillContagemEl.textContent = String(lembreteAtivos.length);
+  lembreteListaEl.innerHTML = "";
+  lembreteAtivos.forEach((item) => {
+    const el = document.createElement(item.chamado ? "button" : "p");
+    el.className = `lembrete-item ${item.classe}`;
+    if (item.chamado) el.type = "button";
+    el.textContent = item.texto;
+    if (item.chamado) {
+      // Pula direto pro chamado na Agenda -- reaproveita o clique do menu
+      // lateral (troca de página + agendaAoAbrir()) e depois centraliza nele.
+      el.addEventListener("click", () => {
+        const itemMenu = document.querySelector('.sidebar-item[data-page="agenda"]');
+        if (itemMenu) itemMenu.click();
+        agendaPularPara(item.chamado);
+      });
+    }
+    lembreteListaEl.appendChild(el);
+  });
+  lembreteAplicarEstado();
+}
+
+// "Já visto antes" pra decidir se algo é novidade de verdade (reabre um balão
+// fechado) ou só continua na lista de sempre. Os avisos de horário usam só
+// lembreteChavesVistas (na memória, reseta a cada sessão -- reabrir o app com
+// um chamado agora dentro de 1h deve avisar de novo, e é o que se espera). O
+// resumo diário é diferente: ele tem que sobreviver a um fechar/abrir do app
+// no MESMO dia sem reabrir o balão de novo, então também olha o localStorage.
+function lembreteJaVistoAntes(chave) {
+  if (lembreteChavesVistas.has(chave)) return true;
+  if (chave.startsWith("resumo:")) return localStorage.getItem(CHAVE_LEMBRETE_RESUMO) === chave.slice(7);
+  return false;
+}
+
+function lembreteAtualizar() {
+  const novos = lembreteCalcularAtivos();
+  const temNovidade = novos.some((item) => !lembreteJaVistoAntes(item.chave));
+  novos.forEach((item) => lembreteChavesVistas.add(item.chave));
+  novos.filter((item) => item.resumoDiario).forEach((item) => {
+    localStorage.setItem(CHAVE_LEMBRETE_RESUMO, item.chave.slice(7));
+  });
+
+  lembreteAtivos = novos;
+
+  // Fechar é "por enquanto", não "pra sempre": um lembrete de verdade novo
+  // reabre o balão. Minimizado não é forçado a expandir -- só a contagem
+  // muda, pra não incomodar quem escolheu deixar pequeno.
+  if (temNovidade && lembreteEstado === "fechado") lembreteEstado = "expandido";
+
+  lembreteDesenhar();
+}
+
+lembreteMinimizarBotao.addEventListener("click", () => {
+  lembreteEstado = "minimizado";
+  sessionStorage.setItem(CHAVE_LEMBRETE_MINIMIZADO, "1");
+  lembreteAplicarEstado();
+});
+
+lembreteFecharBotao.addEventListener("click", () => {
+  lembreteEstado = "fechado";
+  sessionStorage.removeItem(CHAVE_LEMBRETE_MINIMIZADO);
+  lembreteAplicarEstado();
+});
+
+lembretePillEl.addEventListener("click", () => {
+  lembreteEstado = "expandido";
+  sessionStorage.removeItem(CHAVE_LEMBRETE_MINIMIZADO);
+  lembreteAplicarEstado();
+});
+
+// A cada minuto é granularidade de sobra pra avisos pensados em horas -- e
+// roda sempre, em qualquer aba (diferente do refresco da linha "AGORA" da
+// Agenda, que só roda com a página da Agenda visível).
+setInterval(lembreteAtualizar, 60000);
 
 // ----- editar chamado -----
 //
@@ -7099,6 +7394,14 @@ sairBotao.addEventListener("click", () => {
   chamadoEditarBox.classList.add("hidden");
   mostrarChamadosListaStatus("neutral", "");
   limparFormularioChamado();
+
+  // Lembretes também: nada do dono anterior deve continuar avisando (ou
+  // "já mostrado hoje") pro próximo login neste aparelho.
+  lembreteAtivos = [];
+  lembreteChavesVistas = new Set();
+  lembreteEstado = "expandido";
+  sessionStorage.removeItem(CHAVE_LEMBRETE_MINIMIZADO);
+  lembreteDesenhar();
 
   desarmarSaida();
   closeSidebar();

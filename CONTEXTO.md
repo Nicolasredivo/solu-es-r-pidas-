@@ -3542,6 +3542,105 @@ desktop; o que vale nos dois é o `aria-label`. Se em algum momento a dica
 precisar chegar no celular, aí é outro mecanismo (toque longo, ou um "?"
 próprio), e isso não foi feito.
 
+### Passado bloqueado, status Concluído, busca na fila e lembretes flutuantes (17/09/2026)
+
+Pedido em quatro partes, decidido conversa por conversa antes de qualquer
+código (o dono foi respondendo um item por vez, "não execute ainda" até o
+"ok, pode fazer" final). Cada decisão intermediária está registrada abaixo
+porque explica POR QUE a regra ficou do jeito que ficou.
+
+**1. Bloquear agendamento no passado**
+
+- Vale pra **novo horário**, não pra edição: um chamado que já ficou no
+  passado antes desta regra existir continua editável (endereço, descrição,
+  cancelar, concluir) — só não dá pra dar a ele (ou a outro) um horário
+  novo que já passou. Confirmado pelo dono.
+- Vale por **dia E por hora do dia**: às 15h não dá pra marcar hoje 10h,
+  mesmo sendo "hoje" (confirmado pelo dono, "por horario dentro do dia
+  tbm").
+- **Duas camadas**, confirmado explicitamente:
+  - Frontend (`agendaCalcularAlvo`, app.js): a alça de baixo (`base`, só
+    muda o FIM) nunca é checada -- ela nunca move o início, então nunca cria
+    agendamento novo pra trás, e checar ali bloquearia sem motivo o simples
+    ajuste de duração de um chamado que já está no passado de antes. Alça de
+    cima (`topo`), mover (`mover`) e tirar da fila (`novo`) checam sim.
+    Prévia do arrasto fica vermelha igual conflito (`agendaDesenharItens`);
+    `agendaAoSoltar` recusa antes mesmo de checar conflito de horário.
+  - Troca de horários (`agendaPerguntarTroca`): um dos dois já pode estar no
+    passado de antes desta regra (permitido existir) -- mas trocar não pode
+    usar essa folga pra empurrar o OUTRO chamado pra trás. Os dois horários
+    resultantes são checados.
+  - Backend (`App - Reagendar chamado`, node "Monta atualizacao"): mesma
+    regra, no mesmo lugar que já recusa conflito -- é tão importante quanto
+    "não bater em outro chamado". `cancelar`/`desagendar`/`confirmarData`
+    não passam por essa checagem (não mexem em horário novo).
+
+**2. Status "Concluído"**
+
+- Não existia botão nenhum pra isso antes (o Airtable já tinha o status, o
+  app nunca escrevia nele). Reaproveita o MESMO webhook de sempre
+  (`reagendar-chamado`, flag `concluir=true`), espelhando exatamente como
+  `cancelar=true` já funciona -- zero endpoint novo.
+- Concluído se comporta como Cancelado em quase tudo: some da Agenda
+  (`agendaDesenharItens`, `agendaDesenharFila`), libera o horário pra outro
+  chamado (`agendaOcupados` -- o backend já fazia isso, o filtro
+  `AND({Status}!='Concluído', {Status}!='Cancelado')` já existia antes de
+  qualquer coisa poder chegar nesse status), sai dos filtros de tempo "Hoje"/
+  "7 dias" em Consultar chamados. Continua aparecendo em Consultar chamados,
+  com badge **azul** (não verde -- verde já é "Agendado"/"Em andamento", e
+  os dois precisam ser visualmente diferentes de "já aconteceu").
+- Botão "Marcar concluído" em dois lugares: card de Consultar chamados
+  (do lado de "Cancelar chamado", escondido junto quando já
+  Cancelado/Concluído) e no menu rápido da Agenda (clique num bloco sem
+  arrastar). **Achado no caminho**: o botão "Cancelar chamado" só escondia
+  pra quem já estava Cancelado, não pra quem já estava Concluído -- cancelar
+  algo que já foi feito não faz sentido. Corrigido junto.
+
+**3. Busca na fila da Agenda**
+
+- Mesmo motor da busca de Consultar chamados (`termosDaBusca`,
+  `chamadoCombina`, `realcar` -- tudo reaproveitado, nada duplicado).
+  Concluído também sai da fila (igual Cancelado).
+
+**4. Lembretes flutuantes**
+
+- **Só com o app aberto**, decisão explícita -- nada de notificação do
+  celular. Balão fixo (`position:fixed`), visível em **qualquer aba**, não
+  só na Agenda -- por isso `carregarChamadosSeNecessario()` passou a rodar
+  já ao entrar (`entrar()`), não só ao abrir Consultar/Agenda: sem isso, os
+  lembretes só existiriam depois de visitar uma dessas duas telas.
+- Filtro de elegibilidade (`lembreteElegivel`): status **Agendado** (não
+  "Aguardando confirmação"), com horário reservado. "Ainda não executado"
+  hoje é só isso -- não existe outro jeito de sair de "Agendado" a não ser
+  Cancelado ou o novo Concluído, e os dois já saem do filtro.
+- Três avisos: **atrasado** (fim já passou, ainda "Agendado" -- pergunta "foi
+  mesmo?"), **chegando** (2h e 1h antes, o mais próximo vence -- ver bug
+  abaixo), **resumo diário** (a partir das 6h de Brasília, uma vez por dia,
+  com tudo que é hoje; aparece mesmo sem nenhum chamado, dizendo que o dia
+  está livre).
+- Balão fecha (botão) e minimiza (pill com contagem) **separadamente**.
+  Fechar é "por enquanto" -- um lembrete genuinamente novo reabre; minimizar
+  não é forçado a expandir, só a contagem muda.
+- **Dois bugs pegos só no teste, corrigidos antes de qualquer coisa ir pro
+  ar:**
+  1. A ordem do array de antecedência (`[120, 60]`) fazia o aviso de 2h
+     "vencer" o de 1h quando os dois batiam ao mesmo tempo (ex: faltam 45min,
+     que é `<=120` E `<=60` -- o loop parava no primeiro que encontrasse, que
+     era o errado). Corrigido invertendo pra `[60, 120]` (do mais perto pro
+     mais longe).
+  2. O resumo diário desaparecia da lista sozinha no PRÓXIMO recálculo depois
+     de aparecer uma vez (porque a condição de gerar o item e a condição de
+     "já foi mostrado hoje" eram a mesma checagem no `localStorage`). Agora
+     ele sempre entra na lista depois das 6h -- o `localStorage` só decide se
+     reabre um balão fechado, não se ele existe.
+
+Testado com dados falsos e `pedirAoN8n` trocado por stubs fiéis (que
+respondem por caminho, não um "ok" genérico -- isso também pegou um bug de
+teste na primeira tentativa). Nenhum registro real tocado; a trava de
+passado e a troca foram testadas chamando as funções internas direto
+(`agendaCalcularAlvo`, `agendaAoSoltar`, `agendaPerguntarTroca`) com estado
+forçado, sem depender de simular arrasto de ponteiro pixel a pixel.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só
@@ -3573,7 +3672,17 @@ próprio), e isso não foi feito.
   e ainda não feitas:
   - Tocar num espaço vazio da grade pra já abrir "Criar chamado" com
     aquele horário; legenda de cor; comprimir a régua em dias cheios.
-  - Ações rápidas no menu do bloco (ligar/WhatsApp, marcar "Em
-    andamento", ver endereço) sem abrir o formulário inteiro.
+  - Mais ações rápidas no menu do bloco (ligar/WhatsApp, marcar "Em
+    andamento", ver endereço) sem abrir o formulário inteiro -- o menu já
+    ganhou "Marcar concluído" em 17/09/2026, mas essas outras continuam
+    de fora.
   - Refinar a aparência: o combinado foi "primeiro funcional, limpo e
     profissional; depois a gente melhora o visual".
+- **Ligar chamado concluído ao Financeiro** (criar conta a receber a partir
+  dele) e qualquer coisa envolvendo **nota fiscal** — adiado explicitamente
+  em 17/09/2026, junto com o novo status "Concluído" (ver seção acima):
+  "isso vai ser no futuro, nem a de emitir nf nada disso".
+- **Chat/assistente dentro do sistema** que executa ações via os mesmos
+  webhooks do n8n — conversa detalhada em 17/09/2026 (arquitetura, voz só
+  gravada, custo estimado), adiado a pedido do dono pra retomar mais pra
+  frente.

@@ -1475,6 +1475,19 @@
           <div class="agenda-painel">
             <h2 class="titulo-bloco">Chamados</h2>
             <p class="doc-hint">Arraste um chamado da fila para a linha do tempo pra agendar. Arraste de volta pra cá pra tirar da agenda. Clique num que já está marcado pra pular até ele.</p>
+
+            <div class="campo-busca campo-busca-fila">
+              <svg class="campo-busca-lupa" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2" />
+                <line x1="16.3" y1="16.3" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+              <input type="text" id="agenda-fila-busca" class="campo-busca-entrada"
+                     placeholder="Buscar por número, cliente, endereço..."
+                     autocomplete="off" aria-label="Buscar chamado na fila" />
+              <button type="button" id="agenda-fila-busca-limpar" class="campo-busca-limpar hidden"
+                      aria-label="Limpar busca">×</button>
+            </div>
+
             <div id="agenda-lista" class="agenda-lista"></div>
           </div>
         </div>
@@ -1483,6 +1496,24 @@
   </div>
 
   <div id="toast" class="toast" aria-live="polite"></div>
+
+  <!-- Lembretes flutuantes: chamados chegando, atrasados, e o resumo das 6h.
+       Fora de qualquer página de propósito -- position:fixed, visível em
+       qualquer aba do sistema, não só na Agenda. Só funciona com o app
+       aberto (ver CONTEXTO.md 17/09/2026); nada de notificação do celular. -->
+  <div id="lembrete-balao" class="lembrete-balao hidden" aria-live="polite">
+    <div class="lembrete-topo">
+      <strong>🔔 Lembrete</strong>
+      <div class="lembrete-topo-acoes">
+        <button type="button" id="lembrete-minimizar" class="lembrete-botao-icone" title="Minimizar" aria-label="Minimizar">–</button>
+        <button type="button" id="lembrete-fechar" class="lembrete-botao-icone" title="Fechar" aria-label="Fechar">×</button>
+      </div>
+    </div>
+    <div id="lembrete-lista" class="lembrete-lista"></div>
+  </div>
+  <button type="button" id="lembrete-pill" class="lembrete-pill hidden" title="Mostrar lembretes" aria-label="Mostrar lembretes">
+    🔔 <span id="lembrete-pill-contagem">0</span>
+  </button>
 
   <!-- Fantasma que acompanha o mouse durante o arrasto, e menu de ações de um
        bloco da agenda. Ficam fora das páginas de propósito: são posicionados
