@@ -3850,6 +3850,48 @@ finalizar, e a troca de tipo persistindo de verdade no estado em memória).
 Backend publicado e verificado com senha errada nos 4 webhooks antes do
 commit. Nenhum dado real tocado.
 
+### Ícone do PWA estava corrompido, e favicon preso em cache (17/09/2026)
+
+Dono reportou "a logo não mudou pra minha" ao ver a aba do navegador ainda
+com um círculo azul genérico. Duas causas, as duas confirmadas por
+amostragem de pixel (não só olhando a imagem):
+
+1. **O PNG gerado na rodada anterior (Acabamento profissional) estava
+   quebrado de verdade** -- não era só o ícone antigo, o arquivo salvo em
+   `icons/icon-192.png`/`icon-512.png` tinha só uma tira sólida cobrindo
+   ~20% de cima e o resto **totalmente transparente** (o monograma "SR"
+   nunca apareceu). Bug no script gerador (`<canvas>` no navegador,
+   documentado na rodada anterior) que passou despercebido porque a
+   verificação visual da época não conferiu pixel nenhum, só que o arquivo
+   existia. Corrigido com um gerador novo, desta vez **verificado por
+   amostragem de pixel antes de salvar** (centro da imagem tem que ter
+   conteúdo, não só existir o arquivo) -- os dois ícones foram refeitos a
+   partir do mesmo `imagens/logo.svg` de sempre, mesmo enquadramento (~58%
+   de largura, respiro nas bordas).
+2. **O favicon (`<link rel="icon">`) não tinha parâmetro de versão** --
+   `caches.match()` no service worker casa pela URL inteira, e como o
+   pedido do navegador batia exatamente com a chave salva no cache
+   (`./icons/icon-192.png`, sem query), qualquer ícone novo ficava preso
+   atrás do cache antigo até a próxima virada de `CACHE_NAME` **e** o
+   dono aceitar o aviso de atualização. Corrigido pondo
+   `?v=2026.09.17e` no `href` dos dois `<link>` (`index.html` e
+   `sistema.html`) -- isso faz esse pedido específico **não bater** com a
+   chave do cache (que continua sem query), então o favicon sempre busca
+   direto da rede a partir de agora, sem depender de virada de versão.
+
+**Importante, ainda em aberto**: `imagens/logo.svg` continua sendo um
+substituto (monograma "SR" nas cores da marca, não o logo oficial -- ver
+seção "Site institucional na raiz" acima) porque o arquivo original nunca
+esteve no projeto. Perguntei ao dono se ele tem o arquivo de verdade pra
+substituir; se mandar, é só sobrescrever `imagens/logo.svg` (ou salvar
+`.png` e trocar a referência) que ícone, favicon e o símbolo da landing
+acompanham sozinhos, sem precisar mexer em mais nada.
+
+Verificado carregando cada PNG direto no navegador com `?v=` novo
+(ignorando cache) e reamostrando os pixels antes de considerar resolvido.
+Arquivo gerador temporário (`_gerador_icone_temp.html`) apagado depois de
+extrair os PNGs.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

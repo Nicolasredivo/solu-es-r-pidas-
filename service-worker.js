@@ -1,5 +1,5 @@
 // Sobe junto com o APP_VERSION do app.js a cada publicação.
-const CACHE_NAME = "solucoes-rapidas-2026.09.17d";
+const CACHE_NAME = "solucoes-rapidas-2026.09.17e";
 // "./" e "./index.html" são a landing institucional; "./sistema.html" é o
 // app de verdade (tela de senha + painel), que antes ocupava a raiz.
 const APP_SHELL = [
