@@ -3868,16 +3868,32 @@ amostragem de pixel (não só olhando a imagem):
    conteúdo, não só existir o arquivo) -- os dois ícones foram refeitos a
    partir do mesmo `imagens/logo.svg` de sempre, mesmo enquadramento (~58%
    de largura, respiro nas bordas).
-2. **O favicon (`<link rel="icon">`) não tinha parâmetro de versão** --
-   `caches.match()` no service worker casa pela URL inteira, e como o
-   pedido do navegador batia exatamente com a chave salva no cache
-   (`./icons/icon-192.png`, sem query), qualquer ícone novo ficava preso
-   atrás do cache antigo até a próxima virada de `CACHE_NAME` **e** o
-   dono aceitar o aviso de atualização. Corrigido pondo
-   `?v=2026.09.17e` no `href` dos dois `<link>` (`index.html` e
-   `sistema.html`) -- isso faz esse pedido específico **não bater** com a
-   chave do cache (que continua sem query), então o favicon sempre busca
-   direto da rede a partir de agora, sem depender de virada de versão.
+2. **O favicon (`<link rel="icon">`) ficou preso no cache antigo** --
+   `caches.match()` no service worker casa pela URL inteira, e o ícone
+   corrompido continuava servido até a próxima virada de `CACHE_NAME` **e**
+   o dono aceitar o aviso de atualização. Primeira tentativa foi pôr
+   `?v=` no `href` do `<link>` pra furar o cache -- **desfeito depois**
+   (ver ponto 3) por quebrar o padrão que já funciona pra `app.js`/
+   `style.css`/etc.: nenhum outro arquivo do `APP_SHELL` leva versão no
+   link da página, só a virada de `CACHE_NAME` já resolve (o service
+   worker busca tudo de novo com um parâmetro interno de versão na
+   instalação -- ver comentário em `service-worker.js`). Ícone corrigido +
+   `CACHE_NAME` virado já era suficiente; o `?v=` era redundante e ainda
+   tirava o favicon do cache offline.
+
+3. **Ícone ficou "pequeno" na aba do navegador (17/09/2026, depois)** --
+   dono reportou de novo depois do ícone corrigido. Causa: o mesmo PNG de
+   192/512px feito pro ícone do PWA (logo a ~58% da largura, respiro
+   generoso nas quatro bordas -- necessário pro recorte "maskable" do
+   Android) estava sendo usado *também* como favicon, e uma aba de
+   navegador mostra o ícone a uns 16-32px -- nessa escala, o respiro
+   generoso deixa o monograma minúsculo e quase ilegível. Criado
+   `icons/favicon.png` **dedicado**, 64×64, logo a ~92% da largura (quase
+   sem respiro, já que a aba nunca recorta em círculo) -- `icon-192.png`/
+   `icon-512.png` continuam intocados, servindo só o `manifest.json`
+   (instalação do PWA) e o `apple-touch-icon`. `favicon.png` entrou no
+   `APP_SHELL` do service worker (chave normal, sem `?v=`, seguindo o
+   padrão de todo o resto) e `CACHE_NAME` virou `2026.09.17f` junto.
 
 **Importante, ainda em aberto**: `imagens/logo.svg` continua sendo um
 substituto (monograma "SR" nas cores da marca, não o logo oficial -- ver
@@ -3885,12 +3901,13 @@ seção "Site institucional na raiz" acima) porque o arquivo original nunca
 esteve no projeto. Perguntei ao dono se ele tem o arquivo de verdade pra
 substituir; se mandar, é só sobrescrever `imagens/logo.svg` (ou salvar
 `.png` e trocar a referência) que ícone, favicon e o símbolo da landing
-acompanham sozinhos, sem precisar mexer em mais nada.
+acompanham sozinhos -- `favicon.png` e os dois ícones do PWA precisam ser
+gerados de novo a partir do arquivo novo (mesmo script/processo).
 
-Verificado carregando cada PNG direto no navegador com `?v=` novo
-(ignorando cache) e reamostrando os pixels antes de considerar resolvido.
-Arquivo gerador temporário (`_gerador_icone_temp.html`) apagado depois de
-extrair os PNGs.
+Verificado carregando cada PNG direto no navegador (ignorando cache) e
+reamostrando os pixels antes de considerar resolvido. Arquivos geradores
+temporários (`_gerador_icone_temp.html`, `_gerador_favicon_temp.html`)
+apagados depois de extrair os PNGs.
 
 ## Decisões já tomadas (não relitigar sem motivo)
 
