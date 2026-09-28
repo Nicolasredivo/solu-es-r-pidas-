@@ -1,0 +1,533 @@
+{
+  "name": "login",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "login",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      },
+      "id": "l0000000-0000-4000-8000-000000000001",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "l0000000-0000-4000-8000-000000000002"
+    },
+    {
+      "parameters": {
+        "jsCode": "const corpo = $input.first().json.body || {};\nconst cabecalhos = $input.first().json.headers || {};\n\nconst email = String(corpo.email || '').trim().toLowerCase();\nconst senha = String(corpo.senha || '');\nconst dispositivo = String(corpo.dispositivo || cabecalhos['user-agent'] || '').slice(0, 200);\n\nconst emailEscapado = email.replace(/'/g, \"\\\\'\");\n\nreturn [{\n  json: {\n    email,\n    senha,\n    dispositivo,\n    formula: \"LOWER({Email}) = '\" + emailEscapado + \"'\"\n  }\n}];\n"
+      },
+      "id": "l0000000-0000-4000-8000-000000000003",
+      "name": "Monta busca",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblucYjrD3SKf1azh",
+          "mode": "list",
+          "cachedResultName": "Usuarios"
+        },
+        "filterByFormula": "={{ $json.formula }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "l0000000-0000-4000-8000-000000000004",
+      "name": "Busca usuario",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const registros = $input.all();\nconst entrada = $('Monta busca').first().json;\nconst registro = registros[0] && registros[0].json;\n\nif (!registro || !registro.id) {\n  return [{ json: { encontrado: false } }];\n}\n\nconst campos = registro.fields || {};\n\nreturn [{\n  json: {\n    encontrado: true,\n    usuarioId: registro.id,\n    nome: campos.Nome || '',\n    papel: campos.Papel || 'Usuario',\n    senhaHash: campos.Senha_Hash || '',\n    ativo: campos.Ativo === true,\n    senhaDigitada: entrada.senha,\n    dispositivo: entrada.dispositivo || ''\n  }\n}];\n"
+      },
+      "id": "l0000000-0000-4000-8000-000000000005",
+      "name": "Prepara verificacao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e1000000-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.encontrado }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "e1000000-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.ativo }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "l0000000-0000-4000-8000-000000000006",
+      "name": "Encontrado e ativo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "verifica_senha",
+            "senha": "={{ $json.senhaDigitada }}",
+            "hash": "={{ $json.senhaHash }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "l0000000-0000-4000-8000-000000000007",
+      "name": "Confere senha",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e2000000-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "l0000000-0000-4000-8000-000000000008",
+      "name": "Senha correta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "emitir",
+            "usuarioId": "={{ $('Prepara verificacao').item.json.usuarioId }}",
+            "papel": "={{ $('Prepara verificacao').item.json.papel }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "l0000000-0000-4000-8000-000000000009",
+      "name": "Emite token",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1540,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst prep = $('Prepara verificacao').first().json;\nconst emitido = $input.first().json;\n\nconst tokenSessao = crypto.randomBytes(32).toString('hex');\nconst expiraEm = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();\n\nreturn [{\n  json: {\n    usuarioId: prep.usuarioId,\n    nome: prep.nome,\n    papel: prep.papel,\n    dispositivo: prep.dispositivo,\n    tokenAcesso: emitido.tokenAcesso,\n    expiraEmSegundos: emitido.expiraEmSegundos,\n    tokenSessao,\n    expiraEmSessao: expiraEm\n  }\n}];\n"
+      },
+      "id": "l0000000-0000-4000-8000-00000000000a",
+      "name": "Gera sessao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblYDslwEMH6tKfzL",
+          "mode": "list",
+          "cachedResultName": "Sessoes"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Token": "={{ $json.tokenSessao }}",
+            "Usuario": "={{ [$json.usuarioId] }}",
+            "Dispositivo": "={{ $json.dispositivo }}",
+            "Expira_Em": "={{ $json.expiraEmSessao }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Token",
+              "displayName": "Token",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Usuario",
+              "displayName": "Usuario",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Dispositivo",
+              "displayName": "Dispositivo",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Expira_Em",
+              "displayName": "Expira_Em",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "l0000000-0000-4000-8000-00000000000b",
+      "name": "Cria sessao",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1980,
+        -200
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const g = $('Gera sessao').first().json;\nreturn [{\n  json: {\n    ok: true,\n    tokenAcesso: g.tokenAcesso,\n    expiraEmSegundos: g.expiraEmSegundos,\n    tokenSessao: g.tokenSessao,\n    usuario: { nome: g.nome, papel: g.papel }\n  }\n}];\n"
+      },
+      "id": "l0000000-0000-4000-8000-00000000000c",
+      "name": "Monta resposta sucesso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "l0000000-0000-4000-8000-00000000000d",
+      "name": "Responde sucesso",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2420,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, mensagem: 'E-mail ou senha incorretos.' } }];\n"
+      },
+      "id": "l0000000-0000-4000-8000-00000000000e",
+      "name": "Monta erro generico",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "l0000000-0000-4000-8000-00000000000f",
+      "name": "Responde erro",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Monta busca",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta busca": {
+      "main": [
+        [
+          {
+            "node": "Busca usuario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca usuario": {
+      "main": [
+        [
+          {
+            "node": "Prepara verificacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara verificacao": {
+      "main": [
+        [
+          {
+            "node": "Encontrado e ativo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encontrado e ativo?": {
+      "main": [
+        [
+          {
+            "node": "Confere senha",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta erro generico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere senha": {
+      "main": [
+        [
+          {
+            "node": "Senha correta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Senha correta?": {
+      "main": [
+        [
+          {
+            "node": "Emite token",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta erro generico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emite token": {
+      "main": [
+        [
+          {
+            "node": "Gera sessao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gera sessao": {
+      "main": [
+        [
+          {
+            "node": "Cria sessao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cria sessao": {
+      "main": [
+        [
+          {
+            "node": "Monta resposta sucesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta sucesso": {
+      "main": [
+        [
+          {
+            "node": "Responde sucesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta erro generico": {
+      "main": [
+        [
+          {
+            "node": "Responde erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}

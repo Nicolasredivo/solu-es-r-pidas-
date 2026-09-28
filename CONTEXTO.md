@@ -3909,6 +3909,94 @@ reamostrando os pixels antes de considerar resolvido. Arquivos geradores
 temporários (`_gerador_icone_temp.html`, `_gerador_favicon_temp.html`)
 apagados depois de extrair os PNGs.
 
+### Backend de login individual (e-mail/senha), começado (17-28/09/2026)
+
+Pedido do dono: substituir aos poucos a senha única compartilhada por login
+individual (clientes, parceiros, futuramente funcionários), cada um com
+permissões diferentes no futuro (regras de permissão ainda não desenhadas —
+ficam pra quando ele montar a aba "criar conta"). **A senha única atual
+continua funcionando exatamente como hoje** — nada foi removido, nada foi
+trocado no `sistema.html`/`app.js` ainda. Esta rodada foi só o backend, sem
+UI nenhuma; a tela de login de verdade entra numa rodada futura, junto com
+a aba "criar conta".
+
+**Duas tabelas novas no Airtable**: `Usuarios` (Nome, Email, Senha_Hash,
+Papel, Ativo, Codigo_Recuperacao_Hash, Codigo_Expira_Em, Codigo_Tentativas)
+e `Sessoes` (Token, Usuario [link], Dispositivo, Expira_Em) — uma linha de
+`Sessoes` por aparelho logado, apagar a linha revoga aquele aparelho na
+hora (isso já deixa fácil um futuro "ver aparelhos conectados", pedido
+adiado, ver memória).
+
+**Seis workflows novos no n8n**:
+- `verificar-sessao`: sub-workflow central (chamado via "Execute Workflow",
+  nunca por webhook direto) — único lugar que sabe o segredo de assinatura
+  JWT e faz hash/confere senha (scrypt). Operações: `emitir` (token de
+  acesso), `verificar` (confere token), `hash_senha`, `verifica_senha`.
+  Centralizar aqui significa que só existe **um** lugar pra mexer nessa
+  lógica, ao contrário da senha única de hoje (duplicada em 41 workflows).
+- `login`: e-mail+senha → confere na tabela → token de acesso (JWT, 30min)
+  + token de sessão (guardado em `Sessoes`, 60 dias).
+- `renovar-token`: token de sessão → confere validade + usuário ativo →
+  emite novo token de acesso, sem pedir senha de novo.
+- `solicitar-recuperacao`: e-mail → gera código de 6 dígitos (hash sha256
+  guardado, nunca o código em texto puro), manda por e-mail, válido 10min.
+- `verificar-codigo`: confere código (sem consumir) — máximo 5 tentativas
+  erradas, incrementando um contador a cada erro.
+- `redefinir-senha`: confere o código **de novo** (não confia só na
+  checagem anterior) + tamanho mínimo de 8 caracteres → troca a senha →
+  **apaga todas as sessões daquele usuário** (desloga de todo aparelho,
+  prática padrão quando a senha muda).
+
+**Padrão de segurança adotado em todo o fluxo** (autorizado pelo dono
+explicitamente, com um ponto de atenção que ele decidiu manter): mensagem de
+erro **genérica** ("e-mail ou senha incorretos") tanto pra e-mail não
+cadastrado quanto pra senha errada, e a mesma resposta genérica na
+recuperação de senha independente do e-mail existir ou não — evita que
+alguém descubra quais e-mails estão cadastrados só testando.
+
+**E-mail remetente**: `adm.solucoes.rapidas@gmail.com`, credencial SMTP
+(Senha de app / App password) criada dentro do n8n, testada com envio real.
+Duas armadilhas encontradas nesse processo:
+1. O Google não mostrava a opção de gerar Senha de app na conta certa —
+   só apareceu depois de trocar de conta ativa no Chrome (o navegador tinha
+   aberto por padrão numa conta pessoal diferente).
+2. Depois de pronto, descobriu-se que **o n8n desta máquina bloqueia
+   `require('crypto')` dentro de nós de código por padrão** — trava de
+   segurança do "task runner". Corrigido com a variável de ambiente
+   `NODE_FUNCTION_ALLOW_BUILTIN=crypto` (permanente, usuário Windows) +
+   reiniciar o n8n. Sem isso, nem o hash de senha nem a assinatura do JWT
+   funcionariam.
+
+**Bug real achado e corrigido durante os testes**: nó Airtable "search" com
+`alwaysOutputData: true` (copiado do padrão já usado no resto do projeto)
+sempre emite pelo menos 1 item mesmo com zero resultados — só que vem como
+`json: {}`, sem `.id`. Um código que checava `array.length === 0` pra
+decidir "não encontrado" nunca batia, e tratava a busca vazia como se
+tivesse achado um registro real. Tirar o `alwaysOutputData` piora as coisas
+de outro jeito: zero resultados vira zero itens de verdade, e o node de
+código seguinte **nem executa**, travando a resposta do webhook pra sempre.
+**Correção**: manter `alwaysOutputData: true` e checar a presença de
+`registro.id` (não o tamanho do array) — encontrado nos três primeiros
+workflows (`login`, `renovar-token`, `solicitar-recuperacao`) testando
+explicitamente o caminho "não encontrado" de cada um, não só o caminho
+feliz. Os últimos dois (`verificar-codigo`, `redefinir-senha`) já nasceram
+com o padrão certo.
+
+**Publicar workflow de autenticação real é bloqueado pelo modo automático**
+(diferente de workflows de teste descartáveis) — feito pela interface do
+n8n via Claude in Chrome, com autorização explícita do dono a cada vez.
+
+Testado de ponta a ponta com usuário e sessão **falsos** (nunca dado real):
+e-mail/senha errados, e-mail inexistente, sessão expirada, usuário
+desativado, código errado (com contagem de tentativas), tentativas
+esgotadas, senha nova curta demais, e o ciclo completo (pedir código →
+conferir código → trocar senha → logar com a senha nova → confirmar que a
+senha antiga não funciona mais → confirmar que a sessão anterior foi
+revogada). Todo dado de teste apagado do Airtable depois de cada rodada.
+
+Ver a memória "login-email-senha-arquitetura" (fora do repositório) pro
+histórico completo de decisões dessa conversa.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

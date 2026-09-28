@@ -1,0 +1,66 @@
+{
+  "name": "verificar-sessao",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "operacao"
+            },
+            {
+              "name": "usuarioId"
+            },
+            {
+              "name": "papel"
+            },
+            {
+              "name": "tokenAcesso"
+            },
+            {
+              "name": "senha"
+            },
+            {
+              "name": "hash"
+            }
+          ]
+        }
+      },
+      "id": "v0000000-0000-4000-8000-000000000001",
+      "name": "Recebe chamada",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst SEGREDO_JWT = \"TROQUE-ESTA-CHAVE-JWT\";\nconst TTL_ACESSO_SEGUNDOS = 30 * 60;\n\nfunction paraBase64Url(bufOrStr) {\n  const b64 = Buffer.isBuffer(bufOrStr) ? bufOrStr.toString('base64') : Buffer.from(bufOrStr).toString('base64');\n  return b64.replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');\n}\n\nfunction assinarJwt(payload, ttlSegundos) {\n  const agora = Math.floor(Date.now() / 1000);\n  const corpo = Object.assign({ iat: agora, exp: agora + ttlSegundos }, payload);\n  const cabecalho = paraBase64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));\n  const dados = paraBase64Url(JSON.stringify(corpo));\n  const semAssinatura = cabecalho + '.' + dados;\n  const assinatura = paraBase64Url(crypto.createHmac('sha256', SEGREDO_JWT).update(semAssinatura).digest());\n  return semAssinatura + '.' + assinatura;\n}\n\nfunction verificarJwt(token) {\n  if (typeof token !== 'string') return null;\n  const partes = token.split('.');\n  if (partes.length !== 3) return null;\n  const [cabecalho, dados, assinatura] = partes;\n  const esperada = paraBase64Url(crypto.createHmac('sha256', SEGREDO_JWT).update(cabecalho + '.' + dados).digest());\n  const bufEsperado = Buffer.from(esperada);\n  const bufRecebido = Buffer.from(assinatura);\n  if (bufEsperado.length !== bufRecebido.length) return null;\n  if (!crypto.timingSafeEqual(bufEsperado, bufRecebido)) return null;\n  let payload;\n  try {\n    payload = JSON.parse(Buffer.from(dados.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));\n  } catch (e) {\n    return null;\n  }\n  if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;\n  return payload;\n}\n\nfunction hashSenha(senha) {\n  const salt = crypto.randomBytes(16).toString('hex');\n  const derivado = crypto.scryptSync(senha, salt, 64).toString('hex');\n  return salt + ':' + derivado;\n}\n\nfunction verificaSenha(senha, hashGuardado) {\n  if (typeof hashGuardado !== 'string' || hashGuardado.indexOf(':') === -1) return false;\n  const [salt, derivadoGuardado] = hashGuardado.split(':');\n  const derivado = crypto.scryptSync(senha, salt, 64).toString('hex');\n  const bufA = Buffer.from(derivado, 'hex');\n  const bufB = Buffer.from(derivadoGuardado, 'hex');\n  if (bufA.length !== bufB.length) return false;\n  return crypto.timingSafeEqual(bufA, bufB);\n}\n\nconst entrada = $input.first().json;\nconst operacao = entrada.operacao;\n\nif (operacao === 'emitir') {\n  const tokenAcesso = assinarJwt({ sub: String(entrada.usuarioId || ''), papel: entrada.papel || 'Usuario' }, TTL_ACESSO_SEGUNDOS);\n  return [{ json: { tokenAcesso, expiraEmSegundos: TTL_ACESSO_SEGUNDOS } }];\n}\n\nif (operacao === 'verificar') {\n  const payload = verificarJwt(entrada.tokenAcesso);\n  if (!payload) {\n    return [{ json: { valido: false } }];\n  }\n  return [{ json: { valido: true, usuarioId: payload.sub, papel: payload.papel } }];\n}\n\nif (operacao === 'hash_senha') {\n  return [{ json: { hash: hashSenha(String(entrada.senha || '')) } }];\n}\n\nif (operacao === 'verifica_senha') {\n  return [{ json: { valido: verificaSenha(String(entrada.senha || ''), String(entrada.hash || '')) } }];\n}\n\nreturn [{ json: { valido: false, erro: 'operacao desconhecida' } }];\n"
+      },
+      "id": "v0000000-0000-4000-8000-000000000002",
+      "name": "Emite ou verifica token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Recebe chamada": {
+      "main": [
+        [
+          {
+            "node": "Emite ou verifica token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}

@@ -1,0 +1,374 @@
+{
+  "name": "solicitar-recuperacao",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "solicitar-recuperacao",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      },
+      "id": "s0000000-0000-4000-8000-000000000001",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "s0000000-0000-4000-8000-000000000002"
+    },
+    {
+      "parameters": {
+        "jsCode": "const corpo = $input.first().json.body || {};\n\nconst email = String(corpo.email || '').trim().toLowerCase();\nconst codigo = String(corpo.codigo || '').trim();\nconst novaSenha = String(corpo.novaSenha || '');\n\nconst emailEscapado = email.replace(/'/g, \"\\\\'\");\n\nreturn [{\n  json: {\n    email,\n    codigo,\n    novaSenha,\n    formula: \"LOWER({Email}) = '\" + emailEscapado + \"'\"\n  }\n}];\n"
+      },
+      "id": "s0000000-0000-4000-8000-000000000003",
+      "name": "Monta busca",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblucYjrD3SKf1azh",
+          "mode": "list",
+          "cachedResultName": "Usuarios"
+        },
+        "filterByFormula": "={{ $json.formula }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "s0000000-0000-4000-8000-000000000004",
+      "name": "Busca usuario",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const registros = $input.all();\nconst registro = registros[0] && registros[0].json;\n\nif (!registro || !registro.id) {\n  return [{ json: { encontrado: false } }];\n}\n\nreturn [{ json: { encontrado: true, registro } }];\n"
+      },
+      "id": "s0000000-0000-4000-8000-000000000005",
+      "name": "Confere encontrado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "g1000000-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.encontrado }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "s0000000-0000-4000-8000-000000000006",
+      "name": "Encontrado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst registro = $input.first().json.registro;\nconst campos = registro.fields || {};\n\nconst codigo = String(crypto.randomInt(0, 1000000)).padStart(6, '0');\nconst codigoHash = crypto.createHash('sha256').update(codigo).digest('hex');\nconst expiraEm = new Date(Date.now() + 10 * 60 * 1000).toISOString();\n\nreturn [{\n  json: {\n    usuarioId: registro.id,\n    nome: campos.Nome || '',\n    email: campos.Email || '',\n    codigo,\n    codigoHash,\n    expiraEm\n  }\n}];\n"
+      },
+      "id": "s0000000-0000-4000-8000-000000000007",
+      "name": "Gera codigo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const g = $input.first().json;\nconst baseId = 'app6PyYmtFduIMp7B';\nconst tableId = 'tblucYjrD3SKf1azh';\n\nreturn [{\n  json: {\n    metodo: 'PATCH',\n    url: 'https://api.airtable.com/v0/' + baseId + '/' + tableId + '/' + g.usuarioId,\n    corpo: {\n      fields: {\n        Codigo_Recuperacao_Hash: g.codigoHash,\n        Codigo_Expira_Em: g.expiraEm,\n        Codigo_Tentativas: 0\n      }\n    },\n    nome: g.nome,\n    email: g.email,\n    codigo: g.codigo\n  }\n}];\n"
+      },
+      "id": "s0000000-0000-4000-8000-000000000008",
+      "name": "Monta atualizacao codigo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo || {}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "s0000000-0000-4000-8000-000000000009",
+      "name": "Grava codigo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        -100
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "fromEmail": "adm.solucoes.rapidas@gmail.com",
+        "toEmail": "={{ $('Monta atualizacao codigo').first().json.email }}",
+        "subject": "Codigo de recuperacao de senha - Solucoes Rapidas",
+        "emailFormat": "text",
+        "text": "Ola, {{ $('Monta atualizacao codigo').first().json.nome }}!\n\nSeu codigo de recuperacao de senha e: {{ $('Monta atualizacao codigo').first().json.codigo }}\n\nEsse codigo vale por 10 minutos e so pode ser usado uma vez.\n\nSe voce nao pediu essa recuperacao, pode ignorar este e-mail -- sua senha continua a mesma.",
+        "options": {}
+      },
+      "id": "s0000000-0000-4000-8000-00000000000a",
+      "name": "Envia codigo",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1760,
+        -100
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "Nro05J2y8zTXUFXp",
+          "name": "Gmail - Recuperacao de senha (Solucoes Rapidas)"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: true, mensagem: 'Se esse e-mail estiver cadastrado, enviamos um código.' } }];\n"
+      },
+      "id": "s0000000-0000-4000-8000-00000000000b",
+      "name": "Monta resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "s0000000-0000-4000-8000-00000000000c",
+      "name": "Responde",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2200,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: true, mensagem: 'Se esse e-mail estiver cadastrado, enviamos um código.' } }];\n"
+      },
+      "id": "s0000000-0000-4000-8000-00000000000d",
+      "name": "Monta resposta (nao encontrado)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        250
+      ]
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Monta busca",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta busca": {
+      "main": [
+        [
+          {
+            "node": "Busca usuario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca usuario": {
+      "main": [
+        [
+          {
+            "node": "Confere encontrado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere encontrado": {
+      "main": [
+        [
+          {
+            "node": "Encontrado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encontrado?": {
+      "main": [
+        [
+          {
+            "node": "Gera codigo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta resposta (nao encontrado)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gera codigo": {
+      "main": [
+        [
+          {
+            "node": "Monta atualizacao codigo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta atualizacao codigo": {
+      "main": [
+        [
+          {
+            "node": "Grava codigo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava codigo": {
+      "main": [
+        [
+          {
+            "node": "Envia codigo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia codigo": {
+      "main": [
+        [
+          {
+            "node": "Monta resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta (nao encontrado)": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}
