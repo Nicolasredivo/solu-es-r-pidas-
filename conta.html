@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Criar conta — Soluções Rápidas</title>
+  <title>Entrar — Soluções Rápidas</title>
   <meta name="robots" content="noindex, nofollow" />
   <meta name="theme-color" content="#f4f7fa" />
   <link rel="icon" href="icons/favicon.png" />
@@ -31,7 +31,32 @@
     </a>
 
     <section class="cartao">
-      <ol class="passos" id="passos" aria-label="Etapas da criação da conta">
+      <!-- Entrar -->
+      <form class="etapa" id="etapa-entrar" novalidate hidden>
+        <h1 class="etapa-titulo" tabindex="-1">Entrar</h1>
+        <p class="etapa-texto">Use o e-mail e a senha da sua conta.</p>
+        <div class="campo">
+          <label for="entrar-email">E-mail</label>
+          <input id="entrar-email" type="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="voce@exemplo.com.br" />
+        </div>
+        <div class="campo">
+          <div class="campo-rotulos">
+            <label for="entrar-senha">Senha</label>
+            <a class="link link-pequeno" href="#esqueci" id="link-esqueci">Esqueci minha senha</a>
+          </div>
+          <div class="campo-senha">
+            <input id="entrar-senha" type="password" autocomplete="current-password" />
+            <button type="button" class="olho" data-alvo="entrar-senha" aria-label="Mostrar senha" aria-pressed="false">
+              <svg class="olho-aberto" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
+              <svg class="olho-fechado" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18" /><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>
+            </button>
+          </div>
+        </div>
+        <p class="aviso" role="alert" hidden></p>
+        <button class="botao botao-primario" type="submit">Entrar</button>
+      </form>
+
+      <ol class="passos" id="passos" aria-label="Etapas">
         <li class="passo" data-passo="1">
           <span class="passo-bola"><span class="passo-num">1</span><svg class="passo-ok" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
           <span class="passo-rotulo">E-mail</span>
@@ -48,8 +73,8 @@
 
       <!-- Etapa 1: e-mail -->
       <form class="etapa" id="etapa-email" novalidate hidden>
-        <h1 class="etapa-titulo" tabindex="-1">Crie sua conta</h1>
-        <p class="etapa-texto">Comece pelo seu e-mail. Vamos mandar um código pra confirmar que ele é seu.</p>
+        <h1 class="etapa-titulo" tabindex="-1" id="titulo-email">Crie sua conta</h1>
+        <p class="etapa-texto" id="texto-email">Comece pelo seu e-mail. Vamos mandar um código pra confirmar que ele é seu.</p>
         <div class="campo">
           <label for="email">E-mail</label>
           <input id="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="voce@exemplo.com.br" />
@@ -62,7 +87,7 @@
       <form class="etapa" id="etapa-codigo" novalidate hidden>
         <h1 class="etapa-titulo" tabindex="-1">Confira seu e-mail</h1>
         <p class="etapa-texto">
-          Enviamos um código de 6 números para <strong id="email-mostrado"></strong>.
+          <span id="texto-codigo">Enviamos um código de 6 números para</span> <strong id="email-mostrado"></strong>.
           <button type="button" class="link" id="trocar-email">Trocar e-mail</button>
         </p>
         <div class="otp" id="otp">
@@ -113,7 +138,7 @@
           <li id="req-iguais">As duas senhas iguais</li>
         </ul>
         <p class="aviso" role="alert" hidden></p>
-        <button class="botao botao-primario" type="submit">Criar conta</button>
+        <button class="botao botao-primario" type="submit" id="botao-senha">Criar conta</button>
       </form>
 
       <!-- Final: deu certo -->
@@ -123,7 +148,7 @@
         </div>
         <h1 class="etapa-titulo" tabindex="-1" id="titulo-sucesso">Conta criada!</h1>
         <p class="etapa-texto" id="texto-sucesso"></p>
-        <a class="botao botao-primario" href="sistema.html">Ir para o sistema</a>
+        <a class="botao botao-primario" href="sistema.html" id="botao-sucesso">Ir para o sistema</a>
       </div>
 
       <!-- Final: sem convite -->
@@ -149,22 +174,29 @@
         </div>
         <h1 class="etapa-titulo" tabindex="-1">Você já tem conta</h1>
         <p class="etapa-texto">Esse e-mail já tem uma conta ativa. É só entrar com ele.</p>
-        <a class="botao botao-primario" href="sistema.html">Entrar</a>
+        <a class="botao botao-primario" href="#entrar">Entrar</a>
         <button type="button" class="link link-centro" data-voltar>Usar outro e-mail</button>
       </div>
 
       <!-- Final: aparelho sem endereço do servidor -->
-      <div class="etapa etapa-final" id="etapa-sem-servidor" hidden>
+      <form class="etapa etapa-final" id="etapa-sem-servidor" novalidate hidden>
         <div class="selo selo-alerta" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M2 8.5a15 15 0 0 1 20 0" /><path d="M5.5 12a10 10 0 0 1 13 0" /><path d="M9 15.5a5 5 0 0 1 6 0" /><circle cx="12" cy="19" r="1" /></svg>
         </div>
-        <h1 class="etapa-titulo" tabindex="-1">Aparelho ainda não conectado</h1>
-        <p class="etapa-texto">Pra criar a conta, este aparelho precisa estar conectado ao servidor do sistema. Abra o sistema uma vez e configure a conexão em “Endereço do n8n”.</p>
-        <a class="botao botao-primario" href="sistema.html">Abrir o sistema</a>
-      </div>
+        <h1 class="etapa-titulo" tabindex="-1">Conectar este aparelho</h1>
+        <p class="etapa-texto">Este aparelho ainda não sabe o endereço do servidor do sistema. Cole abaixo o endereço que você recebeu — só precisa fazer isso uma vez.</p>
+        <div class="campo campo-esquerda">
+          <label for="endereco-servidor">Endereço do servidor</label>
+          <input id="endereco-servidor" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://algo.trycloudflare.com" />
+        </div>
+        <p class="aviso" role="alert" hidden></p>
+        <button class="botao botao-primario" type="submit">Salvar e continuar</button>
+      </form>
     </section>
 
-    <p class="rodape-cartao" id="rodape-cartao">Já tem conta? <a href="sistema.html">Entrar</a></p>
+    <p class="rodape-cartao" id="rodape-cartao"><span id="rodape-texto">Já tem conta?</span> <a id="rodape-link" href="#entrar">Entrar</a></p>
+    <!-- Caminho antigo, só até o dono autorizar tirar a senha de acesso única. -->
+    <p class="rodape-antigo" id="rodape-antigo" hidden><a href="sistema.html#senha">Entrar com a senha de acesso antiga</a></p>
   </main>
 
   <script src="config.js"></script>

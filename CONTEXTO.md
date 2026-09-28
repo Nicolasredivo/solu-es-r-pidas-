@@ -4093,6 +4093,88 @@ um cadastro real de ponta a ponta contra o n8n local. Tabelas `Usuarios` e
 `Sessoes` deixadas **vazias** no fim -- é o que faz a próxima conta criada
 (a do dono) virar Dono.
 
+### "Entrar" passa a pedir e-mail e senha (28/09/2026)
+
+Pedido do dono: clicar em Entrar tem que pedir e-mail e senha. A conta dele
+(Dono) já existia desde a rodada anterior.
+
+**Como ficou a entrada**:
+- `sistema.html` sem sessão salva manda pra `conta.html#entrar`. Com sessão
+  salva (`sr_sessao`), entra direto; se o token de acesso (30 min) venceu,
+  renova sozinho com o token de sessão (60 dias) mostrando "Entrando…" --
+  com limite de 10 s, pra rede ruim não prender a tela. Sem rede na hora,
+  entra assim mesmo (não desconecta ninguém por falta de internet).
+- `conta.html` virou a porta única, por âncora: `#entrar` (e-mail e senha,
+  com "Esqueci minha senha"), `#esqueci` (recuperação, mesmas 3 etapas da
+  criação de conta, com textos próprios), `#criar` ou sem âncora (criar
+  conta -- o link da landing continua o mesmo). Aparelho sem endereço do
+  servidor ganha um campo pra colar o endereço (antes só avisava).
+- **Só conta Dono entra no sistema por enquanto**: as regras dos outros
+  níveis ainda não existem. Login de outro nível mostra "Sua conta ainda
+  não tem acesso liberado" e já encerra a sessão que o login abriu.
+- **A senha única antiga continua valendo** ("não apague meu acesso até eu
+  autorizar"): link "Entrar com a senha de acesso antiga" embaixo do
+  Entrar leva pra `sistema.html#senha`, a tela antiga de sempre. Entrar
+  por e-mail apaga a senha antiga que estava guardada naquele aparelho
+  (`senha_salva`, texto puro) -- ela continua funcionando se digitada.
+- Menu lateral mostra "Conectado como <primeiro nome>". **Sair** encerra a
+  sessão também no servidor (workflow novo `encerrar-sessao`, com
+  `keepalive` pra terminar mesmo com a página trocando) e volta pro Entrar.
+- Sessão que acaba no meio do uso (senha trocada em outro aparelho, conta
+  desativada) mostra uma faixa "Sua sessão terminou — Entrar de novo" no
+  topo, sem tirar a pessoa da tela (dá pra copiar o que estava
+  preenchendo).
+
+**No app (`app.js`)**: a credencial entra em **um lugar só**, o
+`fetchN8n` -- nenhuma tela manda senha nem token por conta própria (antes 4
+lugares mandavam a senha, um deles com `fetch` direto; todos passam pelo
+`fetchN8n` agora). Token perto de vencer é renovado antes do pedido; várias
+ações ao mesmo tempo fazem **uma** renovação só. Pedido recusado
+(`acessoNegado`) renova uma vez e repete -- repetir é seguro porque o n8n
+confere o acesso antes de fazer qualquer coisa.
+
+**No n8n**: a checagem de senha dos 43 workflows do app (`Senha esta
+correta?`, cada um com a senha escrita dentro) virou uma checagem central:
+`Recebe pedido → Confere acesso (verificar-sessao, operação "acesso") →
+Senha esta correta? (agora só olha "permitido") → Recupera pedido → resto
+igual`. "Recupera pedido" devolve o pedido original, então o resto de cada
+workflow não mudou nada. A operação `acesso` aceita **a senha antiga OU um
+token de Dono**; qualquer outro token é recusado por padrão. Recusa
+responde `{ ok:false, acessoNegado:true }` em todos. Custo medido: ~27 ms a
+mais por pedido. A senha única agora mora num lugar só (o código do
+`verificar-sessao`) -- tirar ela no futuro é mexer em uma linha.
+
+Publicado primeiro só o `testar-conexao`, testado (senha antiga entra;
+sem nada, senha errada e token inventado são recusados), e só então os
+outros 42. As cópias em `n8n/` foram atualizadas com o que roda de verdade
+(34 estavam desatualizadas -- CORS, nós novos) e três entraram no
+repositório pela primeira vez (`checar-conflito-chamado`, `fazer-backup`,
+`encerrar-sessao`).
+
+**Dois ajustes na recuperação de senha**: `solicitar-recuperacao` responde
+antes de mandar o e-mail (7 s → 1,5 s, mesmo esquema do `cadastro-iniciar`,
+ordem "v1"); `redefinir-senha` com código inválido responde
+`motivo:'codigo'`, e a tela volta pra etapa do código em vez de ficar presa
+na da senha.
+
+**Armadilhas achadas**:
+- A API pública do n8n recusa `settings` com chaves que só a tela mexe
+  (`availableInMCP`, `binaryMode`, que o `testar-conexao` tinha): o PUT
+  precisa mandar só as chaves aceitas. Mandando só essas, as outras
+  **continuam** no workflow (conferido).
+- Testando no servidor local (`npx serve`), ele redireciona `conta.html` →
+  `/conta`; o service worker guarda essa resposta redirecionada e o Chrome
+  se recusa a usá-la numa navegação (página de erro). No GitHub Pages não
+  há esse redirecionamento. Nos testes locais: desregistrar o service
+  worker e navegar por `/conta` e `/sistema`.
+
+Testado: telas em 375 px com respostas simuladas (entrar, senha errada,
+conta sem acesso, esqueci com código vencido, criar, já tem conta, sessão
+vencida, renovação única, rede travada, Sair, caminho da senha antiga); e
+de ponta a ponta no n8n com uma conta de teste (Dono e depois Usuario),
+apagada no fim junto com as sessões dela -- a conta e a sessão do dono não
+foram tocadas.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

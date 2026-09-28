@@ -3,6 +3,7 @@
 
   const CHAVE_URL = "n8n_base_url";
   const CHAVE_SESSAO = "sr_sessao";
+  const CHAVE_SENHA_ANTIGA = "senha_salva";
   const ESPERA_REENVIO_S = 60;
   const LIMITE_RESPOSTA_MS = 20000;
   const MSG_REDE = "Não foi possível falar com o servidor. Confira sua internet e tente de novo.";
@@ -16,6 +17,9 @@
   }
   function guardar(chave, valor) {
     try { localStorage.setItem(chave, valor); } catch (e) { /* segue sem guardar */ }
+  }
+  function esquecer(chave) {
+    try { localStorage.removeItem(chave); } catch (e) { /* nada a fazer */ }
   }
 
   // Mesmo endereço que o sistema usa (sistema.html): o que foi salvo neste
@@ -69,9 +73,58 @@
   const pausa = (ms) => new Promise((ok) => setTimeout(ok, ms));
   const emailValido = (email) => email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
+  function guardarSessao(r) {
+    if (!r.tokenAcesso || !r.tokenSessao) return;
+    guardar(CHAVE_SESSAO, JSON.stringify({
+      tokenAcesso: r.tokenAcesso,
+      acessoExpiraEm: Date.now() + (Number(r.expiraEmSegundos) || 1800) * 1000,
+      tokenSessao: r.tokenSessao,
+      usuario: r.usuario || null,
+    }));
+    // A senha única antiga guardada em texto puro neste aparelho sai daqui:
+    // quem entra por e-mail não precisa mais dela.
+    esquecer(CHAVE_SENHA_ANTIGA);
+  }
+
+  // ---------- os dois fluxos de código por e-mail ----------
+  // Criar conta e recuperar senha têm as mesmas três etapas (e-mail, código,
+  // senha); mudam os textos, os endereços e o que vem na resposta.
+
+  const FLUXOS = {
+    criar: {
+      tituloPagina: "Criar conta — Soluções Rápidas",
+      iniciar: "cadastro-iniciar",
+      verificar: "cadastro-verificar",
+      concluir: "cadastro-concluir",
+      campoSenha: "senha",
+      tituloEmail: "Crie sua conta",
+      textoEmail: "Comece pelo seu e-mail. Vamos mandar um código pra confirmar que ele é seu.",
+      textoCodigo: "Enviamos um código de 6 números para",
+      tituloSenha: "Quase lá!",
+      textoSenha: "Agora crie uma senha para entrar no sistema.",
+      botaoSenha: "Criar conta",
+      rodape: ["Já tem conta?", "Entrar", "#entrar"],
+    },
+    esqueci: {
+      tituloPagina: "Recuperar senha — Soluções Rápidas",
+      iniciar: "solicitar-recuperacao",
+      verificar: "verificar-codigo",
+      concluir: "redefinir-senha",
+      campoSenha: "novaSenha",
+      tituloEmail: "Esqueceu a senha?",
+      textoEmail: "Digite o e-mail da sua conta. Vamos mandar um código pra você criar uma senha nova.",
+      textoCodigo: "Se esse e-mail tiver conta, enviamos um código de 6 números para",
+      tituloSenha: "Crie uma senha nova",
+      textoSenha: "Escolha uma senha nova para entrar no sistema.",
+      botaoSenha: "Salvar senha nova",
+      rodape: ["Lembrou a senha?", "Entrar", "#entrar"],
+    },
+  };
+
   // ---------- etapas ----------
 
   const etapas = {
+    entrar: $("#etapa-entrar"),
     email: $("#etapa-email"),
     codigo: $("#etapa-codigo"),
     senha: $("#etapa-senha"),
@@ -83,8 +136,10 @@
   const NUMERO_DO_PASSO = { email: 1, codigo: 2, senha: 3, sucesso: 4 };
   const passos = $("#passos");
   const rodape = $("#rodape-cartao");
+  const rodapeAntigo = $("#rodape-antigo");
 
-  const estado = { email: "", codigo: "", nome: "", precisaNome: false };
+  const estado = { fluxo: "criar", email: "", codigo: "", nome: "", precisaNome: false };
+  const fluxo = () => FLUXOS[estado.fluxo];
 
   function mostrarEtapa(nome, focar) {
     Object.entries(etapas).forEach(([chave, el]) => { el.hidden = chave !== nome; });
@@ -98,7 +153,16 @@
       if (n === atual) li.setAttribute("aria-current", "step");
       else li.removeAttribute("aria-current");
     });
+
+    // Rodapé com o caminho alternativo de cada tela.
+    const [texto, link, destino] = nome === "entrar"
+      ? ["Ainda não tem conta?", "Criar conta", "#criar"]
+      : fluxo().rodape;
+    $("#rodape-texto").textContent = texto;
+    $("#rodape-link").textContent = link;
+    $("#rodape-link").setAttribute("href", destino);
     rodape.hidden = nome === "sucesso" || nome === "jaAtiva";
+    rodapeAntigo.hidden = nome !== "entrar";
 
     const el = etapas[nome];
     limparAviso(el);
@@ -125,9 +189,91 @@
     botao.setAttribute("aria-busy", String(sim));
   }
 
+  document.querySelectorAll(".olho").forEach((botao) => {
+    botao.addEventListener("click", () => {
+      const campo = document.getElementById(botao.dataset.alvo);
+      const mostrar = campo.type === "password";
+      campo.type = mostrar ? "text" : "password";
+      botao.setAttribute("aria-pressed", String(mostrar));
+      botao.setAttribute("aria-label", mostrar ? "Ocultar senha" : "Mostrar senha");
+    });
+  });
+
+  // ---------- entrar ----------
+
+  const entrarEmail = $("#entrar-email");
+  const entrarSenha = $("#entrar-senha");
+
+  [entrarEmail, entrarSenha].forEach((campo) => {
+    campo.addEventListener("input", () => {
+      campo.removeAttribute("aria-invalid");
+      limparAviso(etapas.entrar);
+    });
+  });
+
+  // "Esqueci minha senha" leva o e-mail já digitado junto.
+  $("#link-esqueci").addEventListener("click", () => {
+    const email = entrarEmail.value.trim();
+    if (email) campoEmail.value = email;
+  });
+
+  etapas.entrar.addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    const email = entrarEmail.value.trim().toLowerCase();
+    const senha = entrarSenha.value;
+    if (!emailValido(email)) {
+      entrarEmail.setAttribute("aria-invalid", "true");
+      mostrarAviso(etapas.entrar, "Digite um e-mail válido.");
+      entrarEmail.focus();
+      return;
+    }
+    if (!senha) {
+      entrarSenha.setAttribute("aria-invalid", "true");
+      mostrarAviso(etapas.entrar, "Digite sua senha.");
+      entrarSenha.focus();
+      return;
+    }
+
+    const botao = etapas.entrar.querySelector("[type=submit]");
+    carregando(botao, true);
+    let saindo = false;
+    try {
+      const r = await chamar("login", { email, senha, dispositivo: descreverAparelho() });
+      if (!r.ok) {
+        mostrarAviso(etapas.entrar, r.mensagem || "E-mail ou senha incorretos.");
+        entrarSenha.value = "";
+        entrarSenha.focus();
+        return;
+      }
+      // Só quem tem acesso total entra por enquanto: as regras dos outros
+      // níveis de acesso ainda não foram definidas.
+      if (!r.usuario || r.usuario.papel !== "Dono") {
+        // O login já abriu uma sessão no servidor: fecha na hora, pra não
+        // sobrar sessão válida que ninguém vai usar.
+        if (r.tokenSessao) chamar("encerrar-sessao", { tokenSessao: r.tokenSessao }).catch(() => {});
+        mostrarAviso(etapas.entrar, "Sua conta ainda não tem acesso liberado ao sistema. Fale com a administração.");
+        return;
+      }
+      guardarSessao(r);
+      saindo = true;
+      window.location.replace("sistema.html");
+    } catch (e) {
+      mostrarAviso(etapas.entrar, MSG_REDE);
+    } finally {
+      // Indo pro sistema, o botão fica girando até a página trocar.
+      if (!saindo) carregando(botao, false);
+    }
+  });
+
   // ---------- 1. e-mail ----------
 
   const campoEmail = $("#email");
+
+  function prepararEmail() {
+    $("#titulo-email").textContent = fluxo().tituloEmail;
+    $("#texto-email").textContent = fluxo().textoEmail;
+    document.title = fluxo().tituloPagina;
+  }
 
   etapas.email.addEventListener("submit", async (evento) => {
     evento.preventDefault();
@@ -144,15 +290,17 @@
     const botao = etapas.email.querySelector("[type=submit]");
     carregando(botao, true);
     try {
-      const r = await chamar("cadastro-iniciar", { email });
+      const r = await chamar(fluxo().iniciar, { email });
       if (!r.ok) {
         mostrarAviso(etapas.email, r.mensagem || "Não foi possível continuar agora.");
         return;
       }
       estado.email = email;
       if (r.estado === "sem_convite") mostrarEtapa("semConvite");
-      else if (r.estado === "ja_ativada") mostrarEtapa("jaAtiva");
-      else irParaCodigo();
+      else if (r.estado === "ja_ativada") {
+        entrarEmail.value = email; // o "Entrar" dessa tela já abre com o e-mail preenchido
+        mostrarEtapa("jaAtiva");
+      } else irParaCodigo();
     } catch (e) {
       mostrarAviso(etapas.email, MSG_REDE);
     } finally {
@@ -172,6 +320,7 @@
 
   function voltarParaEmail() {
     pararContagem();
+    prepararEmail();
     mostrarEtapa("email", campoEmail);
     campoEmail.select();
   }
@@ -239,6 +388,7 @@
   }
 
   function irParaCodigo() {
+    $("#texto-codigo").textContent = fluxo().textoCodigo;
     $("#email-mostrado").textContent = estado.email;
     limparCodigo();
     mostrarEtapa("codigo", campoCodigo);
@@ -258,7 +408,7 @@
     conferindo = true;
     carregando(botao, true);
     try {
-      const r = await chamar("cadastro-verificar", { email: estado.email, codigo });
+      const r = await chamar(fluxo().verificar, { email: estado.email, codigo });
       if (!r.ok) {
         erroNoCodigo(r.mensagem || "Código incorreto.", true);
         return;
@@ -309,8 +459,10 @@
     botaoReenviar.disabled = true;
     limparAviso(etapas.codigo);
     try {
-      const r = await chamar("cadastro-iniciar", { email: estado.email });
-      if (r.ok && r.estado === "codigo_enviado") {
+      const r = await chamar(fluxo().iniciar, { email: estado.email });
+      // Criar conta devolve "codigo_enviado"; a recuperação responde sempre
+      // igual (pra não contar se o e-mail existe).
+      if (r.ok && (r.estado === "codigo_enviado" || !r.estado)) {
         limparCodigo();
         mostrarAviso(etapas.codigo, "Enviamos um código novo. O anterior não vale mais.", "ok");
         iniciarContagem();
@@ -334,11 +486,14 @@
   function irParaSenha() {
     pararContagem();
     const nome = primeiroNome(estado.nome);
-    $("#titulo-senha").textContent = !estado.precisaNome && nome ? "Olá, " + nome + "!" : "Quase lá!";
+    $("#titulo-senha").textContent = estado.fluxo === "criar" && !estado.precisaNome && nome
+      ? "Olá, " + nome + "!"
+      : fluxo().tituloSenha;
     $("#texto-senha").textContent = estado.precisaNome
       ? "Diga seu nome e crie uma senha para entrar no sistema."
-      : "Agora crie uma senha para entrar no sistema.";
+      : fluxo().textoSenha;
     $("#campo-nome").hidden = !estado.precisaNome;
+    $("#botao-senha").textContent = fluxo().botaoSenha;
     campoSenha.value = "";
     campoSenha2.value = "";
     conferirRequisitos();
@@ -360,16 +515,6 @@
     });
   });
 
-  document.querySelectorAll(".olho").forEach((botao) => {
-    botao.addEventListener("click", () => {
-      const campo = document.getElementById(botao.dataset.alvo);
-      const mostrar = campo.type === "password";
-      campo.type = mostrar ? "text" : "password";
-      botao.setAttribute("aria-pressed", String(mostrar));
-      botao.setAttribute("aria-label", mostrar ? "Ocultar senha" : "Mostrar senha");
-    });
-  });
-
   function erroNoCampo(campo, mensagem) {
     campo.setAttribute("aria-invalid", "true");
     mostrarAviso(etapas.senha, mensagem);
@@ -388,9 +533,10 @@
     const botao = etapas.senha.querySelector("[type=submit]");
     carregando(botao, true);
     try {
-      const dados = { email: estado.email, codigo: estado.codigo, senha, dispositivo: descreverAparelho() };
+      const dados = { email: estado.email, codigo: estado.codigo, dispositivo: descreverAparelho() };
+      dados[fluxo().campoSenha] = senha;
       if (estado.precisaNome) dados.nome = nome;
-      const r = await chamar("cadastro-concluir", dados);
+      const r = await chamar(fluxo().concluir, dados);
       if (!r.ok) {
         // O código venceu enquanto a pessoa criava a senha: volta pra pedir
         // um novo, em vez de deixá-la presa aqui.
@@ -398,10 +544,10 @@
           irParaCodigoDeNovo(r.mensagem);
           return;
         }
-        mostrarAviso(etapas.senha, r.mensagem || "Não foi possível criar a conta agora.");
+        mostrarAviso(etapas.senha, r.mensagem || "Não foi possível concluir agora.");
         return;
       }
-      guardarSessao(r);
+      if (estado.fluxo === "criar") guardarSessao(r);
       irParaSucesso(r.usuario || {});
     } catch (e) {
       mostrarAviso(etapas.senha, MSG_REDE);
@@ -417,15 +563,7 @@
     mostrarAviso(etapas.codigo, mensagem || "Esse código expirou. Peça um novo código.");
   }
 
-  function guardarSessao(r) {
-    if (!r.tokenAcesso || !r.tokenSessao) return;
-    guardar(CHAVE_SESSAO, JSON.stringify({
-      tokenAcesso: r.tokenAcesso,
-      acessoExpiraEm: Date.now() + (Number(r.expiraEmSegundos) || 1800) * 1000,
-      tokenSessao: r.tokenSessao,
-      usuario: r.usuario || null,
-    }));
-  }
+  const botaoSucesso = $("#botao-sucesso");
 
   function irParaSucesso(usuario) {
     // Nada de senha nem código sobrando na memória da página.
@@ -433,16 +571,67 @@
     campoSenha.value = "";
     campoSenha2.value = "";
 
-    const nome = primeiroNome(usuario.nome || estado.nome);
-    $("#titulo-sucesso").textContent = nome ? "Conta criada, " + nome + "!" : "Conta criada!";
-    $("#texto-sucesso").textContent = usuario.papel === "Dono"
-      ? "Sua conta tem acesso total ao sistema."
-      : "Sua conta já está pronta para usar.";
+    if (estado.fluxo === "esqueci") {
+      $("#titulo-sucesso").textContent = "Senha alterada!";
+      $("#texto-sucesso").textContent = "Pronto. Agora é só entrar com a senha nova.";
+      botaoSucesso.textContent = "Entrar";
+      botaoSucesso.setAttribute("href", "#entrar");
+      entrarEmail.value = estado.email;
+    } else {
+      const nome = primeiroNome(usuario.nome || estado.nome);
+      $("#titulo-sucesso").textContent = nome ? "Conta criada, " + nome + "!" : "Conta criada!";
+      $("#texto-sucesso").textContent = usuario.papel === "Dono"
+        ? "Sua conta tem acesso total ao sistema."
+        : "Sua conta já está pronta para usar.";
+      botaoSucesso.textContent = "Ir para o sistema";
+      botaoSucesso.setAttribute("href", "sistema.html");
+    }
     mostrarEtapa("sucesso");
   }
 
-  // ---------- início ----------
+  // ---------- aparelho sem endereço do servidor ----------
 
-  if (baseUrl()) mostrarEtapa("email", campoEmail);
-  else mostrarEtapa("semServidor");
+  const campoEndereco = $("#endereco-servidor");
+
+  etapas.semServidor.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+    const valor = campoEndereco.value.trim().replace(/\/+$/, "");
+    if (!/^https:\/\/[^\s/]+/.test(valor)) {
+      campoEndereco.setAttribute("aria-invalid", "true");
+      mostrarAviso(etapas.semServidor, "O endereço precisa começar com https://");
+      campoEndereco.focus();
+      return;
+    }
+    guardar(CHAVE_URL, valor);
+    abrirRota();
+  });
+  campoEndereco.addEventListener("input", () => {
+    campoEndereco.removeAttribute("aria-invalid");
+    limparAviso(etapas.semServidor);
+  });
+
+  // ---------- rotas ----------
+  // conta.html#entrar, #esqueci ou #criar (sem nada também é criar: é o
+  // endereço que o botão "Criar conta" da landing já usava).
+
+  function abrirRota() {
+    pararContagem();
+    const rota = window.location.hash.replace("#", "");
+    estado.fluxo = rota === "esqueci" ? "esqueci" : "criar";
+
+    if (!baseUrl()) {
+      mostrarEtapa("semServidor", campoEndereco);
+      return;
+    }
+    if (rota === "entrar") {
+      document.title = "Entrar — Soluções Rápidas";
+      mostrarEtapa("entrar", entrarEmail.value ? entrarSenha : entrarEmail);
+      return;
+    }
+    prepararEmail();
+    mostrarEtapa("email", campoEmail);
+  }
+
+  window.addEventListener("hashchange", abrirRota);
+  abrirRota();
 })();

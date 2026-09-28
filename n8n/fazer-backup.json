@@ -1,0 +1,947 @@
+{
+  "name": "App - Backup de tudo",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 22,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "name": "Todo dia as 22h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -460,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fazer-backup",
+        "responseMode": "lastNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000000002",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        100
+      ],
+      "webhookId": "c0000000-0000-4000-8000-000000000003"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-acc0-4000-8000-000000000003",
+              "leftValue": "={{ $json.permitido }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000005",
+      "name": "Senha esta correta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -20,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\"ok\":false,\"acessoNegado\":true,\"mensagem\":\"Acesso não autorizado. Entre de novo.\"} }];"
+      },
+      "id": "c0000000-0000-4000-8000-000000000006",
+      "name": "Responde senha incorreta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appjAmWXV7Zr33UqE",
+          "mode": "list",
+          "cachedResultName": "Financeiro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblNduEKl2jY280V0",
+          "mode": "list",
+          "cachedResultName": "Despesas"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000007",
+      "name": "Le Despesas",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        420,
+        -120
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appjAmWXV7Zr33UqE",
+          "mode": "list",
+          "cachedResultName": "Financeiro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblhsabIIg8SLqMMj",
+          "mode": "list",
+          "cachedResultName": "Fornecedores"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000008",
+      "name": "Le Fornecedores",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        620,
+        -120
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appjAmWXV7Zr33UqE",
+          "mode": "list",
+          "cachedResultName": "Financeiro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblb8QplhcGRP6SZ7",
+          "mode": "list",
+          "cachedResultName": "Recorrentes"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000009",
+      "name": "Le Recorrentes",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        820,
+        -120
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appjAmWXV7Zr33UqE",
+          "mode": "list",
+          "cachedResultName": "Financeiro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl4tMnm3t3peeLYo",
+          "mode": "list",
+          "cachedResultName": "Recebimentos"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000010",
+      "name": "Le Recebimentos",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1020,
+        -120
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appjAmWXV7Zr33UqE",
+          "mode": "list",
+          "cachedResultName": "Financeiro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl3uT9h7ZYXnfR7E",
+          "mode": "list",
+          "cachedResultName": "Config_Financeiro"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000011",
+      "name": "Le Config_Financeiro",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1220,
+        -120
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appjAmWXV7Zr33UqE",
+          "mode": "list",
+          "cachedResultName": "Financeiro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblIrMrXYI6FZdKfS",
+          "mode": "list",
+          "cachedResultName": "Conferencias"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000012",
+      "name": "Le Conferencias",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1420,
+        -120
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appjAmWXV7Zr33UqE",
+          "mode": "list",
+          "cachedResultName": "Financeiro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblh3m5JB6N2sNs5i",
+          "mode": "list",
+          "cachedResultName": "Retiradas"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000013",
+      "name": "Le Retiradas",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1620,
+        -120
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appjAmWXV7Zr33UqE",
+          "mode": "list",
+          "cachedResultName": "Financeiro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblzJwNGcTpvGmYiM",
+          "mode": "list",
+          "cachedResultName": "Cartoes"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000014",
+      "name": "Le Cartoes",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1820,
+        -120
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appjAmWXV7Zr33UqE",
+          "mode": "list",
+          "cachedResultName": "Financeiro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbldfftPos0qX7nlm",
+          "mode": "list",
+          "cachedResultName": "Pagamentos_Fatura"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000015",
+      "name": "Le Pagamentos_Fatura",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2020,
+        -120
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl5Joji6gAir3mNh",
+          "mode": "list",
+          "cachedResultName": "Entidades_Cadastradas"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000016",
+      "name": "Le Entidades_Cadastradas",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2220,
+        -120
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblXXOEOCwQnC2qFX",
+          "mode": "list",
+          "cachedResultName": "Contatos_Solicitantes"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000017",
+      "name": "Le Contatos_Solicitantes",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2420,
+        -120
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblffVczCf1VeNxs7",
+          "mode": "list",
+          "cachedResultName": "Locais_Atendimento"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000018",
+      "name": "Le Locais_Atendimento",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2620,
+        -120
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appvRrT2s6rK7jOKh",
+          "mode": "list",
+          "cachedResultName": "ERP"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblHAeSNfx7D2qAnI",
+          "mode": "list",
+          "cachedResultName": "Atendimentos"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000019",
+      "name": "Le Atendimentos",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2820,
+        -120
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Junta tudo num objeto so, tabela por tabela, com os registros crus do\n// Airtable (id + fields). Cru de proposito: da para reconstruir a partir dele.\nconst tabelas = [[\"Financeiro\",\"Despesas\",\"Le Despesas\"],[\"Financeiro\",\"Fornecedores\",\"Le Fornecedores\"],[\"Financeiro\",\"Recorrentes\",\"Le Recorrentes\"],[\"Financeiro\",\"Recebimentos\",\"Le Recebimentos\"],[\"Financeiro\",\"Config_Financeiro\",\"Le Config_Financeiro\"],[\"Financeiro\",\"Conferencias\",\"Le Conferencias\"],[\"Financeiro\",\"Retiradas\",\"Le Retiradas\"],[\"Financeiro\",\"Cartoes\",\"Le Cartoes\"],[\"Financeiro\",\"Pagamentos_Fatura\",\"Le Pagamentos_Fatura\"],[\"cadastro\",\"Entidades_Cadastradas\",\"Le Entidades_Cadastradas\"],[\"cadastro\",\"Contatos_Solicitantes\",\"Le Contatos_Solicitantes\"],[\"cadastro\",\"Locais_Atendimento\",\"Le Locais_Atendimento\"],[\"ERP\",\"Atendimentos\",\"Le Atendimentos\"]];\nconst dados = {};\nlet total = 0;\n\nfor (const [base, tabela, no] of tabelas) {\n  let itens = [];\n  try { itens = $(no).all(); } catch (e) { itens = []; }\n  const registros = itens\n    .map((i) => i.json)\n    .filter((j) => j && j.id)\n    .map((j) => ({ id: j.id, createdTime: j.createdTime, fields: j.fields || {} }));\n  dados[base + \" / \" + tabela] = registros;\n  total += registros.length;\n}\n\nconst agora = new Date();\n// Horario de Brasilia, para o nome do arquivo bater com o dia de verdade.\nconst br = new Date(agora.getTime() - 3 * 60 * 60 * 1000);\nconst dia = br.toISOString().slice(0, 10);\n\nreturn [{ json: {\n  feito_em: agora.toISOString(),\n  dia: dia,\n  total_de_registros: total,\n  tabelas: Object.fromEntries(Object.entries(dados).map(([k, v]) => [k, v.length])),\n  dados: dados,\n} }];"
+      },
+      "id": "c0000000-0000-4000-8000-000000000020",
+      "name": "Monta o backup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3020,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "toJson",
+        "mode": "all",
+        "options": {
+          "format": true,
+          "fileName": "backup.json"
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000000021",
+      "name": "Vira arquivo",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        3020,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ \"C:/Users/rediv/.n8n-files/backups-sistema/\" + $('Monta o backup').first().json.dia + \".json\" }}",
+        "dataPropertyName": "data",
+        "options": {
+          "append": false
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000000022",
+      "name": "Grava o do dia",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        3020,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "C:/Users/rediv/.n8n-files/backups-sistema/ultimo.json",
+        "dataPropertyName": "data",
+        "options": {
+          "append": false
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000000023",
+      "name": "Grava o ultimo",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        3020,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const m = $('Monta o backup').first().json;\nreturn [{ json: {\n  ok: true,\n  mensagem: 'Backup salvo: ' + m.total_de_registros + ' registros.',\n  dia: m.dia, feito_em: m.feito_em, tabelas: m.tabelas,\n} }];"
+      },
+      "id": "c0000000-0000-4000-8000-000000000024",
+      "name": "Responde pronto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3020,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "acesso",
+            "senha": "={{ $json.body.senha }}",
+            "tokenAcesso": "={{ $json.body.tokenAcesso }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "c0000000-acc0-4000-8000-000000000001",
+      "name": "Confere acesso",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -240,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Devolve o pedido original: o resto do workflow lê $json.body como antes.\nreturn $('Recebe pedido do app').all();"
+      },
+      "id": "c0000000-acc0-4000-8000-000000000002",
+      "name": "Recupera pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Todo dia as 22h": {
+      "main": [
+        [
+          {
+            "node": "Le Despesas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Confere acesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Senha esta correta?": {
+      "main": [
+        [
+          {
+            "node": "Recupera pedido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde senha incorreta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le Despesas": {
+      "main": [
+        [
+          {
+            "node": "Le Fornecedores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le Fornecedores": {
+      "main": [
+        [
+          {
+            "node": "Le Recorrentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le Recorrentes": {
+      "main": [
+        [
+          {
+            "node": "Le Recebimentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le Recebimentos": {
+      "main": [
+        [
+          {
+            "node": "Le Config_Financeiro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le Config_Financeiro": {
+      "main": [
+        [
+          {
+            "node": "Le Conferencias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le Conferencias": {
+      "main": [
+        [
+          {
+            "node": "Le Retiradas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le Retiradas": {
+      "main": [
+        [
+          {
+            "node": "Le Cartoes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le Cartoes": {
+      "main": [
+        [
+          {
+            "node": "Le Pagamentos_Fatura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le Pagamentos_Fatura": {
+      "main": [
+        [
+          {
+            "node": "Le Entidades_Cadastradas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le Entidades_Cadastradas": {
+      "main": [
+        [
+          {
+            "node": "Le Contatos_Solicitantes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le Contatos_Solicitantes": {
+      "main": [
+        [
+          {
+            "node": "Le Locais_Atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le Locais_Atendimento": {
+      "main": [
+        [
+          {
+            "node": "Le Atendimentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le Atendimentos": {
+      "main": [
+        [
+          {
+            "node": "Monta o backup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta o backup": {
+      "main": [
+        [
+          {
+            "node": "Vira arquivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vira arquivo": {
+      "main": [
+        [
+          {
+            "node": "Grava o do dia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava o do dia": {
+      "main": [
+        [
+          {
+            "node": "Grava o ultimo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava o ultimo": {
+      "main": [
+        [
+          {
+            "node": "Responde pronto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere acesso": {
+      "main": [
+        [
+          {
+            "node": "Senha esta correta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recupera pedido": {
+      "main": [
+        [
+          {
+            "node": "Le Despesas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -7,7 +7,7 @@
         "path": "excluir-despesa",
         "responseMode": "responseNode",
         "options": {
-          "allowedOrigins": "*"
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
         }
       },
       "id": "c0000000-0000-4000-8000-000000000035",
@@ -31,11 +31,11 @@
           },
           "conditions": [
             {
-              "id": "c0000000-0000-4000-8000-000000000037",
-              "leftValue": "={{ $json.body.senha }}",
-              "rightValue": "TROQUE-ESTA-SENHA",
+              "id": "c0000000-acc0-4000-8000-000000000003",
+              "leftValue": "={{ $json.permitido }}",
+              "rightValue": true,
               "operator": {
-                "type": "string",
+                "type": "boolean",
                 "operation": "equals",
                 "name": "filter.operator.equals"
               }
@@ -51,14 +51,14 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        220,
+        440,
         0
       ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
+        "responseBody": "{\n  \"ok\": false,\n  \"acessoNegado\": true,\n  \"mensagem\": \"Acesso não autorizado. Entre de novo.\"\n}",
         "options": {}
       },
       "id": "c0000000-0000-4000-8000-000000000039",
@@ -66,7 +66,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        440,
+        880,
         180
       ]
     },
@@ -79,7 +79,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        440,
+        880,
         -60
       ]
     },
@@ -101,7 +101,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        660,
+        1100,
         -60
       ],
       "credentials": {
@@ -123,7 +123,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        880,
+        1320,
         -160
       ]
     },
@@ -138,8 +138,48 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        880,
+        1320,
         40
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "acesso",
+            "senha": "={{ $json.body.senha }}",
+            "tokenAcesso": "={{ $json.body.tokenAcesso }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "c0000000-acc0-4000-8000-000000000001",
+      "name": "Confere acesso",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Devolve o pedido original: o resto do workflow lê $json.body como antes.\nreturn $('Recebe pedido do app').all();"
+      },
+      "id": "c0000000-acc0-4000-8000-000000000002",
+      "name": "Recupera pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -60
       ]
     }
   ],
@@ -148,7 +188,7 @@
       "main": [
         [
           {
-            "node": "Senha esta correta?",
+            "node": "Confere acesso",
             "type": "main",
             "index": 0
           }
@@ -159,7 +199,7 @@
       "main": [
         [
           {
-            "node": "Monta o que apagar",
+            "node": "Recupera pedido",
             "type": "main",
             "index": 0
           }
@@ -201,10 +241,33 @@
           }
         ]
       ]
+    },
+    "Confere acesso": {
+      "main": [
+        [
+          {
+            "node": "Senha esta correta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recupera pedido": {
+      "main": [
+        [
+          {
+            "node": "Monta o que apagar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
-    "executionOrder": "v1"
-  },
-  "pinData": {}
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  }
 }

@@ -14,7 +14,12 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="gate-view" class="gate-view">
+  <!-- Aparece só enquanto a sessão salva é renovada ao abrir (menos de 1s). -->
+  <div id="entrando" class="entrando hidden" role="status">Entrando…</div>
+
+  <!-- Tela antiga da senha de acesso única: só em sistema.html#senha, até o
+       dono autorizar tirar. A entrada normal é conta.html (e-mail e senha). -->
+  <div id="gate-view" class="gate-view hidden">
     <div class="card">
       <h1>Soluções Rápidas</h1>
       <p class="subtitle">Digite a senha para acessar</p>
@@ -44,6 +49,8 @@
         </div>
         <p id="config-hint" class="config-hint"></p>
       </div>
+
+      <a href="conta.html#entrar" class="link-button link-login">Entrar com e-mail e senha</a>
     </div>
   </div>
 
@@ -76,6 +83,7 @@
       <button type="button" class="sidebar-item" data-page="agenda">Agenda</button>
 
       <div class="sidebar-rodape">
+        <p id="usuario-conectado" class="usuario-conectado hidden"></p>
         <button type="button" id="sair" class="sidebar-item sair">Sair</button>
         <p id="versao-app" class="versao-app"></p>
       </div>
@@ -1558,6 +1566,13 @@
   <div id="atualizacao-disponivel" class="atualizacao-disponivel hidden" role="status">
     <span>Nova versão disponível.</span>
     <button type="button" id="atualizacao-aplicar">Atualizar agora</button>
+  </div>
+
+  <!-- A sessão acabou no meio do uso. Não tira ninguém da tela na hora: dá
+       pra copiar o que estava preenchendo antes de entrar de novo. -->
+  <div id="sessao-expirada" class="atualizacao-disponivel sessao-expirada hidden" role="alert">
+    <span>Sua sessão terminou.</span>
+    <button type="button" id="sessao-expirada-entrar">Entrar de novo</button>
   </div>
 
   <!-- Lembretes flutuantes: chamados chegando, atrasados, e o resumo das 6h.

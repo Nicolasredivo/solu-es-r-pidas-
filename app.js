@@ -66,25 +66,137 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.28a";
+const APP_VERSION = "2026.09.28b";
+
+// ----- Sessão (login por e-mail e senha) -----
+//
+// Dois jeitos de estar dentro do sistema:
+//   "login" -- entrou pela tela conta.html com e-mail e senha. Cada pedido
+//              leva o token de acesso (vale 30 min), renovado sozinho com o
+//              token de sessão (vale 60 dias) guardado neste aparelho.
+//   "senha" -- a senha de acesso única de antes, só por sistema.html#senha.
+//              Continua valendo até o dono autorizar tirar.
+// Em qualquer um dos dois, quem confere é o n8n (verificar-sessao), nunca a
+// tela.
+const CHAVE_SESSAO = "sr_sessao";
+const RENOVAR_ANTES_MS = 60 * 1000;
+let modoAcesso = "login";
+let sessao = null;
+
+function lerSessao() {
+  try {
+    const s = JSON.parse(localStorage.getItem(CHAVE_SESSAO));
+    return s && s.tokenAcesso && s.tokenSessao ? s : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function gravarSessao(nova) {
+  sessao = nova;
+  try {
+    localStorage.setItem(CHAVE_SESSAO, JSON.stringify(nova));
+  } catch (e) {
+    /* segue só em memória; na próxima abertura pede o login de novo */
+  }
+}
+
+function apagarSessao() {
+  sessao = null;
+  try {
+    localStorage.removeItem(CHAVE_SESSAO);
+  } catch (e) {
+    /* nada a fazer */
+  }
+}
+
+// Várias ações ao mesmo tempo com o token vencido pedem UMA renovação só.
+// Resposta: true (renovou), false (sessão acabou: precisa entrar de novo) ou
+// null (sem rede -- não dá pra saber, então não desconecta ninguém).
+let renovacaoEmAndamento = null;
+function renovarAcesso() {
+  if (renovacaoEmAndamento) return renovacaoEmAndamento;
+  renovacaoEmAndamento = (async () => {
+    const atual = sessao;
+    if (!atual) return false;
+    // Rede ruim não pode deixar a abertura presa em "Entrando…".
+    const controle = new AbortController();
+    const limite = setTimeout(() => controle.abort(), 10000);
+    try {
+      const resposta = await fetch(urlWebhook("renovar-token"), {
+        method: "POST",
+        body: new URLSearchParams({ tokenSessao: atual.tokenSessao }),
+        signal: controle.signal,
+      });
+      const d = await resposta.json().catch(() => null);
+      if (!d) return null;
+      if (!d.ok || !d.tokenAcesso) return false;
+      gravarSessao({
+        ...atual,
+        tokenAcesso: d.tokenAcesso,
+        acessoExpiraEm: Date.now() + (Number(d.expiraEmSegundos) || 1800) * 1000,
+      });
+      return true;
+    } catch (e) {
+      return null;
+    } finally {
+      clearTimeout(limite);
+    }
+  })().finally(() => {
+    renovacaoEmAndamento = null;
+  });
+  return renovacaoEmAndamento;
+}
+
+async function credenciais() {
+  if (modoAcesso === "senha") return { senha: passwordInput.value };
+  if (!sessao) return {};
+  // Renova um pouco antes de vencer, pra ação não ser recusada à toa.
+  if (sessao.acessoExpiraEm - Date.now() < RENOVAR_ANTES_MS) await renovarAcesso();
+  return sessao ? { tokenAcesso: sessao.tokenAcesso } : {};
+}
+
+// A sessão acabou no meio do uso (senha trocada em outro aparelho, conta
+// desativada, 60 dias sem abrir). Não tira a pessoa da tela na hora: dá pra
+// copiar o que estava preenchendo antes de entrar de novo.
+function sessaoExpirou() {
+  apagarSessao();
+  document.getElementById("sessao-expirada").classList.remove("hidden");
+}
+
+document.getElementById("sessao-expirada-entrar").addEventListener("click", () => {
+  window.location.href = "conta.html#entrar";
+});
 
 // Toda conversa com o n8n passa por aqui: assim o indicador de conexão reflete
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
-// tempos só para saber se ele está vivo.
-async function fetchN8n(caminho, dados) {
+// tempos só para saber se ele está vivo. É aqui também que a credencial entra
+// em cada pedido -- quem chama não precisa saber qual é.
+async function fetchN8n(caminho, dados, jaRenovou) {
+  let resposta;
   try {
     // Enviado como formulário simples de propósito: assim o navegador não
     // precisa fazer a verificação extra de segurança (CORS preflight).
-    const resposta = await fetch(urlWebhook(caminho), {
+    resposta = await fetch(urlWebhook(caminho), {
       method: "POST",
-      body: new URLSearchParams(dados),
+      body: new URLSearchParams({ ...dados, ...(await credenciais()) }),
     });
     marcarConexao(true);
-    return resposta;
   } catch (err) {
     marcarConexao(false);
     throw err;
   }
+
+  if (modoAcesso !== "login") return resposta;
+  const corpo = await resposta.clone().json().catch(() => null);
+  if (!corpo || corpo.acessoNegado !== true) return resposta;
+
+  // Token recusado: renova uma vez e repete o pedido. Repetir é seguro --
+  // o n8n confere o acesso antes de fazer qualquer coisa.
+  const renovou = jaRenovou ? false : await renovarAcesso();
+  if (renovou === true) return fetchN8n(caminho, dados, true);
+  if (renovou === false) sessaoExpirou();
+  return resposta;
 }
 
 const menuButton = document.getElementById("menu-button");
@@ -685,10 +797,7 @@ async function consultarDocumento(digitos) {
   mostrarDica("neutral", "Consultando...");
 
   try {
-    const resposta = await fetchN8n("consultar-documento", {
-      senha: passwordInput.value,
-      documento: digitos,
-    });
+    const resposta = await fetchN8n("consultar-documento", { documento: digitos });
 
     const dados = await resposta.json().catch(() => null);
 
@@ -787,26 +896,22 @@ formEntidade.addEventListener("submit", async (event) => {
   salvarStatus.className = "status show loading";
 
   try {
-    const resposta = await fetch(urlWebhook("salvar-entidade"), {
-      method: "POST",
-      body: new URLSearchParams({
-        senha: passwordInput.value,
-        documento: documentoAtual,
-        tipo,
-        razaoSocial: razaoSocialInput.value.trim(),
-        nomeFantasia: nomeFantasiaInput.value.trim(),
-        exigenciaFiscal: escolhaDoGrupo(grupoExigencia),
-        emails: emailsInput.value.trim(),
-        whatsappCnpj: normalizarTelefone(whatsappCnpjInput.value),
-        administradora: administradoraInput.value.trim(),
-        empresaSindicos: empresaSindicosInput.value.trim(),
-        status: escolhaDoGrupo(grupoStatus),
-        observacoes: observacoesInput.value.trim(),
-        // Vai como texto JSON dentro de um campo só, para o envio continuar
-        // sendo um formulário simples (sem a verificação extra do navegador).
-        locais: JSON.stringify(locaisPreenchidos(locaisBox)),
-        contatos: JSON.stringify(contatosPreenchidos(contatosBox)),
-      }),
+    const resposta = await fetchN8n("salvar-entidade", {
+      documento: documentoAtual,
+      tipo,
+      razaoSocial: razaoSocialInput.value.trim(),
+      nomeFantasia: nomeFantasiaInput.value.trim(),
+      exigenciaFiscal: escolhaDoGrupo(grupoExigencia),
+      emails: emailsInput.value.trim(),
+      whatsappCnpj: normalizarTelefone(whatsappCnpjInput.value),
+      administradora: administradoraInput.value.trim(),
+      empresaSindicos: empresaSindicosInput.value.trim(),
+      status: escolhaDoGrupo(grupoStatus),
+      observacoes: observacoesInput.value.trim(),
+      // Vai como texto JSON dentro de um campo só, para o envio continuar
+      // sendo um formulário simples (sem a verificação extra do navegador).
+      locais: JSON.stringify(locaisPreenchidos(locaisBox)),
+      contatos: JSON.stringify(contatosPreenchidos(contatosBox)),
     });
 
     const dados = await resposta.json().catch(() => null);
@@ -856,9 +961,10 @@ function mostrarListaStatus(tipo, mensagem) {
   listaStatus.className = `doc-hint ${tipo}`;
 }
 
-// Toda ação manda a senha junto: o n8n é quem confere, nunca a tela.
+// Toda ação leva a credencial junto (fetchN8n põe): o n8n é quem confere,
+// nunca a tela.
 async function pedirAoN8n(caminho, dados) {
-  const resposta = await fetchN8n(caminho, { senha: passwordInput.value, ...dados });
+  const resposta = await fetchN8n(caminho, dados);
   return resposta.json();
 }
 
@@ -4635,7 +4741,7 @@ function showStatus(kind, message) {
 // backup que atrasa é melhor que um app que não abre.
 const CHAVE_ULTIMO_BACKUP = "solucoes-rapidas:ultimo-backup";
 
-function backupDoDia(senha) {
+function backupDoDia() {
   const hoje = new Date().toISOString().slice(0, 10);
   try {
     if (localStorage.getItem(CHAVE_ULTIMO_BACKUP) === hoje) return;
@@ -4643,7 +4749,7 @@ function backupDoDia(senha) {
     // Sem localStorage (aba anônima), faz o backup mesmo. Repetir não estraga.
   }
 
-  fetchN8n("fazer-backup", { senha })
+  fetchN8n("fazer-backup", {})
     .then((r) => r.json())
     .then((d) => {
       if (!d || !d.ok) return;
@@ -4669,7 +4775,9 @@ async function entrar(senha) {
   showStatus("loading", "Conectando ao n8n...");
 
   try {
-    const response = await fetchN8n("testar-conexao", { senha });
+    // A senha vai pelo credenciais() do fetchN8n, que lê o mesmo campo.
+    passwordInput.value = senha;
+    const response = await fetchN8n("testar-conexao", {});
 
     const data = await response.json().catch(() => null);
 
@@ -4681,13 +4789,7 @@ async function entrar(senha) {
       }
 
       showStatus("ok", data.mensagem || "Conectado com sucesso!");
-      gateView.classList.add("hidden");
-      appView.classList.remove("hidden");
-      backupDoDia(senha);
-      // Carrega os chamados em segundo plano já ao entrar, sem esperar a
-      // pessoa abrir Consultar chamados ou a Agenda -- os lembretes flutuantes
-      // precisam disso pra funcionar em qualquer aba, desde o início.
-      carregarChamadosSeNecessario();
+      entrarNoApp();
     } else {
       // Senha recusada: não adianta manter a que estava guardada.
       localStorage.removeItem(CHAVE_SENHA);
@@ -4704,6 +4806,69 @@ form.addEventListener("submit", (event) => {
   event.preventDefault();
   entrar(passwordInput.value);
 });
+
+// Daqui pra frente é igual pros dois jeitos de entrar.
+function entrarNoApp() {
+  document.getElementById("entrando").classList.add("hidden");
+  gateView.classList.add("hidden");
+  appView.classList.remove("hidden");
+  mostrarUsuarioConectado();
+  backupDoDia();
+  // Carrega os chamados em segundo plano já ao entrar, sem esperar a
+  // pessoa abrir Consultar chamados ou a Agenda -- os lembretes flutuantes
+  // precisam disso pra funcionar em qualquer aba, desde o início.
+  carregarChamadosSeNecessario();
+}
+
+function mostrarUsuarioConectado() {
+  const el = document.getElementById("usuario-conectado");
+  const nome = sessao && sessao.usuario && String(sessao.usuario.nome || "").trim().split(/\s+/)[0];
+  if (modoAcesso !== "login" || !nome) {
+    el.classList.add("hidden");
+    return;
+  }
+  el.textContent = `Conectado como ${nome.charAt(0).toUpperCase()}${nome.slice(1)}`;
+  el.classList.remove("hidden");
+}
+
+function irParaLogin() {
+  window.location.replace("conta.html#entrar");
+}
+
+async function iniciarComLogin() {
+  sessao = lerSessao();
+  if (!sessao || !baseUrlN8n()) {
+    irParaLogin();
+    return;
+  }
+  if (sessao.acessoExpiraEm - Date.now() < RENOVAR_ANTES_MS) {
+    document.getElementById("entrando").classList.remove("hidden");
+    const renovou = await renovarAcesso();
+    if (renovou === false) {
+      apagarSessao();
+      irParaLogin();
+      return;
+    }
+    // null = sem rede agora: entra assim mesmo, e cada ação mostra o erro de
+    // conexão de sempre até a rede voltar.
+  }
+  entrarNoApp();
+}
+
+// Sair também encerra a sessão no servidor: sem isso o token de sessão
+// guardado continuaria valendo 60 dias. keepalive deixa o pedido terminar
+// mesmo com a página já trocando pra tela de login.
+function encerrarSessaoNoServidor(tokenSessao) {
+  try {
+    fetch(urlWebhook("encerrar-sessao"), {
+      method: "POST",
+      body: new URLSearchParams({ tokenSessao }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (e) {
+    /* sem rede: a sessão vence sozinha */
+  }
+}
 
 // ----- Ajuste do endereço do n8n -----
 
@@ -7501,12 +7666,14 @@ sairBotao.addEventListener("click", () => {
 
   descartarEdicaoDaConsulta();
 
-  // A senha guardada tem que ir embora, senão o app entraria sozinho de novo
-  // e o Sair não teria efeito nenhum. O endereço do n8n fica: é ajuste do
-  // aparelho, não da sessão.
+  // A senha e a sessão guardadas têm que ir embora, senão o app entraria
+  // sozinho de novo e o Sair não teria efeito nenhum. O endereço do n8n
+  // fica: é ajuste do aparelho, não da sessão.
   localStorage.removeItem(CHAVE_SENHA);
   passwordInput.value = "";
   lembrarSenha.checked = false;
+  if (sessao) encerrarSessaoNoServidor(sessao.tokenSessao);
+  apagarSessao();
 
   limparFormulario();
   esconderFormulario();
@@ -7598,6 +7765,10 @@ sairBotao.addEventListener("click", () => {
   desarmarSaida();
   closeSidebar();
   appView.classList.add("hidden");
+  if (modoAcesso === "login") {
+    irParaLogin();
+    return;
+  }
   gateView.classList.remove("hidden");
   statusBox.className = "status";
 });
@@ -7759,9 +7930,18 @@ if ("serviceWorker" in navigator) {
 
 n8nUrlInput.value = baseUrlN8n();
 
-const senhaGuardada = localStorage.getItem(CHAVE_SENHA);
-if (senhaGuardada) {
-  passwordInput.value = senhaGuardada;
-  lembrarSenha.checked = true;
-  entrar(senhaGuardada);
+// sistema.html#senha: a tela antiga, com a senha de acesso única -- fica até
+// o dono autorizar tirar. Qualquer outro jeito de abrir usa o login por
+// e-mail e senha (conta.html).
+if (window.location.hash === "#senha") {
+  modoAcesso = "senha";
+  gateView.classList.remove("hidden");
+  const senhaGuardada = localStorage.getItem(CHAVE_SENHA);
+  if (senhaGuardada) {
+    passwordInput.value = senhaGuardada;
+    lembrarSenha.checked = true;
+    entrar(senhaGuardada);
+  }
+} else {
+  iniciarComLogin();
 }

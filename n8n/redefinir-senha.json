@@ -414,7 +414,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return [{ json: { ok: false, mensagem: 'Código inválido ou expirado.' } }];\n"
+        "jsCode": "return [{ json: { ok: false, motivo: 'codigo', mensagem: 'Código inválido ou expirado.' } }];"
       },
       "id": "d0000000-0000-4000-8000-000000000014",
       "name": "Monta resposta invalido (com incremento)",
@@ -427,7 +427,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return [{ json: { ok: false, mensagem: 'Código inválido ou expirado.' } }];\n"
+        "jsCode": "return [{ json: { ok: false, motivo: 'codigo', mensagem: 'Código inválido ou expirado.' } }];"
       },
       "id": "d0000000-0000-4000-8000-000000000015",
       "name": "Monta resposta invalido (sem incremento)",

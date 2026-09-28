@@ -191,7 +191,7 @@
       "typeVersion": 2.1,
       "position": [
         1760,
-        -100
+        -60
       ],
       "credentials": {
         "smtp": {
@@ -199,7 +199,8 @@
           "name": "Gmail - Recuperacao de senha (Solucoes Rapidas)"
         }
       },
-      "onError": "continueErrorOutput"
+      "onError": "continueRegularOutput",
+      "webhookId": "ffb47293-6d80-42e0-8d1f-f93d09d31afa"
     },
     {
       "parameters": {
@@ -210,8 +211,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1980,
-        -100
+        1760,
+        -260
       ]
     },
     {
@@ -332,25 +333,12 @@
       "main": [
         [
           {
+            "node": "Monta resposta",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "Envia codigo",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Monta resposta",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Envia codigo": {
-      "main": [
-        [
-          {
-            "node": "Monta resposta",
             "type": "main",
             "index": 0
           }
@@ -387,5 +375,7 @@
       ]
     }
   },
-  "settings": {}
+  "settings": {
+    "executionOrder": "v1"
+  }
 }

@@ -7,7 +7,7 @@
         "path": "salvar-entidade",
         "responseMode": "responseNode",
         "options": {
-          "allowedOrigins": "*"
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
         }
       },
       "id": "50000000-0000-4000-8000-000000000001",
@@ -31,11 +31,11 @@
           },
           "conditions": [
             {
-              "id": "50000000-0000-4000-8000-000000000002-cond",
-              "leftValue": "={{ $json.body.senha }}",
-              "rightValue": "TROQUE-ESTA-SENHA",
+              "id": "50000000-acc0-4000-8000-000000000003",
+              "leftValue": "={{ $json.permitido }}",
+              "rightValue": true,
               "operator": {
-                "type": "string",
+                "type": "boolean",
                 "operation": "equals",
                 "name": "filter.operator.equals"
               }
@@ -51,14 +51,14 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        220,
+        440,
         0
       ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Senha incorreta.\"\n}",
+        "responseBody": "{\n  \"ok\": false,\n  \"acessoNegado\": true,\n  \"mensagem\": \"Acesso não autorizado. Entre de novo.\"\n}",
         "options": {}
       },
       "id": "50000000-0000-4000-8000-000000000003",
@@ -66,7 +66,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        440,
+        880,
         200
       ]
     },
@@ -79,7 +79,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        440,
+        880,
         -60
       ]
     },
@@ -272,7 +272,7 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
       "position": [
-        660,
+        1100,
         -60
       ],
       "credentials": {
@@ -294,7 +294,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        2440,
+        2880,
         -160
       ]
     },
@@ -309,7 +309,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        900,
+        1340,
         20
       ]
     },
@@ -322,7 +322,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        900,
+        1340,
         -60
       ]
     },
@@ -357,7 +357,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1120,
+        1560,
         -60
       ]
     },
@@ -493,7 +493,7 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
       "position": [
-        1340,
+        1780,
         -160
       ],
       "credentials": {
@@ -515,7 +515,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1560,
+        2000,
         40
       ]
     },
@@ -528,7 +528,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1780,
+        2220,
         -60
       ]
     },
@@ -563,7 +563,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        2000,
+        2440,
         -60
       ]
     },
@@ -726,7 +726,7 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
       "position": [
-        2220,
+        2660,
         -160
       ],
       "credentials": {
@@ -748,8 +748,201 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        2440,
+        2880,
         40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const texto = (v) => String(v ?? \"\").trim();\nconst soDigitos = (v) => texto(v).replace(/[^0-9]/g, \"\");\n\n// Endereco guardado como um texto so: \"RUA X, 100, CEP 00000-000\", as vezes\n// com complemento no meio. Enquanto seguir esse padrao (e ele sempre seguiu\n// ate hoje, vindo da consulta a Receita), da para separar de volta. Se um dia\n// alguem digitar diferente, o CEP/numero saem vazios -- nao trava, so manda\n// incompleto para a Asaas.\nfunction separaEndereco(enderecoCompleto) {\n  const bruto = texto(enderecoCompleto);\n  const mCep = bruto.match(/CEP\\s*([0-9]{5}-?[0-9]{3})/i);\n  const postalCode = mCep ? mCep[1].replace(\"-\", \"\") : \"\";\n  const semCep = bruto.replace(/,?\\s*CEP\\s*[0-9-]+/i, \"\").trim();\n  const partes = semCep.split(\",\").map((p) => p.trim()).filter(Boolean);\n  return {\n    address: partes[0] || \"\",\n    addressNumber: partes[1] || \"\",\n    complement: partes.slice(2).join(\", \") || \"\",\n    postalCode,\n  };\n}\n\nfunction separaBairro(bairroCidade) {\n  return texto(String(bairroCidade || \"\").split(\"/\")[0]);\n}\n\n// Numero brasileiro sem o 55 na frente: e o formato que a Asaas espera em\n// mobilePhone. Sobra o DDD + numero.\nfunction celularAsaas(v) {\n  let d = soDigitos(v);\n  if (d.length > 11 && d.startsWith(\"55\")) d = d.slice(2);\n  return d;\n}\n\n// Monta o corpo da Asaas so com o que realmente tem valor: mandar chave com\n// string vazia e diferente de nao mandar a chave (a Asaas trataria como\n// \"apagar o que tinha\").\nfunction montaPayload({ razaoSocial, documento, emailNfe, emailsContato, whatsappContato, enderecoCompleto, bairroCidade }) {\n  const end = separaEndereco(enderecoCompleto);\n  const provincia = separaBairro(bairroCidade);\n  const celular = celularAsaas(whatsappContato);\n\n  // TODOS os e-mails (Financeiro/NF-e + todos os do contato), sem repetir.\n  // O primeiro vira o principal; o resto vai em additionalEmails, separados\n  // por virgula -- e assim que a Asaas aceita mais de um endereco extra.\n  const brutos = [texto(emailNfe)].concat(Array.isArray(emailsContato) ? emailsContato.map(texto) : []);\n  const semRepetir = [];\n  brutos.filter(Boolean).forEach((e) => {\n    if (!semRepetir.some((x) => x.toLowerCase() === e.toLowerCase())) semRepetir.push(e);\n  });\n  const principal = semRepetir[0] || \"\";\n  const adicionais = semRepetir.slice(1).join(\",\");\n\n  const p = { name: texto(razaoSocial), cpfCnpj: soDigitos(documento) };\n  if (principal) p.email = principal;\n  if (adicionais) p.additionalEmails = adicionais;\n  if (celular) p.mobilePhone = celular;\n  if (end.address) p.address = end.address;\n  if (end.addressNumber) p.addressNumber = end.addressNumber;\n  if (end.complement) p.complement = end.complement;\n  if (end.postalCode) p.postalCode = end.postalCode;\n  if (provincia) p.province = provincia;\n  return p;\n}\n\nconst corpo = $(\"Recebe pedido do app\").first().json.body || {};\nconst dados = $(\"Prepara dados\").first().json;\nconst entidadeId = $(\"Cria no Airtable\").first().json.id;\n\nlet locais = [];\ntry { locais = JSON.parse(corpo.locais || \"[]\"); } catch (e) { locais = []; }\nif (!Array.isArray(locais)) locais = [];\nconst local0 = locais[0] || {};\n\nlet contatos = [];\ntry { contatos = JSON.parse(corpo.contatos || \"[]\"); } catch (e) { contatos = []; }\nif (!Array.isArray(contatos)) contatos = [];\nconst contato0 = contatos[0] || {};\nconst emailsContato = Array.isArray(contato0.emails) ? contato0.emails : [];\nconst whatsappContato = Array.isArray(contato0.whatsapps) ? (contato0.whatsapps[0] || \"\") : \"\";\n\nconst payload = montaPayload({\n  razaoSocial: dados.razaoSocial, documento: dados.documento, emailNfe: dados.emails,\n  emailsContato, whatsappContato,\n  enderecoCompleto: local0.endereco, bairroCidade: local0.bairroCidade,\n});\n// So na criacao a notificacao comeca desligada. Depois disso o sync nunca\n// mais manda essa chave, entao se o dono ligar direto na Asaas, fica ligada.\npayload.notificationDisabled = true;\npayload.externalReference = entidadeId;\n\nreturn [{ json: { payload, entidadeId } }];"
+      },
+      "id": "c0000000-0000-4000-8000-000000900001",
+      "name": "Monta cliente Asaas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        -420
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.asaas.com/v3/customers",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000900002",
+      "name": "Cria cliente na Asaas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3100,
+        -420
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "99sqJeNJjk6jJRgZ",
+          "name": "Asaas API (producao)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ typecast: true, records: [{ id: $(\"Monta cliente Asaas\").first().json.entidadeId, fields: { Asaas_Customer_Id: $(\"Cria cliente na Asaas\").first().json.id || \"\" } }] }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000900003",
+      "name": "Salva o Asaas_Customer_Id",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3320,
+        -420
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { urlNotificacoes: \"https://api.asaas.com/v3/customers/\" + $json.id + \"/notifications\" } }];"
+      },
+      "id": "c0000000-0000-4000-8000-000000950001",
+      "name": "Prepara url notificacoes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3340,
+        -560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.urlNotificacoes }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": false,
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000950002",
+      "name": "Le notificacoes padrao",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3560,
+        -560
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "99sqJeNJjk6jJRgZ",
+          "name": "Asaas API (producao)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const DESEJADO = [{\"event\":\"PAYMENT_CREATED\",\"offset\":0,\"email\":true,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_UPDATED\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_DUEDATE_WARNING\",\"offset\":10,\"email\":true,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_DUEDATE_WARNING\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"SEND_LINHA_DIGITAVEL\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_OVERDUE\",\"offset\":0,\"email\":true,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_OVERDUE\",\"offset\":7,\"email\":true,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_RECEIVED\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false}];\nconst lista = ($input.first().json || {}).data || [];\n\nconst itens = [];\nfor (const alvo of DESEJADO) {\n  const atual = lista.find((n) => n.event === alvo.event && n.scheduleOffset === alvo.offset);\n  if (!atual) continue;\n  itens.push({ json: {\n    url: \"https://api.asaas.com/v3/notifications/\" + atual.id,\n    corpo: {\n      emailEnabledForCustomer: alvo.email, smsEnabledForCustomer: alvo.sms,\n      whatsappEnabledForCustomer: alvo.whatsapp, phoneCallEnabledForCustomer: alvo.ligacao,\n    },\n  } });\n}\n// Se a Asaas mudar os nomes dos eventos algum dia e nada bater, ainda\n// precisa sair um item, senao o fluxo morre aqui e o app fica esperando.\nif (!itens.length) return [{ json: { semNotificacao: true } }];\nreturn itens;"
+      },
+      "id": "c0000000-0000-4000-8000-000000950003",
+      "name": "Monta ajustes de notificacao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3780,
+        -560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "c0000000-0000-4000-8000-000000950004",
+      "name": "Ajusta notificacoes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4000,
+        -560
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "99sqJeNJjk6jJRgZ",
+          "name": "Asaas API (producao)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "acesso",
+            "senha": "={{ $json.body.senha }}",
+            "tokenAcesso": "={{ $json.body.tokenAcesso }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "50000000-acc0-4000-8000-000000000001",
+      "name": "Confere acesso",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Devolve o pedido original: o resto do workflow lê $json.body como antes.\nreturn $('Recebe pedido do app').all();"
+      },
+      "id": "50000000-acc0-4000-8000-000000000002",
+      "name": "Recupera pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -60
       ]
     }
   ],
@@ -758,7 +951,7 @@
       "main": [
         [
           {
-            "node": "Senha esta correta?",
+            "node": "Confere acesso",
             "type": "main",
             "index": 0
           }
@@ -769,7 +962,7 @@
       "main": [
         [
           {
-            "node": "Prepara dados",
+            "node": "Recupera pedido",
             "type": "main",
             "index": 0
           }
@@ -881,7 +1074,7 @@
         ],
         [
           {
-            "node": "Responde salvo",
+            "node": "Monta cliente Asaas",
             "type": "main",
             "index": 0
           }
@@ -892,7 +1085,7 @@
       "main": [
         [
           {
-            "node": "Responde salvo",
+            "node": "Monta cliente Asaas",
             "type": "main",
             "index": 0
           }
@@ -905,10 +1098,110 @@
           }
         ]
       ]
+    },
+    "Monta cliente Asaas": {
+      "main": [
+        [
+          {
+            "node": "Cria cliente na Asaas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cria cliente na Asaas": {
+      "main": [
+        [
+          {
+            "node": "Prepara url notificacoes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salva o Asaas_Customer_Id": {
+      "main": [
+        [
+          {
+            "node": "Responde salvo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara url notificacoes": {
+      "main": [
+        [
+          {
+            "node": "Le notificacoes padrao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le notificacoes padrao": {
+      "main": [
+        [
+          {
+            "node": "Monta ajustes de notificacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta ajustes de notificacao": {
+      "main": [
+        [
+          {
+            "node": "Ajusta notificacoes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ajusta notificacoes": {
+      "main": [
+        [
+          {
+            "node": "Salva o Asaas_Customer_Id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere acesso": {
+      "main": [
+        [
+          {
+            "node": "Senha esta correta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recupera pedido": {
+      "main": [
+        [
+          {
+            "node": "Prepara dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
-    "executionOrder": "v1"
-  },
-  "pinData": {}
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  }
 }

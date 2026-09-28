@@ -124,6 +124,12 @@ body {
 .rodape-cartao a { color: var(--azul); font-weight: 600; text-decoration: none; }
 .rodape-cartao a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
+/* Caminho antigo (senha de acesso única): discreto de propósito, some
+   quando o dono autorizar. */
+.rodape-antigo { margin: -12px 0 0; font-size: 0.8rem; }
+.rodape-antigo a { color: var(--tinta-fraca); text-underline-offset: 3px; }
+.rodape-antigo a:hover { color: var(--azul); }
+
 /* ---------- Etapas no alto do cartão ---------- */
 
 .passos {
@@ -216,6 +222,8 @@ body {
 
 .campo { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; }
 .campo label { font-size: 0.86rem; font-weight: 600; color: var(--tinta); }
+.campo-esquerda { text-align: left; }
+.campo-rotulos { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .campo input {
   width: 100%;
   height: 50px;
@@ -458,13 +466,15 @@ body {
 }
 .link:hover { text-decoration-color: currentColor; }
 .link:disabled { color: var(--tinta-fraca); text-decoration: none; cursor: default; }
+.link-pequeno { font-size: 0.84rem; }
 .link-centro { display: block; margin: 16px auto 0; }
 
 .botao:focus-visible,
 .link:focus-visible,
 .olho:focus-visible,
 .marca:focus-visible,
-.rodape-cartao a:focus-visible {
+.rodape-cartao a:focus-visible,
+.rodape-antigo a:focus-visible {
   outline: 3px solid rgba(62, 143, 209, 0.55);
   outline-offset: 2px;
 }

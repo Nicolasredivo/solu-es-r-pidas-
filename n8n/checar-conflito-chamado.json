@@ -1,0 +1,257 @@
+{
+  "name": "App - Checar conflito de chamado",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "checar-conflito-chamado",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      },
+      "id": "h0000000-0000-4000-8000-000000000001",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "h0000000-0000-4000-8000-000000000002"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "h0000000-acc0-4000-8000-000000000003",
+              "leftValue": "={{ $json.permitido }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000004",
+      "name": "Senha esta correta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"acessoNegado\": true,\n  \"mensagem\": \"Acesso não autorizado. Entre de novo.\"\n}",
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000005",
+      "name": "Responde senha incorreta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbltipxOIw8F96QHO",
+          "mode": "list",
+          "cachedResultName": "Chamados"
+        },
+        "filterByFormula": "OR({Status}='Agendado', {Status}='Em andamento')",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000006",
+      "name": "Busca chamados ativos",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Limites do dia de trabalho, usados so pra sugestao de horario livre\n// (o bloco reservado em si e sempre um \"de tal hora ate tal hora\" livre,\n// escolhido direto pelo usuario -- nao ha mais periodo fixo nem duracao\n// pre-definida). Ajustavel aqui se a rotina mudar.\nconst INICIO_DIA = \"08:00\", FIM_DIA = \"18:00\";\n\n// Horario de Brasilia fixo (-03:00, sem horario de verao atualmente) --\n// grava explicito pra nao depender de como o servidor interpreta data sem fuso.\nfunction isoBrasilia(data, hhmm) { return data + \"T\" + hhmm + \":00-03:00\"; }\n\n// Extrai \"HH:MM\" em horario de Brasilia de qualquer ISO (vem em -03:00 ao\n// montar aqui, mas vem em UTC/\"Z\" ao reler do Airtable) -- nao pode so\n// cortar a string, tem que converter de verdade.\nfunction horaLocalBrasilia(iso) {\n  const d = new Date(new Date(iso).getTime() - 3 * 3600000);\n  const hh = String(d.getUTCHours()).padStart(2, \"0\");\n  const mm = String(d.getUTCMinutes()).padStart(2, \"0\");\n  return hh + \":\" + mm;\n}\n\n// Monta o bloco reservado a partir do inicio e fim escolhidos direto pelo\n// usuario (ex: \"13:30\" ate \"17:30\") -- sem nenhum periodo/duracao\n// pre-definido no meio do caminho.\nfunction montaBloco(data, inicio, fim) {\n  return { inicioIso: isoBrasilia(data, inicio), fimIso: isoBrasilia(data, fim) };\n}\n\n// Duas janelas de tempo se cruzam se uma comeca antes da outra terminar,\n// nos dois sentidos.\nfunction seCruzam(aIni, aFim, bIni, bFim) {\n  return new Date(aIni) < new Date(bFim) && new Date(bIni) < new Date(aFim);\n}\n\n// Acha a primeira folga livre com a duracao pedida (em ms), comecando na\n// data dada e olhando ate alguns dias a frente se o dia nao tiver espaco.\n// ocupados e uma lista de { inicioIso, fimIso } (chamados ja marcados).\nfunction achaHorarioLivre(dataInicial, duracaoMs, ocupados, ignorarId) {\n  for (let d = 0; d < 10; d++) {\n    const dia = new Date(dataInicial + \"T00:00:00-03:00\");\n    dia.setUTCDate(dia.getUTCDate() + d);\n    const dataStr = dia.toISOString().slice(0, 10);\n\n    const doDia = ocupados\n      .filter((o) => o.id !== ignorarId)\n      .filter((o) => o.inicioIso.slice(0, 10) === dataStr || o.fimIso.slice(0, 10) === dataStr)\n      .sort((a, b) => new Date(a.inicioIso) - new Date(b.inicioIso));\n\n    let cursor = isoBrasilia(dataStr, INICIO_DIA);\n    const fimDoDia = isoBrasilia(dataStr, FIM_DIA);\n    for (const o of doDia) {\n      if (new Date(o.inicioIso) - new Date(cursor) >= duracaoMs) {\n        return montaSugestao(dataStr, cursor, duracaoMs);\n      }\n      if (new Date(o.fimIso) > new Date(cursor)) cursor = o.fimIso;\n    }\n    if (new Date(fimDoDia) - new Date(cursor) >= duracaoMs) {\n      return montaSugestao(dataStr, cursor, duracaoMs);\n    }\n  }\n  return null;\n}\n\nfunction montaSugestao(dataStr, cursor, duracaoMs) {\n  const fimIso = new Date(new Date(cursor).getTime() + duracaoMs).toISOString();\n  return { data: dataStr, inicio: horaLocalBrasilia(cursor), inicioIso: cursor, fim: horaLocalBrasilia(fimIso), fimIso };\n}\n\nconst b = $(\"Recebe pedido do app\").first().json.body || {};\nconst data = String(b.data || \"\").trim();\nconst reservadoInicio = String(b.reservadoInicio || \"\").trim();\nconst reservadoFim = String(b.reservadoFim || \"\").trim();\nconst ignorarId = String(b.chamadoIdIgnorar || \"\").trim();\n\nif (!data || !reservadoInicio || !reservadoFim) return [{ json: { ok: true, temConflito: false, conflitos: [] } }];\n\nconst pedido = montaBloco(data, reservadoInicio, reservadoFim);\nconst duracaoMs = new Date(pedido.fimIso) - new Date(pedido.inicioIso);\n\nconst ativos = $input.all().map((i) => i.json).filter((j) => j && j.id && !j.error);\nconst ocupados = ativos\n  .filter((j) => j.fields && j.fields.Reservado_Inicio && j.fields.Reservado_Fim)\n  .map((j) => ({\n    id: j.id,\n    numero: j.fields.Numero_Chamado || \"\",\n    cliente: j.fields.Cliente_Nome || \"\",\n    inicioIso: j.fields.Reservado_Inicio,\n    fimIso: j.fields.Reservado_Fim,\n  }));\n\nconst conflitos = ocupados.filter((o) => o.id !== ignorarId\n  && seCruzam(pedido.inicioIso, pedido.fimIso, o.inicioIso, o.fimIso));\n\n// Sugestao pro pedido em si (botao \"Usar esse horario\") -- usa a duracao\n// do que esta sendo pedido agora.\nconst sugestao = conflitos.length\n  ? achaHorarioLivre(data, duracaoMs, ocupados, ignorarId)\n  : null;\n\n// Sugestao pra cada chamado conflitante, caso ele seja empurrado (botao\n// \"Marcar mesmo assim, e mover\") -- precisa usar a DURACAO DELE MESMO,\n// nao a do pedido novo, senao a folga sugerida pode ser curta demais pra\n// ele (achado testando: um chamado de 2h30 nao cabe numa sugestao pensada\n// pra um pedido de 1h). E precisa contar o PEDIDO como ocupado (ele vai\n// ficar mesmo no horario escolhido) e o proprio conflitante como livre\n// (ele esta saindo dali) -- senao a sugestao pode virar o proprio horario\n// que ele ja ocupa, o que nao resolve nada.\nconst conflitosComSugestao = conflitos.map((c) => {\n  const duracaoDoConflitoMs = new Date(c.fimIso) - new Date(c.inicioIso);\n  const ocupadosParaEmpurrar = ocupados\n    .filter((o) => o.id !== ignorarId && o.id !== c.id)\n    .concat([{ id: \"__pedido__\", inicioIso: pedido.inicioIso, fimIso: pedido.fimIso }]);\n  const sugestaoEmpurrar = achaHorarioLivre(data, duracaoDoConflitoMs, ocupadosParaEmpurrar);\n  return { id: c.id, numero: c.numero, cliente: c.cliente, inicio: c.inicioIso, fim: c.fimIso, sugestaoEmpurrar };\n});\n\nreturn [{ json: {\n  ok: true,\n  temConflito: conflitos.length > 0,\n  conflitos: conflitosComSugestao,\n  sugestao,\n} }];"
+      },
+      "id": "h0000000-0000-4000-8000-000000000007",
+      "name": "Monta a resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "h0000000-0000-4000-8000-000000000008",
+      "name": "Responde ao app",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "acesso",
+            "senha": "={{ $json.body.senha }}",
+            "tokenAcesso": "={{ $json.body.tokenAcesso }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "h0000000-acc0-4000-8000-000000000001",
+      "name": "Confere acesso",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Devolve o pedido original: o resto do workflow lê $json.body como antes.\nreturn $('Recebe pedido do app').all();"
+      },
+      "id": "h0000000-acc0-4000-8000-000000000002",
+      "name": "Recupera pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -60
+      ]
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Confere acesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Senha esta correta?": {
+      "main": [
+        [
+          {
+            "node": "Recupera pedido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde senha incorreta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca chamados ativos": {
+      "main": [
+        [
+          {
+            "node": "Monta a resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta a resposta": {
+      "main": [
+        [
+          {
+            "node": "Responde ao app",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere acesso": {
+      "main": [
+        [
+          {
+            "node": "Senha esta correta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recupera pedido": {
+      "main": [
+        [
+          {
+            "node": "Busca chamados ativos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

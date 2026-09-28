@@ -1107,6 +1107,48 @@ button.lembrete-item:hover {
   opacity: 0.7;
 }
 
+.usuario-conectado {
+  margin: 0 0 6px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ----- Entrada por e-mail e senha ----- */
+.entrando {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Na tela antiga da senha: o caminho de volta pro login por e-mail. */
+.link-login {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+}
+
+.link-login:hover {
+  color: var(--text);
+}
+
+.sessao-expirada #sessao-expirada-entrar {
+  width: auto;
+  padding: 5px 12px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 0.8rem;
+}
+
+.sessao-expirada #sessao-expirada-entrar:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
 /* ----- Aviso suave de campo (e-mail / telefone com jeito de errado) ----- */
 .campo-aviso {
   margin: -12px 0 14px;

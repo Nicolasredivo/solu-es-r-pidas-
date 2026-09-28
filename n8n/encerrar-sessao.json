@@ -1,0 +1,208 @@
+{
+  "name": "App - Encerrar sessao",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "encerrar-sessao",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      },
+      "id": "e0000000-0000-4000-8000-000000000001",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "e0000000-0000-4000-8000-000000000002"
+    },
+    {
+      "parameters": {
+        "jsCode": "const corpo = $input.first().json.body || {};\nconst tokenSessao = String(corpo.tokenSessao || '');\n// Token de sessão é sempre 64 caracteres hex (gerado no login). Qualquer\n// outra coisa não busca nada -- e nunca entra na fórmula do Airtable.\nconst valido = /^[0-9a-f]{64}$/.test(tokenSessao);\nreturn [{ json: { formula: valido ? \"{Token} = '\" + tokenSessao + \"'\" : 'FALSE()' } }];"
+      },
+      "id": "e0000000-0000-4000-8000-000000000003",
+      "name": "Monta busca",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: true } }];"
+      },
+      "id": "e0000000-0000-4000-8000-000000000004",
+      "name": "Monta resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        -150
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "e0000000-0000-4000-8000-000000000005",
+      "name": "Responde",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        -150
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblYDslwEMH6tKfzL",
+          "mode": "list",
+          "cachedResultName": "Sessoes"
+        },
+        "filterByFormula": "={{ $json.formula }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "e0000000-0000-4000-8000-000000000006",
+      "name": "Busca sessao",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        100
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// alwaysOutputData manda um item vazio quando não acha nada: só segue\n// o que for registro de verdade.\nreturn $input.all()\n  .filter((item) => item.json && item.json.id)\n  .map((item) => ({ json: { recordId: item.json.id } }));"
+      },
+      "id": "e0000000-0000-4000-8000-000000000007",
+      "name": "Lista sessao achada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "={{ 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/tblYDslwEMH6tKfzL/' + $json.recordId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "e0000000-0000-4000-8000-000000000008",
+      "name": "Apaga sessao",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        100
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Monta busca",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta busca": {
+      "main": [
+        [
+          {
+            "node": "Monta resposta",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Busca sessao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca sessao": {
+      "main": [
+        [
+          {
+            "node": "Lista sessao achada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lista sessao achada": {
+      "main": [
+        [
+          {
+            "node": "Apaga sessao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  }
+}
