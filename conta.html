@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Criar conta — Soluções Rápidas</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#f4f7fa" />
+  <link rel="icon" href="icons/favicon.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Saira:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="conta.css" />
+</head>
+<body>
+  <div class="fundo" aria-hidden="true">
+    <div class="fundo-grade"></div>
+    <div class="fundo-brilho"></div>
+  </div>
+
+  <main class="pagina">
+    <a class="marca" href="./" aria-label="Soluções Rápidas — voltar ao site">
+      <img class="marca-simbolo" src="imagens/logo.svg" alt="" width="150" height="104" />
+      <span class="marca-texto">
+        <span class="marca-nome">Soluções <em>Rápidas</em></span>
+        <span class="marca-sub">Manutenção predial</span>
+      </span>
+    </a>
+
+    <section class="cartao">
+      <ol class="passos" id="passos" aria-label="Etapas da criação da conta">
+        <li class="passo" data-passo="1">
+          <span class="passo-bola"><span class="passo-num">1</span><svg class="passo-ok" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+          <span class="passo-rotulo">E-mail</span>
+        </li>
+        <li class="passo" data-passo="2">
+          <span class="passo-bola"><span class="passo-num">2</span><svg class="passo-ok" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+          <span class="passo-rotulo">Código</span>
+        </li>
+        <li class="passo" data-passo="3">
+          <span class="passo-bola"><span class="passo-num">3</span><svg class="passo-ok" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+          <span class="passo-rotulo">Senha</span>
+        </li>
+      </ol>
+
+      <!-- Etapa 1: e-mail -->
+      <form class="etapa" id="etapa-email" novalidate hidden>
+        <h1 class="etapa-titulo" tabindex="-1">Crie sua conta</h1>
+        <p class="etapa-texto">Comece pelo seu e-mail. Vamos mandar um código pra confirmar que ele é seu.</p>
+        <div class="campo">
+          <label for="email">E-mail</label>
+          <input id="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="voce@exemplo.com.br" />
+        </div>
+        <p class="aviso" role="alert" hidden></p>
+        <button class="botao botao-primario" type="submit">Continuar</button>
+      </form>
+
+      <!-- Etapa 2: código -->
+      <form class="etapa" id="etapa-codigo" novalidate hidden>
+        <h1 class="etapa-titulo" tabindex="-1">Confira seu e-mail</h1>
+        <p class="etapa-texto">
+          Enviamos um código de 6 números para <strong id="email-mostrado"></strong>.
+          <button type="button" class="link" id="trocar-email">Trocar e-mail</button>
+        </p>
+        <div class="otp" id="otp">
+          <input id="codigo" class="otp-campo" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="Código de 6 números" />
+          <div class="otp-caixas" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+        <p class="aviso" role="alert" hidden></p>
+        <button class="botao botao-primario" type="submit">Confirmar código</button>
+        <p class="reenviar">
+          <button type="button" class="link" id="reenviar" disabled>Reenviar código</button>
+          <span class="reenviar-tempo" id="reenviar-tempo" aria-live="off"></span>
+        </p>
+        <p class="dica">Não chegou? Confira também a caixa de spam.</p>
+      </form>
+
+      <!-- Etapa 3: senha -->
+      <form class="etapa" id="etapa-senha" novalidate hidden>
+        <h1 class="etapa-titulo" tabindex="-1" id="titulo-senha">Quase lá!</h1>
+        <p class="etapa-texto" id="texto-senha">Agora crie uma senha para entrar no sistema.</p>
+        <div class="campo" id="campo-nome" hidden>
+          <label for="nome">Seu nome</label>
+          <input id="nome" type="text" autocomplete="name" maxlength="80" />
+        </div>
+        <div class="campo">
+          <label for="senha">Senha</label>
+          <div class="campo-senha">
+            <input id="senha" type="password" autocomplete="new-password" />
+            <button type="button" class="olho" data-alvo="senha" aria-label="Mostrar senha" aria-pressed="false">
+              <svg class="olho-aberto" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
+              <svg class="olho-fechado" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18" /><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>
+            </button>
+          </div>
+        </div>
+        <div class="campo">
+          <label for="senha2">Repita a senha</label>
+          <div class="campo-senha">
+            <input id="senha2" type="password" autocomplete="new-password" />
+            <button type="button" class="olho" data-alvo="senha2" aria-label="Mostrar senha" aria-pressed="false">
+              <svg class="olho-aberto" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
+              <svg class="olho-fechado" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18" /><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>
+            </button>
+          </div>
+        </div>
+        <ul class="requisitos" aria-label="Requisitos da senha">
+          <li id="req-tamanho">Pelo menos 8 caracteres</li>
+          <li id="req-iguais">As duas senhas iguais</li>
+        </ul>
+        <p class="aviso" role="alert" hidden></p>
+        <button class="botao botao-primario" type="submit">Criar conta</button>
+      </form>
+
+      <!-- Final: deu certo -->
+      <div class="etapa etapa-final" id="etapa-sucesso" hidden>
+        <div class="selo selo-ok" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path class="risco" d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+        </div>
+        <h1 class="etapa-titulo" tabindex="-1" id="titulo-sucesso">Conta criada!</h1>
+        <p class="etapa-texto" id="texto-sucesso"></p>
+        <a class="botao botao-primario" href="sistema.html">Ir para o sistema</a>
+      </div>
+
+      <!-- Final: sem convite -->
+      <div class="etapa etapa-final" id="etapa-sem-convite" hidden>
+        <div class="selo selo-info" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="m3.5 7 8.5 6 8.5-6" /></svg>
+        </div>
+        <h1 class="etapa-titulo" tabindex="-1">Convite não encontrado</h1>
+        <p class="etapa-texto">Não encontramos um convite para esse e-mail. Entre em contato para solicitar um convite.</p>
+        <a class="botao botao-whats" href="https://wa.me/554792081047" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M12.04 2c-5.5 0-9.96 4.46-9.96 9.96 0 1.76.46 3.48 1.34 5L2 22l5.2-1.36a9.9 9.9 0 0 0 4.84 1.24h.01c5.5 0 9.96-4.46 9.96-9.96 0-2.66-1.04-5.16-2.92-7.04A9.88 9.88 0 0 0 12.04 2m0 1.9c2.15 0 4.17.84 5.69 2.36a7.99 7.99 0 0 1 2.36 5.7c0 4.44-3.61 8.05-8.06 8.05a8.03 8.03 0 0 1-4.1-1.12l-.3-.18-3.05.8.81-2.97-.19-.31a7.96 7.96 0 0 1-1.22-4.27c0-4.44 3.62-8.06 8.06-8.06M8.5 7.3c-.17 0-.44.07-.67.31-.23.25-.88.86-.88 2.1 0 1.23.9 2.42 1.02 2.59.13.16 1.75 2.79 4.32 3.8 2.13.84 2.57.67 3.03.63.46-.04 1.49-.61 1.7-1.2.21-.59.21-1.09.15-1.2-.07-.1-.23-.16-.48-.29-.25-.12-1.49-.73-1.72-.82-.23-.08-.4-.12-.56.13-.17.24-.64.81-.79.98-.14.16-.29.19-.54.06-.25-.12-1.06-.39-2.02-1.25-.75-.66-1.25-1.48-1.4-1.73-.14-.25-.01-.38.11-.5.11-.11.25-.29.37-.44.12-.14.16-.25.25-.41.08-.17.04-.31-.02-.44-.06-.12-.55-1.37-.77-1.87-.2-.48-.41-.42-.56-.42z" />
+          </svg>
+          Falar no WhatsApp
+        </a>
+        <button type="button" class="link link-centro" data-voltar>Tentar outro e-mail</button>
+      </div>
+
+      <!-- Final: e-mail já tem conta -->
+      <div class="etapa etapa-final" id="etapa-ja-ativa" hidden>
+        <div class="selo selo-info" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.5" /><path d="M3.5 19.5c.8-3.3 3.4-5.5 6.5-5.5 1.4 0 2.7.4 3.8 1.2" /><path d="m15.5 18 2 2 4-4.5" /></svg>
+        </div>
+        <h1 class="etapa-titulo" tabindex="-1">Você já tem conta</h1>
+        <p class="etapa-texto">Esse e-mail já tem uma conta ativa. É só entrar com ele.</p>
+        <a class="botao botao-primario" href="sistema.html">Entrar</a>
+        <button type="button" class="link link-centro" data-voltar>Usar outro e-mail</button>
+      </div>
+
+      <!-- Final: aparelho sem endereço do servidor -->
+      <div class="etapa etapa-final" id="etapa-sem-servidor" hidden>
+        <div class="selo selo-alerta" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M2 8.5a15 15 0 0 1 20 0" /><path d="M5.5 12a10 10 0 0 1 13 0" /><path d="M9 15.5a5 5 0 0 1 6 0" /><circle cx="12" cy="19" r="1" /></svg>
+        </div>
+        <h1 class="etapa-titulo" tabindex="-1">Aparelho ainda não conectado</h1>
+        <p class="etapa-texto">Pra criar a conta, este aparelho precisa estar conectado ao servidor do sistema. Abra o sistema uma vez e configure a conexão em “Endereço do n8n”.</p>
+        <a class="botao botao-primario" href="sistema.html">Abrir o sistema</a>
+      </div>
+    </section>
+
+    <p class="rodape-cartao" id="rodape-cartao">Já tem conta? <a href="sistema.html">Entrar</a></p>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="conta.js"></script>
+</body>
+</html>

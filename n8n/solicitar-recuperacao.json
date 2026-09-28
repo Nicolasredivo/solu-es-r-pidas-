@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const registros = $input.all();\nconst registro = registros[0] && registros[0].json;\n\nif (!registro || !registro.id) {\n  return [{ json: { encontrado: false } }];\n}\n\nreturn [{ json: { encontrado: true, registro } }];\n"
+        "jsCode": "const registros = $input.all();\nconst registro = registros[0] && registros[0].json;\nconst campos = (registro && registro.fields) || {};\n\n// Recuperação é só pra conta ativa. Convite pendente (sem senha) ativa pela\n// tela \"Criar conta\" -- os dois usam os mesmos campos de código, então é\n// essa trava que impede um fluxo de mexer na conta do outro.\nif (!registro || !registro.id || !campos.Senha_Hash || campos.Ativo !== true) {\n  return [{ json: { encontrado: false } }];\n}\n\nreturn [{ json: { encontrado: true, registro } }];\n"
       },
       "id": "s0000000-0000-4000-8000-000000000005",
       "name": "Confere encontrado",
@@ -175,12 +175,15 @@
     },
     {
       "parameters": {
-        "fromEmail": "adm.solucoes.rapidas@gmail.com",
+        "fromEmail": "Soluções Rápidas <adm.solucoes.rapidas@gmail.com>",
         "toEmail": "={{ $('Monta atualizacao codigo').first().json.email }}",
-        "subject": "Codigo de recuperacao de senha - Solucoes Rapidas",
-        "emailFormat": "text",
-        "text": "Ola, {{ $('Monta atualizacao codigo').first().json.nome }}!\n\nSeu codigo de recuperacao de senha e: {{ $('Monta atualizacao codigo').first().json.codigo }}\n\nEsse codigo vale por 10 minutos e so pode ser usado uma vez.\n\nSe voce nao pediu essa recuperacao, pode ignorar este e-mail -- sua senha continua a mesma.",
-        "options": {}
+        "subject": "Código para redefinir sua senha — Soluções Rápidas",
+        "emailFormat": "both",
+        "text": "=Olá{{ $('Monta atualizacao codigo').first().json.nome ? ', ' + $('Monta atualizacao codigo').first().json.nome : '' }}!\n\nUse o código abaixo para criar uma senha nova no sistema da Soluções Rápidas.\n\n{{ $('Monta atualizacao codigo').first().json.codigo }}\n\nEle vale por 10 minutos e só pode ser usado uma vez.\n\nSe não foi você que pediu, é só ignorar este e-mail.\n\nSoluções Rápidas · Manutenção predial",
+        "options": {
+          "appendAttribution": false
+        },
+        "html": "=<div style=\"margin:0;padding:32px 16px;background:#f4f7fa;font-family:Arial,Helvetica,sans-serif;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:480px;margin:0 auto;background:#ffffff;border:1px solid #e2e8ee;border-radius:14px;\"><tr><td style=\"padding:28px 32px 0;\"><p style=\"margin:0;font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:#1c4e85;\">Soluções Rápidas</p></td></tr><tr><td style=\"padding:14px 32px 0;\"><h1 style=\"margin:0 0 10px;font-size:22px;line-height:1.3;color:#0b1e3d;\">Seu código para redefinir a senha</h1><p style=\"margin:0;font-size:15px;line-height:1.6;color:#445468;\">Olá{{ $('Monta atualizacao codigo').first().json.nome ? ', ' + $('Monta atualizacao codigo').first().json.nome : '' }}! Use o código abaixo para criar uma senha nova no sistema da Soluções Rápidas.</p></td></tr><tr><td style=\"padding:22px 32px 0;\"><div style=\"padding:18px 12px;background:#f4f7fa;border:1px solid #e2e8ee;border-radius:12px;text-align:center;font-family:'Courier New',Courier,monospace;font-size:34px;font-weight:bold;letter-spacing:10px;color:#0b1e3d;\">{{ $('Monta atualizacao codigo').first().json.codigo }}</div></td></tr><tr><td style=\"padding:20px 32px 28px;\"><p style=\"margin:0 0 8px;font-size:14px;line-height:1.6;color:#445468;\">O código vale por <strong>10 minutos</strong> e só pode ser usado uma vez.</p><p style=\"margin:0;font-size:13px;line-height:1.6;color:#6d7c8d;\">Se não foi você que pediu, é só ignorar este e-mail.</p></td></tr></table><p style=\"max-width:480px;margin:16px auto 0;text-align:center;font-size:12px;color:#6d7c8d;\">Soluções Rápidas · Manutenção predial · Joinville e região</p></div>"
       },
       "id": "s0000000-0000-4000-8000-00000000000a",
       "name": "Envia codigo",
@@ -333,11 +336,25 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Monta resposta",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "Envia codigo": {
       "main": [
+        [
+          {
+            "node": "Monta resposta",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Monta resposta",

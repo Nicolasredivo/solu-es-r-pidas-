@@ -379,6 +379,19 @@
         1320,
         200
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, mensagem: 'Não foi possível concluir agora. Tente de novo em instantes.' } }];\n"
+      },
+      "id": "l0000000-0000-4000-8000-000000000010",
+      "name": "Monta resposta falha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        -60
+      ]
     }
   ],
   "connections": {
@@ -503,6 +516,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Monta resposta falha",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -518,6 +538,17 @@
       ]
     },
     "Monta erro generico": {
+      "main": [
+        [
+          {
+            "node": "Responde erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta falha": {
       "main": [
         [
           {

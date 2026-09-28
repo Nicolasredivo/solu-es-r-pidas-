@@ -3997,6 +3997,102 @@ revogada). Todo dado de teste apagado do Airtable depois de cada rodada.
 Ver a memória "login-email-senha-arquitetura" (fora do repositório) pro
 histórico completo de decisões dessa conversa.
 
+### Criar conta, convites e níveis de acesso (28/09/2026)
+
+Pergunta que abriu esta rodada: se a tela "Criar conta" deixasse escolher o
+nível de acesso, qualquer um se daria acesso total. Decidido com o dono:
+
+- **Ninguém escolhe o próprio nível.** O campo nem existe na tela, e o
+  backend nunca lê isso do que a pessoa manda.
+- **Conta nasce de convite**: uma linha em `Usuarios` com nome, e-mail e
+  papel já definidos por quem tem acesso total, **sem senha** e com `Ativo`
+  desmarcado. "Criar conta" é só definir a senha de um convite que já
+  existe.
+- **Primeira conta vira Dono sozinha**: enquanto não houver nenhuma conta
+  ativada na tabela, quem criar conta primeiro recebe acesso total -- é
+  como o dono cria a dele, pela mesma tela de todo mundo. Nesse modo existe
+  no máximo uma linha pendente (um e-mail digitado errado e corrigido
+  reaproveita a mesma linha, pra não sobrar convite de acesso total
+  esquecido). A proteção aqui é prática, não técnica: o dono cria a conta
+  dele assim que publicar, antes de divulgar o link.
+- **Código por e-mail também na ativação**, reaproveitando os campos da
+  recuperação de senha -- sem isso, quem soubesse o e-mail de um convite
+  podia ativá-lo antes do dono real. Os dois fluxos agora se excluem:
+  recuperação só vale pra conta ativa, ativação só pra convite pendente
+  (senão um código de um servia no outro e deixava conta em estado
+  quebrado -- achado ao desenhar isso).
+- **Convidar e trocar nível exigem digitar a própria senha de novo**
+  (reautenticação), mesmo já logado. Cinco senhas erradas seguidas travam
+  essas ações por 15 min (campos `Confirmacao_Falhas`,
+  `Confirmacao_Bloqueada_Ate`). O papel de quem pede é relido do Airtable
+  na hora, não do token -- um token de quem acabou de perder o acesso total
+  ainda vale por até 30 min.
+- **Toda troca de nível ou desativação derruba as sessões da pessoa** e
+  nunca deixa o sistema sem ninguém com acesso total ativo (senão dava pra
+  se trancar pra fora de vez).
+- **Histórico** (campo novo `Historico` em `Usuarios`): convite criado,
+  conta ativada, nível alterado, conta desativada -- com data/hora de
+  Brasília e quem fez.
+
+**Workflows novos no n8n**: `cadastro-iniciar` (e-mail → primeira conta /
+convite / sem convite / já ativa; manda o código), `cadastro-verificar`
+(confere o código sem gastar, devolve o nome do convite),
+`cadastro-concluir` (confere de novo, grava senha, ativa, já loga),
+`convidar-usuario` e `gerenciar-usuario` (só Dono, com reautenticação).
+Os dois últimos ainda **não têm tela** -- ficam pra quando o dono desenhar
+a área de gerenciar usuários; por enquanto, convite é feito por mim a
+pedido.
+
+**Tela `conta.html`** (+ `conta.css`, `conta.js`), ligada ao botão "Criar
+conta" da landing (cabeçalho e rodapé). Mesma linguagem visual da landing,
+três etapas indicadas no alto (e-mail → código → senha), código em 6 caixas
+que aceita colar o código inteiro (um campo de verdade invisível por cima
+das caixas, pra colar/apagar/preencher automático funcionarem do jeito
+nativo) e confere sozinho no sexto número, "reenviar código" liberado só
+depois de 1 min com a contagem à vista, olho pra mostrar a senha,
+requisitos que ficam verdes ao vivo, telas finais pra "conta criada", "sem
+convite" (texto do dono + WhatsApp `wa.me/554792081047`), "já tem conta" e
+"aparelho sem endereço do servidor". Guarda a sessão em `localStorage`
+(`sr_sessao`) -- ainda não usada: **o sistema continua abrindo só pela
+senha única**, a troca pro login por e-mail é a próxima etapa.
+
+**Três problemas reais achados e corrigidos no caminho**:
+1. **O e-mail de recuperação de senha mandava o código como texto literal
+   `{{ ... }}`**: o corpo do e-mail tinha expressões do n8n sem o `=` na
+   frente, e sem ele o n8n trata tudo como texto fixo. Corrigido e
+   conferido abrindo o e-mail de verdade. Os e-mails (ativação e
+   recuperação) agora são HTML com o código em destaque, remetente
+   "Soluções Rápidas" e sem a assinatura automática do n8n no rodapé.
+2. **Saídas de erro soltas faziam o webhook nunca responder** (`login` ao
+   falhar a gravação da sessão, e os fluxos de recuperação) -- a tela
+   ficaria girando pra sempre. Todas ligadas a uma resposta. Na
+   recuperação, a falha responde a mesma mensagem genérica de sucesso, pra
+   não revelar que o e-mail existe.
+3. **Criar conta demorava 6-8 s no "Continuar"** esperando o Gmail. Agora
+   `cadastro-iniciar` responde assim que o código é salvo e manda o e-mail
+   logo depois (~2 s). Pra isso esse workflow usa a ordem de execução "v1"
+   (sem ela, o padrão antigo do n8n executaria o e-mail antes da resposta
+   mesmo com o ramo da resposta primeiro) e o ramo da resposta fica acima
+   do e-mail no desenho -- na ordem "v1" os ramos rodam de cima pra baixo.
+
+**Armadilha de teste**: formulário codifica `+` como espaço -- testando
+pelo terminal com `adm.solucoes.rapidas+teste@gmail.com` precisa de
+`--data-urlencode`, senão o e-mail chega com espaço e é recusado (o
+navegador já codifica certo). E o terminal do Windows manda acentos numa
+codificação antiga: "·" chegou quebrado pelo curl, mas certo pelo
+navegador.
+
+Testado com dado falso e e-mails só pra caixa do próprio sistema (o Gmail
+entrega `adm.solucoes.rapidas+qualquercoisa@gmail.com` na mesma caixa):
+primeira conta, e-mail corrigido reaproveitando a linha, código errado,
+código usado duas vezes, convite com nome acentuado, recuperação recusando
+convite pendente, código de ativação recusado na recuperação, trava de
+último Dono, sessões derrubadas ao trocar nível, 5 senhas erradas → bloqueio.
+Tela testada em 375 px e desktop, com respostas simuladas pra cada estado e
+um cadastro real de ponta a ponta contra o n8n local. Tabelas `Usuarios` e
+`Sessoes` deixadas **vazias** no fim -- é o que faz a próxima conta criada
+(a do dono) virar Dono.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

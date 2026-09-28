@@ -1,0 +1,522 @@
+/* ===================================================================
+   Tela de criar conta (conta.html). Mesma linguagem visual da landing
+   -- marinho/azul/aço sobre fundo claro, Saira nos títulos e a grade de
+   planta baixa no fundo -- porque é o caminho natural de quem vem do
+   site. O sistema interno (style.css) é escuro e fica separado.
+   =================================================================== */
+
+:root {
+  --marinho: #0b1e3d;
+  --azul: #1c4e85;
+  --aco: #3e8fd1;
+
+  --tinta: #0b1e3d;
+  --tinta-media: #445468;
+  --tinta-fraca: #6d7c8d;
+
+  --branco: #ffffff;
+  --gelo: #f4f7fa;
+  --linha: #e2e8ee;
+  --linha-forte: #cdd6df;
+
+  --whats: #1fa855;
+  --ok: #1a8f4c;
+  --ok-fundo: #e9f6ee;
+  --erro: #c93a3a;
+  --erro-fundo: #fdf0f0;
+
+  --foco: 0 0 0 4px rgba(62, 143, 209, 0.18);
+  --raio: 12px;
+  --curva: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+[hidden] { display: none !important; }
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--gelo);
+  color: var(--tinta-media);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Fundo: grade de planta baixa + brilho ---------- */
+
+.fundo { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.fundo-grade {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(11, 30, 61, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(11, 30, 61, 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 100%);
+}
+.fundo-brilho {
+  position: absolute;
+  top: -220px;
+  right: -160px;
+  width: 620px;
+  height: 620px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(62, 143, 209, 0.2), transparent 62%);
+}
+
+/* ---------- Página ---------- */
+
+.pagina {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 36px 16px 28px;
+}
+
+.marca {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  color: inherit;
+  text-decoration: none;
+}
+.marca-simbolo { height: 38px; width: auto; max-width: 150px; object-fit: contain; }
+.marca-texto { display: flex; flex-direction: column; line-height: 1.05; }
+.marca-nome {
+  font-family: "Saira", "Inter", sans-serif;
+  font-weight: 700;
+  font-size: 1.08rem;
+  color: var(--marinho);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+.marca-nome em { font-style: normal; color: var(--azul); }
+.marca-sub {
+  font-size: 0.64rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--tinta-fraca);
+  margin-top: 3px;
+}
+
+.cartao {
+  width: 100%;
+  max-width: 440px;
+  background: var(--branco);
+  border: 1px solid var(--linha);
+  border-radius: 20px;
+  box-shadow:
+    0 1px 2px rgba(11, 30, 61, 0.04),
+    0 24px 56px -18px rgba(11, 30, 61, 0.22);
+  padding: 28px 28px 30px;
+}
+
+.rodape-cartao { margin: 0; font-size: 0.92rem; color: var(--tinta-fraca); }
+.rodape-cartao a { color: var(--azul); font-weight: 600; text-decoration: none; }
+.rodape-cartao a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- Etapas no alto do cartão ---------- */
+
+.passos {
+  list-style: none;
+  margin: 0 0 26px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+.passo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--tinta-fraca);
+}
+/* Fio ligando uma etapa à próxima; fica azul quando a etapa foi feita. */
+.passo:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: calc(50% + 20px);
+  right: calc(-50% + 20px);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--linha);
+  transition: background 0.35s var(--curva);
+}
+.passo.feito:not(:last-child)::after { background: var(--aco); }
+
+.passo-bola {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--linha-forte);
+  background: var(--branco);
+  color: var(--tinta-fraca);
+  font-family: "Saira", "Inter", sans-serif;
+  font-size: 0.82rem;
+  transition: background 0.3s var(--curva), border-color 0.3s var(--curva), color 0.3s var(--curva), box-shadow 0.3s var(--curva);
+}
+.passo-ok {
+  display: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.passo.atual { color: var(--tinta); }
+.passo.atual .passo-bola {
+  border-color: var(--azul);
+  background: var(--azul);
+  color: var(--branco);
+  box-shadow: var(--foco);
+}
+.passo.feito .passo-bola { border-color: var(--aco); background: var(--aco); color: var(--branco); }
+.passo.feito .passo-num { display: none; }
+.passo.feito .passo-ok { display: block; }
+
+/* ---------- Conteúdo de cada etapa ---------- */
+
+.etapa { animation: entrar 0.32s var(--curva); }
+@keyframes entrar {
+  from { opacity: 0; transform: translateY(8px); }
+}
+
+.etapa-titulo {
+  margin: 0 0 8px;
+  font-family: "Saira", "Inter", sans-serif;
+  font-weight: 700;
+  font-size: 1.6rem;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  color: var(--tinta);
+  outline: none;
+}
+.etapa-texto { margin: 0 0 22px; font-size: 0.97rem; }
+.etapa-texto strong { color: var(--tinta); font-weight: 600; overflow-wrap: anywhere; }
+
+/* ---------- Campos ---------- */
+
+.campo { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; }
+.campo label { font-size: 0.86rem; font-weight: 600; color: var(--tinta); }
+.campo input {
+  width: 100%;
+  height: 50px;
+  padding: 0 14px;
+  border: 1.5px solid var(--linha-forte);
+  border-radius: var(--raio);
+  background: var(--branco);
+  color: var(--tinta);
+  font: inherit;
+  font-size: 1rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.campo input::placeholder { color: #9aa7b4; }
+.campo input:focus { outline: none; border-color: var(--aco); box-shadow: var(--foco); }
+.campo input[aria-invalid="true"] { border-color: var(--erro); }
+.campo input[aria-invalid="true"]:focus { box-shadow: 0 0 0 4px rgba(201, 58, 58, 0.14); }
+
+.campo-senha { position: relative; }
+.campo-senha input { padding-right: 52px; }
+.olho {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  transform: translateY(-50%);
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--tinta-fraca);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.olho svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.olho-fechado { display: none; }
+.olho[aria-pressed="true"] .olho-aberto { display: none; }
+.olho[aria-pressed="true"] .olho-fechado { display: block; }
+
+/* ---------- Código em 6 caixas ----------
+   Um campo de verdade, invisível, por cima das caixas: assim colar o
+   código inteiro, apagar e o preenchimento automático do celular
+   funcionam do jeito nativo, e as caixas só desenham o que está nele. */
+
+.otp { position: relative; margin: 2px 0 18px; }
+.otp-caixas { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.otp-caixas span {
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--linha-forte);
+  border-radius: 12px;
+  background: var(--branco);
+  font-family: "Saira", "Inter", sans-serif;
+  font-size: 1.65rem;
+  font-weight: 600;
+  color: var(--tinta);
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.2s;
+}
+.otp-caixas span.cheia { border-color: #93a8bd; }
+.otp.foco .otp-caixas span.ativa { border-color: var(--aco); box-shadow: var(--foco); }
+.otp.foco .otp-caixas span.ativa:empty::after {
+  content: "";
+  width: 2px;
+  height: 26px;
+  border-radius: 1px;
+  background: var(--azul);
+  animation: piscar 1s steps(1) infinite;
+}
+@keyframes piscar { 50% { opacity: 0; } }
+
+.otp.erro .otp-caixas { animation: tremer 0.4s var(--curva); }
+.otp.erro .otp-caixas span { border-color: var(--erro); }
+@keyframes tremer {
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+.otp.ok .otp-caixas span { border-color: var(--ok); background: var(--ok-fundo); color: var(--ok); }
+
+.otp-campo {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  font-size: 16px; /* abaixo disso o iPhone dá zoom ao tocar */
+  cursor: text;
+}
+.otp-campo::selection { background: transparent; }
+
+.reenviar {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 5px;
+  margin: 18px 0 0;
+  font-size: 0.92rem;
+}
+.reenviar-tempo { color: var(--tinta-fraca); font-variant-numeric: tabular-nums; }
+.dica { margin: 6px 0 0; text-align: center; font-size: 0.82rem; color: var(--tinta-fraca); }
+
+/* ---------- Requisitos da senha ---------- */
+
+.requisitos {
+  list-style: none;
+  margin: -2px 0 20px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  font-size: 0.88rem;
+  color: var(--tinta-fraca);
+}
+.requisitos li { display: flex; align-items: center; gap: 9px; transition: color 0.2s; }
+.requisitos li::before {
+  content: "";
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--linha-forte);
+  background: var(--branco) center / 11px no-repeat;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+.requisitos li.ok { color: var(--ok); }
+.requisitos li.ok::before {
+  border-color: var(--ok);
+  background-color: var(--ok);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
+}
+
+/* ---------- Avisos ---------- */
+
+.aviso {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  margin: 0 0 16px;
+  padding: 11px 13px;
+  border: 1px solid #f3d3d3;
+  border-radius: 10px;
+  background: var(--erro-fundo);
+  color: #8f2424;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.aviso::before {
+  content: "";
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c93a3a' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9.5'/%3E%3Cpath d='M12 7.5v5.5M12 16.5h.01'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.aviso.aviso-ok { border-color: #cbe9d6; background: var(--ok-fundo); color: #16603a; }
+.aviso.aviso-ok::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231a8f4c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9.5'/%3E%3Cpath d='M8 12.5l2.8 2.8L16.5 9.5'/%3E%3C/svg%3E");
+}
+
+/* ---------- Botões e links ---------- */
+
+.botao {
+  position: relative;
+  width: 100%;
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 0;
+  border-radius: var(--raio);
+  font-family: "Saira", "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 1.02rem;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.2s var(--curva), box-shadow 0.2s var(--curva), opacity 0.2s;
+}
+.botao-primario {
+  background: linear-gradient(135deg, var(--azul), var(--marinho));
+  color: var(--branco);
+  box-shadow: 0 10px 22px -10px rgba(11, 30, 61, 0.6);
+}
+.botao-whats {
+  background: var(--whats);
+  color: var(--branco);
+  box-shadow: 0 10px 24px -10px rgba(31, 168, 85, 0.7);
+}
+.botao-whats svg { width: 21px; height: 21px; }
+@media (hover: hover) and (pointer: fine) {
+  .botao:not(:disabled):hover { transform: translateY(-1px); }
+  .botao-primario:not(:disabled):hover { box-shadow: 0 14px 28px -10px rgba(11, 30, 61, 0.65); }
+}
+.botao:active:not(:disabled) { transform: translateY(0); }
+.botao:disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* Carregando: some o texto e entra uma rodinha no lugar, sem mudar o
+   tamanho do botão. */
+.botao.carregando { color: transparent; pointer-events: none; opacity: 1; }
+.botao.carregando::after {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid rgba(255, 255, 255, 0.35);
+  border-top-color: var(--branco);
+  border-radius: 50%;
+  animation: girar 0.7s linear infinite;
+}
+@keyframes girar { to { transform: rotate(360deg); } }
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--azul);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(28, 78, 133, 0.35);
+  text-underline-offset: 3px;
+}
+.link:hover { text-decoration-color: currentColor; }
+.link:disabled { color: var(--tinta-fraca); text-decoration: none; cursor: default; }
+.link-centro { display: block; margin: 16px auto 0; }
+
+.botao:focus-visible,
+.link:focus-visible,
+.olho:focus-visible,
+.marca:focus-visible,
+.rodape-cartao a:focus-visible {
+  outline: 3px solid rgba(62, 143, 209, 0.55);
+  outline-offset: 2px;
+}
+
+/* ---------- Telas finais (deu certo, sem convite...) ---------- */
+
+.etapa-final { text-align: center; }
+.etapa-final .etapa-texto { margin-bottom: 24px; }
+.selo {
+  width: 72px;
+  height: 72px;
+  margin: 2px auto 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.selo svg {
+  width: 34px;
+  height: 34px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.selo-info { background: #e8f0f9; color: var(--azul); }
+.selo-alerta { background: #fff3e0; color: #a86400; }
+.selo-ok {
+  background: var(--ok-fundo);
+  color: var(--ok);
+  animation: surgir 0.45s var(--curva);
+}
+.selo-ok svg { stroke-width: 2.6; }
+.selo-ok .risco {
+  stroke-dasharray: 22;
+  stroke-dashoffset: 22;
+  animation: riscar 0.45s 0.2s var(--curva) forwards;
+}
+@keyframes surgir { from { opacity: 0; transform: scale(0.6); } }
+@keyframes riscar { to { stroke-dashoffset: 0; } }
+
+/* ---------- Celular ---------- */
+
+@media (max-width: 420px) {
+  .pagina { justify-content: flex-start; padding-top: 26px; }
+  .cartao { padding: 22px 18px 24px; border-radius: 16px; }
+  .etapa-titulo { font-size: 1.42rem; }
+  .otp-caixas { gap: 6px; }
+  .otp-caixas span { height: 52px; font-size: 1.45rem; border-radius: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .selo-ok .risco { stroke-dashoffset: 0; }
+}
