@@ -4175,6 +4175,59 @@ de ponta a ponta no n8n com uma conta de teste (Dono e depois Usuario),
 apagada no fim junto com as sessões dela -- a conta e a sessão do dono não
 foram tocadas.
 
+### Tela de Usuários: convidar e gerenciar contas (28/09/2026)
+
+Item novo **"Usuários"** no menu, que só aparece pra quem entrou por e-mail
+com acesso total (pela senha antiga não há conta pra confirmar a senha).
+
+- **Lista** de todas as contas: nome, e-mail, etiqueta do nível ("Acesso
+  total" / "Acesso padrão") e situação (convite pendente em laranja, conta
+  desativada apagada). Tocar abre as ações e o **histórico** da conta.
+- **Convidar pessoa**: nome, e-mail, nível (com a explicação de cada nível
+  embaixo -- "acesso padrão" diz a verdade: por enquanto ainda não entra no
+  sistema). Depois de criado, aparece a **mensagem pronta pra copiar** com
+  o link de criar conta e o e-mail -- o sistema não manda nada sozinho, o
+  dono escolhe o canal (WhatsApp, e-mail). Convite pendente tem "Copiar
+  convite" pra mandar de novo.
+- **Ações**: dar/tirar acesso total, desativar/reativar conta, **cancelar
+  convite** (novo: apaga o convite que ainda não virou conta -- sem isso, um
+  e-mail digitado errado com acesso total ficava lá esperando quem fosse
+  dono daquele e-mail). A **própria conta não tem botões** ("peça pra outra
+  pessoa com acesso total") -- é o jeito mais fácil de se trancar pra fora.
+- **Toda ação pede a senha da própria conta** numa janela (`<dialog>`
+  nativo: prende o foco e fecha no Esc). Senha errada fica na janela com
+  "Restam N tentativas"; 5 erradas bloqueiam 15 min (regra que já existia
+  no backend). Botão de desistir chama "Voltar" -- "Cancelar" ao lado de
+  "Cancelar convite" confundia.
+
+**n8n**: `listar-usuarios` (novo; só Dono, papel relido do Airtable na
+hora; devolve só id, nome, e-mail, nível, situação, histórico e "você" --
+hash de senha e código nunca saem; execução bem-sucedida não fica
+guardada). `gerenciar-usuario` ganhou `acao=cancelar_convite` (recusa se a
+pessoa já criou a conta: conta de verdade se desativa, nunca se apaga) e
+recusa ativar/desativar convite pendente (deixaria a linha num estado que
+nenhum fluxo reconhece). O `fetchN8n` trata `sessaoExpirada` (resposta
+desses workflows) igual a `acessoNegado`: renova o token e repete.
+
+**Armadilha achada no teste de verdade**: pôr expressão no "Send Body" do
+nó HTTP (`={{ $json.metodo !== 'DELETE' }}`, pra DELETE ir sem corpo) fez
+o n8n **parar de mandar o corpo em todos os pedidos** -- os campos que
+dependem desse interruptor somem quando ele vira expressão. Mudar nível e
+desativar falharam (o Airtable recusou, nada gravado errado). Corrigido
+voltando o nó ao original e dando ao DELETE um nó próprio ("Apaga
+convite", depois de um "E cancelamento?"). **Regra: interruptor que mostra
+outros campos no n8n nunca vira expressão.**
+
+Testado: tela em 375 px e computador com respostas simuladas (lista,
+convidar com validação, janela de senha com senha vazia/errada/certa, Esc,
+própria conta sem botões, menu escondido no modo senha antiga); e de ponta
+a ponta no n8n com contas de teste (uma Dono pra agir, uma ativa e um
+convite): listar sem token recusado, convite com senha errada/certa/e-mail
+repetido, convite → acesso total, convite → ativar recusado, conta ativa →
+cancelar recusado, desativar e reativar com histórico gravado, cancelar
+convite apagando a linha. Contas de teste apagadas no fim; a conta e a
+sessão do dono não foram tocadas.
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

@@ -22,7 +22,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const corpo = $input.first().json.body || {};\nconst PAPEIS = ['Dono', 'Usuario'];\nconst vazio = (v) => v === undefined || v === null || v === '';\n\nconst usuarioId = String(corpo.usuarioId || '');\nconst papel = vazio(corpo.papel) ? null : String(corpo.papel);\nconst ativoTexto = vazio(corpo.ativo) ? null : String(corpo.ativo);\n\nlet erro = '';\nif (!/^rec[A-Za-z0-9]{14}$/.test(usuarioId)) erro = 'Usuário inválido.';\nelse if (papel !== null && !PAPEIS.includes(papel)) erro = 'Escolha um nível de acesso válido.';\nelse if (ativoTexto !== null && ativoTexto !== 'true' && ativoTexto !== 'false') erro = 'Valor inválido.';\nelse if (papel === null && ativoTexto === null) erro = 'Nenhuma alteração para salvar.';\n\nreturn [{\n  json: {\n    tokenAcesso: String(corpo.tokenAcesso || ''),\n    senhaConfirmacao: String(corpo.senhaConfirmacao || ''),\n    usuarioId,\n    papel,\n    ativo: ativoTexto === null ? null : ativoTexto === 'true',\n    erro,\n  },\n}];\n"
+        "jsCode": "const corpo = $input.first().json.body || {};\nconst PAPEIS = ['Dono', 'Usuario'];\nconst vazio = (v) => v === undefined || v === null || v === '';\n\nconst usuarioId = String(corpo.usuarioId || '');\nconst cancelarConvite = String(corpo.acao || '') === 'cancelar_convite';\nconst papel = vazio(corpo.papel) ? null : String(corpo.papel);\nconst ativoTexto = vazio(corpo.ativo) ? null : String(corpo.ativo);\n\nlet erro = '';\nif (!/^rec[A-Za-z0-9]{14}$/.test(usuarioId)) erro = 'Usuário inválido.';\nelse if (cancelarConvite) erro = '';\nelse if (papel !== null && !PAPEIS.includes(papel)) erro = 'Escolha um nível de acesso válido.';\nelse if (ativoTexto !== null && ativoTexto !== 'true' && ativoTexto !== 'false') erro = 'Valor inválido.';\nelse if (papel === null && ativoTexto === null) erro = 'Nenhuma alteração para salvar.';\n\nreturn [{\n  json: {\n    tokenAcesso: String(corpo.tokenAcesso || ''),\n    senhaConfirmacao: String(corpo.senhaConfirmacao || ''),\n    usuarioId,\n    cancelarConvite,\n    papel: cancelarConvite ? null : papel,\n    ativo: cancelarConvite || ativoTexto === null ? null : ativoTexto === 'true',\n    erro,\n  },\n}];"
       },
       "id": "c5000000-0000-4000-8000-000000000003",
       "name": "Le entrada",
@@ -98,7 +98,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const BASE = 'app6PyYmtFduIMp7B';\nconst TABELA = 'tblucYjrD3SKf1azh';\n\nconst token = $('Confere token').first().json;\nconst entrada = $('Le entrada').first().json;\nconst registros = $input.all().map((i) => i.json).filter((r) => r && r.id);\n\nconst negar = (mensagem, extra) => [{ json: Object.assign({ pode: false, mensagem }, extra || {}) }];\n\nif (!token.valido) return negar('Sua sessão expirou. Entre de novo para continuar.', { sessao: true });\n\n// Papel e situação lidos agora do Airtable, não do token: um token emitido\n// antes de a pessoa perder o acesso total ainda vale por até 30 minutos.\nconst chamador = registros.find((r) => r.id === token.usuarioId);\nconst c = (chamador && chamador.fields) || {};\nif (!chamador || c.Ativo !== true || c.Papel !== 'Dono' || !c.Senha_Hash) {\n  return negar('Só quem tem acesso total pode alterar contas.');\n}\n\nconst bloqueio = c.Confirmacao_Bloqueada_Ate ? new Date(c.Confirmacao_Bloqueada_Ate).getTime() : 0;\nif (bloqueio > Date.now()) {\n  const minutos = Math.max(1, Math.ceil((bloqueio - Date.now()) / 60000));\n  return negar('Muitas senhas erradas seguidas. Tente de novo em ' + minutos + ' min.');\n}\n\nif (entrada.erro) return negar(entrada.erro);\n\nconst alvo = registros.find((r) => r.id === entrada.usuarioId);\nif (!alvo) return negar('Usuário não encontrado.');\nconst a = alvo.fields || {};\n\nconst papelAtual = a.Papel || 'Usuario';\nconst ativoAtual = a.Ativo === true;\nconst papelNovo = entrada.papel !== null ? entrada.papel : papelAtual;\nconst ativoNovo = entrada.ativo !== null ? entrada.ativo : ativoAtual;\n\nif (papelNovo === papelAtual && ativoNovo === ativoAtual) {\n  return negar('Nenhuma alteração para salvar.');\n}\n\n// Nunca deixar o sistema sem ninguém com acesso total ativo: sem isso, dava\n// pra se trancar pra fora de vez (a primeira conta automática só vale com a\n// tabela sem nenhuma conta ativada).\nconst donoAtivo = (f) => f.Papel === 'Dono' && f.Ativo === true && Boolean(f.Senha_Hash);\nconst sobra = registros.some((r) => {\n  const f = r.id === alvo.id ? Object.assign({}, r.fields, { Papel: papelNovo, Ativo: ativoNovo }) : (r.fields || {});\n  return donoAtivo(f);\n});\nif (!sobra) {\n  return negar('O sistema precisa de pelo menos uma pessoa com acesso total ativa. Dê acesso total a outra pessoa antes.');\n}\n\nconst carimbo = new Date()\n  .toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })\n  .replace(',', '');\nconst quem = c.Nome || c.Email;\nconst nivel = (p) => (p === 'Dono' ? 'acesso total' : 'acesso padrão');\n\nconst linhas = [];\nconst campos = {};\nif (papelNovo !== papelAtual) {\n  campos.Papel = papelNovo;\n  linhas.push(carimbo + ' — Nível alterado de ' + nivel(papelAtual) + ' para ' + nivel(papelNovo) + ' por ' + quem);\n}\nif (ativoNovo !== ativoAtual) {\n  campos.Ativo = ativoNovo;\n  linhas.push(carimbo + ' — Conta ' + (ativoNovo ? 'reativada' : 'desativada') + ' por ' + quem);\n}\ncampos.Historico = (a.Historico ? a.Historico + '\\n' : '') + linhas.join('\\n');\n\nreturn [{\n  json: {\n    pode: true,\n    chamadorId: chamador.id,\n    chamadorHash: c.Senha_Hash,\n    falhas: Number(c.Confirmacao_Falhas) || 0,\n    alvoId: alvo.id,\n    acaoPrincipal: {\n      metodo: 'PATCH',\n      url: 'https://api.airtable.com/v0/' + BASE + '/' + TABELA + '/' + alvo.id,\n      corpo: { fields: campos },\n    },\n    resumo: { nome: a.Nome || a.Email || 'essa pessoa' },\n  },\n}];\n"
+        "jsCode": "const BASE = 'app6PyYmtFduIMp7B';\nconst TABELA = 'tblucYjrD3SKf1azh';\n\nconst token = $('Confere token').first().json;\nconst entrada = $('Le entrada').first().json;\nconst registros = $input.all().map((i) => i.json).filter((r) => r && r.id);\n\nconst negar = (mensagem, extra) => [{ json: Object.assign({ pode: false, mensagem }, extra || {}) }];\n\nif (!token.valido) return negar('Sua sessão expirou. Entre de novo para continuar.', { sessao: true });\n\n// Papel e situação lidos agora do Airtable, não do token: um token emitido\n// antes de a pessoa perder o acesso total ainda vale por até 30 minutos.\nconst chamador = registros.find((r) => r.id === token.usuarioId);\nconst c = (chamador && chamador.fields) || {};\nif (!chamador || c.Ativo !== true || c.Papel !== 'Dono' || !c.Senha_Hash) {\n  return negar('Só quem tem acesso total pode alterar contas.');\n}\n\nconst bloqueio = c.Confirmacao_Bloqueada_Ate ? new Date(c.Confirmacao_Bloqueada_Ate).getTime() : 0;\nif (bloqueio > Date.now()) {\n  const minutos = Math.max(1, Math.ceil((bloqueio - Date.now()) / 60000));\n  return negar('Muitas senhas erradas seguidas. Tente de novo em ' + minutos + ' min.');\n}\n\nif (entrada.erro) return negar(entrada.erro);\n\nconst alvo = registros.find((r) => r.id === entrada.usuarioId);\nif (!alvo) return negar('Usuário não encontrado.');\nconst a = alvo.fields || {};\n\n// Cancelar convite = apagar a linha. Só vale pra convite que ainda não virou\n// conta (sem senha): conta de verdade se desativa, nunca se apaga -- o\n// histórico dela fica.\nconst nomeAlvo = a.Nome || a.Email || 'essa pessoa';\nif (entrada.cancelarConvite) {\n  if (a.Senha_Hash) return negar('Essa pessoa já criou a conta. Para tirar o acesso, desative a conta.');\n  return [{\n    json: {\n      pode: true,\n      chamadorId: chamador.id,\n      chamadorHash: c.Senha_Hash,\n      falhas: Number(c.Confirmacao_Falhas) || 0,\n      alvoId: alvo.id,\n      acaoPrincipal: { metodo: 'DELETE', url: 'https://api.airtable.com/v0/' + BASE + '/' + TABELA + '/' + alvo.id, corpo: null },\n      resumo: { nome: nomeAlvo, mensagem: 'Convite de ' + nomeAlvo + ' cancelado.' },\n    },\n  }];\n}\n// Convite pendente não tem o que ativar/desativar: marcar \"ativo\" sem senha\n// deixaria a linha num estado que nenhum fluxo reconhece.\nif (!a.Senha_Hash && entrada.ativo !== null) {\n  return negar('Esse convite ainda não virou conta. Para a pessoa não entrar, cancele o convite.');\n}\n\nconst papelAtual = a.Papel || 'Usuario';\nconst ativoAtual = a.Ativo === true;\nconst papelNovo = entrada.papel !== null ? entrada.papel : papelAtual;\nconst ativoNovo = entrada.ativo !== null ? entrada.ativo : ativoAtual;\n\nif (papelNovo === papelAtual && ativoNovo === ativoAtual) {\n  return negar('Nenhuma alteração para salvar.');\n}\n\n// Nunca deixar o sistema sem ninguém com acesso total ativo: sem isso, dava\n// pra se trancar pra fora de vez (a primeira conta automática só vale com a\n// tabela sem nenhuma conta ativada).\nconst donoAtivo = (f) => f.Papel === 'Dono' && f.Ativo === true && Boolean(f.Senha_Hash);\nconst sobra = registros.some((r) => {\n  const f = r.id === alvo.id ? Object.assign({}, r.fields, { Papel: papelNovo, Ativo: ativoNovo }) : (r.fields || {});\n  return donoAtivo(f);\n});\nif (!sobra) {\n  return negar('O sistema precisa de pelo menos uma pessoa com acesso total ativa. Dê acesso total a outra pessoa antes.');\n}\n\nconst carimbo = new Date()\n  .toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })\n  .replace(',', '');\nconst quem = c.Nome || c.Email;\nconst nivel = (p) => (p === 'Dono' ? 'acesso total' : 'acesso padrão');\n\nconst linhas = [];\nconst campos = {};\nif (papelNovo !== papelAtual) {\n  campos.Papel = papelNovo;\n  linhas.push(carimbo + ' — Nível alterado de ' + nivel(papelAtual) + ' para ' + nivel(papelNovo) + ' por ' + quem);\n}\nif (ativoNovo !== ativoAtual) {\n  campos.Ativo = ativoNovo;\n  linhas.push(carimbo + ' — Conta ' + (ativoNovo ? 'reativada' : 'desativada') + ' por ' + quem);\n}\ncampos.Historico = (a.Historico ? a.Historico + '\\n' : '') + linhas.join('\\n');\n\nreturn [{\n  json: {\n    pode: true,\n    chamadorId: chamador.id,\n    chamadorHash: c.Senha_Hash,\n    falhas: Number(c.Confirmacao_Falhas) || 0,\n    alvoId: alvo.id,\n    acaoPrincipal: {\n      metodo: 'PATCH',\n      url: 'https://api.airtable.com/v0/' + BASE + '/' + TABELA + '/' + alvo.id,\n      corpo: { fields: campos },\n    },\n    resumo: {\n      nome: nomeAlvo,\n      mensagem: a.Senha_Hash\n        ? 'Alterações salvas para ' + nomeAlvo + '. Por segurança, essa conta foi desconectada de todos os aparelhos.'\n        : 'Convite de ' + nomeAlvo + ' atualizado.',\n    },\n  },\n}];\n"
       },
       "id": "c5000000-0000-4000-8000-000000000006",
       "name": "Confere autorizacao",
@@ -318,7 +318,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r = $('Confere autorizacao').first().json.resumo;\nreturn [{\n  json: {\n    ok: true,\n    mensagem: 'Alterações salvas para ' + r.nome + '. Por segurança, essa conta foi desconectada de todos os aparelhos.',\n  },\n}];\n"
+        "jsCode": "const r = $('Confere autorizacao').first().json.resumo;\nreturn [{ json: { ok: true, mensagem: r.mensagem } }];"
       },
       "id": "c5000000-0000-4000-8000-000000000018",
       "name": "Monta resposta sucesso",
@@ -473,6 +473,67 @@
         }
       },
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c5000000-0000-4000-8000-000000000031",
+              "leftValue": "={{ $json.metodo }}",
+              "rightValue": "DELETE",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "c5000000-0000-4000-8000-000000000030",
+      "name": "E cancelamento?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2090,
+        -440
+      ]
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "c5000000-0000-4000-8000-000000000032",
+      "name": "Apaga convite",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2310,
+        -560
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
     }
   ],
   "connections": {
@@ -604,7 +665,7 @@
       "main": [
         [
           {
-            "node": "Grava alteracao",
+            "node": "E cancelamento?",
             "type": "main",
             "index": 0
           }
@@ -730,6 +791,42 @@
         [
           {
             "node": "Apaga sessoes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E cancelamento?": {
+      "main": [
+        [
+          {
+            "node": "Apaga convite",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Grava alteracao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apaga convite": {
+      "main": [
+        [
+          {
+            "node": "Prepara zerar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta resposta falha",
             "type": "main",
             "index": 0
           }

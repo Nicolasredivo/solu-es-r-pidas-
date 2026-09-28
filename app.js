@@ -66,7 +66,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.28b";
+const APP_VERSION = "2026.09.28c";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -189,7 +189,9 @@ async function fetchN8n(caminho, dados, jaRenovou) {
 
   if (modoAcesso !== "login") return resposta;
   const corpo = await resposta.clone().json().catch(() => null);
-  if (!corpo || corpo.acessoNegado !== true) return resposta;
+  // Os workflows de usuários respondem "sessaoExpirada" em vez de
+  // "acessoNegado" -- os dois querem dizer token recusado.
+  if (!corpo || (corpo.acessoNegado !== true && corpo.sessaoExpirada !== true)) return resposta;
 
   // Token recusado: renova uma vez e repete o pedido. Repetir é seguro --
   // o n8n confere o acesso antes de fazer qualquer coisa.
@@ -4821,6 +4823,11 @@ function entrarNoApp() {
 }
 
 function mostrarUsuarioConectado() {
+  // "Usuários" só existe pra quem entrou por e-mail com acesso total: pela
+  // senha antiga não há conta pra confirmar a senha nas ações de lá.
+  const dono = modoAcesso === "login" && Boolean(sessao && sessao.usuario && sessao.usuario.papel === "Dono");
+  document.getElementById("menu-usuarios").classList.toggle("hidden", !dono);
+
   const el = document.getElementById("usuario-conectado");
   const nome = sessao && sessao.usuario && String(sessao.usuario.nome || "").trim().split(/\s+/)[0];
   if (modoAcesso !== "login" || !nome) {
@@ -7762,6 +7769,9 @@ sairBotao.addEventListener("click", () => {
   sessionStorage.removeItem(CHAVE_LEMBRETE_MINIMIZADO);
   lembreteDesenhar();
 
+  // Usuários: a lista de pessoas não fica na tela nem em memória.
+  limparUsuarios();
+
   desarmarSaida();
   closeSidebar();
   appView.classList.add("hidden");
@@ -7772,6 +7782,339 @@ sairBotao.addEventListener("click", () => {
   gateView.classList.remove("hidden");
   statusBox.className = "status";
 });
+
+// ----- Confirmar com a própria senha -----
+//
+// Convidar, mudar nível, desativar e cancelar convite pedem a senha da conta
+// de quem está usando, mesmo já logado. Quem confere é o n8n; aqui é só a
+// janela. Resolve com a resposta do servidor quando dá certo, ou null se a
+// pessoa desistir. Erro (senha errada, regra do sistema) fica na janela, pra
+// dar pra tentar de novo sem perder o que foi escolhido.
+const dialogoSenha = document.getElementById("confirmar-senha");
+const dialogoSenhaForm = document.getElementById("confirmar-senha-form");
+const dialogoSenhaCampo = document.getElementById("confirmar-senha-campo");
+const dialogoSenhaErro = document.getElementById("confirmar-senha-erro");
+const dialogoSenhaOk = document.getElementById("confirmar-senha-ok");
+let dialogoSenhaPedido = null;
+
+function confirmarComSenha({ texto, botao, perigo, executar }) {
+  document.getElementById("confirmar-senha-texto").textContent = texto;
+  dialogoSenhaOk.textContent = botao;
+  dialogoSenhaOk.classList.toggle("botao-perigo-cheio", Boolean(perigo));
+  dialogoSenhaCampo.value = "";
+  dialogoSenhaErro.textContent = "";
+  return new Promise((resolver) => {
+    dialogoSenhaPedido = { executar, resolver, textoBotao: botao };
+    dialogoSenha.showModal();
+    dialogoSenhaCampo.focus();
+  });
+}
+
+function fecharDialogoSenha(resultado) {
+  if (dialogoSenha.open) dialogoSenha.close();
+  // A senha não fica esperando no campo depois de usada.
+  dialogoSenhaCampo.value = "";
+  const pedido = dialogoSenhaPedido;
+  dialogoSenhaPedido = null;
+  if (pedido) pedido.resolver(resultado);
+}
+
+dialogoSenhaForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const pedido = dialogoSenhaPedido;
+  if (!pedido || dialogoSenhaOk.disabled) return;
+  const senha = dialogoSenhaCampo.value;
+  if (!senha) {
+    dialogoSenhaErro.textContent = "Digite sua senha.";
+    dialogoSenhaCampo.focus();
+    return;
+  }
+
+  dialogoSenhaOk.disabled = true;
+  dialogoSenhaOk.textContent = "Conferindo...";
+  dialogoSenhaErro.textContent = "";
+  try {
+    const resposta = await pedido.executar(senha);
+    if (resposta && resposta.ok) {
+      fecharDialogoSenha(resposta);
+      return;
+    }
+    dialogoSenhaErro.textContent = (resposta && resposta.mensagem) || "Não foi possível concluir agora.";
+    if (resposta && resposta.senhaIncorreta) dialogoSenhaCampo.value = "";
+    dialogoSenhaCampo.focus();
+  } catch (err) {
+    dialogoSenhaErro.textContent = "Não foi possível falar com o n8n.";
+  } finally {
+    dialogoSenhaOk.disabled = false;
+    dialogoSenhaOk.textContent = pedido.textoBotao;
+  }
+});
+
+document.getElementById("confirmar-senha-cancelar").addEventListener("click", () => fecharDialogoSenha(null));
+// Esc (ou o botão voltar do Android) fecha a janela: conta como desistir.
+dialogoSenha.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  if (!dialogoSenhaOk.disabled) fecharDialogoSenha(null);
+});
+
+// ----- Usuários (só quem tem acesso total) -----
+
+const listaUsuariosBox = document.getElementById("lista-usuarios");
+const usuariosStatus = document.getElementById("usuarios-status");
+const modeloUsuario = document.getElementById("modelo-usuario");
+const formConvite = document.getElementById("form-convite");
+const conviteCampos = {
+  nome: document.getElementById("convite-nome"),
+  email: document.getElementById("convite-email"),
+  papel: document.getElementById("convite-papel"),
+};
+const convitePronto = document.getElementById("convite-pronto");
+let usuarios = [];
+
+const NOME_DO_NIVEL = { Dono: "Acesso total", Usuario: "Acesso padrão" };
+const DICA_DO_NIVEL = {
+  Dono: "Acesso total: vê e altera tudo no sistema, inclusive esta tela de usuários.",
+  Usuario: "Acesso padrão: por enquanto ainda não entra no sistema — o que esse nível pode fazer vai ser definido depois.",
+};
+
+function mostrarUsuariosStatus(tipo, mensagem) {
+  usuariosStatus.className = `doc-hint ${tipo}`;
+  usuariosStatus.textContent = mensagem;
+}
+
+async function carregarUsuarios() {
+  mostrarUsuariosStatus("neutral", "Carregando...");
+  try {
+    const resposta = await pedirAoN8n("listar-usuarios", {});
+    if (!resposta || !resposta.ok) {
+      mostrarUsuariosStatus("error", (resposta && resposta.mensagem) || "Não consegui carregar a lista.");
+      return false;
+    }
+    usuarios = resposta.usuarios || [];
+    desenharUsuarios();
+    return true;
+  } catch (err) {
+    mostrarUsuariosStatus("error", "Não foi possível falar com o n8n.");
+    return false;
+  }
+}
+
+function desenharUsuarios() {
+  listaUsuariosBox.innerHTML = "";
+  const pendentes = usuarios.filter((u) => u.situacao === "pendente").length;
+  const contas = usuarios.length - pendentes;
+  const partes = [`${contas} conta${contas === 1 ? "" : "s"}`];
+  if (pendentes) partes.push(`${pendentes} convite${pendentes === 1 ? "" : "s"} esperando a pessoa criar a conta`);
+  mostrarUsuariosStatus("neutral", partes.join(" · ") + ".");
+  usuarios.forEach((u) => listaUsuariosBox.appendChild(montarLinhaUsuario(u)));
+}
+
+// Texto pronto pra mandar pra pessoa convidada: o sistema não manda nada
+// sozinho, quem convida escolhe o canal.
+function mensagemDeConvite(nome, email) {
+  const link = new URL("conta.html#criar", window.location.href).href;
+  const primeiro = String(nome || "").trim().split(/\s+/)[0];
+  return `Olá${primeiro ? ", " + primeiro : ""}! Você foi convidado(a) para o sistema da Soluções Rápidas. `
+    + `Para criar sua conta, abra ${link} e use o e-mail ${email}.`;
+}
+
+async function copiarTexto(texto) {
+  try {
+    await navigator.clipboard.writeText(texto);
+    mostrarToast("Mensagem copiada.");
+  } catch (err) {
+    mostrarToast("Não consegui copiar sozinho — selecione o texto e copie.");
+  }
+}
+
+function montarLinhaUsuario(u) {
+  const linha = modeloUsuario.content.firstElementChild.cloneNode(true);
+  linha.classList.toggle("desativada", u.situacao === "desativada");
+
+  linha.querySelector(".usuario-nome").textContent = u.nome || u.email;
+  const nivel = linha.querySelector(".usuario-nivel");
+  nivel.textContent = NOME_DO_NIVEL[u.papel];
+  nivel.classList.toggle("total", u.papel === "Dono");
+
+  const extra = linha.querySelector(".usuario-extra");
+  extra.textContent = u.email + (u.voce ? " · você" : "");
+  if (u.situacao !== "ativa") {
+    const situacao = document.createElement("span");
+    situacao.className = u.situacao === "pendente" ? "usuario-pendente" : "";
+    situacao.textContent = u.situacao === "pendente" ? " · convite pendente" : " · conta desativada";
+    extra.appendChild(situacao);
+  }
+
+  const detalhe = linha.querySelector(".usuario-detalhe");
+  const aviso = linha.querySelector(".usuario-aviso");
+  const botoes = linha.querySelector(".usuario-botoes");
+  const botao = (texto, aoClicar, classe) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "botao-secundario" + (classe ? " " + classe : "");
+    b.textContent = texto;
+    b.addEventListener("click", aoClicar);
+    botoes.appendChild(b);
+  };
+  const quem = u.nome || u.email;
+  const outroNivel = u.papel === "Dono" ? "Usuario" : "Dono";
+
+  if (u.voce) {
+    // Mudar o próprio nível daqui é a forma mais fácil de se trancar pra fora.
+    aviso.textContent = "Esta é a sua conta. Para mudar o seu próprio nível, peça pra outra pessoa com acesso total.";
+    aviso.classList.remove("hidden");
+  } else {
+    if (u.situacao === "pendente") {
+      aviso.textContent = "Ainda não criou a conta. Mande a mensagem de convite pra pessoa.";
+      aviso.classList.remove("hidden");
+      botao("Copiar convite", () => copiarTexto(mensagemDeConvite(u.nome, u.email)));
+    }
+    botao(outroNivel === "Dono" ? "Dar acesso total" : "Mudar para acesso padrão", () =>
+      executarAcaoUsuario({
+        texto: outroNivel === "Dono"
+          ? `Dar acesso total a ${quem}. ${DICA_DO_NIVEL.Dono}`
+          : `Mudar ${quem} para acesso padrão. ${DICA_DO_NIVEL.Usuario}`,
+        botao: "Confirmar",
+        dados: { usuarioId: u.id, papel: outroNivel },
+      })
+    );
+    if (u.situacao === "pendente") {
+      botao("Cancelar convite", () =>
+        executarAcaoUsuario({
+          texto: `Cancelar o convite de ${quem}. O e-mail ${u.email} deixa de poder criar conta.`,
+          botao: "Cancelar convite",
+          perigo: true,
+          dados: { usuarioId: u.id, acao: "cancelar_convite" },
+        }), "botao-perigo");
+    } else if (u.situacao === "ativa") {
+      botao("Desativar conta", () =>
+        executarAcaoUsuario({
+          texto: `Desativar a conta de ${quem}. A pessoa sai de todos os aparelhos e não consegue mais entrar, até você reativar.`,
+          botao: "Desativar",
+          perigo: true,
+          dados: { usuarioId: u.id, ativo: "false" },
+        }), "botao-perigo");
+    } else {
+      botao("Reativar conta", () =>
+        executarAcaoUsuario({
+          texto: `Reativar a conta de ${quem}. A pessoa volta a conseguir entrar com a senha dela.`,
+          botao: "Reativar",
+          dados: { usuarioId: u.id, ativo: "true" },
+        }));
+    }
+  }
+
+  if (u.historico) {
+    linha.querySelector(".usuario-historico-texto").textContent = u.historico;
+    linha.querySelector(".usuario-historico").classList.remove("hidden");
+  }
+
+  linha.querySelector(".despesa-resumo").addEventListener("click", () => {
+    const abrindo = detalhe.classList.contains("hidden");
+    listaUsuariosBox.querySelectorAll(".usuario-item").forEach((outra) => {
+      outra.classList.remove("aberta");
+      outra.querySelector(".usuario-detalhe").classList.add("hidden");
+    });
+    detalhe.classList.toggle("hidden", !abrindo);
+    linha.classList.toggle("aberta", abrindo);
+  });
+
+  return linha;
+}
+
+async function executarAcaoUsuario({ texto, botao, perigo, dados }) {
+  const resposta = await confirmarComSenha({
+    texto,
+    botao,
+    perigo,
+    executar: (senha) => pedirAoN8n("gerenciar-usuario", { ...dados, senhaConfirmacao: senha }),
+  });
+  if (!resposta) return;
+  await carregarUsuarios();
+  mostrarUsuariosStatus("ok", resposta.mensagem || "Alteração salva.");
+}
+
+// Convite
+
+function mostrarConviteStatus(tipo, mensagem) {
+  const el = document.getElementById("convite-status");
+  el.textContent = mensagem;
+  el.className = mensagem ? `status show ${tipo}` : "status";
+}
+
+function atualizarDicaDoConvite() {
+  document.getElementById("convite-papel-dica").textContent = DICA_DO_NIVEL[conviteCampos.papel.value];
+}
+
+function abrirConvite() {
+  convitePronto.classList.add("hidden");
+  formConvite.classList.remove("hidden");
+  document.getElementById("usuarios-convidar").classList.add("hidden");
+  atualizarDicaDoConvite();
+  conviteCampos.nome.focus();
+}
+
+function fecharConvite() {
+  formConvite.classList.add("hidden");
+  document.getElementById("usuarios-convidar").classList.remove("hidden");
+  conviteCampos.nome.value = "";
+  conviteCampos.email.value = "";
+  conviteCampos.papel.value = "Usuario";
+  mostrarConviteStatus("", "");
+}
+
+document.getElementById("usuarios-convidar").addEventListener("click", abrirConvite);
+document.getElementById("convite-cancelar").addEventListener("click", fecharConvite);
+conviteCampos.papel.addEventListener("change", atualizarDicaDoConvite);
+document.getElementById("usuarios-atualizar").addEventListener("click", carregarUsuarios);
+
+formConvite.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const nome = conviteCampos.nome.value.trim().replace(/\s+/g, " ");
+  const email = conviteCampos.email.value.trim().toLowerCase();
+  const papel = conviteCampos.papel.value;
+  if (nome.length < 2) {
+    mostrarConviteStatus("error", "Digite o nome da pessoa.");
+    conviteCampos.nome.focus();
+    return;
+  }
+  if (!pareceEmail(email)) {
+    mostrarConviteStatus("error", "Digite um e-mail válido.");
+    conviteCampos.email.focus();
+    return;
+  }
+  mostrarConviteStatus("", "");
+
+  const resposta = await confirmarComSenha({
+    texto: `Convidar ${nome} (${email}) com ${NOME_DO_NIVEL[papel].toLowerCase()}.`,
+    botao: "Convidar",
+    executar: (senha) => pedirAoN8n("convidar-usuario", { nome, email, papel, senhaConfirmacao: senha }),
+  });
+  if (!resposta) return;
+
+  fecharConvite();
+  document.getElementById("convite-pronto-texto").textContent = `Convite criado para ${nome}.`;
+  document.getElementById("convite-pronto-mensagem").textContent = mensagemDeConvite(nome, email);
+  convitePronto.classList.remove("hidden");
+  carregarUsuarios();
+});
+
+document.getElementById("convite-copiar").addEventListener("click", () =>
+  copiarTexto(document.getElementById("convite-pronto-mensagem").textContent)
+);
+document.getElementById("convite-fechar").addEventListener("click", () => convitePronto.classList.add("hidden"));
+
+// Lista sempre fresca ao abrir: é pequena, e pode ter mudado em outro aparelho.
+document.getElementById("menu-usuarios").addEventListener("click", carregarUsuarios);
+
+function limparUsuarios() {
+  usuarios = [];
+  listaUsuariosBox.innerHTML = "";
+  mostrarUsuariosStatus("neutral", "");
+  fecharConvite();
+  convitePronto.classList.add("hidden");
+  document.getElementById("convite-pronto-mensagem").textContent = "";
+}
 
 // ----- Botão voltar do celular -----
 

@@ -81,6 +81,7 @@
         </div>
       </div>
       <button type="button" class="sidebar-item" data-page="agenda">Agenda</button>
+      <button type="button" class="sidebar-item hidden" data-page="usuarios" id="menu-usuarios">Usuários</button>
 
       <div class="sidebar-rodape">
         <p id="usuario-conectado" class="usuario-conectado hidden"></p>
@@ -1548,8 +1549,91 @@
           </div>
         </div>
       </div>
+
+      <!-- Usuários: só aparece no menu pra quem entrou por e-mail com acesso
+           total. Toda ação aqui pede a senha da própria conta de novo. -->
+      <div id="page-usuarios" class="card page hidden">
+        <h1>Usuários</h1>
+        <p class="subtitle">Quem pode entrar no sistema, e com qual nível de acesso.</p>
+
+        <div class="usuarios-acoes">
+          <button type="button" id="usuarios-convidar" class="botao-secundario">+ Convidar pessoa</button>
+          <button type="button" id="usuarios-atualizar" class="botao-secundario" title="Busca a lista de novo no servidor.">Atualizar</button>
+        </div>
+
+        <form id="form-convite" class="hidden bloco-cartao" novalidate>
+          <h2 class="titulo-bloco">Convidar pessoa</h2>
+          <label for="convite-nome">Nome</label>
+          <input type="text" id="convite-nome" autocomplete="off" maxlength="80" placeholder="Nome da pessoa" />
+
+          <label for="convite-email">E-mail</label>
+          <input type="text" id="convite-email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="pessoa@exemplo.com.br" />
+
+          <label for="convite-papel">Nível de acesso</label>
+          <select id="convite-papel">
+            <option value="Usuario">Acesso padrão</option>
+            <option value="Dono">Acesso total</option>
+          </select>
+          <p id="convite-papel-dica" class="doc-hint neutral"></p>
+
+          <button type="submit" id="convite-continuar">Continuar</button>
+          <button type="button" id="convite-cancelar" class="botao-secundario">Cancelar</button>
+          <div id="convite-status" class="status"></div>
+        </form>
+
+        <!-- Convite criado: a pessoa não recebe nada sozinha -- o dono manda a
+             mensagem pelo canal que preferir. -->
+        <div id="convite-pronto" class="convite-pronto hidden" role="status">
+          <p id="convite-pronto-texto" class="convite-pronto-texto"></p>
+          <p class="convite-pronto-dica">Mande esta mensagem pra pessoa (WhatsApp, e-mail…):</p>
+          <p id="convite-pronto-mensagem" class="convite-mensagem"></p>
+          <div class="usuarios-acoes">
+            <button type="button" id="convite-copiar">Copiar mensagem</button>
+            <button type="button" id="convite-fechar" class="botao-secundario">Fechar</button>
+          </div>
+        </div>
+
+        <p id="usuarios-status" class="doc-hint"></p>
+        <div id="lista-usuarios" class="grade-responsiva"></div>
+
+        <template id="modelo-usuario">
+          <div class="despesa usuario-item">
+            <button type="button" class="despesa-resumo">
+              <span class="despesa-topo">
+                <span class="despesa-descricao usuario-nome"></span>
+                <span class="usuario-nivel"></span>
+              </span>
+              <span class="despesa-extra usuario-extra"></span>
+            </button>
+            <div class="usuario-detalhe hidden">
+              <p class="usuario-aviso hidden"></p>
+              <div class="despesa-acoes usuario-botoes"></div>
+              <details class="usuario-historico hidden">
+                <summary>Histórico</summary>
+                <p class="usuario-historico-texto"></p>
+              </details>
+            </div>
+          </div>
+        </template>
+      </div>
     </main>
   </div>
+
+  <!-- Confirmação com a própria senha: convidar, mudar nível, desativar e
+       cancelar convite passam por aqui (o n8n confere, nunca a tela). -->
+  <dialog id="confirmar-senha" class="dialogo" aria-labelledby="confirmar-senha-titulo">
+    <form id="confirmar-senha-form" novalidate>
+      <h2 id="confirmar-senha-titulo" class="dialogo-titulo">Confirme com a sua senha</h2>
+      <p id="confirmar-senha-texto" class="dialogo-texto"></p>
+      <label for="confirmar-senha-campo">Sua senha</label>
+      <input type="password" id="confirmar-senha-campo" autocomplete="current-password" />
+      <p id="confirmar-senha-erro" class="doc-hint error" role="alert"></p>
+      <div class="dialogo-botoes">
+        <button type="button" id="confirmar-senha-cancelar" class="botao-secundario">Voltar</button>
+        <button type="submit" id="confirmar-senha-ok">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
 
   <div id="toast" class="toast" aria-live="polite"></div>
 
