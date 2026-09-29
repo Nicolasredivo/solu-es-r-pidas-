@@ -22,11 +22,28 @@ const CHAVE_SENHA = "senha_salva";
 // certo" visível -- ex: criar um chamado. Some sozinha, não trava nada.
 const toastEl = document.getElementById("toast");
 let toastTimer = null;
-function mostrarToast(mensagem) {
+// `acao` ({ rotulo, aoClicar }) põe um botão no aviso -- ex: "Desfazer" -- e
+// deixa ele mais tempo na tela, pra dar tempo de tocar. `tipo` "erro" pinta
+// de vermelho (o normal é verde, de confirmação).
+function mostrarToast(mensagem, acao, tipo) {
   toastEl.textContent = mensagem;
+  toastEl.classList.toggle("com-acao", Boolean(acao));
+  toastEl.classList.toggle("erro", tipo === "erro");
+  if (acao) {
+    const botao = document.createElement("button");
+    botao.type = "button";
+    botao.className = "toast-acao";
+    botao.textContent = acao.rotulo;
+    botao.addEventListener("click", () => {
+      clearTimeout(toastTimer);
+      toastEl.classList.remove("show");
+      acao.aoClicar();
+    }, { once: true });
+    toastEl.appendChild(botao);
+  }
   toastEl.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2200);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), acao ? 7000 : tipo === "erro" ? 4500 : 2200);
 }
 
 // ----- Rede de segurança pra erro que ninguém previu -----
@@ -66,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.28d";
+const APP_VERSION = "2026.09.28e";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -5593,7 +5610,11 @@ function montarCardChamado(c, comData, termos = []) {
   // sentido os botões de novo pra quem já chegou num dos dois.
   const jaCancelado = c.status === "Cancelado";
   const jaConcluido = c.status === "Concluído";
-  const podeAgir = !jaCancelado && !jaConcluido;
+  // Em andamento: concluir/cancelar/orçamento ficam pro fim do atendimento,
+  // na aba Atendimento -- aqui só abre ele.
+  const emAndamento = c.status === "Em andamento";
+  const podeAgir = !jaCancelado && !jaConcluido && !emAndamento;
+  const podeIniciar = comData && podeIniciarAtendimento(c);
 
   // Orçamento é o mesmo registro, só com um campo de tipo a mais -- em
   // branco conta como Atendimento (chamado de antes deste campo existir).
@@ -5631,6 +5652,8 @@ function montarCardChamado(c, comData, termos = []) {
     ${orcamentoTexto}
     ${criadoTexto}
     <div class="chamado-card-acoes">
+      ${emAndamento ? `<button type="button" class="botao-abrir-atendimento">▶ Abrir atendimento</button>` : ""}
+      ${podeIniciar ? `<button type="button" class="botao-iniciar-atendimento">${escapeHtml(rotuloIniciarAtendimento(c))}</button>` : ""}
       <button type="button" class="botao-secundario botao-editar-chamado">Editar</button>
       ${ehOrcamento && podeAgir ? `<button type="button" class="botao-secundario botao-finalizar-orcamento">${orcamentoPronto ? "Editar orçamento" : "Finalizar orçamento"}</button>` : ""}
       ${ehOrcamento && podeAgir && orcamentoPronto ? `<button type="button" class="botao-secundario botao-transformar-atendimento">Transformar em atendimento</button>` : ""}
@@ -5640,6 +5663,11 @@ function montarCardChamado(c, comData, termos = []) {
   `;
 
   card.querySelector(".botao-editar-chamado").addEventListener("click", () => abrirEdicaoChamado(c));
+
+  const abrirAtendimentoBotao = card.querySelector(".botao-abrir-atendimento");
+  if (abrirAtendimentoBotao) abrirAtendimentoBotao.addEventListener("click", () => abrirAtendimentoDoChamado(c.id));
+  const iniciarBotao = card.querySelector(".botao-iniciar-atendimento");
+  if (iniciarBotao) iniciarBotao.addEventListener("click", () => iniciarAtendimento(c));
 
   const finalizarBotao = card.querySelector(".botao-finalizar-orcamento");
   if (finalizarBotao) finalizarBotao.addEventListener("click", () => abrirFinalizarOrcamento(c));
@@ -6628,6 +6656,9 @@ function agendaAoMover(evento) {
   if (!a.ativo) {
     const dist = Math.abs(evento.clientX - a.pegouEm.x) + Math.abs(evento.clientY - a.pegouEm.y);
     if (dist < AGENDA_ARRASTE_MINIMO_PX) return;
+    // Em andamento já está acontecendo: não muda de horário nem de dia.
+    // Soltar vira um clique normal (abre o menu, com "Abrir atendimento").
+    if (a.chamado.status === "Em andamento") return;
     agendaAtivarArraste();
   }
   evento.preventDefault();
@@ -6675,7 +6706,10 @@ function agendaAvaliarAlvoSobPonteiro() {
   // Trocar horários só depois de segurar de propósito quase um segundo em
   // cima do outro bloco -- passar por cima correndo não pode fazer nada.
   const blocoEl = achar(".agenda-bloco");
-  const outroId = blocoEl && blocoEl.dataset.id !== a.chamado.id ? blocoEl.dataset.id : null;
+  const outroCandidato = blocoEl && blocoEl.dataset.id !== a.chamado.id ? blocoEl.dataset.id : null;
+  // Trocar de lugar com um chamado em andamento o tiraria do horário dele.
+  const outroChamado = outroCandidato ? agendaAcharChamado(outroCandidato) : null;
+  const outroId = outroChamado && outroChamado.status === "Em andamento" ? null : outroCandidato;
   if (a.tipo === "mover" && a.iniOriginal && a.fimOriginal && outroId) {
     if (a.trocaAlvo !== outroId) { a.trocaAlvo = outroId; a.trocaDesde = Date.now(); }
     a.trocaPronta = Date.now() - a.trocaDesde > AGENDA_ESPERA_TROCA_MS;
@@ -6890,6 +6924,21 @@ function agendaAbrirMenu(c, x, y) {
     agendaMenuEl.appendChild(b);
   };
 
+  // Acontecendo agora: horário, confirmação, concluir e cancelar ficam pro
+  // fim do atendimento -- mexer nisso aqui deixaria a visita pendurada.
+  if (c.status === "Em andamento") {
+    opcao("▶ Abrir atendimento", () => abrirAtendimentoDoChamado(c.id), "agenda-menu-principal");
+    opcao("Editar chamado", () => {
+      const item = document.querySelector('.sidebar-item[data-page="consultar-chamados"]');
+      if (item) item.click();
+      abrirEdicaoChamado(c);
+    });
+    return agendaPosicionarMenu(x, y);
+  }
+  if (podeIniciarAtendimento(c)) {
+    opcao(rotuloIniciarAtendimento(c), () => iniciarAtendimento(c), "agenda-menu-principal");
+  }
+
   if (agendado && c.reservadoFim) {
     opcao(confirmado ? "Voltar pra aguardando confirmação" : "Confirmar data", () => {
       const antes = agendaEstado(c);
@@ -6919,6 +6968,10 @@ function agendaAbrirMenu(c, x, y) {
     cancelarChamado(c.id, null);
   }, "botao-perigo");
 
+  agendaPosicionarMenu(x, y);
+}
+
+function agendaPosicionarMenu(x, y) {
   agendaMenuEl.classList.remove("hidden");
   const larg = agendaMenuEl.offsetWidth, alt = agendaMenuEl.offsetHeight;
   agendaMenuEl.style.left = `${Math.min(x, window.innerWidth - larg - 10)}px`;
@@ -7229,6 +7282,9 @@ async function carregarChamados() {
   desenharAgenda();
   lembreteAtualizar();
   mostrarChamadosListaStatus("neutral", "");
+  // Quais estão sendo atendidos agora: depende dos chamados já carregados
+  // (a visita só conta se o chamado estiver mesmo "Em andamento").
+  carregarAtendimentos();
 }
 
 recarregarChamadosBotao.addEventListener("click", carregarChamados);
@@ -7348,18 +7404,34 @@ function lembreteDesenhar() {
   lembretePillContagemEl.textContent = String(lembreteAtivos.length);
   lembreteListaEl.innerHTML = "";
   lembreteAtivos.forEach((item) => {
-    const el = document.createElement(item.chamado ? "button" : "p");
+    const el = document.createElement(item.chamado ? "div" : "p");
     el.className = `lembrete-item ${item.classe}`;
-    if (item.chamado) el.type = "button";
-    el.textContent = item.texto;
-    if (item.chamado) {
-      // Pula direto pro chamado na Agenda -- reaproveita o clique do menu
-      // lateral (troca de página + agendaAoAbrir()) e depois centraliza nele.
-      el.addEventListener("click", () => {
-        const itemMenu = document.querySelector('.sidebar-item[data-page="agenda"]');
-        if (itemMenu) itemMenu.click();
-        agendaPularPara(item.chamado);
-      });
+    if (!item.chamado) {
+      el.textContent = item.texto;
+      lembreteListaEl.appendChild(el);
+      return;
+    }
+    // O texto pula direto pro chamado na Agenda -- reaproveita o clique do
+    // menu lateral (troca de página + agendaAoAbrir()) e depois centraliza nele.
+    const texto = document.createElement("button");
+    texto.type = "button";
+    texto.className = "lembrete-texto";
+    texto.textContent = item.texto;
+    texto.addEventListener("click", () => {
+      const itemMenu = document.querySelector('.sidebar-item[data-page="agenda"]');
+      if (itemMenu) itemMenu.click();
+      agendaPularPara(item.chamado);
+    });
+    el.appendChild(texto);
+    // "Chegando" e "atrasado" aparecem justo na hora de começar: atalho.
+    if (podeIniciarAtendimento(item.chamado)) {
+      const iniciar = document.createElement("button");
+      iniciar.type = "button";
+      iniciar.className = "lembrete-iniciar";
+      iniciar.textContent = "▶ Iniciar";
+      iniciar.title = rotuloIniciarAtendimento(item.chamado).replace("▶ ", "");
+      iniciar.addEventListener("click", () => iniciarAtendimento(item.chamado));
+      el.appendChild(iniciar);
     }
     lembreteListaEl.appendChild(el);
   });
@@ -7771,6 +7843,8 @@ sairBotao.addEventListener("click", () => {
 
   // Usuários: a lista de pessoas não fica na tela nem em memória.
   limparUsuarios();
+  // Atendimentos e rascunhos do que estava sendo escrito também saem.
+  limparAtendimentos();
 
   desarmarSaida();
   closeSidebar();
@@ -7782,6 +7856,396 @@ sairBotao.addEventListener("click", () => {
   gateView.classList.remove("hidden");
   statusBox.className = "status";
 });
+
+// ----- Atendimento (fase 1: iniciar, acompanhar, concluir) -----
+//
+// Cada ida ao local é uma Visita (tabela própria no Airtable), ligada ao
+// chamado. Iniciar deixa o chamado "Em andamento" e abre a aba Atendimento;
+// concluir fecha a visita e, num atendimento, conclui o chamado -- numa visita
+// de orçamento, o chamado volta pra fila até o orçamento ser enviado. Tudo
+// pelo webhook "atendimento" (ver CONTEXTO.md, 28/09/2026).
+
+const atendimentoConteudo = document.getElementById("atendimento-conteudo");
+const faixaAtendimento = document.getElementById("faixa-atendimento");
+const menuAtendimentoContagem = document.getElementById("menu-atendimento-contagem");
+const CHAVE_RASCUNHO_ATENDIMENTO = "atendimento_rascunho:";
+let atendimentos = []; // visitas "Em andamento": { id, chamadoId, inicioReal, iniciadoPor }
+let atendimentoAbertoId = "";
+let iniciandoAtendimento = false;
+
+function podeIniciarAtendimento(c) {
+  return Boolean(c && c.reservadoInicio
+    && (c.status === "Agendado" || c.status === "Aguardando confirmação de data"));
+}
+
+// Data ainda não confirmada não bloqueia: o mesmo toque confirma e inicia
+// (acontece de esquecer de confirmar antes de ir).
+function rotuloIniciarAtendimento(c) {
+  if (c.status !== "Agendado") return "▶ Confirmar e iniciar";
+  return c.tipoChamado === "Orçamento" ? "▶ Iniciar visita" : "▶ Iniciar atendimento";
+}
+
+function chamadoPorId(id) {
+  return chamadosComData.find((c) => c.id === id) || chamadosSemData.find((c) => c.id === id) || null;
+}
+
+// Só conta visita cujo chamado está mesmo em andamento: uma visita que
+// sobrou de uma falha no meio do caminho não aparece como atendimento.
+function atendimentosValidos() {
+  return atendimentos.filter((v) => {
+    const c = chamadoPorId(v.chamadoId);
+    return c && c.status === "Em andamento";
+  });
+}
+
+function tempoDecorrido(iso) {
+  const min = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h} h ${String(m).padStart(2, "0")} min` : `${h} h`;
+}
+
+function digitosComDdi(numero) {
+  const d = String(numero || "").replace(/\D/g, "");
+  if (!d) return "";
+  return d.length <= 11 ? "55" + d : d;
+}
+
+async function carregarAtendimentos() {
+  try {
+    const resposta = await pedirAoN8n("atendimento", { acao: "listar" });
+    if (!resposta || !resposta.ok) return;
+    atendimentos = resposta.visitas || [];
+    atualizarAtendimentoNaTela();
+  } catch (err) {
+    // Silencioso: sem isso a faixa só não aparece; o resto do app segue.
+  }
+}
+
+function atendimentoNaTela() {
+  return !document.getElementById("page-atendimento").classList.contains("hidden");
+}
+
+function atualizarFaixaAtendimento() {
+  const validos = atendimentosValidos();
+  menuAtendimentoContagem.textContent = String(validos.length);
+  menuAtendimentoContagem.classList.toggle("hidden", !validos.length);
+  faixaAtendimento.classList.toggle("hidden", !validos.length || atendimentoNaTela());
+  if (!validos.length) return;
+  if (validos.length === 1) {
+    const c = chamadoPorId(validos[0].chamadoId);
+    faixaAtendimento.textContent =
+      `▶ Em atendimento: #${c.numero} ${c.clienteNome || ""} · há ${tempoDecorrido(validos[0].inicioReal)}`;
+  } else {
+    faixaAtendimento.textContent = `▶ ${validos.length} atendimentos em andamento`;
+  }
+}
+
+function atualizarAtendimentoNaTela() {
+  atualizarFaixaAtendimento();
+  if (atendimentoNaTela()) desenharAtendimento();
+}
+
+// O relógio anda sozinho; só o texto do tempo muda, nunca o formulário (senão
+// apagaria o que a pessoa está digitando).
+function atualizarTemposAtendimento() {
+  document.querySelectorAll("[data-tempo-desde]").forEach((el) => {
+    el.textContent = tempoDecorrido(el.dataset.tempoDesde);
+  });
+  atualizarFaixaAtendimento();
+}
+setInterval(atualizarTemposAtendimento, 30000);
+
+function redesenharDepoisDoAtendimento() {
+  desenharListaChamados();
+  if (chamadosPaginaCarregada) agendaRedesenhar();
+  lembreteAtualizar();
+  atualizarFaixaAtendimento();
+}
+
+async function iniciarAtendimento(c) {
+  if (iniciandoAtendimento || !podeIniciarAtendimento(c)) return;
+  const hoje = agDataStr(agDia(agAgora()));
+  const diaMarcado = agDataStr(agDia(agDeIso(c.reservadoInicio)));
+  if (diaMarcado !== hoje && !confirm(
+    `O Chamado #${c.numero} está marcado pra ${new Date(c.reservadoInicio).toLocaleDateString("pt-BR")}, não pra hoje. Iniciar agora mesmo assim?`
+  )) return;
+
+  iniciandoAtendimento = true;
+  mostrarToast(`Iniciando o Chamado #${c.numero}...`);
+  let resposta;
+  try {
+    resposta = await pedirAoN8n("atendimento", {
+      acao: "iniciar", chamadoId: c.id, confirmarData: c.status === "Agendado" ? "" : "true",
+    });
+  } catch (err) {
+    resposta = null;
+  } finally {
+    iniciandoAtendimento = false;
+  }
+  if (!resposta || !resposta.ok || !resposta.visita) {
+    mostrarToast((resposta && resposta.mensagem) || "Não foi possível falar com o n8n.", null, "erro");
+    return;
+  }
+
+  const visita = resposta.visita;
+  c.status = "Em andamento";
+  atendimentos = atendimentos.filter((v) => v.id !== visita.id).concat(visita);
+  redesenharDepoisDoAtendimento();
+  abrirAtendimento(visita.id);
+  // Sem pergunta antes de iniciar: o "Desfazer" cobre o toque errado.
+  mostrarToast(`Chamado #${c.numero} em andamento.`, {
+    rotulo: "Desfazer",
+    aoClicar: () => desfazerInicioAtendimento(visita.id),
+  });
+}
+
+async function desfazerInicioAtendimento(visitaId) {
+  const visita = atendimentos.find((v) => v.id === visitaId);
+  let resposta;
+  try {
+    resposta = await pedirAoN8n("atendimento", { acao: "desfazer", visitaId });
+  } catch (err) {
+    resposta = null;
+  }
+  if (!resposta || !resposta.ok) {
+    mostrarToast((resposta && resposta.mensagem) || "Não consegui desfazer.", null, "erro");
+    return;
+  }
+  atendimentos = atendimentos.filter((v) => v.id !== visitaId);
+  apagarRascunhoAtendimento(visitaId);
+  const c = visita && chamadoPorId(visita.chamadoId);
+  if (c && c.status === "Em andamento") c.status = "Agendado";
+  redesenharDepoisDoAtendimento();
+  // Desfazer devolve pra onde a pessoa estava: a Agenda.
+  if (atendimentoNaTela() && !atendimentosValidos().length) {
+    const agenda = document.querySelector('.sidebar-item[data-page="agenda"]');
+    if (agenda) agenda.click();
+  } else if (atendimentoNaTela()) {
+    desenharAtendimento();
+  }
+  mostrarToast("Início desfeito.");
+}
+
+function abrirAtendimento(visitaId) {
+  atendimentoAbertoId = visitaId;
+  const item = document.querySelector('.sidebar-item[data-page="atendimento"]');
+  if (item) item.click();
+}
+
+async function abrirAtendimentoDoChamado(chamadoId) {
+  let visita = atendimentos.find((v) => v.chamadoId === chamadoId);
+  if (!visita) {
+    await carregarAtendimentos();
+    visita = atendimentos.find((v) => v.chamadoId === chamadoId);
+  }
+  if (!visita) {
+    mostrarToast("Não achei o atendimento desse chamado. Toque em Atualizar na Agenda.", null, "erro");
+    return;
+  }
+  abrirAtendimento(visita.id);
+}
+
+// Rascunho do que a pessoa está escrevendo, por visita: sobrevive a trocar
+// de aba, a um recarregar e ao sinal que cai no meio do serviço.
+function lerRascunhoAtendimento(visitaId) {
+  try {
+    return JSON.parse(localStorage.getItem(CHAVE_RASCUNHO_ATENDIMENTO + visitaId)) || {};
+  } catch (err) {
+    return {};
+  }
+}
+
+function guardarRascunhoAtendimento(visitaId, rascunho) {
+  try {
+    localStorage.setItem(CHAVE_RASCUNHO_ATENDIMENTO + visitaId, JSON.stringify(rascunho));
+  } catch (err) {
+    /* sem onde guardar: só não sobrevive a um recarregar */
+  }
+}
+
+function apagarRascunhoAtendimento(visitaId) {
+  try {
+    localStorage.removeItem(CHAVE_RASCUNHO_ATENDIMENTO + visitaId);
+  } catch (err) {
+    /* nada a fazer */
+  }
+}
+
+function desenharAtendimento() {
+  const validos = atendimentosValidos();
+  if (!validos.length) {
+    atendimentoConteudo.innerHTML = `
+      <p class="subtitle">Nenhum atendimento em andamento.</p>
+      <p class="placeholder-text">Pra começar, toque no chamado na Agenda e em <strong>▶ Iniciar atendimento</strong>.</p>
+      <button type="button" class="botao-secundario atendimento-ir-agenda">Ir pra Agenda</button>`;
+    atendimentoConteudo.querySelector(".atendimento-ir-agenda").addEventListener("click", () => {
+      const agenda = document.querySelector('.sidebar-item[data-page="agenda"]');
+      if (agenda) agenda.click();
+    });
+    return;
+  }
+
+  if (!validos.some((v) => v.id === atendimentoAbertoId)) atendimentoAbertoId = validos[0].id;
+  const v = validos.find((x) => x.id === atendimentoAbertoId);
+  const c = chamadoPorId(v.chamadoId);
+  const orcamento = c.tipoChamado === "Orçamento";
+
+  const abas = validos.length > 1
+    ? `<div class="atendimento-abas">${validos.map((x) => {
+        const cx = chamadoPorId(x.chamadoId);
+        return `<button type="button" class="atendimento-aba${x.id === v.id ? " ativa" : ""}" data-visita="${escapeHtml(x.id)}">` +
+          `#${escapeHtml(String(cx.numero))} · ${escapeHtml(cx.clienteNome || "")}</button>`;
+      }).join("")}</div>`
+    : "";
+
+  const telefone = digitosComDdi(c.contatoWhatsApp);
+  const mapa = c.enderecoCopia
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.enderecoCopia)}`
+    : "";
+  const atalhos = [
+    mapa ? `<a class="atalho" href="${escapeHtml(mapa)}" target="_blank" rel="noopener">📍 Abrir no mapa</a>` : "",
+    telefone ? `<a class="atalho" href="https://wa.me/${telefone}" target="_blank" rel="noopener">💬 WhatsApp</a>` : "",
+    telefone ? `<a class="atalho" href="tel:+${telefone}">📞 Ligar</a>` : "",
+  ].join("");
+  const anexos = (c.anexos || []).map((a) =>
+    `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${escapeHtml(a.filename)}</a>`).join("<br>");
+
+  atendimentoConteudo.innerHTML = `
+    ${abas}
+    <div class="atendimento-topo">
+      <div class="atendimento-topo-linha">
+        <span class="chamado-numero">#${escapeHtml(String(c.numero))}</span>
+        ${orcamento ? `<span class="chamado-tipo-badge">Visita de orçamento</span>` : ""}
+      </div>
+      <p class="atendimento-tempo"><span class="atendimento-ponto" aria-hidden="true"></span>Em andamento há
+        <strong data-tempo-desde="${escapeHtml(v.inicioReal)}">${tempoDecorrido(v.inicioReal)}</strong></p>
+      <p class="doc-hint neutral">Iniciado às ${formatarHoraIso(v.inicioReal)}${v.iniciadoPor ? " por " + escapeHtml(v.iniciadoPor) : ""}</p>
+    </div>
+
+    <h2 class="atendimento-cliente">${escapeHtml(c.clienteNome || "Sem nome")}</h2>
+    ${atalhos ? `<div class="atendimento-atalhos">${atalhos}</div>` : ""}
+
+    <dl class="atendimento-dados">
+      <dt>Endereço</dt>
+      <dd>${escapeHtml(c.enderecoCopia || "—")}${c.localExato ? `<span class="atendimento-local">${escapeHtml(c.localExato)}</span>` : ""}</dd>
+      ${c.contatoNome ? `<dt>Contato</dt><dd>${escapeHtml(c.contatoNome)}${c.contatoWhatsApp ? " · " + escapeHtml(c.contatoWhatsApp) : ""}</dd>` : ""}
+      <dt>Pedido</dt>
+      <dd class="atendimento-texto">${escapeHtml(c.descricaoSolicitacao || "—")}</dd>
+      ${c.observacoesServico ? `<dt>Observações internas</dt><dd class="atendimento-texto">${escapeHtml(c.observacoesServico)}</dd>` : ""}
+      ${anexos ? `<dt>Anexos</dt><dd>${anexos}</dd>` : ""}
+    </dl>
+
+    <form class="atendimento-encerrar bloco-cartao" novalidate>
+      <h2 class="titulo-bloco">${orcamento ? "Encerrar visita" : "Concluir atendimento"}</h2>
+      <label for="atendimento-resumo">${orcamento ? "O que foi visto no local" : "O que foi feito"}</label>
+      <textarea id="atendimento-resumo" rows="4"></textarea>
+      <label for="atendimento-recebido">Quem recebeu (opcional)</label>
+      <input type="text" id="atendimento-recebido" autocomplete="off" maxlength="120" placeholder="Nome de quem acompanhou no local" />
+      <button type="submit" class="atendimento-concluir">${orcamento ? "Encerrar visita" : "Concluir atendimento"}</button>
+      ${orcamento ? `<p class="doc-hint neutral">Depois de encerrar, abre o formulário do orçamento pra preencher os valores.</p>` : ""}
+      <div class="status atendimento-status"></div>
+    </form>`;
+
+  atendimentoConteudo.querySelectorAll(".atendimento-aba").forEach((aba) => {
+    aba.addEventListener("click", () => {
+      atendimentoAbertoId = aba.dataset.visita;
+      desenharAtendimento();
+    });
+  });
+
+  const form = atendimentoConteudo.querySelector(".atendimento-encerrar");
+  const campoResumo = form.querySelector("#atendimento-resumo");
+  const campoRecebido = form.querySelector("#atendimento-recebido");
+  const rascunho = lerRascunhoAtendimento(v.id);
+  campoResumo.value = rascunho.resumo || "";
+  campoRecebido.value = rascunho.recebidoPor || "";
+  const guardar = () => guardarRascunhoAtendimento(v.id, { resumo: campoResumo.value, recebidoPor: campoRecebido.value });
+  campoResumo.addEventListener("input", guardar);
+  campoRecebido.addEventListener("input", guardar);
+  form.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+    concluirAtendimento(v, form);
+  });
+}
+
+async function concluirAtendimento(v, form) {
+  const campoResumo = form.querySelector("#atendimento-resumo");
+  const resumo = campoResumo.value.trim();
+  const recebidoPor = form.querySelector("#atendimento-recebido").value.trim();
+  const status = form.querySelector(".atendimento-status");
+  const botao = form.querySelector(".atendimento-concluir");
+  const mostrar = (tipo, texto) => {
+    status.textContent = texto;
+    status.className = `status show ${tipo} atendimento-status`;
+  };
+  if (!resumo) {
+    mostrar("error", "Escreva o que foi feito antes de concluir.");
+    campoResumo.focus();
+    return;
+  }
+
+  botao.disabled = true;
+  mostrar("loading", "Salvando...");
+  let resposta;
+  try {
+    resposta = await pedirAoN8n("atendimento", { acao: "concluir", visitaId: v.id, resumo, recebidoPor });
+  } catch (err) {
+    resposta = null;
+  }
+  if (!resposta || !resposta.ok) {
+    botao.disabled = false;
+    mostrar("error", (resposta && resposta.mensagem) || "Não foi possível falar com o n8n. O texto continua salvo aqui.");
+    return;
+  }
+
+  atendimentos = atendimentos.filter((x) => x.id !== v.id);
+  apagarRascunhoAtendimento(v.id);
+  const c = chamadoPorId(v.chamadoId);
+  if (c) {
+    c.status = resposta.novoStatus || c.status;
+    // Visita de orçamento volta pra fila, sem data (o servidor já tirou).
+    if (resposta.orcamento) {
+      c.reservadoInicio = "";
+      c.reservadoFim = "";
+      chamadosComData = chamadosComData.filter((x) => x.id !== c.id);
+      if (!chamadosSemData.includes(c)) chamadosSemData.push(c);
+    }
+  }
+  redesenharDepoisDoAtendimento();
+  desenharAtendimento();
+
+  if (resposta.orcamento && c) {
+    mostrarToast(`Visita do #${c.numero} encerrada. Agora os valores do orçamento.`);
+    const consultar = document.querySelector('.sidebar-item[data-page="consultar-chamados"]');
+    if (consultar) consultar.click();
+    abrirFinalizarOrcamento(c);
+  } else {
+    mostrarToast(c ? `Chamado #${c.numero} concluído.` : "Atendimento concluído.");
+  }
+  // Confere com o servidor em segundo plano (pega qualquer outra mudança).
+  carregarChamados();
+}
+
+document.getElementById("menu-atendimento").addEventListener("click", desenharAtendimento);
+faixaAtendimento.addEventListener("click", () => {
+  const validos = atendimentosValidos();
+  if (validos.length) abrirAtendimento(atendimentoAbertoId && validos.some((v) => v.id === atendimentoAbertoId) ? atendimentoAbertoId : validos[0].id);
+});
+// A faixa some na própria aba Atendimento e volta nas outras. Este ouvinte
+// roda depois do que troca de página (registrado antes), então já vê a aba nova.
+document.querySelectorAll(".sidebar-item[data-page]").forEach((item) => {
+  item.addEventListener("click", atualizarFaixaAtendimento);
+});
+
+function limparAtendimentos() {
+  atendimentos.forEach((v) => apagarRascunhoAtendimento(v.id));
+  atendimentos = [];
+  atendimentoAbertoId = "";
+  atendimentoConteudo.innerHTML = "";
+  atualizarFaixaAtendimento();
+}
 
 // ----- Confirmar com a própria senha -----
 //

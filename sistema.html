@@ -64,6 +64,10 @@
       </span>
     </div>
 
+    <!-- Atendimento em andamento: visível em qualquer aba, um toque volta pra
+         ele. Some quando a própria aba Atendimento está aberta. -->
+    <button type="button" id="faixa-atendimento" class="faixa-atendimento hidden"></button>
+
     <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
     <nav id="sidebar" class="sidebar">
@@ -81,6 +85,7 @@
         </div>
       </div>
       <button type="button" class="sidebar-item" data-page="agenda">Agenda</button>
+      <button type="button" class="sidebar-item" data-page="atendimento" id="menu-atendimento">Atendimento<span id="menu-atendimento-contagem" class="menu-contagem hidden"></span></button>
       <button type="button" class="sidebar-item hidden" data-page="usuarios" id="menu-usuarios">Usuários</button>
 
       <div class="sidebar-rodape">
@@ -1548,6 +1553,14 @@
             <div id="agenda-lista" class="agenda-lista"></div>
           </div>
         </div>
+      </div>
+
+      <!-- Atendimento: o chamado que está acontecendo agora. Começa pelo
+           "Iniciar" da Agenda, do lembrete ou do cartão; tudo aqui dentro é
+           desenhado pelo app.js (desenharAtendimento). -->
+      <div id="page-atendimento" class="card page hidden">
+        <h1>Atendimento</h1>
+        <div id="atendimento-conteudo"></div>
       </div>
 
       <!-- Usuários: só aparece no menu pra quem entrou por e-mail com acesso

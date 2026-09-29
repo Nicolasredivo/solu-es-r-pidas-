@@ -1,0 +1,1449 @@
+{
+  "name": "App - Atendimento",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "atendimento",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      },
+      "id": "a7e00000-0000-4000-8000-000000000001",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "a7e00000-0000-4000-8000-0000000000ff"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "acesso",
+            "senha": "={{ $json.body.senha }}",
+            "tokenAcesso": "={{ $json.body.tokenAcesso }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "a7e00000-0000-4000-8000-000000000002",
+      "name": "Confere acesso",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a7e00000-0000-4000-8000-000000000003",
+              "leftValue": "={{ $json.permitido }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a7e00000-0000-4000-8000-000000000004",
+      "name": "Acesso permitido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, acessoNegado: true, mensagem: 'Acesso não autorizado. Entre de novo.' } }];"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000005",
+      "name": "Monta acesso negado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const corpo = $('Recebe pedido do app').first().json.body || {};\nconst acesso = $('Confere acesso').first().json;\nconst texto = (v) => String(v ?? '').trim();\nconst id = (v) => (/^rec[A-Za-z0-9]{14}$/.test(texto(v)) ? texto(v) : '');\n\nconst ACOES = ['listar', 'iniciar', 'desfazer', 'concluir'];\nconst acao = ACOES.includes(texto(corpo.acao)) ? texto(corpo.acao) : '';\nconst chamadoId = id(corpo.chamadoId);\nconst visitaId = id(corpo.visitaId);\nconst resumo = texto(corpo.resumo).slice(0, 5000);\n\nlet erro = '';\nif (!acao) erro = 'Ação inválida.';\nelse if (acao === 'iniciar' && !chamadoId) erro = 'Chamado inválido.';\nelse if ((acao === 'desfazer' || acao === 'concluir') && !visitaId) erro = 'Atendimento inválido.';\nelse if (acao === 'concluir' && !resumo) erro = 'Escreva o que foi feito.';\n\nreturn [{\n  json: {\n    acao, chamadoId, visitaId, resumo,\n    recebidoPor: texto(corpo.recebidoPor).slice(0, 120),\n    confirmarData: texto(corpo.confirmarData) === 'true',\n    usuarioId: acesso.usuarioId || '',\n    erro,\n  },\n}];"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000006",
+      "name": "Le entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a7e00000-0000-4000-8000-000000000007",
+              "leftValue": "={{ !$json.erro }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a7e00000-0000-4000-8000-000000000008",
+      "name": "Entrada ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, mensagem: $('Le entrada').first().json.erro } }];"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000009",
+      "name": "Monta erro de entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a7e00000-0000-4000-8000-000000000010",
+              "leftValue": "={{ $('Le entrada').first().json.acao === 'listar' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a7e00000-0000-4000-8000-000000000011",
+      "name": "E listar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblmeNdVfOE9AYptk",
+          "mode": "list",
+          "cachedResultName": "Visitas"
+        },
+        "filterByFormula": "{Situacao}='Em andamento'",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "a7e00000-0000-4000-8000-000000000012",
+      "name": "Busca visitas abertas",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        -600
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const itens = $input.all().map((i) => i.json);\n// Airtable fora do ar não pode parecer \"nenhum atendimento em andamento\".\nif (itens.some((j) => j && j.error)) {\n  return [{ json: { ok: false, mensagem: 'Não foi possível carregar os atendimentos agora.' } }];\n}\nconst visitas = itens\n  .filter((j) => j && j.id)\n  .map((j) => {\n    const f = j.fields || {};\n    return {\n      id: j.id,\n      chamadoId: (f.Chamado || [])[0] || '',\n      inicioReal: f.Inicio_Real || '',\n      iniciadoPor: f.Iniciado_Por || '',\n    };\n  })\n  .filter((v) => v.chamadoId);\nreturn [{ json: { ok: true, visitas } }];"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000013",
+      "name": "Monta lista",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        -600
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "app6PyYmtFduIMp7B",
+          "mode": "list",
+          "cachedResultName": "cadastro"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblucYjrD3SKf1azh",
+          "mode": "list",
+          "cachedResultName": "Usuarios"
+        },
+        "filterByFormula": "={{ $('Le entrada').first().json.usuarioId ? \"RECORD_ID()='\" + $('Le entrada').first().json.usuarioId + \"'\" : 'FALSE()' }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "a7e00000-0000-4000-8000-000000000014",
+      "name": "Busca usuario",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        0
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a7e00000-0000-4000-8000-000000000015",
+              "leftValue": "={{ $('Le entrada').first().json.acao === 'iniciar' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a7e00000-0000-4000-8000-000000000016",
+      "name": "E iniciar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a7e00000-0000-4000-8000-000000000017",
+              "leftValue": "={{ $('Le entrada').first().json.acao === 'desfazer' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a7e00000-0000-4000-8000-000000000018",
+      "name": "E desfazer?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1760,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO/' + $('Le entrada').first().json.chamadoId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "a7e00000-0000-4000-8000-000000000019",
+      "name": "Busca chamado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        -300
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const usuario = $('Busca usuario').first().json;\nconst quem = (usuario && usuario.fields && usuario.fields.Nome) || 'senha de acesso';\nconst agora = new Date().toISOString();\nconst hora = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });\nconst comLinha = (historico, linha) => (historico ? historico + '\\n' : '') + agora + ' -- ' + linha;\nconst recusa = (mensagem) => [{ json: { pode: false, resposta: { ok: false, mensagem } } }];\nconst entrada = $('Le entrada').first().json;\nconst r = $input.first().json;\nif (!r || !r.id) return recusa('Chamado não encontrado.');\nconst f = r.fields || {};\nconst status = f.Status || '';\n\nif (status === 'Em andamento') return recusa('Esse chamado já está em andamento.');\nif (status === 'Concluído' || status === 'Cancelado') return recusa('Esse chamado já está ' + status.toLowerCase() + '.');\nif (!f.Reservado_Inicio) return recusa('Esse chamado ainda não está na agenda.');\n// Só começa com data confirmada -- ou confirmando agora, no mesmo toque.\nif (status !== 'Agendado' && !(status === 'Aguardando confirmação de data' && entrada.confirmarData)) {\n  return recusa('Confirme a data do chamado antes de iniciar.');\n}\n\nconst orcamento = f.Tipo_Chamado === 'Orçamento';\nconst rotulo = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '');\nconst linha = (orcamento ? 'Visita de orçamento iniciada' : 'Atendimento iniciado') + ' por ' + quem\n  + (status !== 'Agendado' ? ' (data confirmada na hora)' : '') + '.';\n\nreturn [{\n  json: {\n    pode: true,\n    chamadoId: r.id,\n    // Pra voltar atrás se a visita não puder ser criada.\n    desfazChamado: { typecast: true, records: [{ id: r.id, fields: { Status: status, Historico: f.Historico || '' } }] },\n    patchChamado: { typecast: true, records: [{ id: r.id, fields: { Status: 'Em andamento', Historico: comLinha(f.Historico, linha) } }] },\n    criaVisita: { typecast: true, records: [{ fields: {\n      Visita: 'Chamado #' + (f.Numero_Chamado || '') + ' — ' + rotulo,\n      Chamado: [r.id], Situacao: 'Em andamento', Inicio_Real: agora, Iniciado_Por: quem,\n    } }] },\n    inicioReal: agora,\n    iniciadoPor: quem,\n  },\n}];"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000020",
+      "name": "Decide inicio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a7e00000-0000-4000-8000-000000000021",
+              "leftValue": "={{ $json.pode }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a7e00000-0000-4000-8000-000000000022",
+      "name": "Pode iniciar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2200,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Decide inicio').first().json.patchChamado) }}"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000023",
+      "name": "Marca chamado em andamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        -400
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.airtable.com/v0/app6PyYmtFduIMp7B/tblmeNdVfOE9AYptk",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Decide inicio').first().json.criaVisita) }}"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000024",
+      "name": "Cria visita",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        -400
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Decide inicio').first().json;\nconst criada = ($input.first().json.records || [])[0] || {};\nreturn [{ json: { ok: true, visita: { id: criada.id, chamadoId: d.chamadoId, inicioReal: d.inicioReal, iniciadoPor: d.iniciadoPor } } }];"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000025",
+      "name": "Monta resposta inicio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        -500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Decide inicio').first().json.desfazChamado) }}"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000026",
+      "name": "Volta chamado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2860,
+        -300
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/tblmeNdVfOE9AYptk/' + $('Le entrada').first().json.visitaId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "a7e00000-0000-4000-8000-000000000027",
+      "name": "Busca visita",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        100
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO/' + ((($json.fields || {}).Chamado || [])[0] || 'recNaoExiste00000') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "a7e00000-0000-4000-8000-000000000028",
+      "name": "Busca chamado da visita",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        100
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const usuario = $('Busca usuario').first().json;\nconst quem = (usuario && usuario.fields && usuario.fields.Nome) || 'senha de acesso';\nconst agora = new Date().toISOString();\nconst hora = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });\nconst comLinha = (historico, linha) => (historico ? historico + '\\n' : '') + agora + ' -- ' + linha;\nconst recusa = (mensagem) => [{ json: { pode: false, resposta: { ok: false, mensagem } } }];\nconst visita = $('Busca visita').first().json;\nconst chamado = $input.first().json;\nconst v = visita.fields || {};\nconst f = chamado.fields || {};\nif (v.Situacao !== 'Em andamento') return recusa('Esse atendimento já foi encerrado.');\n// Desfazer é pra toque errado: vale só logo depois de iniciar.\nif (Date.now() - new Date(v.Inicio_Real).getTime() > 15 * 60 * 1000) {\n  return recusa('Já passou muito tempo pra desfazer. Encerre o atendimento normalmente.');\n}\nconst patch = { typecast: true, records: [{ id: chamado.id, fields: { Historico: comLinha(f.Historico, 'Início desfeito por ' + quem + '.') } }] };\n// Só devolve pra \"Agendado\" se ainda estiver em andamento (ninguém mudou no meio).\nif (f.Status === 'Em andamento') patch.records[0].fields.Status = 'Agendado';\nreturn [{ json: { pode: true, visitaId: visita.id, chamadoId: chamado.id, patchChamado: patch } }];"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000029",
+      "name": "Decide desfazer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a7e00000-0000-4000-8000-000000000030",
+              "leftValue": "={{ $json.pode }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a7e00000-0000-4000-8000-000000000031",
+      "name": "Pode desfazer?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2640,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Decide desfazer').first().json.patchChamado) }}"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000032",
+      "name": "Devolve chamado pra agendado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2860,
+        0
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "={{ 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/tblmeNdVfOE9AYptk/' + $('Decide desfazer').first().json.visitaId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "a7e00000-0000-4000-8000-000000000033",
+      "name": "Apaga visita",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        0
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: true, chamadoId: $('Decide desfazer').first().json.chamadoId } }];"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000034",
+      "name": "Monta resposta desfazer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/tblmeNdVfOE9AYptk/' + $('Le entrada').first().json.visitaId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "a7e00000-0000-4000-8000-000000000035",
+      "name": "Busca visita p/ concluir",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        500
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO/' + ((($json.fields || {}).Chamado || [])[0] || 'recNaoExiste00000') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "a7e00000-0000-4000-8000-000000000036",
+      "name": "Busca chamado p/ concluir",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        500
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const usuario = $('Busca usuario').first().json;\nconst quem = (usuario && usuario.fields && usuario.fields.Nome) || 'senha de acesso';\nconst agora = new Date().toISOString();\nconst hora = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });\nconst comLinha = (historico, linha) => (historico ? historico + '\\n' : '') + agora + ' -- ' + linha;\nconst recusa = (mensagem) => [{ json: { pode: false, resposta: { ok: false, mensagem } } }];\nconst entrada = $('Le entrada').first().json;\nconst visita = $('Busca visita p/ concluir').first().json;\nconst chamado = $input.first().json;\nconst v = visita.fields || {};\nconst f = chamado.fields || {};\nif (v.Situacao !== 'Em andamento') return recusa('Esse atendimento já foi encerrado.');\n\nconst orcamento = f.Tipo_Chamado === 'Orçamento';\nconst periodo = ' (' + hora(v.Inicio_Real) + ' às ' + hora(agora) + ')';\nconst camposChamado = {};\nlet novoStatus = f.Status || '';\nif (f.Status === 'Cancelado') {\n  // Cancelado no meio do caminho: fecha só a visita, não ressuscita o chamado.\n  camposChamado.Historico = comLinha(f.Historico, 'Visita encerrada por ' + quem + periodo + '.');\n} else if (orcamento) {\n  // Visita de orçamento feita: o próximo passo é mandar o preço, e a execução\n  // (se aprovada) ganha agendamento novo. Volta pra fila, sem data.\n  novoStatus = 'Aguardando confirmação de data';\n  Object.assign(camposChamado, {\n    Status: novoStatus, Reservado_Inicio: null, Reservado_Fim: null,\n    Historico: comLinha(f.Historico, 'Visita de orçamento encerrada por ' + quem + periodo + '. Voltou pra fila até o orçamento ser enviado.'),\n  });\n} else {\n  novoStatus = 'Concluído';\n  Object.assign(camposChamado, {\n    Status: novoStatus,\n    Historico: comLinha(f.Historico, 'Atendimento concluído por ' + quem + periodo + '.'),\n  });\n}\n\nreturn [{\n  json: {\n    pode: true,\n    chamadoId: chamado.id,\n    novoStatus,\n    orcamento,\n    patchChamado: { typecast: true, records: [{ id: chamado.id, fields: camposChamado }] },\n    patchVisita: { typecast: true, records: [{ id: visita.id, fields: {\n      Situacao: 'Concluída', Fim_Real: agora, Resumo: entrada.resumo,\n      Recebido_Por: entrada.recebidoPor, Concluido_Por: quem,\n    } }] },\n  },\n}];"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000037",
+      "name": "Decide conclusao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a7e00000-0000-4000-8000-000000000038",
+              "leftValue": "={{ $json.pode }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a7e00000-0000-4000-8000-000000000039",
+      "name": "Pode concluir?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2640,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Decide conclusao').first().json.patchChamado) }}"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000040",
+      "name": "Grava chamado concluido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2860,
+        400
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://api.airtable.com/v0/app6PyYmtFduIMp7B/tblmeNdVfOE9AYptk",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Decide conclusao').first().json.patchVisita) }}"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000041",
+      "name": "Grava visita concluida",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        400
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Decide conclusao').first().json;\nreturn [{ json: { ok: true, chamadoId: d.chamadoId, novoStatus: d.novoStatus, orcamento: d.orcamento } }];"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000042",
+      "name": "Monta resposta conclusao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $input.first().json.resposta }];"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000043",
+      "name": "Monta recusa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, mensagem: 'Não foi possível salvar agora. Tente de novo em instantes.' } }];"
+      },
+      "id": "a7e00000-0000-4000-8000-000000000044",
+      "name": "Monta falha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "a7e00000-0000-4000-8000-000000000045",
+      "name": "Responde",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3560,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Confere acesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere acesso": {
+      "main": [
+        [
+          {
+            "node": "Acesso permitido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acesso permitido?": {
+      "main": [
+        [
+          {
+            "node": "Le entrada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta acesso negado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le entrada": {
+      "main": [
+        [
+          {
+            "node": "Entrada ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada ok?": {
+      "main": [
+        [
+          {
+            "node": "E listar?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta erro de entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E listar?": {
+      "main": [
+        [
+          {
+            "node": "Busca visitas abertas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Busca usuario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca visitas abertas": {
+      "main": [
+        [
+          {
+            "node": "Monta lista",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca usuario": {
+      "main": [
+        [
+          {
+            "node": "E iniciar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E iniciar?": {
+      "main": [
+        [
+          {
+            "node": "Busca chamado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "E desfazer?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E desfazer?": {
+      "main": [
+        [
+          {
+            "node": "Busca visita",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Busca visita p/ concluir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca chamado": {
+      "main": [
+        [
+          {
+            "node": "Decide inicio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide inicio": {
+      "main": [
+        [
+          {
+            "node": "Pode iniciar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pode iniciar?": {
+      "main": [
+        [
+          {
+            "node": "Marca chamado em andamento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta recusa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marca chamado em andamento": {
+      "main": [
+        [
+          {
+            "node": "Cria visita",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cria visita": {
+      "main": [
+        [
+          {
+            "node": "Monta resposta inicio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Volta chamado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Volta chamado": {
+      "main": [
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca visita": {
+      "main": [
+        [
+          {
+            "node": "Busca chamado da visita",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca chamado da visita": {
+      "main": [
+        [
+          {
+            "node": "Decide desfazer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide desfazer": {
+      "main": [
+        [
+          {
+            "node": "Pode desfazer?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pode desfazer?": {
+      "main": [
+        [
+          {
+            "node": "Devolve chamado pra agendado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta recusa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Devolve chamado pra agendado": {
+      "main": [
+        [
+          {
+            "node": "Apaga visita",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apaga visita": {
+      "main": [
+        [
+          {
+            "node": "Monta resposta desfazer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca visita p/ concluir": {
+      "main": [
+        [
+          {
+            "node": "Busca chamado p/ concluir",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca chamado p/ concluir": {
+      "main": [
+        [
+          {
+            "node": "Decide conclusao",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide conclusao": {
+      "main": [
+        [
+          {
+            "node": "Pode concluir?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pode concluir?": {
+      "main": [
+        [
+          {
+            "node": "Grava chamado concluido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta recusa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava chamado concluido": {
+      "main": [
+        [
+          {
+            "node": "Grava visita concluida",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava visita concluida": {
+      "main": [
+        [
+          {
+            "node": "Monta resposta conclusao",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta acesso negado": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta erro de entrada": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta lista": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta inicio": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta desfazer": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta conclusao": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta recusa": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta falha": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  }
+}

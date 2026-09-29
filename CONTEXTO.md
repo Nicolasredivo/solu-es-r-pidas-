@@ -4274,6 +4274,74 @@ caixinha some nela, pra não repetir).
 Se o sistema já estiver aberto com o endereço velho: **Sair** leva pra tela
 de Entrar, onde está a caixinha. **Sai quando o endereço for fixo.**
 
+### Atendimento, fase 1: iniciar, acompanhar e concluir (28/09/2026)
+
+Plano de 5 fases fechado com o dono (base: Jobber, Housecall Pro, Auvo,
+Field Control): 1 iniciar/concluir → 2 fotos antes/depois → 3 "a caminho"
+no WhatsApp + relatório pro cliente por link (marcado como importante) →
+4 precisa retorno + material usado → 5 funcionar sem sinal. Esta rodada é a
+fase 1.
+
+**Modelo de dados**: tabela nova **`Visitas`** (`tblmeNdVfOE9AYptk`) -- uma
+linha por ida ao local, porque manutenção predial volta muito ao mesmo
+chamado (retorno, orçamento e depois execução). Campos: `Visita` (rótulo
+"Chamado #18 — 28/09/2026 14:07"), `Chamado` (vínculo; o Airtable criou o
+inverso `Visitas` em Chamados), `Situacao` (Em andamento / Concluída),
+`Inicio_Real`, `Fim_Real`, `Resumo`, `Recebido_Por`, `Iniciado_Por`,
+`Concluido_Por`. O chamado usa o status "Em andamento" que já existia na
+lista e nunca era usado. Esquema conferido de verdade depois de criado
+(lição do `Tipo_Chamado`).
+
+**n8n**: workflow novo `App - Atendimento` (webhook `atendimento`), com a
+mesma checagem de acesso dos outros (senha antiga ou login de Dono) e quatro
+ações:
+- `listar`: visitas em andamento.
+- `iniciar`: só chamado na agenda e confirmado -- ou `confirmarData=true`
+  ("Confirmar e iniciar", pra quando esqueceram de confirmar). Marca o
+  chamado "Em andamento" + histórico e cria a visita; se a visita falhar,
+  devolve o chamado como estava.
+- `desfazer`: só até 15 min depois de iniciar (é pra toque errado); devolve
+  o chamado pra "Agendado" e apaga a visita.
+- `concluir` (resumo obrigatório, quem recebeu opcional): atendimento →
+  chamado "Concluído"; **visita de orçamento → chamado volta pra fila, sem
+  data** ("Aguardando confirmação de data"), porque o próximo passo é mandar
+  o preço e a execução, se aprovada, ganha agendamento novo; chamado
+  cancelado no meio → só fecha a visita. Grava o chamado primeiro e a visita
+  depois (se a segunda falhar, a visita solta não aparece: o app só conta
+  visita de chamado que está mesmo "Em andamento").
+
+**App**:
+- **"▶ Iniciar"** em três lugares: primeira opção (destacada) do menu do
+  chamado na Agenda, botão no lembrete de "chegando"/"atrasado" e no cartão
+  de Consultar chamados. Rótulo muda: "Iniciar atendimento", "Iniciar
+  visita" (orçamento) ou "Confirmar e iniciar". Chamado de outro dia
+  pergunta antes. Iniciar não pergunta nada: o aviso embaixo traz
+  **"Desfazer"** por 7 s (o aviso ganhou botão de ação e versão vermelha
+  de erro, e passou pra frente do balão de lembrete, que o cobria).
+- Aba nova **Atendimento** (menu, com contador roxo): número, relógio "em
+  andamento há X" com bolinha pulsando, quem iniciou e quando, cliente,
+  atalhos **Abrir no mapa / WhatsApp / Ligar**, endereço + local exato,
+  contato, pedido, observações internas, anexos, e o formulário de concluir
+  ("Encerrar visita" no orçamento, que depois abre o formulário de valores
+  do orçamento). Vários em andamento viram abas no topo. O que se escreve
+  fica em **rascunho** no aparelho por visita (sobrevive a trocar de aba,
+  recarregar ou o sinal cair) e é apagado ao concluir ou ao Sair.
+- **Faixa roxa** no topo de qualquer outra aba: "▶ Em atendimento: #18
+  Cliente · há 35 min" (ou "2 atendimentos em andamento"); um toque volta.
+- Chamado em andamento: roxo em todo lugar (etiqueta e bloco da Agenda --
+  antes usava o mesmo verde do Agendado); **não arrasta** nem troca de lugar
+  com outro na Agenda; o menu dele só tem "Abrir atendimento" e "Editar";
+  no cartão, concluir/cancelar/orçamento somem até encerrar o atendimento;
+  sai dos lembretes (que só olham "Agendado").
+
+Testado na tela (375 px e computador) com chamados e respostas falsas:
+menus por status, iniciar pela Agenda/cartão/lembrete, Desfazer voltando
+pra Agenda, faixa e contador, dois em andamento com abas, pergunta de outro
+dia, concluir sem resumo recusado, rascunho entre abas, concluir, encerrar
+orçamento abrindo os valores, trava de arraste, limpeza ao sair. Backend
+testado sem gravar (sem acesso, ação inválida, ids faltando, listar,
+chamado/visita inexistente).
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

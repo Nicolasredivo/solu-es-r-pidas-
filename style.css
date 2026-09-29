@@ -859,7 +859,12 @@ button:focus-visible {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.2s ease;
-  z-index: 50;
+  /* Acima do balão de lembrete (52) e do menu da Agenda (55): o "Desfazer"
+     do aviso não pode ficar escondido atrás de nada. */
+  z-index: 60;
+  /* Centralizado com left:50%, sem isto ele só podia usar metade da tela e
+     quebrava o texto em várias linhas à toa. */
+  width: max-content;
   max-width: 90vw;
   text-align: center;
 }
@@ -2129,9 +2134,10 @@ input[type="text"].campo-busca-entrada {
   color: var(--ok);
 }
 
+/* Roxo: "acontecendo agora" precisa se destacar do verde do Agendado. */
 .chamado-status-andamento {
-  background: rgba(62, 207, 142, 0.18);
-  color: var(--ok);
+  background: rgba(167, 139, 250, 0.2);
+  color: #c4b5fd;
 }
 
 .chamado-status-cancelado {
@@ -2461,8 +2467,9 @@ input[type="text"].campo-busca-entrada {
 }
 
 .agenda-bloco.andamento {
-  border-color: var(--ok);
-  background: rgba(62, 207, 142, 0.22);
+  border-color: #a78bfa;
+  background: rgba(167, 139, 250, 0.26);
+  cursor: pointer;
 }
 
 .agenda-bloco.arrastando {
@@ -2656,6 +2663,17 @@ input[type="text"].campo-busca-entrada {
   background: rgba(229, 72, 77, 0.14);
 }
 
+/* A ação principal do menu (Iniciar / Abrir atendimento) vem destacada. */
+.agenda-menu button.agenda-menu-principal {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.agenda-menu button.agenda-menu-principal:hover {
+  background: var(--accent);
+  filter: brightness(1.1);
+}
+
 /* Fila da direita: só o que ainda não tem lugar na agenda. */
 @media (min-width: 768px) {
   .agenda-layout {
@@ -2784,3 +2802,241 @@ input[type="text"].campo-busca-entrada {
   border-top: none;
 }
 
+
+/* ===================== Atendimento =====================
+   O chamado que está acontecendo agora. Roxo = "em andamento" em todo lugar
+   (etiqueta, bloco da Agenda, faixa, contador do menu). */
+
+.faixa-atendimento {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 0;
+  background: linear-gradient(90deg, #7c5cdb, #5b8def);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (min-width: 768px) {
+  .faixa-atendimento {
+    width: auto;
+    margin-left: 240px;
+  }
+}
+
+.menu-contagem {
+  display: inline-block;
+  min-width: 20px;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #7c5cdb;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Aviso rápido: versão de erro e versão com botão (ex.: Desfazer). */
+.toast.erro {
+  background: var(--error);
+  color: #fff;
+}
+
+.toast.com-acao {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 7px 7px 18px;
+}
+
+/* Só recebe toque enquanto está à vista -- escondido, não pode "roubar" o
+   clique de quem está embaixo dele. */
+.toast.com-acao.show {
+  pointer-events: auto;
+}
+
+.toast-acao {
+  width: auto;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.2);
+  color: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+/* Lembrete com atalho de Iniciar ao lado do texto. */
+div.lembrete-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+div.lembrete-item:hover {
+  background: rgba(91, 141, 239, 0.2);
+}
+
+.lembrete-texto {
+  flex: 1;
+  width: auto;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 400;
+  line-height: inherit;
+  text-align: left;
+}
+
+.lembrete-iniciar {
+  flex: none;
+  width: auto;
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: 0.76rem;
+}
+
+.atendimento-abas {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin: 0 0 14px;
+  padding-bottom: 2px;
+}
+
+.atendimento-aba {
+  flex: none;
+  width: auto;
+  padding: 7px 12px;
+  border: 1px solid #2c3153;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.atendimento-aba.ativa {
+  border-color: #a78bfa;
+  background: rgba(167, 139, 250, 0.18);
+  color: #fff;
+}
+
+.atendimento-topo {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  border-radius: 12px;
+  background: rgba(167, 139, 250, 0.1);
+}
+
+.atendimento-topo-linha {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.atendimento-tempo {
+  margin: 8px 0 2px;
+  font-size: 1.05rem;
+}
+
+.atendimento-tempo strong {
+  color: #c4b5fd;
+}
+
+/* Bolinha pulsando: "isso está acontecendo agora". */
+.atendimento-ponto {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #a78bfa;
+  vertical-align: 1px;
+  animation: atendimentoPulso 1.6s ease-out infinite;
+}
+
+@keyframes atendimentoPulso {
+  0% { box-shadow: 0 0 0 0 rgba(167, 139, 250, 0.6); }
+  100% { box-shadow: 0 0 0 9px rgba(167, 139, 250, 0); }
+}
+
+.atendimento-topo .doc-hint {
+  margin: 0;
+}
+
+.atendimento-cliente {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+}
+
+.atendimento-atalhos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.atalho {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: border-color var(--transicao);
+}
+
+.atalho:hover {
+  border-color: var(--accent);
+}
+
+.atendimento-dados {
+  margin: 0 0 16px;
+}
+
+.atendimento-dados dt {
+  margin-top: 10px;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.atendimento-dados dd {
+  margin: 2px 0 0;
+  font-size: 0.93rem;
+  overflow-wrap: anywhere;
+}
+
+.atendimento-dados a {
+  color: var(--accent);
+}
+
+.atendimento-local {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.atendimento-texto {
+  white-space: pre-line;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atendimento-ponto {
+    animation: none;
+  }
+}
