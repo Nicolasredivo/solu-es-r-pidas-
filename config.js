@@ -5,7 +5,8 @@
 // qualquer um que achasse o repositório. Sem ele, quem encontrar o código não
 // sabe onde bater.
 //
-// Onde colocar o endereço: na tela de entrada do app, em "⚙ Endereço do n8n".
+// Onde colocar o endereço: no pé da tela de Entrar (conta.html), em
+// "⚙ Endereço do servidor" -- ou, pela senha antiga, em "⚙ Endereço do n8n".
 // O que você salvar lá fica guardado só no seu aparelho, e precisa ser
 // informado uma vez em cada aparelho que usar o sistema.
 //

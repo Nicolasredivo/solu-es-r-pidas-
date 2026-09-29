@@ -4228,6 +4228,52 @@ cancelar recusado, desativar e reativar com histórico gravado, cancelar
 convite apagando a linha. Contas de teste apagadas no fim; a conta e a
 sessão do dono não foram tocadas.
 
+### Criar chamado quebrado desde 17/09: campos do orçamento nunca existiram (28/09/2026)
+
+Dono reportou "Não consegui criar o chamado". Causa: a rodada do "Chamado
+de orçamento" (17/09) fez os workflows gravarem `Tipo_Chamado` (criar e
+reagendar) e seis `Orcamento_*` (editar), mas **esses campos nunca foram
+criados na tabela `Chamados`** -- o Airtable recusava todo chamado novo com
+`Unknown field name: "Tipo_Chamado"`. Não apareceu antes porque o teste
+daquela rodada foi só com respostas simuladas e senha errada (nenhuma
+gravação de verdade), e ninguém criou chamado depois; duas tentativas em
+17/09 às 20:48 já tinham caído no mesmo erro. Não tinha relação com o login
+novo (a checagem de acesso deixava passar normalmente).
+
+Corrigido criando os 7 campos com os tipos que os workflows esperam:
+`Tipo_Chamado` (lista: Atendimento, Orçamento), `Orcamento_Valor_Material`,
+`Orcamento_Valor_MaoDeObra`, `Orcamento_Valor_Aproximado` (R$, 2 casas),
+`Orcamento_Forma_Pagamento` (texto), `Orcamento_Detalhes` (texto longo),
+`Orcamento_Situacao` (lista: Finalizado). Campos novos e vazios -- nenhum
+chamado existente mudou. Conferidos os outros campos citados pelos
+workflows de chamados: todos existem. Confirmado com o dono criando o
+chamado de verdade logo depois.
+
+**Lição**: rodada que cria campo novo no Airtable precisa conferir o
+esquema de verdade (listar os campos da tabela) antes de dizer que está
+pronto -- "o workflow grava X" não prova que X existe.
+
+### Endereço do servidor na tela de Entrar (provisório, 28/09/2026)
+
+Com o login novo, o app abre direto quando a sessão salva ainda vale
+(não consulta o servidor pra mostrar a tela) -- e o único lugar pra trocar
+o endereço do túnel era a tela da senha antiga. Com o túnel reiniciado, o
+dono ficava sem onde colar o endereço novo.
+
+Pedido do dono: enquanto o endereço não for fixo, uma caixinha na tela de
+login. Ficou um link discreto **"⚙ Endereço do servidor"** no pé de
+`conta.html` (todas as telas: Entrar, Criar conta, Esqueci a senha), que
+abre um campo já preenchido com o endereço salvo + "Salvar". Grava no mesmo
+`n8n_base_url` que o sistema lê. Quando o servidor não responde (ou responde
+uma página de erro, como túnel antigo costuma fazer), a caixinha **abre
+sozinha** e a página rola só o necessário pra ela aparecer, com o aviso
+"Confira sua internet e o endereço do servidor, aqui embaixo". Aparelho sem
+endereço nenhum continua vendo a tela inteira "Conectar este aparelho" (a
+caixinha some nela, pra não repetir).
+
+Se o sistema já estiver aberto com o endereço velho: **Sair** leva pra tela
+de Entrar, onde está a caixinha. **Sai quando o endereço for fixo.**
+
 ## Decisões já tomadas (não relitigar sem motivo)
 
 - **Toda ação envia a senha para o n8n conferir.** A tela de entrada é só

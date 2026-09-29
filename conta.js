@@ -6,7 +6,7 @@
   const CHAVE_SENHA_ANTIGA = "senha_salva";
   const ESPERA_REENVIO_S = 60;
   const LIMITE_RESPOSTA_MS = 20000;
-  const MSG_REDE = "Não foi possível falar com o servidor. Confira sua internet e tente de novo.";
+  const MSG_REDE = "Não foi possível falar com o servidor. Confira sua internet e o endereço do servidor, aqui embaixo.";
 
   const $ = (seletor) => document.querySelector(seletor);
 
@@ -41,13 +41,24 @@
         body: new URLSearchParams(dados),
         signal: controle.signal,
       });
+    } catch (erro) {
+      // Sem resposta nenhuma: internet fora, ou o túnel mudou de endereço.
+      // Abre a caixinha do endereço pra pessoa já ver onde trocar.
+      abrirServidor(false);
+      throw erro;
     } finally {
       clearTimeout(relogio);
     }
     const corpo = await resposta.json().catch(() => null);
-    if (!corpo) throw new Error("resposta inválida");
+    if (!corpo) {
+      // Túnel antigo costuma responder uma página de erro em vez de dados.
+      abrirServidor(false);
+      throw new Error("resposta inválida");
+    }
     return corpo;
   }
+
+  const enderecoValido = (valor) => /^https:\/\/[^\s/]+/.test(valor);
 
   // "Chrome · Windows" -- só pra reconhecer o aparelho numa futura lista de
   // aparelhos conectados.
@@ -163,6 +174,9 @@
     $("#rodape-link").setAttribute("href", destino);
     rodape.hidden = nome === "sucesso" || nome === "jaAtiva";
     rodapeAntigo.hidden = nome !== "entrar";
+    // Sem endereço nenhum a tela inteira já é o campo do endereço: a
+    // caixinha do pé da página seria repetida.
+    $("#servidor").hidden = nome === "semServidor";
 
     const el = etapas[nome];
     limparAviso(el);
@@ -596,7 +610,7 @@
   etapas.semServidor.addEventListener("submit", (evento) => {
     evento.preventDefault();
     const valor = campoEndereco.value.trim().replace(/\/+$/, "");
-    if (!/^https:\/\/[^\s/]+/.test(valor)) {
+    if (!enderecoValido(valor)) {
       campoEndereco.setAttribute("aria-invalid", "true");
       mostrarAviso(etapas.semServidor, "O endereço precisa começar com https://");
       campoEndereco.focus();
@@ -608,6 +622,68 @@
   campoEndereco.addEventListener("input", () => {
     campoEndereco.removeAttribute("aria-invalid");
     limparAviso(etapas.semServidor);
+  });
+
+  // ---------- endereço do servidor, no pé da página (provisório) ----------
+  // O túnel ganha endereço novo a cada reinício. Enquanto o endereço não for
+  // fixo, dá pra trocar aqui em qualquer tela da conta. Grava no mesmo lugar
+  // que o sistema lê (n8n_base_url), então vale pros dois.
+
+  const servidorAbrir = $("#servidor-abrir");
+  const servidorForm = $("#servidor-form");
+  const servidorCampo = $("#servidor-campo");
+  const servidorDica = $("#servidor-dica");
+  const DICA_SERVIDOR = "Fica salvo só neste aparelho.";
+
+  function dicaServidor(texto, tipo) {
+    servidorDica.textContent = texto;
+    servidorDica.className = "servidor-dica" + (tipo ? " " + tipo : "");
+  }
+
+  function abrirServidor(focar) {
+    // Já aberta: não apaga o que a pessoa pode estar digitando.
+    if (servidorForm.hidden) {
+      servidorCampo.value = baseUrl();
+      servidorCampo.removeAttribute("aria-invalid");
+      dicaServidor(DICA_SERVIDOR);
+      servidorForm.hidden = false;
+      servidorAbrir.setAttribute("aria-expanded", "true");
+    }
+    if (focar) {
+      servidorCampo.focus();
+      return;
+    }
+    // Aberta por causa de uma falha: no celular ela nasce abaixo da tela.
+    // Rola só o necessário -- o aviso do erro, lá em cima, continua à vista.
+    servidorForm.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  servidorAbrir.addEventListener("click", () => {
+    if (servidorForm.hidden) {
+      abrirServidor(true);
+      return;
+    }
+    servidorForm.hidden = true;
+    servidorAbrir.setAttribute("aria-expanded", "false");
+  });
+
+  servidorForm.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+    const valor = servidorCampo.value.trim().replace(/\/+$/, "");
+    if (!enderecoValido(valor)) {
+      servidorCampo.setAttribute("aria-invalid", "true");
+      dicaServidor("O endereço precisa começar com https://", "erro");
+      servidorCampo.focus();
+      return;
+    }
+    guardar(CHAVE_URL, valor);
+    servidorCampo.value = valor;
+    dicaServidor("Endereço salvo neste aparelho. Pode tentar de novo.", "ok");
+  });
+
+  servidorCampo.addEventListener("input", () => {
+    servidorCampo.removeAttribute("aria-invalid");
+    dicaServidor(DICA_SERVIDOR);
   });
 
   // ---------- rotas ----------

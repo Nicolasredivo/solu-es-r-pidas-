@@ -197,6 +197,24 @@
     <p class="rodape-cartao" id="rodape-cartao"><span id="rodape-texto">Já tem conta?</span> <a id="rodape-link" href="#entrar">Entrar</a></p>
     <!-- Caminho antigo, só até o dono autorizar tirar a senha de acesso única. -->
     <p class="rodape-antigo" id="rodape-antigo" hidden><a href="sistema.html#senha">Entrar com a senha de acesso antiga</a></p>
+
+    <!-- Endereço do servidor: PROVISÓRIO. O túnel ganha endereço novo a cada
+         reinício; quando o endereço for fixo, isto sai. Grava no mesmo lugar
+         que o sistema lê, então vale pros dois. -->
+    <div class="servidor" id="servidor">
+      <button type="button" class="servidor-abrir" id="servidor-abrir" aria-expanded="false" aria-controls="servidor-form">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></svg>
+        Endereço do servidor
+      </button>
+      <form class="servidor-form" id="servidor-form" novalidate hidden>
+        <label for="servidor-campo">Endereço do servidor (túnel)</label>
+        <div class="servidor-linha">
+          <input id="servidor-campo" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://algo.trycloudflare.com" />
+          <button type="submit" class="servidor-salvar">Salvar</button>
+        </div>
+        <p class="servidor-dica" id="servidor-dica" aria-live="polite">Fica salvo só neste aparelho.</p>
+      </form>
+    </div>
   </main>
 
   <script src="config.js"></script>

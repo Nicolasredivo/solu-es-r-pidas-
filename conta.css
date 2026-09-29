@@ -130,6 +130,99 @@ body {
 .rodape-antigo a { color: var(--tinta-fraca); text-underline-offset: 3px; }
 .rodape-antigo a:hover { color: var(--azul); }
 
+/* ---------- Endereço do servidor (provisório) ----------
+   Discreto no pé da página: só se mexe nele quando o túnel troca de
+   endereço. Sai quando o endereço do servidor for fixo. */
+
+.servidor {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: -8px;
+}
+.servidor-abrir {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--tinta-fraca);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.servidor-abrir svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.35s var(--curva);
+}
+.servidor-abrir:hover,
+.servidor-abrir[aria-expanded="true"] { color: var(--azul); }
+.servidor-abrir[aria-expanded="true"] svg { transform: rotate(60deg); }
+
+.servidor-form {
+  width: 100%;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--linha);
+  border-radius: 14px;
+  background: var(--branco);
+  box-shadow: 0 12px 30px -18px rgba(11, 30, 61, 0.3);
+  animation: entrar 0.25s var(--curva);
+}
+.servidor-form label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--tinta);
+}
+.servidor-linha { display: flex; gap: 8px; }
+.servidor-linha input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px;
+  border: 1.5px solid var(--linha-forte);
+  border-radius: 10px;
+  background: var(--branco);
+  color: var(--tinta);
+  font: inherit;
+  font-size: 1rem; /* abaixo de 16px o iPhone dá zoom ao tocar */
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.servidor-linha input::placeholder { color: #9aa7b4; }
+.servidor-linha input:focus { outline: none; border-color: var(--aco); box-shadow: var(--foco); }
+.servidor-linha input[aria-invalid="true"] { border-color: var(--erro); }
+.servidor-salvar {
+  flex: none;
+  height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--azul);
+  color: var(--branco);
+  font-family: "Saira", "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.servidor-salvar:hover { background: var(--marinho); }
+.servidor-dica { margin: 8px 0 0; font-size: 0.8rem; color: var(--tinta-fraca); }
+.servidor-dica.ok { color: var(--ok); font-weight: 600; }
+.servidor-dica.erro { color: var(--erro); }
+
 /* ---------- Etapas no alto do cartão ---------- */
 
 .passos {
@@ -474,7 +567,9 @@ body {
 .olho:focus-visible,
 .marca:focus-visible,
 .rodape-cartao a:focus-visible,
-.rodape-antigo a:focus-visible {
+.rodape-antigo a:focus-visible,
+.servidor-abrir:focus-visible,
+.servidor-salvar:focus-visible {
   outline: 3px solid rgba(62, 143, 209, 0.55);
   outline-offset: 2px;
 }
