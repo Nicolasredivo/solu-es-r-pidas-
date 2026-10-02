@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.09.28e";
+const APP_VERSION = "2026.10.02a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -6268,6 +6268,7 @@ function agendaDesenharGrade() {
 function agendaClasseStatus(status) {
   if (status === "Agendado") return "confirmado";
   if (status === "Em andamento") return "andamento";
+  if (status === "Concluído") return "concluido";
   return "aguardando";
 }
 
@@ -6275,20 +6276,30 @@ function agendaClasseStatus(status) {
 // espremer horário e número dentro de um retângulo de 8px de altura.
 function agendaConteudoBloco(c, ini, fim, alturaPx) {
   const nome = escapeHtml(c.clienteNome || "Sem nome");
-  if (agendaNivelId === "ano") return `<div class="agenda-bloco-titulo">${nome}</div>`;
+  // Concluído continua na Agenda (dá pra corrigir horário e detalhes), mas
+  // com a palavra bem maior que o resto, pra ler de longe que já aconteceu.
+  const concluido = c.status === "Concluído";
+  const selo = concluido ? `<span class="agenda-bloco-selo-inline">✔ CONCLUÍDO</span> · ` : "";
+  if (agendaNivelId === "ano") return `<div class="agenda-bloco-titulo">${selo}${nome}</div>`;
   if (agendaNivelId === "mes") {
-    return `<div class="agenda-bloco-titulo">${agFmt(ini, { day: "2-digit", month: "2-digit" })} · ${nome}</div>`;
+    return `<div class="agenda-bloco-titulo">${selo}${agFmt(ini, { day: "2-digit", month: "2-digit" })} · ${nome}</div>`;
   }
   if (agendaNivelId === "semana") {
-    return `<div class="agenda-bloco-titulo">${agHoraStr(ini)} · ${nome}</div>`;
+    return `<div class="agenda-bloco-titulo">${selo}${agHoraStr(ini)} · ${nome}</div>`;
   }
 
   // Os cortes abaixo são a altura que cada linha a mais precisa de verdade
   // (linha de ~15px + os 4px de recheio do bloco) -- antes a segunda linha
   // entrava e ficava cortada pela metade num bloco de 1h na escala "Dia".
-  let html = `<div class="agenda-bloco-titulo">${nome}</div>`;
+  // O concluído gasta uma linha maior a mais (o selo), então os cortes sobem.
+  const seloGrande = concluido && alturaPx >= 40;
+  if (seloGrande) alturaPx -= 18;
+  let html = (seloGrande ? `<div class="agenda-bloco-selo-concluido">✔ CONCLUÍDO</div>` : "")
+    + `<div class="agenda-bloco-titulo">${seloGrande ? "" : selo}${nome}</div>`;
   if (alturaPx >= 34) {
-    html += `<div class="agenda-bloco-linha">${agHoraStr(ini)} → ${agHoraStr(fim)} · ${agendaDuracaoTexto(fim - ini)}</div>`;
+    // A data do agendamento (dd/mm/aa) vem junto do horário, no mesmo estilo.
+    const dataCurta = agFmt(ini, { day: "2-digit", month: "2-digit", year: "2-digit" });
+    html += `<div class="agenda-bloco-linha">${dataCurta} · ${agHoraStr(ini)} → ${agHoraStr(fim)} · ${agendaDuracaoTexto(fim - ini)}</div>`;
   }
   if (alturaPx >= 49) {
     html += `<div class="agenda-bloco-linha">Chamado #${escapeHtml(String(c.numero))}` +
@@ -6305,16 +6316,24 @@ function agendaDesenharItens() {
   const idArrastado = arrastando && arrastando.tipo !== "novo" ? arrastando.chamado.id : "";
   let html = "";
 
+  // Se um chamado que já começou estica o fim, o plano diz quem é empurrado e
+  // pra onde: os blocos dessa lista aparecem já no lugar novo, tracejados.
+  const plano = arrastando && arrastando.tipo === "base" && arrastando.plano ? arrastando.plano : null;
+
   chamadosComData.forEach((c) => {
-    // Cancelado e Concluído não ocupam mais lugar na agenda -- continuam
-    // visíveis em "Consultar chamados" (ver CONTEXTO.md 16 e 17/09/2026), mas
-    // aqui é como se nunca tivessem sido marcados.
-    if (!c.reservadoInicio || c.status === "Cancelado" || c.status === "Concluído") return;
-    const ini = agDeIso(c.reservadoInicio);
+    // Cancelado não ocupa mais lugar na agenda (continua em "Consultar
+    // chamados", ver CONTEXTO.md 16 e 17/09/2026). Concluído continua
+    // aparecendo -- com cor própria e o selo "CONCLUÍDO" -- e continua
+    // editável, pra corrigir horário ou detalhes; só não bloqueia horário de
+    // ninguém (ver agendaOcupados).
+    if (!c.reservadoInicio || c.status === "Cancelado") return;
+    const concluido = c.status === "Concluído";
+    let ini = agDeIso(c.reservadoInicio);
 
     // Dia marcado, horário ainda não definido: fica preso na linha do dia,
     // com cara de pendência. Não ocupa faixa de horário nenhuma.
     if (!c.reservadoFim) {
+      if (concluido) return;
       if (ini + MS_DIA < agendaJanelaInicio || ini > agendaJanelaFim) return;
       html += `<div class="agenda-bloco-semhora" data-id="${escapeHtml(c.id)}" data-semhora="1"` +
         `${c.id === idArrastado ? ' style="opacity:.3;' : ' style="'}top:${(agendaPxDoTempo(ini) + 2).toFixed(1)}px">` +
@@ -6322,19 +6341,27 @@ function agendaDesenharItens() {
       return;
     }
 
-    const fim = agDeIso(c.reservadoFim);
+    let fim = agDeIso(c.reservadoFim);
+    const empurrado = plano && plano.mapa[c.id] ? plano.mapa[c.id] : null;
+    if (empurrado) { ini = empurrado.ini; fim = empurrado.fim; }
     if (fim < agendaJanelaInicio || ini > agendaJanelaFim) return;
     const topo = agendaPxDoTempo(ini);
     const altura = Math.max(14, agendaPxDoTempo(fim) - topo);
     const classes = ["agenda-bloco", agendaClasseStatus(c.status)];
     if (c.id === idArrastado) classes.push("arrastando");
+    if (empurrado) classes.push("empurrado");
     if (arrastando && arrastando.trocaPronta && arrastando.trocaAlvo === c.id) classes.push("alvo-troca");
 
-    const podeAlca = agendaNivel().precisa && altura >= 26 && c.id !== idArrastado;
+    // Alça de baixo (mexe só no FIM, que é uma estimativa): sempre que o bloco
+    // tem altura. Alça de cima (mexe no início): não existe pra quem já está em
+    // andamento -- o início de algo que já está acontecendo não muda.
+    const podeAlca = agendaNivel().precisa && altura >= 26 && c.id !== idArrastado && !empurrado;
+    const podeAlcaTopo = podeAlca && c.status !== "Em andamento";
     html += `<div class="${classes.join(" ")}" data-id="${escapeHtml(c.id)}" ` +
       `style="top:${topo.toFixed(1)}px;height:${altura.toFixed(1)}px">` +
       agendaConteudoBloco(c, ini, fim, altura) +
-      (podeAlca ? `<div class="agenda-bloco-alca topo" data-alca="topo"></div><div class="agenda-bloco-alca base" data-alca="base"></div>` : "") +
+      (podeAlcaTopo ? `<div class="agenda-bloco-alca topo" data-alca="topo"></div>` : "") +
+      (podeAlca ? `<div class="agenda-bloco-alca base" data-alca="base"></div>` : "") +
       `</div>`;
   });
 
@@ -6344,11 +6371,18 @@ function agendaDesenharItens() {
     const topo = agendaPxDoTempo(a.ini);
     const invalido = (arrastando.conflitos.length > 0 && !arrastando.trocaPronta && !arrastando.sobreFila)
       || (a.noPassado && !arrastando.sobreFila);
+    let complemento = "";
+    if (plano && plano.empurrados.length) {
+      complemento += ` · empurra ${plano.empurrados.map((p) => `#${p.c.numero} (+${agendaDuracaoTexto(p.deslocMin * MS_MIN)})`).join(", ")}`;
+    }
+    if (plano && plano.sobrepostos.length) {
+      complemento += ` · fica sobre ${plano.sobrepostos.map((s) => `#${s.numero}`).join(", ")} (em andamento)`;
+    }
     const texto = a.noPassado
       ? "Não dá pra marcar no passado"
       : (a.semHorario
         ? `${agFmt(a.ini, { day: "2-digit", month: "2-digit", year: "numeric" })} · horário a definir`
-        : `${agHoraStr(a.ini)} → ${agHoraStr(a.fim)} · ${agendaDuracaoTexto(a.fim - a.ini)}`);
+        : `${agHoraStr(a.ini)} → ${agHoraStr(a.fim)} · ${agendaDuracaoTexto(a.fim - a.ini)}${complemento}`);
     const altura = a.semHorario ? 22 : Math.max(18, agendaPxDoTempo(a.fim) - topo);
     html += `<div class="agenda-previa${invalido ? " conflito" : ""}" ` +
       `style="top:${topo.toFixed(1)}px;height:${altura.toFixed(1)}px">${escapeHtml(texto)}</div>`;
@@ -6369,8 +6403,9 @@ function agendaDesenharItens() {
 // Aguardando confirmação entra sim -- horário reservado é horário ocupado.
 function agendaOcupados(excluir) {
   const fora = excluir || [];
-  // Concluído libera o horário igual Cancelado -- é o mesmo filtro que o
-  // backend já usa pra achar quem está "ativo" (ver reagendar-chamado.json).
+  // Concluído libera o horário igual Cancelado (mesmo ele aparecendo na
+  // Agenda, ver agendaDesenharItens) -- é o mesmo filtro que o backend já usa
+  // pra achar quem está "ativo" (ver reagendar-chamado.json).
   return chamadosComData
     .filter((c) => c.reservadoInicio && c.reservadoFim
       && c.status !== "Cancelado" && c.status !== "Concluído" && !fora.includes(c.id))
@@ -6401,6 +6436,60 @@ function agendaProximoLivre(desde, duracaoMs, excluir) {
     if (fecha - cursor >= duracaoMs) return { ini: cursor, fim: cursor + duracaoMs };
   }
   return null;
+}
+
+// ----- fim esticado que empurra os seguintes -----
+
+function agendaPlanoVazio() { return { empurrados: [], sobrepostos: [], mapa: {} }; }
+
+// O fim de um chamado é uma estimativa: quando o serviço atrasa e o fim estica
+// por cima do próximo chamado, o próximo anda pra frente EXATAMENTE o tempo
+// que foi invadido, mantendo a duração dele. Se isso invadir o seguinte, ele
+// anda também, em cadeia, até achar folga. Quem já está "Em andamento" não
+// anda (já está acontecendo): a cadeia passa por cima dele e a tela só avisa.
+// Quem calcula é a tela; o servidor só confere o resultado final (modo "lote"
+// do reagendar-chamado).
+function agendaPlanoEmpurrao(c, novoFim) {
+  const plano = agendaPlanoVazio();
+  const ini = agDeIso(c.reservadoInicio);
+  const depois = agendaOcupados([c.id]).filter((o) => o.ini >= ini).sort((x, y) => x.ini - y.ini);
+  let corte = novoFim;
+  for (const o of depois) {
+    if (o.ini >= corte) break;
+    if (o.c.status === "Em andamento") { plano.sobrepostos.push(o.c); continue; }
+    const desloc = corte - o.ini;
+    const item = { c: o.c, ini: o.ini + desloc, fim: o.fim + desloc, deslocMin: Math.round(desloc / MS_MIN) };
+    plano.empurrados.push(item);
+    plano.mapa[o.c.id] = item;
+    corte = item.fim;
+  }
+  return plano;
+}
+
+// Solta a alça do fim de um chamado que não está concluído: grava o fim novo e,
+// se der, os empurrados -- tudo de uma vez (ou nada), e dá pra desfazer tudo.
+async function agendaAplicarFim(c, novoFim, plano) {
+  if (plano.empurrados.length > 9) {
+    agendaMostrarAviso("erro", "Isso empurraria mais de 9 chamados de uma vez. Mexa em menos horários.");
+    return;
+  }
+  const alteracoes = [{
+    chamado: c, antes: agendaEstado(c),
+    depois: agendaEstadoDeIntervalo(agDeIso(c.reservadoInicio), novoFim, c.status),
+  }];
+  plano.empurrados.forEach((p) => alteracoes.push({
+    chamado: p.c, antes: agendaEstado(p.c), depois: agendaEstadoDeIntervalo(p.ini, p.fim, p.c.status),
+  }));
+  const empurroes = plano.empurrados.map((p) => `#${p.c.numero} +${agendaDuracaoTexto(p.deslocMin * MS_MIN)}`);
+  const descricao = `Chamado #${c.numero} termina às ${agHoraStr(novoFim)}` +
+    (empurroes.length ? ` · empurrou ${empurroes.join(", ")}` : "");
+  const ok = await agendaAplicar(alteracoes, descricao, undefined, {
+    lote: true,
+    motivo: empurroes.length ? `atraso do chamado #${c.numero}` : "",
+  });
+  if (ok && plano.sobrepostos.length) {
+    agendaMostrarAviso("", `Ficou por cima de ${plano.sobrepostos.map((s) => `#${s.numero}`).join(", ")}, que já está em andamento e não dá pra empurrar.`);
+  }
 }
 
 // ----- faixa de recado -----
@@ -6498,12 +6587,28 @@ function agendaPedidoDaTroca(c, estado) {
 // Coração da persistência: muda na tela na hora (pra não ficar lento), manda
 // pro n8n e, se o servidor recusar, VOLTA tudo pro que era. Nunca fica
 // mostrando que deu certo quando não deu.
-async function agendaAplicar(alteracoes, descricao, registrar) {
+// opcoes.lote: vários chamados de uma vez (fim esticado que empurra os
+// seguintes, e o desfazer/refazer disso) -- o servidor confere o resultado
+// final e grava tudo ou nada. Sem isso, é o caso de sempre: um chamado, ou dois
+// numa troca.
+async function agendaAplicar(alteracoes, descricao, registrar, opcoes) {
+  const op = opcoes || {};
   alteracoes.forEach(({ chamado, depois }) => agendaAplicarLocal(chamado, depois));
   agendaRedesenhar();
 
-  const corpo = agendaPedidoDoEstado(alteracoes[0].chamado, alteracoes[0].depois);
-  if (alteracoes[1]) Object.assign(corpo, agendaPedidoDaTroca(alteracoes[1].chamado, alteracoes[1].depois));
+  let corpo;
+  if (op.lote) {
+    corpo = {
+      chamadoId: alteracoes[0].chamado.id,
+      lote: JSON.stringify(alteracoes.map(({ chamado, depois }) => ({
+        id: chamado.id, reservadoInicio: depois.reservadoInicio, reservadoFim: depois.reservadoFim,
+      }))),
+    };
+    if (op.motivo) corpo.motivo = op.motivo;
+  } else {
+    corpo = agendaPedidoDoEstado(alteracoes[0].chamado, alteracoes[0].depois);
+    if (alteracoes[1]) Object.assign(corpo, agendaPedidoDaTroca(alteracoes[1].chamado, alteracoes[1].depois));
+  }
 
   let resposta;
   try {
@@ -6529,7 +6634,7 @@ async function agendaAplicar(alteracoes, descricao, registrar) {
 
   if (registrar !== false) {
     agendaHistorico = agendaHistorico.slice(0, agendaHistoricoPos);
-    agendaHistorico.push({ descricao, alteracoes });
+    agendaHistorico.push({ descricao, alteracoes, lote: Boolean(op.lote), motivo: op.motivo || "" });
     if (agendaHistorico.length > AGENDA_HISTORICO_MAX) agendaHistorico.shift();
     agendaHistoricoPos = agendaHistorico.length;
   }
@@ -6557,7 +6662,7 @@ async function agendaDesfazer() {
   if (agendaHistoricoPos === 0) return;
   const entrada = agendaHistorico[agendaHistoricoPos - 1];
   const inverso = entrada.alteracoes.map((a) => ({ chamado: a.chamado, antes: a.depois, depois: a.antes }));
-  if (await agendaAplicar(inverso, `Desfeito: ${entrada.descricao}`, false)) {
+  if (await agendaAplicar(inverso, `Desfeito: ${entrada.descricao}`, false, { lote: entrada.lote, motivo: entrada.motivo && `desfeito: ${entrada.motivo}` })) {
     agendaHistoricoPos--;
     agendaAtualizarBotoesHistorico();
   }
@@ -6566,7 +6671,7 @@ async function agendaDesfazer() {
 async function agendaRefazer() {
   if (agendaHistoricoPos >= agendaHistorico.length) return;
   const entrada = agendaHistorico[agendaHistoricoPos];
-  if (await agendaAplicar(entrada.alteracoes, `Refeito: ${entrada.descricao}`, false)) {
+  if (await agendaAplicar(entrada.alteracoes, `Refeito: ${entrada.descricao}`, false, { lote: entrada.lote, motivo: entrada.motivo })) {
     agendaHistoricoPos++;
     agendaAtualizarBotoesHistorico();
   }
@@ -6593,16 +6698,22 @@ function agendaCalcularAlvo() {
   if (!a) return;
   const passo = AGENDA_SNAP_MIN * MS_MIN;
   const agora = agAgora();
+  // Concluído é histórico: o horário dele é (quase sempre) do passado e pode
+  // ser corrigido à vontade -- sem regra de passado, sem conflito, sem empurrar.
+  const concl = a.chamado.status === "Concluído";
+  a.plano = null;
 
   if (a.tipo === "base") {
     const fim = Math.max(a.iniOriginal + passo, agendaEncaixar(agendaParedeDoPonteiro(a.ponteiro.y, 0)));
     a.alvo = { ini: a.iniOriginal, fim, semHorario: false, noPassado: false };
+    // Esticou por cima do próximo: ele (e os seguintes) andam pra frente.
+    a.plano = !concl && fim > a.fimOriginal ? agendaPlanoEmpurrao(a.chamado, fim) : agendaPlanoVazio();
   } else if (a.tipo === "topo") {
     const ini = Math.min(a.fimOriginal - passo, agendaEncaixar(agendaParedeDoPonteiro(a.ponteiro.y, 0)));
-    a.alvo = { ini, fim: a.fimOriginal, semHorario: false, noPassado: ini < agora };
+    a.alvo = { ini, fim: a.fimOriginal, semHorario: false, noPassado: !concl && ini < agora };
   } else if (agendaNivel().precisa) {
     const ini = agendaEncaixar(agendaParedeDoPonteiro(a.ponteiro.y, a.deslocPx));
-    a.alvo = { ini, fim: ini + a.duracaoMin * MS_MIN, semHorario: false, noPassado: ini < agora };
+    a.alvo = { ini, fim: ini + a.duracaoMin * MS_MIN, semHorario: false, noPassado: !concl && ini < agora };
   } else {
     // Escala larga: só dá pra escolher o dia. Não inventa horário -- e "hoje"
     // conta como válido inteiro, só um dia ANTES de hoje é que é passado.
@@ -6610,7 +6721,9 @@ function agendaCalcularAlvo() {
     a.alvo = { ini: dia, fim: dia, semHorario: true, noPassado: dia < agDia(agora) };
   }
 
-  a.conflitos = (a.alvo.semHorario || a.alvo.noPassado) ? [] : agendaConflitos(a.alvo.ini, a.alvo.fim, [a.chamado.id]);
+  // Esticar o fim não é conflito: vira empurrão (a.plano). Concluído nunca bate.
+  a.conflitos = (a.alvo.semHorario || a.alvo.noPassado || concl || a.tipo === "base")
+    ? [] : agendaConflitos(a.alvo.ini, a.alvo.fim, [a.chamado.id]);
 }
 
 function agendaComecarArraste(c, evento, tipo, deslocPx) {
@@ -6656,9 +6769,15 @@ function agendaAoMover(evento) {
   if (!a.ativo) {
     const dist = Math.abs(evento.clientX - a.pegouEm.x) + Math.abs(evento.clientY - a.pegouEm.y);
     if (dist < AGENDA_ARRASTE_MINIMO_PX) return;
-    // Em andamento já está acontecendo: não muda de horário nem de dia.
-    // Soltar vira um clique normal (abre o menu, com "Abrir atendimento").
-    if (a.chamado.status === "Em andamento") return;
+    // Em andamento já está acontecendo: não muda de dia nem de início. Só o
+    // FIM (que é uma estimativa) pode esticar ou encolher, pela alça de baixo.
+    // Qualquer outro arrasto vira um clique normal (abre o menu, com "Abrir
+    // atendimento").
+    if (a.chamado.status === "Em andamento" && a.tipo !== "base") return;
+    // Concluído só corrige horário com a escala que mostra horas; nas escalas
+    // largas (semana/mês/ano) arrastar só escolheria um dia, e ele precisa de
+    // horário exato.
+    if (a.chamado.status === "Concluído" && !agendaNivel().precisa) return;
     agendaAtivarArraste();
   }
   evento.preventDefault();
@@ -6684,7 +6803,8 @@ function agendaAvaliarAlvoSobPonteiro() {
   const sob = document.elementFromPoint(a.ponteiro.x, a.ponteiro.y);
   const achar = (seletor) => (sob && sob.closest ? sob.closest(seletor) : null);
 
-  a.sobreFila = Boolean(achar(".agenda-painel")) && a.tipo === "mover";
+  // Concluído não volta pra fila: ele já aconteceu.
+  a.sobreFila = Boolean(achar(".agenda-painel")) && a.tipo === "mover" && a.chamado.status !== "Concluído";
   agendaPainelEl.classList.toggle("alvo-solta", a.sobreFila);
 
   const nivelEl = achar(".agenda-nivel");
@@ -6707,10 +6827,12 @@ function agendaAvaliarAlvoSobPonteiro() {
   // cima do outro bloco -- passar por cima correndo não pode fazer nada.
   const blocoEl = achar(".agenda-bloco");
   const outroCandidato = blocoEl && blocoEl.dataset.id !== a.chamado.id ? blocoEl.dataset.id : null;
-  // Trocar de lugar com um chamado em andamento o tiraria do horário dele.
+  // Trocar de lugar com um chamado em andamento o tiraria do horário dele; com
+  // um concluído (histórico) não faz sentido, nem partindo dele.
   const outroChamado = outroCandidato ? agendaAcharChamado(outroCandidato) : null;
-  const outroId = outroChamado && outroChamado.status === "Em andamento" ? null : outroCandidato;
-  if (a.tipo === "mover" && a.iniOriginal && a.fimOriginal && outroId) {
+  const outroId = outroChamado && (outroChamado.status === "Em andamento" || outroChamado.status === "Concluído")
+    ? null : outroCandidato;
+  if (a.tipo === "mover" && a.chamado.status !== "Concluído" && a.iniOriginal && a.fimOriginal && outroId) {
     if (a.trocaAlvo !== outroId) { a.trocaAlvo = outroId; a.trocaDesde = Date.now(); }
     a.trocaPronta = Date.now() - a.trocaDesde > AGENDA_ESPERA_TROCA_MS;
   } else {
@@ -6829,6 +6951,14 @@ async function agendaAoSoltar(evento) {
 
   if (!a.alvo) return;
 
+  // Esticar/encolher o fim de quem não está concluído: grava o fim e empurra os
+  // seguintes que ele invadir (tudo de uma vez, com um desfazer só).
+  if (a.tipo === "base" && c.status !== "Concluído") {
+    if (a.alvo.fim === a.fimOriginal) return; // soltou onde estava
+    await agendaAplicarFim(c, a.alvo.fim, a.plano || agendaPlanoVazio());
+    return;
+  }
+
   if (a.alvo.noPassado) {
     agendaMostrarAviso("erro", a.alvo.semHorario
       ? "Não dá pra marcar num dia que já passou."
@@ -6924,8 +7054,10 @@ function agendaAbrirMenu(c, x, y) {
     agendaMenuEl.appendChild(b);
   };
 
-  // Acontecendo agora: horário, confirmação, concluir e cancelar ficam pro
-  // fim do atendimento -- mexer nisso aqui deixaria a visita pendurada.
+  // Acontecendo agora: início, confirmação, concluir e cancelar ficam pro fim
+  // do atendimento -- mexer nisso aqui deixaria a visita pendurada. O FIM
+  // previsto é só uma estimativa e pode esticar (empurrando os seguintes) ou
+  // encolher pela alça de baixo do bloco.
   if (c.status === "Em andamento") {
     opcao("▶ Abrir atendimento", () => abrirAtendimentoDoChamado(c.id), "agenda-menu-principal");
     opcao("Editar chamado", () => {
@@ -6933,6 +7065,24 @@ function agendaAbrirMenu(c, x, y) {
       if (item) item.click();
       abrirEdicaoChamado(c);
     });
+    const dica = document.createElement("p");
+    dica.className = "doc-hint";
+    dica.textContent = "Pra mudar o fim previsto, arraste a borda de baixo do bloco.";
+    agendaMenuEl.appendChild(dica);
+    return agendaPosicionarMenu(x, y);
+  }
+  // Concluído já aconteceu, mas continua editável: dá pra corrigir o horário
+  // (arrastando o bloco ou as bordas) e os detalhes.
+  if (c.status === "Concluído") {
+    opcao("Editar chamado", () => {
+      const item = document.querySelector('.sidebar-item[data-page="consultar-chamados"]');
+      if (item) item.click();
+      abrirEdicaoChamado(c);
+    }, "agenda-menu-principal");
+    const dica = document.createElement("p");
+    dica.className = "doc-hint";
+    dica.textContent = "Pra corrigir o horário, arraste o bloco ou as bordas dele.";
+    agendaMenuEl.appendChild(dica);
     return agendaPosicionarMenu(x, y);
   }
   if (podeIniciarAtendimento(c)) {
@@ -8205,6 +8355,12 @@ async function concluirAtendimento(v, form) {
   const c = chamadoPorId(v.chamadoId);
   if (c) {
     c.status = resposta.novoStatus || c.status;
+    // Atendimento concluído continua na Agenda (cinza, editável) e o bloco
+    // passa a mostrar o horário REAL da visita; o servidor devolve os dois.
+    if (resposta.reservadoInicio && resposta.reservadoFim) {
+      c.reservadoInicio = resposta.reservadoInicio;
+      c.reservadoFim = resposta.reservadoFim;
+    }
     // Visita de orçamento volta pra fila, sem data (o servidor já tirou).
     if (resposta.orcamento) {
       c.reservadoInicio = "";

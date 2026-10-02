@@ -3581,7 +3581,10 @@ porque explica POR QUE a regra ficou do jeito que ficou.
   app nunca escrevia nele). Reaproveita o MESMO webhook de sempre
   (`reagendar-chamado`, flag `concluir=true`), espelhando exatamente como
   `cancelar=true` já funciona -- zero endpoint novo.
-- Concluído se comporta como Cancelado em quase tudo: some da Agenda
+- (Atualizado em 01/10/2026: Concluído agora **aparece** na Agenda, em cinza
+  e editável -- ver a seção "Agenda: fim estimado editável..." -- mas
+  continua sem bloquear horário.) Concluído se comportava como Cancelado em
+  quase tudo: sumia da Agenda
   (`agendaDesenharItens`, `agendaDesenharFila`), libera o horário pra outro
   chamado (`agendaOcupados` -- o backend já fazia isso, o filtro
   `AND({Status}!='Concluído', {Status}!='Cancelado')` já existia antes de
@@ -4341,6 +4344,97 @@ dia, concluir sem resumo recusado, rascunho entre abas, concluir, encerrar
 orçamento abrindo os valores, trava de arraste, limpeza ao sair. Backend
 testado sem gravar (sem acesso, ação inválida, ids faltando, listar,
 chamado/visita inexistente).
+
+### Agenda: fim estimado editável, empurrão em cadeia e Concluído visível (01/10/2026)
+
+Pedido do dono: o horário de fim é só uma **estimativa** (ele só sabe quando
+termina), então (1) tem que dar pra mexer no fim enquanto o chamado não está
+concluído, inclusive depois que começou; (2) se o fim atrasado invadir o
+próximo chamado, o sistema **empurra o próximo pra frente**, exatamente o
+tempo que foi invadido, mantendo a duração dele (se isso invadir o seguinte,
+ele anda também, em cadeia); (3) **Concluído continua na Agenda**, com cor
+própria e a palavra em destaque, e continua editável (horário e detalhes) pra
+quando ele marcar concluído e errar o horário ou esquecer algo.
+
+**O que estava errado antes**: a tela deixava esticar o fim de um chamado que
+já passou da hora de começar, mas o servidor (`reagendar-chamado`) recusava
+("Não dá pra marcar num horário que já passou") qualquer pedido com início no
+passado, mesmo só mudando o fim; e a fase 1 do Atendimento travou todo
+arrasto de "Em andamento", inclusive a alça do fim. Resultado: depois que o
+chamado começava, não dava pra mexer no fim.
+
+**Servidor** (`App - Reagendar chamado`, nó "Monta atualizacao", cópia em
+`n8n/reagendar-chamado.json`; só acréscimos, os modos antigos não mudaram):
+- Modo novo **`lote`** (corpo: `chamadoId` do principal + `lote` = JSON
+  `[{id, reservadoInicio, reservadoFim}]` em ISO + `motivo` opcional). A tela
+  calcula o plano; o servidor só **confere o resultado final** e grava num
+  PATCH só (tudo ou nada). Regras: o principal vem primeiro; só chamado ativo
+  (não Concluído/Cancelado); no máximo 10 itens; fim depois do início; início
+  que anda pra **trás** não pode cair no passado (andar pra frente pode -- é o
+  empurrão); nada pode ficar em cima de outro, **exceto** o principal por cima
+  de quem está "Em andamento" (esse não dá pra empurrar); Status e confirmação
+  nunca mudam; "Nada mudou" é recusado. Histórico: "horário ajustado: A -> B"
+  e "horário empurrado: A -> B [atraso do chamado #N]".
+- **Concluído editável**: se o chamado principal é Concluído, o modo normal
+  (`data + reservadoInicio + reservadoFim`) corrige o horário **sem checar
+  passado nem conflito** e sem derrubar o status (`decideStatus` agora devolve
+  Concluído). Concluído não usa o lote, não troca de lugar com ninguém e exige
+  horário exato.
+- Testado com o código real do nó rodando em Node com chamados falsos (44
+  verificações, nada toca o Airtable) e, no n8n vivo, só com pedidos que o
+  servidor recusa antes de gravar.
+
+**Tela** (`app.js`, `style.css`, versão 2026.10.02a):
+- **Alça de baixo** (só o fim) existe em Em andamento, Agendado já iniciado e
+  Concluído; a de cima não existe pra Em andamento. `agendaAoMover` só trava o
+  arrasto do corpo e da alça de cima de Em andamento.
+- **`agendaPlanoEmpurrao(c, novoFim)`**: quem começa depois do chamado e é
+  invadido anda `corte - início` (mantendo a duração) e vira o novo corte;
+  para na primeira folga; "Em andamento" é só avisado ("fica por cima").
+  Prévia do arrasto diz "empurra #2 (+45min), #3 ..." e os empurrados
+  aparecem já no lugar novo, tracejados. Soltou: `agendaAplicarFim` manda um
+  lote (recusa se empurraria mais de 9). Se o servidor recusar, **tudo volta**.
+- **Desfazer/Refazer** do lote usa o mesmo modo (`entrada.lote`/`motivo` no
+  histórico); desfazer pode ser recusado se o horário original já passou.
+- **Concluído visível**: bloco cinza com "✔ CONCLUÍDO" em tamanho bem maior
+  (selo inline nos blocos baixos e nas escalas semana/mês/ano), por baixo dos
+  ativos (z-index), com as duas alças. **Continua não bloqueando horário**
+  (`agendaOcupados` e o filtro do servidor ficam como estavam): sem conflito,
+  sem regra de passado, sem empurrar, sem trocar de lugar, sem "tirar da
+  agenda"; só arrasta nas escalas com horas. Menu do bloco: só "Editar
+  chamado" + dica. Cancelado continua fora da Agenda.
+- Testado na tela (desktop e 375 px) com chamados e respostas falsas:
+  empurrão em cadeia (3), prévia e blocos tracejados, desfazer/refazer em
+  lote, servidor recusando (volta tudo, sem histórico), concluído por cima de
+  ativo e pro passado, Em andamento arrastado vira clique/menu, atrasado
+  esticando o fim, mover/conflito/encolher fim sem regressão.
+- **Data no bloco** (pedido do dono): a linha do horário dos blocos da Agenda
+  (escalas com horas) passou a ser "02/10/26 · 07:00 → 09:30 · 2h30" -- mesma
+  linha, mesmo estilo e tamanho (`agendaConteudoBloco`); não corta no celular
+  (375 px).
+- **Horário real ao concluir pelo Atendimento** (dono aprovou, 02/10/2026):
+  workflow `App - Atendimento`, nó "Decide conclusao" (cópia em
+  `n8n/atendimento.json`): no atendimento normal o chamado passa a ter
+  `Reservado_Inicio` = início real da visita e `Reservado_Fim` = agora (nunca
+  menos de 1 min depois do início), e o histórico guarda o previsto
+  ("A Agenda passou a mostrar o horário real (previsto 10:00 às 11:30)").
+  A resposta traz `reservadoInicio/Fim` e a tela (`concluirAtendimento`) já
+  atualiza o bloco. **Orçamento** continua voltando pra fila sem data;
+  **cancelado no meio** continua só fechando a visita. Concluir NÃO empurra
+  ninguém: o empurrão acontece quando o fim é esticado (dá pra fazer durante
+  o atendimento); se o real passar por cima de um chamado seguinte, ele fica
+  por baixo do bloco cinza e se arrasta à mão. "Marcar concluído" pela
+  Agenda/cartão (sem visita) mantém o horário previsto.
+- **Teste de ponta a ponta no Airtable de verdade (02/10/2026)**, só com 4
+  chamados de teste (9901-9904, março/2027, criados e apagados no mesmo
+  teste, junto com a visita; nada real foi tocado): iniciar → lote que estica
+  e empurra 2 em cadeia (status intactos, histórico certo) → plano
+  desatualizado recusado sem mudar nada → desfazer (volta tudo) → refazer →
+  concluir (bloco assume o real) → concluído corrigido pro passado e por cima
+  de outro ativo (continua Concluído) → concluído sem horário exato, troca com
+  concluído e lote com concluído recusados → modos antigos intactos (conflito
+  e passado continuam recusando). Lição: o número do próximo chamado real é
+  máx+1, então chamado de teste com número alto TEM que ser apagado.
 
 ## Decisões já tomadas (não relitigar sem motivo)
 

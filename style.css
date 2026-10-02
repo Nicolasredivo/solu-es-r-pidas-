@@ -2472,6 +2472,42 @@ input[type="text"].campo-busca-entrada {
   cursor: pointer;
 }
 
+/* Concluído continua na Agenda (histórico editável): cinza, bem diferente de
+   Agendado (azul), Aguardando (âmbar) e Em andamento (roxo), com a palavra
+   "CONCLUÍDO" em tamanho bem maior que o resto. Fica por baixo dos blocos
+   ativos, que continuam clicáveis se algum cair por cima dele. */
+.agenda-bloco.concluido {
+  border-color: #8b94aa;
+  background: rgba(139, 148, 170, 0.22);
+  z-index: 2;
+}
+
+.agenda-bloco-selo-concluido {
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  color: #dde3f2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agenda-bloco-selo-inline {
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #dde3f2;
+}
+
+/* Prévia de quem vai ser empurrado quando o fim de um chamado estica por cima
+   dele: aparece já no lugar novo, tracejado. */
+.agenda-bloco.empurrado {
+  outline: 2px dashed var(--aviso);
+  outline-offset: 1px;
+  opacity: 0.9;
+}
+
 .agenda-bloco.arrastando {
   opacity: 0.3;
   cursor: grabbing;
