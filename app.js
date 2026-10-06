@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.02a";
+const APP_VERSION = "2026.10.06a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -5121,6 +5121,7 @@ const editChamadoListaContatos = document.getElementById("edit-chamado-lista-con
 const editChamadoLocalEscolhaBox = document.getElementById("edit-chamado-local-escolha");
 const editChamadoListaLocais = document.getElementById("edit-chamado-lista-locais");
 const editChamadoLocalExato = document.getElementById("edit-chamado-local-exato");
+const editChamadoChegada = document.getElementById("edit-chamado-chegada");
 const editChamadoDescricao = document.getElementById("edit-chamado-descricao");
 const editChamadoObservacoes = document.getElementById("edit-chamado-observacoes");
 const editChamadoAnexosAtuaisBloco = document.getElementById("edit-chamado-anexos-atuais-bloco");
@@ -5161,6 +5162,7 @@ const chamadoListaContatos = document.getElementById("chamado-lista-contatos");
 const chamadoLocalEscolhaBox = document.getElementById("chamado-local-escolha");
 const chamadoListaLocais = document.getElementById("chamado-lista-locais");
 const chamadoLocalExatoInput = document.getElementById("chamado-local-exato");
+const chamadoChegadaInput = document.getElementById("chamado-chegada");
 const chamadoDescricaoInput = document.getElementById("chamado-descricao");
 const chamadoObservacoesInput = document.getElementById("chamado-observacoes");
 const chamadoAnexosFotoInput = document.getElementById("chamado-anexos-foto");
@@ -5508,6 +5510,7 @@ function limparFormularioChamado() {
   chamadoPassoCliente.classList.remove("hidden");
   chamadosBusca.value = "";
   chamadoLocalExatoInput.value = "";
+  chamadoChegadaInput.value = "";
   chamadoDescricaoInput.value = "";
   chamadoObservacoesInput.value = "";
   chamadoAnexosLista.innerHTML = "";
@@ -5537,7 +5540,9 @@ async function criarChamadoDeVerdade() {
     data: "",
     reservadoInicio: "",
     reservadoFim: "",
-    horarioCombinadoCliente: "",
+    // Hora em que precisa estar no local (opcional). Não é agendamento: a
+    // Agenda continua sendo quem reserva o bloco.
+    horarioCombinadoCliente: chamadoChegadaInput.value,
     // Viaja como texto JSON num campo só, mesmo padrão de "locais"/"contatos"
     // no Cadastro: URLSearchParams não sabe serializar um array de verdade.
     anexos: JSON.stringify(chamadosAnexosArquivos.map((a) => ({ filename: a.filename, contentType: a.contentType, base64: a.base64 }))),
@@ -5599,7 +5604,7 @@ function montarCardChamado(c, comData, termos = []) {
       ? `${formatarHoraIso(c.reservadoInicio)} às ${formatarHoraIso(c.reservadoFim)}`
       : "horário ainda não definido";
     horarioTexto = `<p class="chamado-card-horario">${dataFmt} · ${horas}` +
-      `${c.horarioCombinadoCliente ? ` (combinado ${escapeHtml(c.horarioCombinadoCliente)})` : ""}</p>`;
+      `${c.horarioCombinadoCliente ? ` (chegar às ${escapeHtml(c.horarioCombinadoCliente)})` : ""}</p>`;
   }
 
   const criadoTexto = c.criadoEm
@@ -6300,6 +6305,7 @@ function agendaConteudoBloco(c, ini, fim, alturaPx) {
     // A data do agendamento (dd/mm/aa) vem junto do horário, no mesmo estilo.
     const dataCurta = agFmt(ini, { day: "2-digit", month: "2-digit", year: "2-digit" });
     html += `<div class="agenda-bloco-linha">${dataCurta} · ${agHoraStr(ini)} → ${agHoraStr(fim)} · ${agendaDuracaoTexto(fim - ini)}</div>`;
+    if (c.horarioCombinadoCliente) html += `<div class="agenda-bloco-linha agenda-bloco-chegada">⏰ Chegar às ${escapeHtml(c.horarioCombinadoCliente)}</div>`;
   }
   if (alturaPx >= 49) {
     html += `<div class="agenda-bloco-linha">Chamado #${escapeHtml(String(c.numero))}` +
@@ -7653,6 +7659,9 @@ async function abrirEdicaoChamado(chamado) {
   chamadoEditarTitulo.textContent = `Chamado #${chamado.numero} — ${chamado.clienteNome}`;
 
   editChamadoLocalExato.value = chamado.localExato || "";
+  // O campo é de hora (HH:MM). Texto livre antigo ("depois das 14h") não cabe
+  // nele: fica em branco e, se continuar em branco, o valor antigo não é tocado.
+  editChamadoChegada.value = /^\d{2}:\d{2}$/.test(chamado.horarioCombinadoCliente || "") ? chamado.horarioCombinadoCliente : "";
   editChamadoDescricao.value = chamado.descricaoSolicitacao || "";
   editChamadoObservacoes.value = chamado.observacoesServico || "";
 
@@ -7742,6 +7751,8 @@ async function salvarEdicaoChamado() {
     localId: chamadoEditLocalEscolhidoId,
     localExato: editChamadoLocalExato.value.trim(),
     descricaoSolicitacao: editChamadoDescricao.value.trim(),
+    ...(editChamadoChegada.value || /^\d{2}:\d{2}$/.test(chamadoEditandoAtual.horarioCombinadoCliente || "")
+      ? { horarioCombinadoCliente: editChamadoChegada.value } : {}),
     observacoesServico: editChamadoObservacoes.value.trim(),
     anexosNovos: JSON.stringify(chamadoEditAnexosNovos.map((a) => ({ filename: a.filename, contentType: a.contentType, base64: a.base64 }))),
   };
@@ -8278,6 +8289,7 @@ function desenharAtendimento() {
     ${atalhos ? `<div class="atendimento-atalhos">${atalhos}</div>` : ""}
 
     <dl class="atendimento-dados">
+      ${c.horarioCombinadoCliente ? `<dt>Chegada combinada</dt><dd><strong>${escapeHtml(c.horarioCombinadoCliente)}</strong></dd>` : ""}
       <dt>Endereço</dt>
       <dd>${escapeHtml(c.enderecoCopia || "—")}${c.localExato ? `<span class="atendimento-local">${escapeHtml(c.localExato)}</span>` : ""}</dd>
       ${c.contatoNome ? `<dt>Contato</dt><dd>${escapeHtml(c.contatoNome)}${c.contatoWhatsApp ? " · " + escapeHtml(c.contatoWhatsApp) : ""}</dd>` : ""}

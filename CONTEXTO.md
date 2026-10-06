@@ -4481,3 +4481,22 @@ chamado começava, não dava pra mexer no fim.
   webhooks do n8n — conversa detalhada em 17/09/2026 (arquitetura, voz só
   gravada, custo estimado), adiado a pedido do dono pra retomar mais pra
   frente.
+
+### Horário combinado com o cliente (chegada no local) (06/10/2026)
+
+Campo **opcional** "Horário combinado com o cliente", em Criar chamado e Editar
+chamado (atendimento e orçamento usam os mesmos formulários). É a hora em que
+o dono precisa estar no local; o bloco da Agenda já inclui o deslocamento, então
+é **só informativo**: não gera conflito nem empurra ninguém.
+
+- Usa a coluna que já existia, `Horario_Combinado_Cliente` (texto, grava `HH:MM`).
+  `App - Criar chamado` e `App - Reagendar chamado` já a aceitavam.
+- `App - Editar chamado` (nó `Monta atualizacao`) passou a gravar o campo, **só se o
+  app mandar a chave** (o fluxo de finalizar orçamento reenvia o resto sem ela e
+  não pode apagar). Vazio apaga; texto que não é hora (`HH:MM`) é recusado.
+- Aparece como "⏰ Chegar às HH:MM" (negrito) no bloco da Agenda (quando há
+  altura), como "Chegada combinada" na tela Atendimento e como "(chegar às HH:MM)"
+  nos cartões de chamado.
+- Texto livre antigo na coluna continua aparecendo nos cartões; na edição o campo
+  de hora fica em branco e o valor antigo só muda se for preenchida uma hora.
+- Teste: lógica do nó rodada com dados falsos (7 verificações); nada real tocado.

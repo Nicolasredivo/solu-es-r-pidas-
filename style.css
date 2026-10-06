@@ -3076,3 +3076,8 @@ div.lembrete-item:hover {
     animation: none;
   }
 }
+
+/* Hora combinada com o cliente, em destaque dentro do bloco da Agenda. */
+.agenda-bloco-chegada {
+  font-weight: 700;
+}
