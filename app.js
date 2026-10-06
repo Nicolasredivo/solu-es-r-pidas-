@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.06a";
+const APP_VERSION = "2026.10.06b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -8152,14 +8152,81 @@ async function iniciarAtendimento(c) {
 
   const visita = resposta.visita;
   c.status = "Em andamento";
+  // O bloco da Agenda passa a começar na hora real (mesma duração). Se atrasou,
+  // quem foi empurrado já vem na resposta; se adiantou, ninguém mais se mexe.
+  const mudouHorario = Boolean(resposta.horario);
+  if (resposta.horario) {
+    c.reservadoInicio = resposta.horario.reservadoInicio;
+    c.reservadoFim = resposta.horario.reservadoFim;
+  }
+  const movidos = resposta.movidos || [];
+  movidos.forEach((m) => {
+    const x = chamadoPorId(m.id);
+    if (x) { x.reservadoInicio = m.reservadoInicio; x.reservadoFim = m.reservadoFim; }
+  });
   atendimentos = atendimentos.filter((v) => v.id !== visita.id).concat(visita);
   redesenharDepoisDoAtendimento();
   abrirAtendimento(visita.id);
+  mostrarAlertaHorarioCombinado(movidos);
+  const textoHorario = mudouHorario
+    ? ` Horário real: ${formatarHoraIso(c.reservadoInicio)} às ${formatarHoraIso(c.reservadoFim)}.` : "";
+  const textoMovidos = movidos.length ? ` Empurrou ${movidos.map((m) => "#" + m.numero).join(", ")}.` : "";
   // Sem pergunta antes de iniciar: o "Desfazer" cobre o toque errado.
-  mostrarToast(`Chamado #${c.numero} em andamento.`, {
+  mostrarToast(`Chamado #${c.numero} em andamento.${textoHorario}${textoMovidos}`, {
     rotulo: "Desfazer",
     aoClicar: () => desfazerInicioAtendimento(visita.id),
   });
+}
+
+// Alerta persistente (não some sozinho) quando o atraso empurrou um chamado que
+// tem horário de chegada combinado com o cliente. Não impede nada: a cascata
+// já foi feita. O botão abre a edição do chamado com a mesma folga sugerida.
+function fecharAlertaHorarioCombinado() {
+  const antigo = document.getElementById("alerta-horario-combinado");
+  if (antigo) antigo.remove();
+}
+
+function mostrarAlertaHorarioCombinado(movidos) {
+  fecharAlertaHorarioCombinado();
+  const afetados = (movidos || []).filter((m) => m.horarioCombinado);
+  if (!afetados.length) return;
+  const caixa = document.createElement("div");
+  caixa.id = "alerta-horario-combinado";
+  caixa.className = "alerta-horario-combinado";
+  caixa.setAttribute("role", "alert");
+  const titulo = document.createElement("strong");
+  titulo.textContent = "Atenção: horário combinado com o cliente";
+  caixa.appendChild(titulo);
+  afetados.forEach((m) => {
+    const linha = document.createElement("div");
+    linha.className = "alerta-horario-combinado-linha";
+    const texto = document.createElement("span");
+    texto.textContent = `Chamado #${m.numero}${m.cliente ? " — " + m.cliente : ""} foi empurrado pra ${formatarHoraIso(m.reservadoInicio)}, mas a chegada combinada é ${m.horarioCombinado}.`;
+    linha.appendChild(texto);
+    const ajustar = document.createElement("button");
+    ajustar.type = "button";
+    ajustar.textContent = m.sugestaoHorarioCombinado ? `Ajustar (sugestão ${m.sugestaoHorarioCombinado})` : "Ajustar";
+    ajustar.addEventListener("click", async () => {
+      const x = chamadoPorId(m.id);
+      if (!x) return;
+      const item = document.querySelector('.sidebar-item[data-page="consultar-chamados"]');
+      if (item) item.click();
+      await abrirEdicaoChamado(x);
+      if (m.sugestaoHorarioCombinado) editChamadoChegada.value = m.sugestaoHorarioCombinado;
+      editChamadoChegada.focus();
+      linha.remove();
+      if (!caixa.querySelector(".alerta-horario-combinado-linha")) caixa.remove();
+    });
+    linha.appendChild(ajustar);
+    caixa.appendChild(linha);
+  });
+  const manter = document.createElement("button");
+  manter.type = "button";
+  manter.className = "alerta-horario-combinado-fechar";
+  manter.textContent = "Entendi, manter os horários combinados";
+  manter.addEventListener("click", fecharAlertaHorarioCombinado);
+  caixa.appendChild(manter);
+  document.body.appendChild(caixa);
 }
 
 async function desfazerInicioAtendimento(visitaId) {
@@ -8176,6 +8243,11 @@ async function desfazerInicioAtendimento(visitaId) {
   }
   atendimentos = atendimentos.filter((v) => v.id !== visitaId);
   apagarRascunhoAtendimento(visitaId);
+  (resposta.restaurados || []).forEach((m) => {
+    const x = chamadoPorId(m.id);
+    if (x) { x.reservadoInicio = m.reservadoInicio; x.reservadoFim = m.reservadoFim; }
+  });
+  fecharAlertaHorarioCombinado();
   const c = visita && chamadoPorId(visita.chamadoId);
   if (c && c.status === "Em andamento") c.status = "Agendado";
   redesenharDepoisDoAtendimento();

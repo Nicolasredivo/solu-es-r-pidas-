@@ -3081,3 +3081,36 @@ div.lembrete-item:hover {
 .agenda-bloco-chegada {
   font-weight: 700;
 }
+
+/* Alerta persistente: um chamado empurrado tem chegada combinada com o cliente. */
+.alerta-horario-combinado {
+  position: fixed;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  width: min(92vw, 460px);
+  background: var(--card);
+  color: var(--text);
+  border: 2px solid var(--aviso);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 0.9rem;
+}
+.alerta-horario-combinado strong { color: var(--aviso); }
+.alerta-horario-combinado-linha { display: flex; flex-direction: column; gap: 6px; }
+.alerta-horario-combinado button {
+  align-self: flex-start;
+  border: 1px solid var(--aviso);
+  background: transparent;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+.alerta-horario-combinado-fechar { opacity: 0.85; }

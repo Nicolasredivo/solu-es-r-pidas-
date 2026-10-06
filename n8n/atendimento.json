@@ -376,7 +376,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const usuario = $('Busca usuario').first().json;\nconst quem = (usuario && usuario.fields && usuario.fields.Nome) || 'senha de acesso';\nconst agora = new Date().toISOString();\nconst hora = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });\nconst comLinha = (historico, linha) => (historico ? historico + '\\n' : '') + agora + ' -- ' + linha;\nconst recusa = (mensagem) => [{ json: { pode: false, resposta: { ok: false, mensagem } } }];\nconst entrada = $('Le entrada').first().json;\nconst r = $input.first().json;\nif (!r || !r.id) return recusa('Chamado não encontrado.');\nconst f = r.fields || {};\nconst status = f.Status || '';\n\nif (status === 'Em andamento') return recusa('Esse chamado já está em andamento.');\nif (status === 'Concluído' || status === 'Cancelado') return recusa('Esse chamado já está ' + status.toLowerCase() + '.');\nif (!f.Reservado_Inicio) return recusa('Esse chamado ainda não está na agenda.');\n// Só começa com data confirmada -- ou confirmando agora, no mesmo toque.\nif (status !== 'Agendado' && !(status === 'Aguardando confirmação de data' && entrada.confirmarData)) {\n  return recusa('Confirme a data do chamado antes de iniciar.');\n}\n\nconst orcamento = f.Tipo_Chamado === 'Orçamento';\nconst rotulo = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '');\nconst linha = (orcamento ? 'Visita de orçamento iniciada' : 'Atendimento iniciado') + ' por ' + quem\n  + (status !== 'Agendado' ? ' (data confirmada na hora)' : '') + '.';\n\nreturn [{\n  json: {\n    pode: true,\n    chamadoId: r.id,\n    // Pra voltar atrás se a visita não puder ser criada.\n    desfazChamado: { typecast: true, records: [{ id: r.id, fields: { Status: status, Historico: f.Historico || '' } }] },\n    patchChamado: { typecast: true, records: [{ id: r.id, fields: { Status: 'Em andamento', Historico: comLinha(f.Historico, linha) } }] },\n    criaVisita: { typecast: true, records: [{ fields: {\n      Visita: 'Chamado #' + (f.Numero_Chamado || '') + ' — ' + rotulo,\n      Chamado: [r.id], Situacao: 'Em andamento', Inicio_Real: agora, Iniciado_Por: quem,\n    } }] },\n    inicioReal: agora,\n    iniciadoPor: quem,\n  },\n}];"
+        "jsCode": "const usuario = $('Busca usuario').first().json;\nconst quem = (usuario && usuario.fields && usuario.fields.Nome) || 'senha de acesso';\nconst agora = new Date().toISOString();\nconst hora = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });\nconst dataHora = (iso) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '');\nconst comLinha = (historico, linha) => (historico ? historico + '\\n' : '') + agora + ' -- ' + linha;\nconst recusa = (mensagem) => [{ json: { pode: false, resposta: { ok: false, mensagem } } }];\nconst entrada = $('Le entrada').first().json;\nconst r = $('Busca chamado').first().json;\nif (!r || !r.id) return recusa('Chamado não encontrado.');\nconst f = r.fields || {};\nconst status = f.Status || '';\n\nif (status === 'Em andamento') return recusa('Esse chamado já está em andamento.');\nif (status === 'Concluído' || status === 'Cancelado') return recusa('Esse chamado já está ' + status.toLowerCase() + '.');\nif (!f.Reservado_Inicio) return recusa('Esse chamado ainda não está na agenda.');\n// Só começa com data confirmada -- ou confirmando agora, no mesmo toque.\nif (status !== 'Agendado' && !(status === 'Aguardando confirmação de data' && entrada.confirmarData)) {\n  return recusa('Confirme a data do chamado antes de iniciar.');\n}\n\nconst orcamento = f.Tipo_Chamado === 'Orçamento';\nconst rotulo = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '');\nconst linha = (orcamento ? 'Visita de orçamento iniciada' : 'Atendimento iniciado') + ' por ' + quem\n  + (status !== 'Agendado' ? ' (data confirmada na hora)' : '') + '.';\n\n// ---- O bloco da Agenda passa a começar na hora REAL, com a mesma duração ----\n// Adiantou: só o próprio chamado anda pra mais cedo; os seguintes ficam onde\n// estão (o dono decide se aproveita a folga). Atrasou: o fim também anda, e o\n// que passar a invadir o próximo empurra ele em cascata (mesma regra da Agenda).\nconst MIN = 60000;\nconst t = (iso) => new Date(iso).getTime();\nconst iso = (ms) => new Date(ms).toISOString();\nconst iniAntes = t(f.Reservado_Inicio);\nconst fimAntes = f.Reservado_Fim ? t(f.Reservado_Fim) : null;\nconst duracao = fimAntes !== null && fimAntes > iniAntes ? fimAntes - iniAntes : null;\nconst niCandidato = Math.floor(Date.now() / MIN) * MIN;\n// Sem horário de fim (só o dia marcado) ou diferença de menos de 1 min: não mexe.\nconst mexe = duracao !== null && Math.abs(niCandidato - iniAntes) >= MIN;\nconst ni = mexe ? niCandidato : iniAntes;\nconst nf = mexe ? ni + duracao : fimAntes;\n\nconst registros = [];\nconst antes = [];\nconst movidos = [];\nconst sobrepostos = [];\nconst fieldsPrincipal = { Status: 'Em andamento' };\nlet histPrincipal = linha;\n\nif (mexe) {\n  fieldsPrincipal.Reservado_Inicio = iso(ni);\n  fieldsPrincipal.Reservado_Fim = iso(nf);\n  histPrincipal += ' O bloco da Agenda passou a mostrar o horário real: previsto ' + dataHora(iniAntes) + ' às ' + hora(fimAntes)\n    + ', agora ' + dataHora(ni) + ' às ' + hora(nf) + '.';\n  antes.push({ id: r.id, ini: iso(iniAntes), fim: iso(fimAntes), depoisIni: iso(ni), depoisFim: iso(nf) });\n\n  if (ni > iniAntes) {\n    // Atrasou: cascata. Só considera quem vem depois do início previsto.\n    const lista = (($input.first().json || {}).records || [])\n      .filter((o) => o.id !== r.id && o.fields && o.fields.Reservado_Inicio && o.fields.Reservado_Fim\n        && t(o.fields.Reservado_Inicio) >= iniAntes\n        && !['Concluído', 'Cancelado'].includes(o.fields.Status || ''))\n      .sort((a, b) => t(a.fields.Reservado_Inicio) - t(b.fields.Reservado_Inicio));\n    let corte = nf;\n    for (const o of lista) {\n      const oi = t(o.fields.Reservado_Inicio);\n      const ofim = t(o.fields.Reservado_Fim);\n      if (oi >= corte) break;\n      if (o.fields.Status === 'Em andamento' || movidos.length >= 9) { sobrepostos.push(o.fields.Numero_Chamado); continue; }\n      const desloc = corte - oi;\n      const novoIni = corte;\n      const novoFim = ofim + desloc;\n      // Chegada combinada com o cliente nesse chamado: a cascata continua, mas a tela\n      // avisa e sugere a mesma folga na hora combinada (o dono decide se muda).\n      const hc = String(o.fields.Horario_Combinado_Cliente || '').trim();\n      let sugestao = '';\n      const mHc = /^([01]?\\d|2[0-3]):([0-5]\\d)$/.exec(hc);\n      if (mHc) { const tot = Number(mHc[1]) * 60 + Number(mHc[2]) + Math.round(desloc / MIN); if (tot < 24 * 60) sugestao = String(Math.floor(tot / 60)).padStart(2, '0') + ':' + String(tot % 60).padStart(2, '0'); }\n      movidos.push({ id: o.id, numero: o.fields.Numero_Chamado, cliente: o.fields.Cliente_Nome || '', reservadoInicio: iso(novoIni), reservadoFim: iso(novoFim),\n        horarioCombinado: hc, sugestaoHorarioCombinado: sugestao });\n      antes.push({ id: o.id, ini: iso(oi), fim: iso(ofim), depoisIni: iso(novoIni), depoisFim: iso(novoFim) });\n      registros.push({ id: o.id, fields: {\n        Reservado_Inicio: iso(novoIni), Reservado_Fim: iso(novoFim),\n        Historico: comLinha(o.fields.Historico, 'horário empurrado: ' + dataHora(oi) + ' -> ' + dataHora(novoIni)\n          + ' [o Chamado #' + (f.Numero_Chamado || '') + ' começou mais tarde que o previsto]'),\n      } });\n      corte = novoFim;\n    }\n  }\n}\nfieldsPrincipal.Historico = comLinha(f.Historico, histPrincipal);\nregistros.unshift({ id: r.id, fields: fieldsPrincipal });\n\n// Pra voltar atrás se a visita não puder ser criada: devolve tudo como estava.\nconst originais = new Map((($input.first().json || {}).records || []).map((o) => [o.id, o.fields || {}]));\nconst desfazRegistros = [{ id: r.id, fields: { Status: status, Historico: f.Historico || '',\n  ...(mexe ? { Reservado_Inicio: f.Reservado_Inicio, Reservado_Fim: f.Reservado_Fim } : {}) } }];\nfor (const m of movidos) {\n  const o = originais.get(m.id) || {};\n  desfazRegistros.push({ id: m.id, fields: { Reservado_Inicio: o.Reservado_Inicio, Reservado_Fim: o.Reservado_Fim, Historico: o.Historico || '' } });\n}\n\nreturn [{\n  json: {\n    pode: true,\n    chamadoId: r.id,\n    desfazChamado: { typecast: true, records: desfazRegistros },\n    patchChamado: { typecast: true, records: registros },\n    criaVisita: { typecast: true, records: [{ fields: {\n      Visita: 'Chamado #' + (f.Numero_Chamado || '') + ' — ' + rotulo,\n      Chamado: [r.id], Situacao: 'Em andamento', Inicio_Real: agora, Iniciado_Por: quem,\n      ...(antes.length ? { Reservado_Antes: JSON.stringify(antes) } : {}),\n    } }] },\n    inicioReal: agora,\n    iniciadoPor: quem,\n    horario: mexe ? { reservadoInicio: iso(ni), reservadoFim: iso(nf), previstoInicio: iso(iniAntes), previstoFim: iso(fimAntes) } : null,\n    movidos,\n    sobrepostos,\n  },\n}];\n"
       },
       "id": "a7e00000-0000-4000-8000-000000000020",
       "name": "Decide inicio",
@@ -482,7 +482,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const d = $('Decide inicio').first().json;\nconst criada = ($input.first().json.records || [])[0] || {};\nreturn [{ json: { ok: true, visita: { id: criada.id, chamadoId: d.chamadoId, inicioReal: d.inicioReal, iniciadoPor: d.iniciadoPor } } }];"
+        "jsCode": "const d = $('Decide inicio').first().json;\nconst criada = ($input.first().json.records || [])[0] || {};\nreturn [{ json: { ok: true, visita: { id: criada.id, chamadoId: d.chamadoId, inicioReal: d.inicioReal, iniciadoPor: d.iniciadoPor },\n  horario: d.horario, movidos: d.movidos, sobrepostos: d.sobrepostos } }];"
       },
       "id": "a7e00000-0000-4000-8000-000000000025",
       "name": "Monta resposta inicio",
@@ -576,7 +576,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const usuario = $('Busca usuario').first().json;\nconst quem = (usuario && usuario.fields && usuario.fields.Nome) || 'senha de acesso';\nconst agora = new Date().toISOString();\nconst hora = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });\nconst comLinha = (historico, linha) => (historico ? historico + '\\n' : '') + agora + ' -- ' + linha;\nconst recusa = (mensagem) => [{ json: { pode: false, resposta: { ok: false, mensagem } } }];\nconst visita = $('Busca visita').first().json;\nconst chamado = $input.first().json;\nconst v = visita.fields || {};\nconst f = chamado.fields || {};\nif (v.Situacao !== 'Em andamento') return recusa('Esse atendimento já foi encerrado.');\n// Desfazer é pra toque errado: vale só logo depois de iniciar.\nif (Date.now() - new Date(v.Inicio_Real).getTime() > 15 * 60 * 1000) {\n  return recusa('Já passou muito tempo pra desfazer. Encerre o atendimento normalmente.');\n}\nconst patch = { typecast: true, records: [{ id: chamado.id, fields: { Historico: comLinha(f.Historico, 'Início desfeito por ' + quem + '.') } }] };\n// Só devolve pra \"Agendado\" se ainda estiver em andamento (ninguém mudou no meio).\nif (f.Status === 'Em andamento') patch.records[0].fields.Status = 'Agendado';\nreturn [{ json: { pode: true, visitaId: visita.id, chamadoId: chamado.id, patchChamado: patch } }];"
+        "jsCode": "const usuario = $('Busca usuario').first().json;\nconst quem = (usuario && usuario.fields && usuario.fields.Nome) || 'senha de acesso';\nconst agora = new Date().toISOString();\nconst dataHora = (iso) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '');\nconst comLinha = (historico, linha) => (historico ? historico + '\\n' : '') + agora + ' -- ' + linha;\nconst recusa = (mensagem) => [{ json: { pode: false, resposta: { ok: false, mensagem } } }];\nconst visita = $('Busca visita').first().json;\nconst chamado = $('Busca chamado da visita').first().json;\nconst v = visita.fields || {};\nconst f = chamado.fields || {};\nif (v.Situacao !== 'Em andamento') return recusa('Esse atendimento já foi encerrado.');\n// Desfazer é pra toque errado: vale só logo depois de iniciar.\nif (Date.now() - new Date(v.Inicio_Real).getTime() > 15 * 60 * 1000) {\n  return recusa('Já passou muito tempo pra desfazer. Encerre o atendimento normalmente.');\n}\nconst patch = { typecast: true, records: [{ id: chamado.id, fields: { Historico: comLinha(f.Historico, 'Início desfeito por ' + quem + '.') } }] };\n// Só devolve pra \"Agendado\" se ainda estiver em andamento (ninguém mudou no meio).\nif (f.Status === 'Em andamento') patch.records[0].fields.Status = 'Agendado';\n\n// Devolve os horários de antes de iniciar (o do chamado e os dos empurrados),\n// mas só de quem ainda está exatamente onde o início deixou: se o dono já mexeu\n// no horário de algum, esse não é tocado.\nlet antes = [];\ntry { antes = JSON.parse(v.Reservado_Antes || '[]'); } catch (e) { antes = []; }\nconst atuais = new Map((($input.first().json || {}).records || []).map((o) => [o.id, o]));\natuais.set(chamado.id, chamado);\nconst mesmo = (a, b) => a && b && new Date(a).getTime() === new Date(b).getTime();\nconst restaurados = [];\nfor (const e of antes) {\n  const atual = atuais.get(e.id);\n  if (!atual) continue;\n  const af = atual.fields || {};\n  if (!mesmo(af.Reservado_Inicio, e.depoisIni) || !mesmo(af.Reservado_Fim, e.depoisFim)) continue;\n  restaurados.push({ id: e.id, reservadoInicio: e.ini, reservadoFim: e.fim });\n  if (e.id === chamado.id) {\n    patch.records[0].fields.Reservado_Inicio = e.ini;\n    patch.records[0].fields.Reservado_Fim = e.fim;\n  } else {\n    patch.records.push({ id: e.id, fields: { Reservado_Inicio: e.ini, Reservado_Fim: e.fim,\n      Historico: comLinha(af.Historico, 'horário devolvido: ' + dataHora(e.depoisIni) + ' -> ' + dataHora(e.ini) + ' [início do Chamado #' + (f.Numero_Chamado || '') + ' desfeito]') } });\n  }\n}\nreturn [{ json: { pode: true, visitaId: visita.id, chamadoId: chamado.id, patchChamado: patch, restaurados } }];\n"
       },
       "id": "a7e00000-0000-4000-8000-000000000029",
       "name": "Decide desfazer",
@@ -679,7 +679,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return [{ json: { ok: true, chamadoId: $('Decide desfazer').first().json.chamadoId } }];"
+        "jsCode": "const d = $('Decide desfazer').first().json;\nreturn [{ json: { ok: true, chamadoId: d.chamadoId, restaurados: d.restaurados || [] } }];"
       },
       "id": "a7e00000-0000-4000-8000-000000000034",
       "name": "Monta resposta desfazer",
@@ -901,6 +901,58 @@
         3560,
         0
       ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO?pageSize=100&sort%5B0%5D%5Bfield%5D=Reservado_Inicio&sort%5B0%5D%5Bdirection%5D=asc&fields%5B%5D=Numero_Chamado&fields%5B%5D=Status&fields%5B%5D=Reservado_Inicio&fields%5B%5D=Reservado_Fim&fields%5B%5D=Historico&fields%5B%5D=Cliente_Nome&fields%5B%5D=Horario_Combinado_Cliente&filterByFormula=' + encodeURIComponent(\"AND(NOT(OR({Status}='Concluído',{Status}='Cancelado')),{Reservado_Inicio},IS_AFTER({Reservado_Inicio},'\" + new Date(Date.now() - 86400000).toISOString() + \"'))\") }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "a7e00000-0000-4000-8000-000000000041",
+      "name": "Busca seguintes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        -300
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ (() => { let ids = []; try { ids = JSON.parse($('Busca visita').first().json.fields.Reservado_Antes || '[]').map((e) => e.id); } catch (e) {} const f = 'OR(' + (ids.length ? ids : ['none']).map((i) => \"RECORD_ID()='\" + i + \"'\").join(',') + ')'; return 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO?filterByFormula=' + encodeURIComponent(f); })() }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "a7e00000-0000-4000-8000-000000000042",
+      "name": "Busca movidos p/ desfazer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        100
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "IJB0DgRAc1qPMkVm",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
     }
   ],
   "connections": {
@@ -1053,7 +1105,7 @@
       "main": [
         [
           {
-            "node": "Decide inicio",
+            "node": "Busca seguintes",
             "type": "main",
             "index": 0
           }
@@ -1172,7 +1224,7 @@
       "main": [
         [
           {
-            "node": "Decide desfazer",
+            "node": "Busca movidos p/ desfazer",
             "type": "main",
             "index": 0
           }
@@ -1434,6 +1486,42 @@
         [
           {
             "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca seguintes": {
+      "main": [
+        [
+          {
+            "node": "Decide inicio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca movidos p/ desfazer": {
+      "main": [
+        [
+          {
+            "node": "Decide desfazer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
             "type": "main",
             "index": 0
           }

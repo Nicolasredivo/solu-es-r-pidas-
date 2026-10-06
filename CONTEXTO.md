@@ -4500,3 +4500,31 @@ o dono precisa estar no local; o bloco da Agenda já inclui o deslocamento, ent�
 - Texto livre antigo na coluna continua aparecendo nos cartões; na edição o campo
   de hora fica em branco e o valor antigo só muda se for preenchida uma hora.
 - Teste: lógica do nó rodada com dados falsos (7 verificações); nada real tocado.
+
+### Iniciar atendimento move o bloco pra hora real (06/10/2026)
+
+Ao clicar em **Iniciar**, o bloco da Agenda passa a começar na hora real, com a
+**mesma duração estimada** (`App - Atendimento`, nó `Decide inicio`):
+
+- **Adiantou:** só o próprio chamado anda pra mais cedo (início e fim). Os seguintes
+  **não** são mexidos (decisão do dono: ele muda à mão se quiser aproveitar a folga).
+- **Atrasou:** o fim também anda; o que passar a invadir o próximo empurra em
+  cascata (mesma regra da Agenda: quem tinha folga fica; Em andamento nunca é movido,
+  vira "sobreposto"; no máx. 9 empurrados). Os empurrados mantêm o status.
+- Sem `Reservado_Fim` (só o dia marcado) ou clique a menos de 1 min do previsto:
+  só muda o status. Histórico do chamado guarda previsto x real; o dos empurrados
+  explica o motivo.
+- Novo nó `Busca seguintes` (chamados ativos com horário, a partir de ontem) antes do
+  `Decide inicio`. Tudo vai num PATCH em lote do Airtable (atômico, ≤10 registros).
+- **Alerta de horário combinado:** se um empurrado tem `Horario_Combinado_Cliente`, a
+  resposta traz `horarioCombinado` e `sugestaoHorarioCombinado` (+ o atraso, se for
+  HH:MM). A tela mostra uma caixa fixa (não some sozinha, não impede nada) com botão
+  "Ajustar" que abre a edição do chamado já com a sugestão no campo.
+- **Desfazer** devolve o horário do chamado e dos empurrados. Pra isso a tabela
+  Visitas ganhou o campo `Reservado_Antes` (JSON com antes/depois de cada um). Só
+  devolve quem ainda está exatamente onde o início deixou (novo nó
+  `Busca movidos p/ desfazer`).
+- Concluir continua gravando o horário real (início da visita até agora).
+- Testes: lógica dos nós rodada com dados falsos (23 verificações). A aparência da
+  caixa de alerta não foi vista no preview (o navegador de preview não abriu a
+  página local naquele dia) — conferir no primeiro uso real.
