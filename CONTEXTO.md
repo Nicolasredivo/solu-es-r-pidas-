@@ -76,6 +76,12 @@ Quem executa as automações de verdade é o **n8n**, e o app é só a "tela".
 
 ## Airtable
 
+> **Desde 27/10/2026 os dados moram num banco PostgreSQL no PC do dono, não mais
+> no Airtable.** Os fluxos falam com o "Airtable local" (`banco/airtable-local.js`),
+> que entende os mesmos pedidos da API do Airtable. O Airtable da nuvem ficou só
+> como cópia antiga (parada em 27/10). Ver a seção "Banco próprio no PC" no fim.
+> Nomes de tabela, de campo e ids de registro abaixo continuam valendo.
+
 Base **"cadastro"** (`app6PyYmtFduIMp7B`), com 3 tabelas ligadas entre si:
 
 - `Entidades_Cadastradas` (`tbl5Joji6gAir3mNh`) — clientes; é a tabela "mãe"
@@ -154,12 +160,23 @@ Todos criados, publicados e testados de ponta a ponta:
 | `App - Pagar fatura do cartao` | `/webhook/pagar-fatura` | `jCimCPy6ICIwOm4q` |
 | `App - Pagar fatura do cartao por boleto` | `/webhook/pagar-fatura-boleto` | `FayraViYiF44HN6p` |
 | `App - Confirmar fatura paga` | `/webhook/confirmar-fatura` | `D5VnSvfkddLSxhNL` |
+| `App - Anexo` (27/10/2026, sem senha: o código do anexo é a chave) | `/webhook/anexo?id=att...` | `hR3mriNGyScrMXUY` |
 
 Cada arquivo em `n8n/` tem o nome do caminho do webhook correspondente.
 
 As cópias em `n8n/*.json` são só backup/referência. **Nelas a senha aparece
-como `TROQUE-ESTA-SENHA` de propósito** — o repositório é público e a senha
-real vive só dentro do n8n. Quem reimportar precisa trocar na mão.
+como `TROQUE-ESTA-SENHA` (e a chave do JWT como `TROQUE-ESTA-CHAVE-JWT`) de
+propósito** — o repositório é público e a senha real vive só dentro do n8n.
+Quem reimportar precisa trocar na mão.
+
+**Para atualizar as cópias e publicar** (27/10/2026):
+- `node n8n/exportar.js` regrava as cópias a partir do n8n. Ele guarda só
+  name/nodes/connections/settings, troca a senha e a chave pelos marcadores e
+  recusa gravar se sobrar algum segredo.
+- `node n8n/conferir-segredos.js` varre todos os arquivos que iriam para o
+  GitHub. Ele procura as chaves e senhas reais (dos arquivos do PC), os hashes
+  de senha e os tokens de sessão do banco, além de padrões de chave.
+  **Rodar antes de todo commit.**
 
 ## Como mexer no n8n direto pela API (evita importação manual)
 
@@ -4452,7 +4469,12 @@ chamado começava, não dava pra mexer no fim.
   em teste nenhum escrever na linha real do dono. Foi assim que se perdeu dado
   em 28/08.
 - **Antes de apagar qualquer coisa do Airtable, avisar o dono** — não existe
-  histórico e não tem volta.
+  histórico e não tem volta. Vale igual para o banco do PC (27/10/2026): só
+  apagar dado real com ordem dele; teste usa registro de teste e apaga só ele.
+- **Dados no PC (PostgreSQL), não em serviço pago/limitado** (27/10/2026). O
+  Airtable grátis estourou o limite de chamadas e derrubou o sistema; o dono
+  não quis pagar nem usar VPS. O Supabase chegou a ser escolhido e foi trocado
+  pelo banco local porque o n8n já roda no mesmo PC.
 
 ## Próximos passos previstos, depois do pendente
 
@@ -4528,3 +4550,149 @@ Ao clicar em **Iniciar**, o bloco da Agenda passa a começar na hora real, com a
 - Testes: lógica dos nós rodada com dados falsos (23 verificações). A aparência da
   caixa de alerta não foi vista no preview (o navegador de preview não abriu a
   página local naquele dia) — conferir no primeiro uso real.
+
+## Banco próprio no PC: saída do Airtable (26–27/10/2026)
+
+**Por quê.** Em 19/10/2026 o Airtable grátis estourou o limite de 1.000 chamadas por
+mês (é por *workspace*, zera dia 1º) e respondeu 429 em tudo: o login dava "senha
+incorreta" e o sistema parou. O dono não quis pagar o plano Team nem usar VPS.
+Decidiu-se ter o banco no próprio PC, onde o n8n já roda.
+
+**Como ficou.**
+- **PostgreSQL 17.11**, zip oficial da EDB, sem instalador e sem administrador:
+  programa em `C:\Users\rediv\postgresql`, dados em `C:\Users\rediv\banco-solucoes\dados`.
+  Fica **fora do OneDrive de propósito**, porque a sincronização estraga banco aberto.
+  Só escuta `localhost:5432`, com fuso America/Sao_Paulo e ordenação ICU pt-BR.
+  Banco `solucoes`; o usuário `n8n_app` só lê e grava dados, não mexe na estrutura.
+  As senhas estão em `C:\Users\rediv\senha-banco.txt` (fora do repositório).
+- **Estrutura:** `banco/schema.sql`, com as 16 tabelas das duas bases e **os mesmos nomes
+  de campo do Airtable**. O `id` é o mesmo `recXXXXXXXXXXXXXX`, e registros novos ganham
+  id no mesmo formato. O vínculo fica só no lado "filho" (ex.: `Locais_Atendimento.Cliente_Vinculado`);
+  o lado "mãe" é calculado na leitura. `Contatos_Solicitantes.Entidades_Vinculadas` é uma
+  lista (`text[]`). Anexos ficam como JSON.
+- **"Airtable local"** (`banco/airtable-local.js`): servidorzinho Node em
+  `http://127.0.0.1:5690` que **entende os mesmos pedidos da API v0 do Airtable** que os
+  fluxos já faziam e grava no PostgreSQL. Por isso **a lógica dos fluxos não mudou**.
+  Ele imita do Airtable: o formato `{id, createdTime, fields}`; campos vazios (texto vazio,
+  caixinha desmarcada, lista vazia) que não aparecem; vínculo como lista de ids dos dois
+  lados; as consultas `Contatos_Nomes` e `Fornecedor_Nome`; a fórmula `Criado_Em` de
+  Usuarios/Sessoes; `filterByFormula` (RECORD_ID, AND/OR/NOT, IF, LOWER/UPPER, FIND, SEARCH,
+  IS_AFTER/IS_BEFORE, comparações, `&`, aspas com `\'`); `sort`, `fields[]`,
+  `pageSize`/`offset`, `maxRecords`; criar, alterar (PATCH/PUT), apagar (`records[]`) e
+  `uploadAttachment`. O que ele não conhece **recusa com 422**, como o Airtable, em vez
+  de responder errado calado. Exige o token do arquivo de senhas e só escuta no próprio PC.
+  Extra: `?_itens=1` devolve lista pura, e o nó HTTP vira um item por registro.
+- **Fluxos trocados** (`banco/trocar-fluxos-para-local.js`):
+  - nas chamadas HTTP diretas, só mudam o endereço (`api.airtable.com` / `content.airtable.com`
+    → `127.0.0.1:5690`) e a credencial ("Airtable local (banco do PC)", tipo
+    airtableTokenApi, liberada só para 127.0.0.1);
+  - os nós do Airtable (busca e criação) viraram nós HTTP com o mesmo nome, a mesma
+    posição, as mesmas ligações e as mesmas opções de erro;
+  - foram 54 fluxos. O "ERP Empresa - Principal" (inativo, base antiga) ficou de fora;
+  - a cópia de antes de cada fluxo está em `C:\Users\rediv\banco-solucoes\fluxos-antes-da-migracao`.
+    Para desfazer, basta um PUT dessa cópia.
+- **Atalho "Servidor n8n":** agora roda `n8n-launcher\ligar-banco.ps1` antes do n8n. Esse
+  script liga o PostgreSQL e o Airtable local se estiverem desligados; os logs ficam em
+  `banco-solucoes\airtable-local*.log`.
+- **Anexos:** o arquivo vai para `C:\Users\rediv\banco-solucoes\anexos\att<32 hex>` (com um
+  `.json` ao lado). O registro guarda `url: /webhook/anexo?id=att...` (relativo). O novo fluxo
+  **`App - Anexo`** (GET `/webhook/anexo?id=`) entrega o arquivo. O `App - Listar chamados`
+  completa o endereço com o do túnel (`x-forwarded-proto` + `host`). O endereço é aleatório
+  e impossível de adivinhar, como era o do Airtable. Até 27/10 nenhum chamado tinha anexo.
+
+**Como os dados vieram.** A API pública estava bloqueada. A página `airtable.com/<base>/api/docs`
+(o site não gasta cota) traz o esquema em `window.initData.application.tables`, e
+`fetch('/v0.3/table/<tbl>/readData?...')` no próprio site traz os registros com ids e
+vínculos. Isso foi salvo em JSON. O Chrome pede "Salvar como" e o dono clica; **não fechar a
+aba antes**. Depois foi importado com `banco/importar-airtable.js`: 178 registros (166 do
+cadastro, 12 do Financeiro), conferidos campo a campo, e os vínculos batem 100%. Os JSON ficaram
+em `banco-solucoes\importacao` e **têm hash de senha e tokens: nunca publicar**.
+
+**Testes** (`banco/testes/`, sempre com registro de teste "TESTE MIGRACAO", apagado no fim,
+conferindo que as quantidades voltam ao que eram e que o n8n não registrou erro):
+- `comparar-com-airtable.js`: 1.594 valores iguais ao exportado, nenhuma diferença.
+- `testar-airtable-local.js`: 44 testes (fórmulas dos fluxos, ordem, páginas, gravações,
+  vínculos dos dois lados, erros 401/404/422).
+- `testar-fluxos-leitura.js` (24), `-financeiro.js` (25), `-chamados.js` (18),
+  `-usuarios.js` (19), `testar-anexos.js` (7): chamam os webhooks **como o app** (formulário
+  `URLSearchParams`, valores como texto), entrando com um usuário de teste (senha gerada na
+  hora, hash scrypt igual ao do sistema) que é apagado no fim.
+- `testar-fluxos-copias.js` (21): fluxos que falam com o Asaas (cliente, PIX, boleto), com
+  e-mail ou que gravam na configuração rodam numa **cópia temporária**. O Asaas e o e-mail são
+  simulados, e a cópia nem é montada se sobrar chamada real. A configuração usa uma linha
+  "teste-migracao"; o teste confere que as linhas "principal" reais não mudaram. Chamados de
+  teste ficam em 12/2027, longe da agenda real.
+- Total: 158 testes ok, nenhuma falha. Rodar tudo de novo depois de qualquer mexida no
+  Airtable local.
+- **Cuidado com as cópias de teste:** só apagar o fluxo-cópia depois de o n8n gravar as estatísticas
+  de uso (*insights*, a cada 30 s). Por isso `apagarCopias` desliga, espera 40 s e só então apaga.
+  Apagar antes deixou o n8n repetindo "Error while saving insights metadata and raw data" no
+  console a cada 30 s, para sempre (ele recoloca o lote que falhou na fila). Só passou depois de
+  reiniciar o n8n (27/10/2026). Não afetava dado nenhum, só a estatística interna do n8n.
+
+**Achados que ficaram como estavam (decidir com o dono antes de apagar):** 1 Entidade vazia
+(`reccg1we8S4u6vyFG`) e 1 Contato vazio (`recZFIMW0nbyRwe8W`), de 06/08; 2 linhas "principal"
+em `Config_Financeiro`. A de verdade é `rec0srmyjsL0XmrBv`, a mais antiga, que o fluxo já
+escolhe; a vazia é `recV4T0MA60rb5OjW`.
+
+**Achado sério no backup diário:** `App - Backup de tudo` (22h) gravou arquivo **vazio** quando o
+Airtable falhou e **sobrescreveu o `ultimo.json`**; o último backup bom era o de 15/10. Ele
+também nunca incluiu Chamados, Visitas, Usuarios e Sessoes. Voltou a gerar backup cheio em
+27/10, mas falta a etapa de backup de verdade: `pg_dump` diário no OneDrive e no SSD, que não
+sobrescreve se der erro.
+
+**Diferenças conscientes em relação ao Airtable:**
+- vínculo do lado "filho" aceita **um** registro só (o Airtable aceitaria vários; nenhum
+  fluxo usa vários);
+- `Usuarios.Email` é único (sem diferenciar maiúsculas) e `Chamados.Numero_Chamado` também;
+  duplicado volta 422;
+- apagar um usuário apaga as sessões dele junto.
+**27/10/2026, depois da migração:** a pedido do dono ("eram apenas pra teste"), foram apagados
+os **20 chamados** que vieram do Airtable (nº 1 a 20, todos "Cancelado", sem visita). Antes,
+foi feito o backup `banco-solucoes\backups\solucoes-2026-10-27_1312-antes-de-apagar-chamados.dump`.
+Clientes, locais e contatos ficaram intactos. O próximo chamado criado volta a ser o **nº 1**
+(o número é o maior existente + 1). A partir daqui, o `comparar-com-airtable.js` deixa de bater
+de propósito: ele serviu só para conferir a importação.
+### Backup: decisão do dono (27/10/2026)
+
+- **Sem backup diário até chegar o SSD.** O `App - Backup de tudo` (22h + `fazer-backup`, que o app
+  chamava ao abrir) foi **desligado**. O app só deixa de receber resposta, sem erro na tela
+  (`backupDoDia` é silencioso).
+- **Um arquivo só, com os cadastros:** `C:\Users\rediv\banco-solucoes\backup-cadastros.json`
+  (clientes, endereços e contatos, no formato `{id, createdTime, fields}`). É **refeito quando entra
+  cliente novo**: o `App - Salvar entidade` ganhou o nó `Atualiza backup dos cadastros` depois do
+  `Responde salvo` (`executeOnce`; se falhar, não atrapalha o cadastro), que chama
+  `POST 127.0.0.1:5690/backup-cadastros`. O arquivo novo **troca o anterior** (grava em `.novo` e
+  renomeia), a pedido do dono, para não ocupar espaço com cópia repetida.
+- Quem some do sistema entre um backup e outro **não some do arquivo**: vai para
+  `apagados_do_sistema` (com `apagadoNoSistemaEm`). Assim, um cliente apagado sem querer e seguido
+  de um cliente novo não perde a única cópia. Apagar cliente não refaz o backup.
+- Os testes que criam cliente (`testar-fluxos-copias.js`, `testar-backup-cadastros.js`) guardam o
+  arquivo antes e devolvem igual no fim.
+- Quando o SSD chegar: backup diário do banco inteiro (`pg_dump`), que não sobrescreve em caso de
+  erro.
+### Revisão de segurança antes de publicar (27/10/2026)
+
+O dono pediu que só ele e eu tenhamos acesso, sem brecha fácil. O que foi conferido:
+
+- **Rede.** O PostgreSQL escuta só em `127.0.0.1`/`::1`, com senha scram-sha-256. O Airtable local
+  escuta só em `127.0.0.1` e exige token (comparação em tempo constante). O n8n escuta em `::`
+  (padrão dele), mas o firewall do Windows não tem regra liberando a entrada. O único caminho de
+  fora é o túnel, e todo webhook confere login. O `n8n_app` não é superusuário: só lê e grava dados.
+- **Injeção.** No Airtable local, nome de tabela e de campo só vale se estiver no esquema; os
+  valores vão sempre como parâmetro do SQL. A fórmula é interpretada passo a passo, sem `eval`.
+  Nomes como `__proto__` e `constructor` são recusados explicitamente (antes já eram recusados,
+  mas por acaso).
+- **Anexos.** O endereço é um código aleatório de 128 bits. Fora do formato, a resposta é 404 do
+  próprio fluxo. O caminho do arquivo nunca vem do pedido. **Corrigido:** o tipo do arquivo vinha
+  de quem enviou, e um "HTML" ou "SVG" subiria e abriria como página no endereço do n8n. Agora só
+  foto (jpeg/png/gif/webp/heic) e PDF abrem na tela; o resto vai como download
+  (`application/octet-stream`), sempre com `X-Content-Type-Options: nosniff`. Os testes conferem.
+- **Segredos.** Ficam fora do repositório e fora do OneDrive (`chave-*.txt`, `senha-*.txt`,
+  `banco-solucoes\`). As cópias dos fluxos saem com marcador. O `conferir-segredos.js` passou
+  limpo nos 94 arquivos, e plantar uma chave falsa foi detectado. O erro 500 não devolve detalhe:
+  o detalhe fica só no log local. O log não grava endereço com parâmetros (que levariam e-mail e
+  token).
+- **Ainda vale lembrar:** o repositório público mostra a arquitetura (portas, nomes de arquivo,
+  ids dos fluxos), mas nenhum valor secreto. Para usar qualquer coisa disso, a pessoa precisaria
+  estar dentro do PC.
