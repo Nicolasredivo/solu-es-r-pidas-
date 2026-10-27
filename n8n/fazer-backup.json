@@ -90,484 +90,484 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appjAmWXV7Zr33UqE",
-          "mode": "list",
-          "cachedResultName": "Financeiro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblNduEKl2jY280V0",
-          "mode": "list",
-          "cachedResultName": "Despesas"
-        },
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000007",
       "name": "Le Despesas",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         420,
         -120
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "executeOnce": true,
+      "onError": "continueRegularOutput",
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "executeOnce": true
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appjAmWXV7Zr33UqE",
-          "mode": "list",
-          "cachedResultName": "Financeiro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblhsabIIg8SLqMMj",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblhsabIIg8SLqMMj",
-          "mode": "list",
-          "cachedResultName": "Fornecedores"
-        },
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000008",
       "name": "Le Fornecedores",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         620,
         -120
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "executeOnce": true,
+      "onError": "continueRegularOutput",
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "executeOnce": true
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appjAmWXV7Zr33UqE",
-          "mode": "list",
-          "cachedResultName": "Financeiro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblb8QplhcGRP6SZ7",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblb8QplhcGRP6SZ7",
-          "mode": "list",
-          "cachedResultName": "Recorrentes"
-        },
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000009",
       "name": "Le Recorrentes",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         820,
         -120
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "executeOnce": true,
+      "onError": "continueRegularOutput",
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "executeOnce": true
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appjAmWXV7Zr33UqE",
-          "mode": "list",
-          "cachedResultName": "Financeiro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tbl4tMnm3t3peeLYo",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tbl4tMnm3t3peeLYo",
-          "mode": "list",
-          "cachedResultName": "Recebimentos"
-        },
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000010",
       "name": "Le Recebimentos",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1020,
         -120
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "executeOnce": true,
+      "onError": "continueRegularOutput",
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "executeOnce": true
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appjAmWXV7Zr33UqE",
-          "mode": "list",
-          "cachedResultName": "Financeiro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tbl3uT9h7ZYXnfR7E",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tbl3uT9h7ZYXnfR7E",
-          "mode": "list",
-          "cachedResultName": "Config_Financeiro"
-        },
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000011",
       "name": "Le Config_Financeiro",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1220,
         -120
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "executeOnce": true,
+      "onError": "continueRegularOutput",
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "executeOnce": true
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appjAmWXV7Zr33UqE",
-          "mode": "list",
-          "cachedResultName": "Financeiro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblIrMrXYI6FZdKfS",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblIrMrXYI6FZdKfS",
-          "mode": "list",
-          "cachedResultName": "Conferencias"
-        },
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000012",
       "name": "Le Conferencias",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1420,
         -120
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "executeOnce": true,
+      "onError": "continueRegularOutput",
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "executeOnce": true
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appjAmWXV7Zr33UqE",
-          "mode": "list",
-          "cachedResultName": "Financeiro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblh3m5JB6N2sNs5i",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblh3m5JB6N2sNs5i",
-          "mode": "list",
-          "cachedResultName": "Retiradas"
-        },
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000013",
       "name": "Le Retiradas",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1620,
         -120
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "executeOnce": true,
+      "onError": "continueRegularOutput",
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "executeOnce": true
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appjAmWXV7Zr33UqE",
-          "mode": "list",
-          "cachedResultName": "Financeiro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblzJwNGcTpvGmYiM",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblzJwNGcTpvGmYiM",
-          "mode": "list",
-          "cachedResultName": "Cartoes"
-        },
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000014",
       "name": "Le Cartoes",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1820,
         -120
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "executeOnce": true,
+      "onError": "continueRegularOutput",
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "executeOnce": true
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appjAmWXV7Zr33UqE",
-          "mode": "list",
-          "cachedResultName": "Financeiro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tbldfftPos0qX7nlm",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tbldfftPos0qX7nlm",
-          "mode": "list",
-          "cachedResultName": "Pagamentos_Fatura"
-        },
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000015",
       "name": "Le Pagamentos_Fatura",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         2020,
         -120
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "executeOnce": true,
+      "onError": "continueRegularOutput",
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "executeOnce": true
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tbl5Joji6gAir3mNh",
-          "mode": "list",
-          "cachedResultName": "Entidades_Cadastradas"
-        },
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000016",
       "name": "Le Entidades_Cadastradas",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         2220,
         -120
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "executeOnce": true,
+      "onError": "continueRegularOutput",
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "executeOnce": true
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblXXOEOCwQnC2qFX",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblXXOEOCwQnC2qFX",
-          "mode": "list",
-          "cachedResultName": "Contatos_Solicitantes"
-        },
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000017",
       "name": "Le Contatos_Solicitantes",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         2420,
         -120
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "executeOnce": true,
+      "onError": "continueRegularOutput",
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "executeOnce": true
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblffVczCf1VeNxs7",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblffVczCf1VeNxs7",
-          "mode": "list",
-          "cachedResultName": "Locais_Atendimento"
-        },
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000018",
       "name": "Le Locais_Atendimento",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         2620,
         -120
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "executeOnce": true,
+      "onError": "continueRegularOutput",
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "executeOnce": true
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appvRrT2s6rK7jOKh",
-          "mode": "list",
-          "cachedResultName": "ERP"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appvRrT2s6rK7jOKh/tblHAeSNfx7D2qAnI",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblHAeSNfx7D2qAnI",
-          "mode": "list",
-          "cachedResultName": "Atendimentos"
-        },
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000019",
       "name": "Le Atendimentos",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         2820,
         -120
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "executeOnce": true,
+      "onError": "continueRegularOutput",
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "executeOnce": true
     },
     {
       "parameters": {

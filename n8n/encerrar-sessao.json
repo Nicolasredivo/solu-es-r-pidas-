@@ -63,36 +63,39 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblYDslwEMH6tKfzL",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "={{ $json.formula }}"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblYDslwEMH6tKfzL",
-          "mode": "list",
-          "cachedResultName": "Sessoes"
-        },
-        "filterByFormula": "={{ $json.formula }}",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "e0000000-0000-4000-8000-000000000006",
       "name": "Busca sessao",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         440,
         100
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueRegularOutput",
@@ -114,7 +117,7 @@
     {
       "parameters": {
         "method": "DELETE",
-        "url": "={{ 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/tblYDslwEMH6tKfzL/' + $json.recordId }}",
+        "url": "={{ 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblYDslwEMH6tKfzL/' + $json.recordId }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "airtableTokenApi",
         "options": {
@@ -131,8 +134,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueRegularOutput"

@@ -72,40 +72,39 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appjAmWXV7Zr33UqE",
-          "mode": "list",
-          "cachedResultName": "Financeiro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblh3m5JB6N2sNs5i",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblh3m5JB6N2sNs5i",
-          "mode": "list",
-          "cachedResultName": "Retiradas"
-        },
-        "filterByFormula": "",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000006",
       "name": "Busca",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         880,
         -60
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {

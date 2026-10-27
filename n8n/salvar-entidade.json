@@ -85,200 +85,29 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "create",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
-        },
-        "table": {
-          "__rl": true,
-          "value": "tbl5Joji6gAir3mNh",
-          "mode": "list",
-          "cachedResultName": "Entidades_Cadastradas"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "CPF_CNPJ": "={{ $json.documento }}",
-            "Razao_Social_Nome": "={{ $json.razaoSocial }}",
-            "Nome_Fantasia_Identificador": "={{ $json.nomeFantasia }}",
-            "Tipo_Documento": "={{ $json.tipo }}",
-            "Exigencia_Fiscal": "={{ $json.exigenciaFiscal }}",
-            "Emails_Financeiro_NFE": "={{ $json.emails }}",
-            "Administradora": "={{ $json.administradora }}",
-            "Status": "={{ $json.status }}",
-            "Observacoes": "={{ $json.observacoes }}",
-            "WhatsApp_CNPJ": "={{ $json.whatsappCnpj }}",
-            "Empresa_Sindicos": "={{ $json.empresaSindicos }}"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "CPF_CNPJ",
-              "displayName": "CPF_CNPJ",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Razao_Social_Nome",
-              "displayName": "Razao_Social_Nome",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Nome_Fantasia_Identificador",
-              "displayName": "Nome_Fantasia_Identificador",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Tipo_Documento",
-              "displayName": "Tipo_Documento",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "options",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Exigencia_Fiscal",
-              "displayName": "Exigencia_Fiscal",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "options",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Emails_Financeiro_NFE",
-              "displayName": "Emails_Financeiro_NFE",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Administradora",
-              "displayName": "Administradora",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Status",
-              "displayName": "Status",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "options",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Locais_Atendimento",
-              "displayName": "Locais_Atendimento",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "array",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "Contatos_Solicitantes",
-              "displayName": "Contatos_Solicitantes",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "array",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "Observacoes",
-              "displayName": "Observacoes",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "WhatsApp_CNPJ",
-              "displayName": "WhatsApp_CNPJ",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Empresa_Sindicos",
-              "displayName": "Empresa_Sindicos",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "POST",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ typecast: true, fields: { \"CPF_CNPJ\": ($json.documento), \"Razao_Social_Nome\": ($json.razaoSocial), \"Nome_Fantasia_Identificador\": ($json.nomeFantasia), \"Tipo_Documento\": ($json.tipo), \"Exigencia_Fiscal\": ($json.exigenciaFiscal), \"Emails_Financeiro_NFE\": ($json.emails), \"Administradora\": ($json.administradora), \"Status\": ($json.status), \"Observacoes\": ($json.observacoes), \"WhatsApp_CNPJ\": ($json.whatsappCnpj), \"Empresa_Sindicos\": ($json.empresaSindicos) } }) }}",
         "options": {
-          "typecast": true
+          "timeout": 20000
         }
       },
       "id": "50000000-0000-4000-8000-000000000004",
       "name": "Cria no Airtable",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1100,
         -60
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"
@@ -363,143 +192,29 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "create",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
-        },
-        "table": {
-          "__rl": true,
-          "value": "tblffVczCf1VeNxs7",
-          "mode": "list",
-          "cachedResultName": "Locais_Atendimento"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Nome_do_Local": "={{ $json.nome }}",
-            "Endereco_Completo": "={{ $json.endereco }}",
-            "Bairro_Cidade": "={{ $json.bairroCidade }}",
-            "Observacoes_Acesso": "={{ $json.acesso }}",
-            "Cliente_Vinculado": "={{ [$json.entidadeId] }}",
-            "Status": "={{ $json.status }}"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "Nome_do_Local",
-              "displayName": "Nome_do_Local",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Endereco_Completo",
-              "displayName": "Endereco_Completo",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Bairro_Cidade",
-              "displayName": "Bairro_Cidade",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Observacoes_Acesso",
-              "displayName": "Observacoes_Acesso",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Cliente_Vinculado",
-              "displayName": "Cliente_Vinculado",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "array",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Status",
-              "displayName": "Status",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "options",
-              "readOnly": false,
-              "removed": false,
-              "options": [
-                {
-                  "name": "Ativo",
-                  "value": "Ativo"
-                },
-                {
-                  "name": "Inativo",
-                  "value": "Inativo"
-                },
-                {
-                  "name": "Arquivado",
-                  "value": "Arquivado"
-                }
-              ]
-            },
-            {
-              "id": "Observacoes",
-              "displayName": "Observacoes",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "POST",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblffVczCf1VeNxs7",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ typecast: true, fields: { \"Nome_do_Local\": ($json.nome), \"Endereco_Completo\": ($json.endereco), \"Bairro_Cidade\": ($json.bairroCidade), \"Observacoes_Acesso\": ($json.acesso), \"Cliente_Vinculado\": ([$json.entidadeId]), \"Status\": ($json.status) } }) }}",
         "options": {
-          "typecast": true
+          "timeout": 20000
         }
       },
       "id": "50000000-0000-4000-8000-00000000000a",
       "name": "Cria locais no Airtable",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1780,
         -160
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"
@@ -569,170 +284,29 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "create",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
-        },
-        "table": {
-          "__rl": true,
-          "value": "tblXXOEOCwQnC2qFX",
-          "mode": "list",
-          "cachedResultName": "Contatos_Solicitantes"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Nome_Contato": "={{ $json.nome }}",
-            "Cargo_Funcao": "={{ $json.cargo }}",
-            "WhatsApps": "={{ $json.whatsapps }}",
-            "Emails": "={{ $json.emails }}",
-            "Entidades_Vinculadas": "={{ [$json.entidadeId] }}",
-            "Observacoes": "={{ $json.observacoes }}",
-            "Status": "={{ $json.status }}"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "Nome_Contato",
-              "displayName": "Nome_Contato",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Cargo_Funcao",
-              "displayName": "Cargo_Funcao",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "options",
-              "readOnly": false,
-              "removed": false,
-              "options": [
-                {
-                  "name": "Síndico",
-                  "value": "Síndico"
-                },
-                {
-                  "name": "Administradora",
-                  "value": "Administradora"
-                },
-                {
-                  "name": "Gerente",
-                  "value": "Gerente"
-                },
-                {
-                  "name": "Zelador",
-                  "value": "Zelador"
-                },
-                {
-                  "name": "Proprietário",
-                  "value": "Proprietário"
-                },
-                {
-                  "name": "Outro",
-                  "value": "Outro"
-                }
-              ]
-            },
-            {
-              "id": "WhatsApps",
-              "displayName": "WhatsApps",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Emails",
-              "displayName": "Emails",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Entidades_Vinculadas",
-              "displayName": "Entidades_Vinculadas",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "array",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Observacoes",
-              "displayName": "Observacoes",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Status",
-              "displayName": "Status",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "options",
-              "readOnly": false,
-              "removed": false,
-              "options": [
-                {
-                  "name": "Ativo",
-                  "value": "Ativo"
-                },
-                {
-                  "name": "Inativo",
-                  "value": "Inativo"
-                },
-                {
-                  "name": "Arquivado",
-                  "value": "Arquivado"
-                }
-              ]
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "POST",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblXXOEOCwQnC2qFX",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ typecast: true, fields: { \"Nome_Contato\": ($json.nome), \"Cargo_Funcao\": ($json.cargo), \"WhatsApps\": ($json.whatsapps), \"Emails\": ($json.emails), \"Entidades_Vinculadas\": ([$json.entidadeId]), \"Observacoes\": ($json.observacoes), \"Status\": ($json.status) } }) }}",
         "options": {
-          "typecast": true
+          "timeout": 20000
         }
       },
       "id": "50000000-0000-4000-8000-000000000010",
       "name": "Cria contatos no Airtable",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         2660,
         -160
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"
@@ -797,7 +371,7 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "airtableTokenApi",
         "sendBody": true,
@@ -817,8 +391,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueRegularOutput"
@@ -944,6 +518,34 @@
         660,
         -60
       ]
+    },
+    {
+      "id": "bk000000-0000-4000-8000-000000000001",
+      "name": "Atualiza backup dos cadastros",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3100,
+        -20
+      ],
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "notes": "Cliente novo entrou: refaz o arquivo único de backup dos cadastros (banco-solucoes/backup-cadastros.json). Falhar aqui não atrapalha o cadastro, que já foi respondido.",
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:5690/backup-cadastros",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        }
+      }
     }
   ],
   "connections": {
@@ -1192,6 +794,17 @@
         [
           {
             "node": "Prepara dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responde salvo": {
+      "main": [
+        [
+          {
+            "node": "Atualiza backup dos cadastros",
             "type": "main",
             "index": 0
           }

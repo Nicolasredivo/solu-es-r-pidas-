@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parar de gerar e diferente de apagar: quem para guarda o historico das\n// contas que ja sairam. Apagar de vez e para quando foi cadastro errado.\nconst b = $json.body || {};\nconst id = String(b.id || \"\").trim();\nif (!/^rec[A-Za-z0-9]{14}$/.test(id)) throw new Error(\"Pedido sem o codigo da conta fixa.\");\n\nconst apagarDeVez = String(b.apagarDeVez || \"\") === \"sim\";\n\nreturn [{\n  json: apagarDeVez\n    ? { metodo: \"DELETE\", url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblb8QplhcGRP6SZ7?records[]=\" + id, corpo: null,\n        mensagem: \"Conta fixa excluída.\" }\n    : { metodo: \"PATCH\", url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblb8QplhcGRP6SZ7\",\n        corpo: { records: [{ id, fields: { Ativo: false } }] },\n        mensagem: \"Conta fixa encerrada — não gera mais.\" },\n}];"
+        "jsCode": "// Parar de gerar e diferente de apagar: quem para guarda o historico das\n// contas que ja sairam. Apagar de vez e para quando foi cadastro errado.\nconst b = $json.body || {};\nconst id = String(b.id || \"\").trim();\nif (!/^rec[A-Za-z0-9]{14}$/.test(id)) throw new Error(\"Pedido sem o codigo da conta fixa.\");\n\nconst apagarDeVez = String(b.apagarDeVez || \"\") === \"sim\";\n\nreturn [{\n  json: apagarDeVez\n    ? { metodo: \"DELETE\", url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblb8QplhcGRP6SZ7?records[]=\" + id, corpo: null,\n        mensagem: \"Conta fixa excluída.\" }\n    : { metodo: \"PATCH\", url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblb8QplhcGRP6SZ7\",\n        corpo: { records: [{ id, fields: { Ativo: false } }] },\n        mensagem: \"Conta fixa encerrada — não gera mais.\" },\n}];"
       },
       "id": "c0000000-0000-4000-8000-000000000018",
       "name": "Monta a chamada",
@@ -106,8 +106,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"

@@ -35,40 +35,43 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblucYjrD3SKf1azh",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "={{ $json.formula }}"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblucYjrD3SKf1azh",
-          "mode": "list",
-          "cachedResultName": "Usuarios"
-        },
-        "filterByFormula": "={{ $json.formula }}",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "v1000000-0000-4000-8000-000000000004",
       "name": "Busca usuario",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         440,
         0
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -155,7 +158,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const entrada = $input.first().json;\nconst baseId = 'app6PyYmtFduIMp7B';\nconst tableId = 'tblucYjrD3SKf1azh';\n\nreturn [{\n  json: {\n    metodo: 'PATCH',\n    url: 'https://api.airtable.com/v0/' + baseId + '/' + tableId + '/' + entrada.usuarioId,\n    corpo: {\n      fields: {\n        Codigo_Tentativas: (entrada.tentativasAtuais || 0) + 1\n      }\n    }\n  }\n}];\n"
+        "jsCode": "const entrada = $input.first().json;\nconst baseId = 'app6PyYmtFduIMp7B';\nconst tableId = 'tblucYjrD3SKf1azh';\n\nreturn [{\n  json: {\n    metodo: 'PATCH',\n    url: 'http://127.0.0.1:5690/v0/' + baseId + '/' + tableId + '/' + entrada.usuarioId,\n    corpo: {\n      fields: {\n        Codigo_Tentativas: (entrada.tentativasAtuais || 0) + 1\n      }\n    }\n  }\n}];\n"
       },
       "id": "v1000000-0000-4000-8000-000000000008",
       "name": "Monta incremento",
@@ -189,8 +192,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"

@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Monta, em ordem, todas as chamadas que o Airtable precisa receber.\n// Um no HTTP so executa todas: o endereco e o metodo mudam por item.\nconst b = $('Recebe pedido do app').first().json.body || {};\nconst BASE = 'https://api.airtable.com/v0/app6PyYmtFduIMp7B/';\nconst T = { entidades: 'tbl5Joji6gAir3mNh', locais: 'tblffVczCf1VeNxs7', contatos: 'tblXXOEOCwQnC2qFX' };\n\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => texto(v) || null;\nconst linhas = (v) => (Array.isArray(v) ? v.map(texto).filter(Boolean) : []);\nconst ids = (v) => String(v || '').split(',').map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nconst entidadeId = ids(b.id)[0];\nif (!entidadeId) throw new Error('Pedido sem o codigo do cadastro.');\n\nconst lerJson = (t) => {\n  try { const v = JSON.parse(t || '[]'); return Array.isArray(v) ? v : []; }\n  catch (erro) { return []; }\n};\n\n// O Airtable aceita no maximo 10 registros por chamada.\nconst emLotes = (arr) => {\n  const lotes = [];\n  for (let i = 0; i < arr.length; i += 10) lotes.push(arr.slice(i, i + 10));\n  return lotes;\n};\n\nconst chamadas = [];\nconst gravar = (tabela, registros, novo) => {\n  for (const lote of emLotes(registros)) {\n    chamadas.push({\n      metodo: novo ? 'POST' : 'PATCH',\n      url: BASE + tabela,\n      corpo: { typecast: true, records: lote },\n    });\n  }\n};\nconst apagar = (tabela, lista) => {\n  for (const lote of emLotes(lista)) {\n    chamadas.push({\n      metodo: 'DELETE',\n      url: BASE + tabela + '?' + lote.map((id) => 'records[]=' + id).join('&'),\n      corpo: null,\n    });\n  }\n};\n\n// ---- 1. o cadastro em si ----\nchamadas.push({\n  metodo: 'PATCH',\n  url: BASE + T.entidades,\n  corpo: { typecast: true, records: [{ id: entidadeId, fields: {\n    CPF_CNPJ: texto(b.documento).replace(/\\D/g, ''),\n    Razao_Social_Nome: texto(b.razaoSocial),\n    Nome_Fantasia_Identificador: texto(b.nomeFantasia),\n    Tipo_Documento: lista(b.tipo),\n    Exigencia_Fiscal: lista(b.exigenciaFiscal),\n    Emails_Financeiro_NFE: texto(b.emails),\n    WhatsApp_CNPJ: texto(b.whatsappCnpj),\n    Administradora: texto(b.administradora),\n    Empresa_Sindicos: texto(b.empresaSindicos),\n    Status: lista(b.status) || 'Ativo',\n    Observacoes: texto(b.observacoes),\n  } }] },\n});\n\n// ---- 2. enderecos ----\nconst locais = lerJson(b.locais)\n  .map((l) => ({\n    id: ids(l.id)[0] || null,\n    nome: texto(l.nome), endereco: texto(l.endereco),\n    bairroCidade: texto(l.bairroCidade), acesso: texto(l.acesso),\n    status: lista(l.status) || 'Ativo',\n  }))\n  .filter((l) => l.nome || l.endereco || l.bairroCidade || l.acesso);\n\nconst camposLocal = (l) => ({\n  Nome_do_Local: l.nome || l.endereco || 'Local sem nome',\n  Endereco_Completo: l.endereco,\n  Bairro_Cidade: l.bairroCidade,\n  Observacoes_Acesso: l.acesso,\n  Status: l.status,\n});\n\ngravar(T.locais, locais.filter((l) => l.id).map((l) => ({ id: l.id, fields: camposLocal(l) })), false);\ngravar(T.locais, locais.filter((l) => !l.id).map((l) => ({\n  fields: { ...camposLocal(l), Cliente_Vinculado: [entidadeId] },\n})), true);\napagar(T.locais, ids(b.locaisApagar));\n\n// ---- 3. contatos ----\nconst contatos = lerJson(b.contatos)\n  .map((c) => ({\n    id: ids(c.id)[0] || null,\n    nome: texto(c.nome), cargo: texto(c.cargo),\n    whatsapps: linhas(c.whatsapps), emails: linhas(c.emails),\n    observacoes: texto(c.observacoes),\n    status: lista(c.status) || 'Ativo',\n  }))\n  .filter((c) => c.nome || c.whatsapps.length || c.emails.length || c.observacoes);\n\nconst camposContato = (c) => ({\n  Nome_Contato: c.nome || c.whatsapps[0] || c.emails[0] || 'Contato sem nome',\n  Cargo_Funcao: c.cargo || null,\n  WhatsApps: c.whatsapps.join('\\n'),\n  Emails: c.emails.join('\\n'),\n  Observacoes: c.observacoes,\n  Status: c.status,\n});\n\ngravar(T.contatos, contatos.filter((c) => c.id).map((c) => ({ id: c.id, fields: camposContato(c) })), false);\ngravar(T.contatos, contatos.filter((c) => !c.id).map((c) => ({\n  fields: { ...camposContato(c), Entidades_Vinculadas: [entidadeId] },\n})), true);\napagar(T.contatos, ids(b.contatosApagar));\n\nreturn chamadas.map((c) => ({ json: c }));"
+        "jsCode": "// Monta, em ordem, todas as chamadas que o Airtable precisa receber.\n// Um no HTTP so executa todas: o endereco e o metodo mudam por item.\nconst b = $('Recebe pedido do app').first().json.body || {};\nconst BASE = 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/';\nconst T = { entidades: 'tbl5Joji6gAir3mNh', locais: 'tblffVczCf1VeNxs7', contatos: 'tblXXOEOCwQnC2qFX' };\n\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => texto(v) || null;\nconst linhas = (v) => (Array.isArray(v) ? v.map(texto).filter(Boolean) : []);\nconst ids = (v) => String(v || '').split(',').map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nconst entidadeId = ids(b.id)[0];\nif (!entidadeId) throw new Error('Pedido sem o codigo do cadastro.');\n\nconst lerJson = (t) => {\n  try { const v = JSON.parse(t || '[]'); return Array.isArray(v) ? v : []; }\n  catch (erro) { return []; }\n};\n\n// O Airtable aceita no maximo 10 registros por chamada.\nconst emLotes = (arr) => {\n  const lotes = [];\n  for (let i = 0; i < arr.length; i += 10) lotes.push(arr.slice(i, i + 10));\n  return lotes;\n};\n\nconst chamadas = [];\nconst gravar = (tabela, registros, novo) => {\n  for (const lote of emLotes(registros)) {\n    chamadas.push({\n      metodo: novo ? 'POST' : 'PATCH',\n      url: BASE + tabela,\n      corpo: { typecast: true, records: lote },\n    });\n  }\n};\nconst apagar = (tabela, lista) => {\n  for (const lote of emLotes(lista)) {\n    chamadas.push({\n      metodo: 'DELETE',\n      url: BASE + tabela + '?' + lote.map((id) => 'records[]=' + id).join('&'),\n      corpo: null,\n    });\n  }\n};\n\n// ---- 1. o cadastro em si ----\nchamadas.push({\n  metodo: 'PATCH',\n  url: BASE + T.entidades,\n  corpo: { typecast: true, records: [{ id: entidadeId, fields: {\n    CPF_CNPJ: texto(b.documento).replace(/\\D/g, ''),\n    Razao_Social_Nome: texto(b.razaoSocial),\n    Nome_Fantasia_Identificador: texto(b.nomeFantasia),\n    Tipo_Documento: lista(b.tipo),\n    Exigencia_Fiscal: lista(b.exigenciaFiscal),\n    Emails_Financeiro_NFE: texto(b.emails),\n    WhatsApp_CNPJ: texto(b.whatsappCnpj),\n    Administradora: texto(b.administradora),\n    Empresa_Sindicos: texto(b.empresaSindicos),\n    Status: lista(b.status) || 'Ativo',\n    Observacoes: texto(b.observacoes),\n  } }] },\n});\n\n// ---- 2. enderecos ----\nconst locais = lerJson(b.locais)\n  .map((l) => ({\n    id: ids(l.id)[0] || null,\n    nome: texto(l.nome), endereco: texto(l.endereco),\n    bairroCidade: texto(l.bairroCidade), acesso: texto(l.acesso),\n    status: lista(l.status) || 'Ativo',\n  }))\n  .filter((l) => l.nome || l.endereco || l.bairroCidade || l.acesso);\n\nconst camposLocal = (l) => ({\n  Nome_do_Local: l.nome || l.endereco || 'Local sem nome',\n  Endereco_Completo: l.endereco,\n  Bairro_Cidade: l.bairroCidade,\n  Observacoes_Acesso: l.acesso,\n  Status: l.status,\n});\n\ngravar(T.locais, locais.filter((l) => l.id).map((l) => ({ id: l.id, fields: camposLocal(l) })), false);\ngravar(T.locais, locais.filter((l) => !l.id).map((l) => ({\n  fields: { ...camposLocal(l), Cliente_Vinculado: [entidadeId] },\n})), true);\napagar(T.locais, ids(b.locaisApagar));\n\n// ---- 3. contatos ----\nconst contatos = lerJson(b.contatos)\n  .map((c) => ({\n    id: ids(c.id)[0] || null,\n    nome: texto(c.nome), cargo: texto(c.cargo),\n    whatsapps: linhas(c.whatsapps), emails: linhas(c.emails),\n    observacoes: texto(c.observacoes),\n    status: lista(c.status) || 'Ativo',\n  }))\n  .filter((c) => c.nome || c.whatsapps.length || c.emails.length || c.observacoes);\n\nconst camposContato = (c) => ({\n  Nome_Contato: c.nome || c.whatsapps[0] || c.emails[0] || 'Contato sem nome',\n  Cargo_Funcao: c.cargo || null,\n  WhatsApps: c.whatsapps.join('\\n'),\n  Emails: c.emails.join('\\n'),\n  Observacoes: c.observacoes,\n  Status: c.status,\n});\n\ngravar(T.contatos, contatos.filter((c) => c.id).map((c) => ({ id: c.id, fields: camposContato(c) })), false);\ngravar(T.contatos, contatos.filter((c) => !c.id).map((c) => ({\n  fields: { ...camposContato(c), Entidades_Vinculadas: [entidadeId] },\n})), true);\napagar(T.contatos, ids(b.contatosApagar));\n\nreturn chamadas.map((c) => ({ json: c }));"
       },
       "id": "a0000000-0000-4000-8000-000000000006",
       "name": "Monta as alteracoes",
@@ -106,8 +106,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"
@@ -144,40 +144,43 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "={{ (() => { const doc = String($json.body.documento || '').replace(/\\D/g, ''); const id = String($json.body.id || '').replace(/[^a-zA-Z0-9]/g, ''); return doc ? \"AND({CPF_CNPJ} = '\" + doc + \"', RECORD_ID() != '\" + id + \"')\" : 'FALSE()'; })() }}"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tbl5Joji6gAir3mNh",
-          "mode": "list",
-          "cachedResultName": "Entidades_Cadastradas"
-        },
-        "filterByFormula": "={{ (() => { const doc = String($json.body.documento || '').replace(/\\D/g, ''); const id = String($json.body.id || '').replace(/[^a-zA-Z0-9]/g, ''); return doc ? \"AND({CPF_CNPJ} = '\" + doc + \"', RECORD_ID() != '\" + id + \"')\" : 'FALSE()'; })() }}",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "d0000000-0000-4000-8000-000000000001",
       "name": "Busca duplicado",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         880,
         -60
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -257,40 +260,43 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "={{ \"RECORD_ID() = '\" + String($(\"Recebe pedido do app\").first().json.body.id || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tbl5Joji6gAir3mNh",
-          "mode": "list",
-          "cachedResultName": "Entidades_Cadastradas"
-        },
-        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($(\"Recebe pedido do app\").first().json.body.id || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000900005",
       "name": "Busca entidade atual",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1980,
         -260
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -307,77 +313,83 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblffVczCf1VeNxs7",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "={{ \"RECORD_ID() = '\" + String($json.localId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblffVczCf1VeNxs7",
-          "mode": "list",
-          "cachedResultName": "Locais_Atendimento"
-        },
-        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($json.localId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000900007",
       "name": "Busca local atual",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         2420,
         -260
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblXXOEOCwQnC2qFX",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "={{ \"RECORD_ID() = '\" + String($(\"Monta ids do local e contato\").first().json.contatoId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblXXOEOCwQnC2qFX",
-          "mode": "list",
-          "cachedResultName": "Contatos_Solicitantes"
-        },
-        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($(\"Monta ids do local e contato\").first().json.contatoId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000900008",
       "name": "Busca contato atual",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         2640,
         -260
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -424,7 +436,7 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "airtableTokenApi",
         "sendBody": true,
@@ -444,8 +456,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueRegularOutput"

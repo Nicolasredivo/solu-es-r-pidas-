@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const b = $json.body || {};\nconst texto = (v) => String(v == null ? \"\" : v).trim();\n\nconst ids = texto(b.ids).split(\",\").map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\nconst dataPagamento = texto(b.dataPagamento);\n\nif (!ids.length) {\n  return [{ json: { invalido: true, mensagem: \"Nenhuma despesa para confirmar.\" } }];\n}\nif (!dataPagamento) {\n  return [{ json: { invalido: true, mensagem: \"Falta a data do pagamento.\" } }];\n}\n\n// So mexe em Status e Data_Pagamento: nao reenvia o resto do registro,\n// entao nada mais e alterado por engano.\nconst registros = ids.map((id) => ({\n  id,\n  fields: { Status: \"Pago\", Data_Pagamento: dataPagamento },\n}));\n\n// O Airtable aceita no maximo 10 registros por chamada.\nconst chamadas = [];\nfor (let i = 0; i < registros.length; i += 10) {\n  chamadas.push({\n    invalido: false,\n    metodo: \"PATCH\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: registros.slice(i, i + 10) },\n  });\n}\n\nreturn chamadas.map((c) => ({ json: c }));"
+        "jsCode": "const b = $json.body || {};\nconst texto = (v) => String(v == null ? \"\" : v).trim();\n\nconst ids = texto(b.ids).split(\",\").map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\nconst dataPagamento = texto(b.dataPagamento);\n\nif (!ids.length) {\n  return [{ json: { invalido: true, mensagem: \"Nenhuma despesa para confirmar.\" } }];\n}\nif (!dataPagamento) {\n  return [{ json: { invalido: true, mensagem: \"Falta a data do pagamento.\" } }];\n}\n\n// So mexe em Status e Data_Pagamento: nao reenvia o resto do registro,\n// entao nada mais e alterado por engano.\nconst registros = ids.map((id) => ({\n  id,\n  fields: { Status: \"Pago\", Data_Pagamento: dataPagamento },\n}));\n\n// O Airtable aceita no maximo 10 registros por chamada.\nconst chamadas = [];\nfor (let i = 0; i < registros.length; i += 10) {\n  chamadas.push({\n    invalido: false,\n    metodo: \"PATCH\",\n    url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: registros.slice(i, i + 10) },\n  });\n}\n\nreturn chamadas.map((c) => ({ json: c }));"
       },
       "id": "c0000000-0000-4000-8000-000000000006",
       "name": "Monta as alteracoes",
@@ -156,8 +156,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"

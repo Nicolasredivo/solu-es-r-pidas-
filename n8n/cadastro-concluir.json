@@ -35,40 +35,43 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblucYjrD3SKf1azh",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "={{ $json.formula }}"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblucYjrD3SKf1azh",
-          "mode": "list",
-          "cachedResultName": "Usuarios"
-        },
-        "filterByFormula": "={{ $json.formula }}",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c3000000-0000-4000-8000-000000000004",
       "name": "Busca usuario",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         440,
         0
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -155,7 +158,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const entrada = $input.first().json;\nconst baseId = 'app6PyYmtFduIMp7B';\nconst tableId = 'tblucYjrD3SKf1azh';\n\nreturn [{\n  json: {\n    metodo: 'PATCH',\n    url: 'https://api.airtable.com/v0/' + baseId + '/' + tableId + '/' + entrada.usuarioId,\n    corpo: {\n      fields: {\n        Codigo_Tentativas: (entrada.tentativasAtuais || 0) + 1\n      }\n    }\n  }\n}];\n"
+        "jsCode": "const entrada = $input.first().json;\nconst baseId = 'app6PyYmtFduIMp7B';\nconst tableId = 'tblucYjrD3SKf1azh';\n\nreturn [{\n  json: {\n    metodo: 'PATCH',\n    url: 'http://127.0.0.1:5690/v0/' + baseId + '/' + tableId + '/' + entrada.usuarioId,\n    corpo: {\n      fields: {\n        Codigo_Tentativas: (entrada.tentativasAtuais || 0) + 1\n      }\n    }\n  }\n}];\n"
       },
       "id": "c3000000-0000-4000-8000-000000000010",
       "name": "Monta incremento",
@@ -189,8 +192,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"
@@ -297,7 +300,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const BASE = 'app6PyYmtFduIMp7B';\nconst TABELA = 'tblucYjrD3SKf1azh';\n\nconst conf = $('Confere codigo').first().json;\nconst entrada = $('Monta busca').first().json;\nconst hash = $input.first().json.hash;\n\nconst carimbo = new Date()\n  .toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })\n  .replace(',', '');\nconst nivel = conf.papel === 'Dono' ? 'acesso total' : 'acesso padrão';\nconst linha = carimbo + ' — Conta ativada (' + nivel + ')';\n\nconst campos = {\n  Senha_Hash: hash,\n  Ativo: true,\n  Codigo_Recuperacao_Hash: '',\n  Codigo_Expira_Em: null,\n  Codigo_Tentativas: 0,\n  Historico: (conf.historico ? conf.historico + '\\n' : '') + linha,\n};\nif (!conf.nome) campos.Nome = entrada.nome;\n\nreturn [{\n  json: {\n    metodo: 'PATCH',\n    url: 'https://api.airtable.com/v0/' + BASE + '/' + TABELA + '/' + conf.usuarioId,\n    corpo: { fields: campos },\n  },\n}];\n"
+        "jsCode": "const BASE = 'app6PyYmtFduIMp7B';\nconst TABELA = 'tblucYjrD3SKf1azh';\n\nconst conf = $('Confere codigo').first().json;\nconst entrada = $('Monta busca').first().json;\nconst hash = $input.first().json.hash;\n\nconst carimbo = new Date()\n  .toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })\n  .replace(',', '');\nconst nivel = conf.papel === 'Dono' ? 'acesso total' : 'acesso padrão';\nconst linha = carimbo + ' — Conta ativada (' + nivel + ')';\n\nconst campos = {\n  Senha_Hash: hash,\n  Ativo: true,\n  Codigo_Recuperacao_Hash: '',\n  Codigo_Expira_Em: null,\n  Codigo_Tentativas: 0,\n  Historico: (conf.historico ? conf.historico + '\\n' : '') + linha,\n};\nif (!conf.nome) campos.Nome = entrada.nome;\n\nreturn [{\n  json: {\n    metodo: 'PATCH',\n    url: 'http://127.0.0.1:5690/v0/' + BASE + '/' + TABELA + '/' + conf.usuarioId,\n    corpo: { fields: campos },\n  },\n}];\n"
       },
       "id": "c3000000-0000-4000-8000-000000000018",
       "name": "Monta ativacao",
@@ -331,8 +334,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"
@@ -379,94 +382,29 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "create",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
-        },
-        "table": {
-          "__rl": true,
-          "value": "tblYDslwEMH6tKfzL",
-          "mode": "list",
-          "cachedResultName": "Sessoes"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Token": "={{ $json.tokenSessao }}",
-            "Usuario": "={{ [$json.usuarioId] }}",
-            "Dispositivo": "={{ $json.dispositivo }}",
-            "Expira_Em": "={{ $json.expiraEmSessao }}"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "Token",
-              "displayName": "Token",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Usuario",
-              "displayName": "Usuario",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "array",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Dispositivo",
-              "displayName": "Dispositivo",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "Expira_Em",
-              "displayName": "Expira_Em",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "POST",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblYDslwEMH6tKfzL",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ typecast: true, fields: { \"Token\": ($json.tokenSessao), \"Usuario\": ([$json.usuarioId]), \"Dispositivo\": ($json.dispositivo), \"Expira_Em\": ($json.expiraEmSessao) } }) }}",
         "options": {
-          "typecast": true
+          "timeout": 20000
         }
       },
       "id": "c3000000-0000-4000-8000-000000000022",
       "name": "Cria sessao",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         2640,
         -300
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"

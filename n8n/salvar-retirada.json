@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const b = $json.body || {};\nconst texto = (v) => String(v == null ? \"\" : v).trim();\nconst numero = (v) => {\n  const n = Number(String(v == null ? \"\" : v).replace(\",\", \".\"));\n  return Number.isFinite(n) ? n : 0;\n};\n\nconst socio = texto(b.socio);\nconst valor = numero(b.valor);\nif (!socio || valor <= 0) {\n  return [{ json: { invalido: true, mensagem: \"Diga de quem é a retirada e um valor maior que zero.\" } }];\n}\n\nreturn [{\n  json: {\n    invalido: false,\n    metodo: \"POST\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblh3m5JB6N2sNs5i\",\n    corpo: {\n      typecast: true,\n      records: [{\n        fields: {\n          Data: texto(b.data) || null,\n          Socio: socio,\n          Valor: valor,\n          Observacoes: texto(b.observacoes),\n        },\n      }],\n    },\n  },\n}];"
+        "jsCode": "const b = $json.body || {};\nconst texto = (v) => String(v == null ? \"\" : v).trim();\nconst numero = (v) => {\n  const n = Number(String(v == null ? \"\" : v).replace(\",\", \".\"));\n  return Number.isFinite(n) ? n : 0;\n};\n\nconst socio = texto(b.socio);\nconst valor = numero(b.valor);\nif (!socio || valor <= 0) {\n  return [{ json: { invalido: true, mensagem: \"Diga de quem é a retirada e um valor maior que zero.\" } }];\n}\n\nreturn [{\n  json: {\n    invalido: false,\n    metodo: \"POST\",\n    url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblh3m5JB6N2sNs5i\",\n    corpo: {\n      typecast: true,\n      records: [{\n        fields: {\n          Data: texto(b.data) || null,\n          Socio: socio,\n          Valor: valor,\n          Observacoes: texto(b.observacoes),\n        },\n      }],\n    },\n  },\n}];"
       },
       "id": "c0000000-0000-4000-8000-000000000014",
       "name": "Monta a chamada",
@@ -156,8 +156,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"

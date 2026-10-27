@@ -72,40 +72,43 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "={{ \"RECORD_ID() = '\" + String($(\"Recebe pedido do app\").first().json.body.chamadoId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tbltipxOIw8F96QHO",
-          "mode": "list",
-          "cachedResultName": "Chamados"
-        },
-        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($(\"Recebe pedido do app\").first().json.body.chamadoId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "h0000000-0000-4000-8000-000000000006",
       "name": "Busca chamado atual",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         880,
         -60
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -144,40 +147,43 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblXXOEOCwQnC2qFX",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "={{ \"RECORD_ID() = '\" + String($(\"Recebe pedido do app\").first().json.body.contatoId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblXXOEOCwQnC2qFX",
-          "mode": "list",
-          "cachedResultName": "Contatos_Solicitantes"
-        },
-        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($(\"Recebe pedido do app\").first().json.body.contatoId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "h0000000-0000-4000-8000-000000000009",
       "name": "Busca contato novo",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1320,
         -160
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -194,7 +200,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const achado = $(\"Busca chamado atual\").all().map((i) => i.json).find((j) => j && j.id && !j.error);\nif (!achado) return [{ json: { erro: \"Chamado nao encontrado.\" } }];\nconst f = achado.fields || {};\nconst b = $(\"Recebe pedido do app\").first().json.body || {};\nconst texto = (v) => String(v ?? \"\").trim();\n\nconst fields = {\n  Local_Exato: texto(b.localExato),\n  Descricao_Solicitacao: texto(b.descricaoSolicitacao),\n  Observacoes_Servico: texto(b.observacoesServico),\n};\n\n// Horario combinado com o cliente (hora de chegada, HH:MM). So entra quando o\n// app manda o campo: o fluxo de finalizar orcamento reenvia o resto sem ele e\n// nao pode apagar o horario. Vazio apaga; texto que nao e hora e recusado.\nif (b.horarioCombinadoCliente !== undefined) {\n  const hc = texto(b.horarioCombinadoCliente);\n  if (hc && !/^([01]?\\d|2[0-3]):[0-5]\\d$/.test(hc)) return [{ json: { erro: \"Horario combinado invalido (use HH:MM).\" } }];\n  fields.Horario_Combinado_Cliente = hc;\n}\n\nconst entrada = $input.first().json || {};\n\nconst contatoNovo = entrada.contatoNovo;\nif (contatoNovo && contatoNovo.id && !contatoNovo.error) {\n  const cf = contatoNovo.fields || {};\n  const linhas = (v) => (Array.isArray(v) ? v : String(v || \"\").split(\"\\n\")).map((s) => s.trim()).filter(Boolean);\n  fields.Contato_Nome = cf.Nome_Contato || \"\";\n  fields.Contato_WhatsApp = linhas(cf.WhatsApps)[0] || \"\";\n  fields.Contato_Email = linhas(cf.Emails)[0] || \"\";\n}\n\n// Endereco escolhido pelo app quando o cliente tem mais de um endereco\n// cadastrado (ver CONTEXTO.md 'Selecao de endereco', 14/09/2026).\nconst localNovo = entrada.localNovo;\nif (localNovo && localNovo.id && !localNovo.error) {\n  const lf = localNovo.fields || {};\n  fields.Endereco_Copia = lf.Endereco_Completo || \"\";\n}\n\n// ---- Orcamento: finalizar (preencher valor e detalhes combinados) ----\n// So grava os campos de orcamento quando o pedido pede isso -- uma edicao\n// normal (troca de endereco/descricao/observacoes, em qualquer tipo de\n// chamado) nunca toca nesses campos. Numero vazio vira null, nao 0 --\n// \"nao informado\" e diferente de \"custa zero\".\nconst finalizandoOrcamento = texto(b.finalizarOrcamento) === \"true\";\nconst numeroOuNulo = (v) => (texto(v) ? Number(texto(v).replace(\",\", \".\")) : null);\nif (finalizandoOrcamento) {\n  fields.Orcamento_Valor_Material = numeroOuNulo(b.orcamentoValorMaterial);\n  fields.Orcamento_Valor_MaoDeObra = numeroOuNulo(b.orcamentoValorMaoDeObra);\n  fields.Orcamento_Valor_Aproximado = numeroOuNulo(b.orcamentoValorAproximado);\n  fields.Orcamento_Forma_Pagamento = texto(b.orcamentoFormaPagamento);\n  fields.Orcamento_Detalhes = texto(b.orcamentoDetalhes);\n  fields.Orcamento_Situacao = \"Finalizado\";\n}\n\nconst agora = new Date().toISOString();\nconst linha = agora + \" -- \" + (finalizandoOrcamento ? \"Orcamento finalizado.\" : \"Chamado editado.\");\nfields.Historico = (f.Historico ? f.Historico + \"\\n\" : \"\") + linha;\n\nreturn [{ json: { chamadoId: achado.id, metodo: \"PATCH\", url: \"https://api.airtable.com/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO\", corpo: { typecast: true, records: [{ id: achado.id, fields }] } } }];"
+        "jsCode": "const achado = $(\"Busca chamado atual\").all().map((i) => i.json).find((j) => j && j.id && !j.error);\nif (!achado) return [{ json: { erro: \"Chamado nao encontrado.\" } }];\nconst f = achado.fields || {};\nconst b = $(\"Recebe pedido do app\").first().json.body || {};\nconst texto = (v) => String(v ?? \"\").trim();\n\nconst fields = {\n  Local_Exato: texto(b.localExato),\n  Descricao_Solicitacao: texto(b.descricaoSolicitacao),\n  Observacoes_Servico: texto(b.observacoesServico),\n};\n\n// Horario combinado com o cliente (hora de chegada, HH:MM). So entra quando o\n// app manda o campo: o fluxo de finalizar orcamento reenvia o resto sem ele e\n// nao pode apagar o horario. Vazio apaga; texto que nao e hora e recusado.\nif (b.horarioCombinadoCliente !== undefined) {\n  const hc = texto(b.horarioCombinadoCliente);\n  if (hc && !/^([01]?\\d|2[0-3]):[0-5]\\d$/.test(hc)) return [{ json: { erro: \"Horario combinado invalido (use HH:MM).\" } }];\n  fields.Horario_Combinado_Cliente = hc;\n}\n\nconst entrada = $input.first().json || {};\n\nconst contatoNovo = entrada.contatoNovo;\nif (contatoNovo && contatoNovo.id && !contatoNovo.error) {\n  const cf = contatoNovo.fields || {};\n  const linhas = (v) => (Array.isArray(v) ? v : String(v || \"\").split(\"\\n\")).map((s) => s.trim()).filter(Boolean);\n  fields.Contato_Nome = cf.Nome_Contato || \"\";\n  fields.Contato_WhatsApp = linhas(cf.WhatsApps)[0] || \"\";\n  fields.Contato_Email = linhas(cf.Emails)[0] || \"\";\n}\n\n// Endereco escolhido pelo app quando o cliente tem mais de um endereco\n// cadastrado (ver CONTEXTO.md 'Selecao de endereco', 14/09/2026).\nconst localNovo = entrada.localNovo;\nif (localNovo && localNovo.id && !localNovo.error) {\n  const lf = localNovo.fields || {};\n  fields.Endereco_Copia = lf.Endereco_Completo || \"\";\n}\n\n// ---- Orcamento: finalizar (preencher valor e detalhes combinados) ----\n// So grava os campos de orcamento quando o pedido pede isso -- uma edicao\n// normal (troca de endereco/descricao/observacoes, em qualquer tipo de\n// chamado) nunca toca nesses campos. Numero vazio vira null, nao 0 --\n// \"nao informado\" e diferente de \"custa zero\".\nconst finalizandoOrcamento = texto(b.finalizarOrcamento) === \"true\";\nconst numeroOuNulo = (v) => (texto(v) ? Number(texto(v).replace(\",\", \".\")) : null);\nif (finalizandoOrcamento) {\n  fields.Orcamento_Valor_Material = numeroOuNulo(b.orcamentoValorMaterial);\n  fields.Orcamento_Valor_MaoDeObra = numeroOuNulo(b.orcamentoValorMaoDeObra);\n  fields.Orcamento_Valor_Aproximado = numeroOuNulo(b.orcamentoValorAproximado);\n  fields.Orcamento_Forma_Pagamento = texto(b.orcamentoFormaPagamento);\n  fields.Orcamento_Detalhes = texto(b.orcamentoDetalhes);\n  fields.Orcamento_Situacao = \"Finalizado\";\n}\n\nconst agora = new Date().toISOString();\nconst linha = agora + \" -- \" + (finalizandoOrcamento ? \"Orcamento finalizado.\" : \"Chamado editado.\");\nfields.Historico = (f.Historico ? f.Historico + \"\\n\" : \"\") + linha;\n\nreturn [{ json: { chamadoId: achado.id, metodo: \"PATCH\", url: \"http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO\", corpo: { typecast: true, records: [{ id: achado.id, fields }] } } }];"
       },
       "id": "h0000000-0000-4000-8000-000000000011",
       "name": "Monta atualizacao",
@@ -228,8 +234,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"
@@ -271,7 +277,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const b = $(\"Recebe pedido do app\").first().json.body || {};\nlet anexos = [];\ntry { anexos = JSON.parse(b.anexosNovos || \"[]\"); } catch (e) { anexos = []; }\nif (!Array.isArray(anexos)) anexos = [];\nconst chamadoId = $(\"Monta atualizacao\").first().json.chamadoId;\nreturn anexos.map((a) => ({ json: {\n  url: \"https://content.airtable.com/v0/app6PyYmtFduIMp7B/\" + chamadoId + \"/Anexos/uploadAttachment\",\n  corpo: { contentType: a.contentType, file: a.base64, filename: a.filename },\n} }));"
+        "jsCode": "const b = $(\"Recebe pedido do app\").first().json.body || {};\nlet anexos = [];\ntry { anexos = JSON.parse(b.anexosNovos || \"[]\"); } catch (e) { anexos = []; }\nif (!Array.isArray(anexos)) anexos = [];\nconst chamadoId = $(\"Monta atualizacao\").first().json.chamadoId;\nreturn anexos.map((a) => ({ json: {\n  url: \"http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/\" + chamadoId + \"/Anexos/uploadAttachment\",\n  corpo: { contentType: a.contentType, file: a.base64, filename: a.filename },\n} }));"
       },
       "id": "h0000000-0000-4000-8000-000000000015",
       "name": "Prepara anexos novos",
@@ -305,8 +311,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueRegularOutput"
@@ -391,40 +397,43 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblffVczCf1VeNxs7",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "={{ \"RECORD_ID() = '\" + String($(\"Recebe pedido do app\").first().json.body.localId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblffVczCf1VeNxs7",
-          "mode": "list",
-          "cachedResultName": "Locais_Atendimento"
-        },
-        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($(\"Recebe pedido do app\").first().json.body.localId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "h0000000-0000-4000-8000-000000000021",
       "name": "Busca local novo",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1980,
         -160
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {

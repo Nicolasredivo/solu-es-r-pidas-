@@ -72,40 +72,43 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appjAmWXV7Zr33UqE",
-          "mode": "list",
-          "cachedResultName": "Financeiro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tbldfftPos0qX7nlm",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "{Status} = 'Enviado'"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tbldfftPos0qX7nlm",
-          "mode": "list",
-          "cachedResultName": "Pagamentos_Fatura"
-        },
-        "filterByFormula": "{Status} = 'Enviado'",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000006",
       "name": "Busca pagamento existente",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         880,
         -60
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -172,40 +175,43 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appjAmWXV7Zr33UqE",
-          "mode": "list",
-          "cachedResultName": "Financeiro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblzJwNGcTpvGmYiM",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "={{ \"RECORD_ID() = '\" + String($json.cartaoId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblzJwNGcTpvGmYiM",
-          "mode": "list",
-          "cachedResultName": "Cartoes"
-        },
-        "filterByFormula": "={{ \"RECORD_ID() = '\" + String($json.cartaoId || \"\").replace(/[^a-zA-Z0-9]/g, \"\") + \"'\" }}",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000011",
       "name": "Busca o cartao",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1540,
         -160
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -390,7 +396,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const resposta = $json || {};\nconst dados = $(\"Tem saldo?\").first().json;\nconst hoje = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);\n\nconst chamadas = [];\n\nchamadas.push({\n  metodo: \"POST\",\n  url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tbldfftPos0qX7nlm\",\n  corpo: { typecast: true, records: [{ fields: {\n    Data: hoje,\n    Cartao_Ref: [dados.cartaoId],\n    Vencimento_Fatura: dados.vencimento || null,\n    Valor: dados.valor,\n    Valor_Calculado: dados.valorCalculado,\n    Status: \"Enviado\",\n    Metodo: \"Boleto\",\n    Asaas_Transfer_Id: String(resposta.id || \"\"),\n  } }] },\n});\n\nfor (let i = 0; i < dados.ids.length; i += 10) {\n  chamadas.push({\n    metodo: \"PATCH\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: dados.ids.slice(i, i + 10).map((id) => ({\n      id, fields: { Status: \"Pago\", Data_Pagamento: hoje },\n    })) },\n  });\n}\n\nconst diferenca = Math.round((dados.valor - dados.valorCalculado) * 100) / 100;\nif (Math.abs(diferenca) >= 0.01) {\n  chamadas.push({\n    metodo: \"POST\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: [{ fields: {\n      Descricao: \"Diferença da fatura \" + dados.nomeCartao,\n      Valor: diferenca,\n      Vencimento: dados.vencimento || hoje,\n      Data_Pagamento: hoje,\n      Status: \"Pago\",\n      Categoria: \"Outros\",\n      Forma_Pagamento: \"Boleto\",\n      Cartao_Ref: [dados.cartaoId],\n      Observacoes: \"Lançada sozinha: a fatura foi paga por um valor diferente do que o sistema tinha somado.\",\n    } }] },\n  });\n}\n\nreturn chamadas.map((c) => ({ json: c }));"
+        "jsCode": "const resposta = $json || {};\nconst dados = $(\"Tem saldo?\").first().json;\nconst hoje = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);\n\nconst chamadas = [];\n\nchamadas.push({\n  metodo: \"POST\",\n  url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tbldfftPos0qX7nlm\",\n  corpo: { typecast: true, records: [{ fields: {\n    Data: hoje,\n    Cartao_Ref: [dados.cartaoId],\n    Vencimento_Fatura: dados.vencimento || null,\n    Valor: dados.valor,\n    Valor_Calculado: dados.valorCalculado,\n    Status: \"Enviado\",\n    Metodo: \"Boleto\",\n    Asaas_Transfer_Id: String(resposta.id || \"\"),\n  } }] },\n});\n\nfor (let i = 0; i < dados.ids.length; i += 10) {\n  chamadas.push({\n    metodo: \"PATCH\",\n    url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: dados.ids.slice(i, i + 10).map((id) => ({\n      id, fields: { Status: \"Pago\", Data_Pagamento: hoje },\n    })) },\n  });\n}\n\nconst diferenca = Math.round((dados.valor - dados.valorCalculado) * 100) / 100;\nif (Math.abs(diferenca) >= 0.01) {\n  chamadas.push({\n    metodo: \"POST\",\n    url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: [{ fields: {\n      Descricao: \"Diferença da fatura \" + dados.nomeCartao,\n      Valor: diferenca,\n      Vencimento: dados.vencimento || hoje,\n      Data_Pagamento: hoje,\n      Status: \"Pago\",\n      Categoria: \"Outros\",\n      Forma_Pagamento: \"Boleto\",\n      Cartao_Ref: [dados.cartaoId],\n      Observacoes: \"Lançada sozinha: a fatura foi paga por um valor diferente do que o sistema tinha somado.\",\n    } }] },\n  });\n}\n\nreturn chamadas.map((c) => ({ json: c }));"
       },
       "id": "c0000000-0000-4000-8000-000000000022",
       "name": "Monta as gravacoes",
@@ -424,8 +430,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"
@@ -462,7 +468,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const erro = $json || {};\nconst dados = $(\"Tem saldo?\").first().json;\nconst hoje = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);\n\nconst motivo = ((erro.error || {}).message)\n  || (((erro.errors || [])[0] || {}).description)\n  || \"O Asaas recusou o pagamento do boleto.\";\n\nreturn [{ json: {\n  metodo: \"POST\",\n  url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tbldfftPos0qX7nlm\",\n  corpo: { typecast: true, records: [{ fields: {\n    Data: hoje,\n    Cartao_Ref: [dados.cartaoId],\n    Vencimento_Fatura: dados.vencimento || null,\n    Valor: dados.valor,\n    Valor_Calculado: dados.valorCalculado,\n    Status: \"Falhou\",\n    Metodo: \"Boleto\",\n    Observacoes: motivo,\n  } }] },\n  motivo,\n} }];"
+        "jsCode": "const erro = $json || {};\nconst dados = $(\"Tem saldo?\").first().json;\nconst hoje = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);\n\nconst motivo = ((erro.error || {}).message)\n  || (((erro.errors || [])[0] || {}).description)\n  || \"O Asaas recusou o pagamento do boleto.\";\n\nreturn [{ json: {\n  metodo: \"POST\",\n  url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tbldfftPos0qX7nlm\",\n  corpo: { typecast: true, records: [{ fields: {\n    Data: hoje,\n    Cartao_Ref: [dados.cartaoId],\n    Vencimento_Fatura: dados.vencimento || null,\n    Valor: dados.valor,\n    Valor_Calculado: dados.valorCalculado,\n    Status: \"Falhou\",\n    Metodo: \"Boleto\",\n    Observacoes: motivo,\n  } }] },\n  motivo,\n} }];"
       },
       "id": "c0000000-0000-4000-8000-000000000026",
       "name": "Monta a falha",
@@ -496,8 +502,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"

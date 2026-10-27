@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const b = $json.body || {};\nconst texto = (v) => String(v ?? \"\").trim();\nconst id = texto(b.id);\nconst nome = texto(b.nome);\nif (!nome) throw new Error(\"Fornecedor sem nome.\");\n\nconst fields = { Nome: nome, CNPJ: texto(b.cnpj).replace(/\\D/g, \"\") };\nif (texto(b.observacoes)) fields.Observacoes = texto(b.observacoes);\n\nconst ehExistente = /^rec[A-Za-z0-9]{14}$/.test(id);\nreturn [{\n  json: {\n    metodo: ehExistente ? \"PATCH\" : \"POST\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblhsabIIg8SLqMMj\",\n    corpo: { typecast: true, records: [ehExistente ? { id, fields } : { fields }] },\n  },\n}];"
+        "jsCode": "const b = $json.body || {};\nconst texto = (v) => String(v ?? \"\").trim();\nconst id = texto(b.id);\nconst nome = texto(b.nome);\nif (!nome) throw new Error(\"Fornecedor sem nome.\");\n\nconst fields = { Nome: nome, CNPJ: texto(b.cnpj).replace(/\\D/g, \"\") };\nif (texto(b.observacoes)) fields.Observacoes = texto(b.observacoes);\n\nconst ehExistente = /^rec[A-Za-z0-9]{14}$/.test(id);\nreturn [{\n  json: {\n    metodo: ehExistente ? \"PATCH\" : \"POST\",\n    url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblhsabIIg8SLqMMj\",\n    corpo: { typecast: true, records: [ehExistente ? { id, fields } : { fields }] },\n  },\n}];"
       },
       "id": "c0000000-0000-4000-8000-000000000006",
       "name": "Monta a chamada",
@@ -106,8 +106,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"

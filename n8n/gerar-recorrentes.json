@@ -72,44 +72,43 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appjAmWXV7Zr33UqE",
-          "mode": "list",
-          "cachedResultName": "Financeiro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblb8QplhcGRP6SZ7",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblb8QplhcGRP6SZ7",
-          "mode": "list",
-          "cachedResultName": "Recorrentes"
-        },
-        "filterByFormula": "",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000027",
       "name": "Busca as contas fixas",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         880,
         -60
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
-        "jsCode": "function diaNoMes(ano, mesIndex, dia) {\n  const base = new Date(Date.UTC(ano, mesIndex, 1));\n  const ultimo = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate();\n  const dd = String(Math.min(Math.max(1, dia), ultimo)).padStart(2, \"0\");\n  const mm = String(base.getUTCMonth() + 1).padStart(2, \"0\");\n  return base.getUTCFullYear() + \"-\" + mm + \"-\" + dd;\n}\n\n// Datas em texto (2026-03-15) comparam certo com < e >, sem virar objeto.\nfunction hojeNoBrasil() {\n  return new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);\n}\n\nconst achados = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\nconst hoje = hojeNoBrasil();\n\nconst novasDespesas = [];\nconst ajustesNaRegra = [];\n\nfor (const item of achados) {\n  const f = item.json.fields || {};\n  if (!f.Ativo) continue;\n\n  const diaDoMes = Math.min(31, Math.max(1, Number(f.Dia_Do_Mes) || 1));\n  const semFim = Boolean(f.Sem_Fim);\n  let vencimento = String(f.Proxima_Geracao || \"\").slice(0, 10);\n  let restantes = semFim ? Infinity : Math.max(0, Number(f.Restantes) || 0);\n\n  if (!vencimento) continue;\n\n  // Gera tudo o que ficou para tras, nao so o mes atual: se o sistema passou\n  // dois meses sem ser aberto, as duas contas aparecem. O limite de 24 e uma\n  // trava contra data cadastrada errada la no passado.\n  let geradas = 0;\n  while (vencimento <= hoje && restantes > 0 && geradas < 24) {\n    const campos = {\n      Descricao: f.Descricao || \"Conta fixa\",\n      Valor: f.Valor || 0,\n      Vencimento: vencimento,\n      Status: \"Pendente\",\n      Categoria: f.Categoria || \"Outros\",\n      Forma_Pagamento: f.Forma_Pagamento || null,\n      Observacoes: f.Observacoes || \"\",\n      Recorrente_Ref: [item.json.id],\n    };\n    if (Array.isArray(f.Fornecedor_Ref) && f.Fornecedor_Ref.length) {\n      campos.Fornecedor_Ref = f.Fornecedor_Ref;\n    }\n    novasDespesas.push({ fields: campos });\n\n    geradas += 1;\n    if (!semFim) restantes -= 1;\n\n    const [ano, mes] = vencimento.split(\"-\").map(Number);\n    vencimento = diaNoMes(ano, mes, diaDoMes);\n  }\n\n  if (!geradas) continue;\n\n  // A regra so volta atualizada depois de gerar: se algo falhar no meio, a\n  // data antiga continua la e a proxima tentativa refaz o que faltou.\n  ajustesNaRegra.push({\n    id: item.json.id,\n    fields: {\n      Proxima_Geracao: vencimento,\n      Restantes: semFim ? 0 : restantes,\n      Ativo: semFim ? true : restantes > 0,\n    },\n  });\n}\n\nif (!novasDespesas.length) {\n  return [{ json: { nada: true, gerou: 0 } }];\n}\n\n// Primeiro as despesas, depois as regras: o no de HTTP segue a ordem dos\n// itens, entao a regra so avanca depois da conta ter sido criada.\nconst chamadas = [];\nfor (let i = 0; i < novasDespesas.length; i += 10) {\n  chamadas.push({\n    metodo: \"POST\", url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: novasDespesas.slice(i, i + 10) },\n  });\n}\nfor (let i = 0; i < ajustesNaRegra.length; i += 10) {\n  chamadas.push({\n    metodo: \"PATCH\", url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblb8QplhcGRP6SZ7\",\n    corpo: { typecast: true, records: ajustesNaRegra.slice(i, i + 10) },\n  });\n}\n\nreturn chamadas.map((c) => ({ json: { ...c, nada: false, gerou: novasDespesas.length } }));"
+        "jsCode": "function diaNoMes(ano, mesIndex, dia) {\n  const base = new Date(Date.UTC(ano, mesIndex, 1));\n  const ultimo = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate();\n  const dd = String(Math.min(Math.max(1, dia), ultimo)).padStart(2, \"0\");\n  const mm = String(base.getUTCMonth() + 1).padStart(2, \"0\");\n  return base.getUTCFullYear() + \"-\" + mm + \"-\" + dd;\n}\n\n// Datas em texto (2026-03-15) comparam certo com < e >, sem virar objeto.\nfunction hojeNoBrasil() {\n  return new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);\n}\n\nconst achados = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\nconst hoje = hojeNoBrasil();\n\nconst novasDespesas = [];\nconst ajustesNaRegra = [];\n\nfor (const item of achados) {\n  const f = item.json.fields || {};\n  if (!f.Ativo) continue;\n\n  const diaDoMes = Math.min(31, Math.max(1, Number(f.Dia_Do_Mes) || 1));\n  const semFim = Boolean(f.Sem_Fim);\n  let vencimento = String(f.Proxima_Geracao || \"\").slice(0, 10);\n  let restantes = semFim ? Infinity : Math.max(0, Number(f.Restantes) || 0);\n\n  if (!vencimento) continue;\n\n  // Gera tudo o que ficou para tras, nao so o mes atual: se o sistema passou\n  // dois meses sem ser aberto, as duas contas aparecem. O limite de 24 e uma\n  // trava contra data cadastrada errada la no passado.\n  let geradas = 0;\n  while (vencimento <= hoje && restantes > 0 && geradas < 24) {\n    const campos = {\n      Descricao: f.Descricao || \"Conta fixa\",\n      Valor: f.Valor || 0,\n      Vencimento: vencimento,\n      Status: \"Pendente\",\n      Categoria: f.Categoria || \"Outros\",\n      Forma_Pagamento: f.Forma_Pagamento || null,\n      Observacoes: f.Observacoes || \"\",\n      Recorrente_Ref: [item.json.id],\n    };\n    if (Array.isArray(f.Fornecedor_Ref) && f.Fornecedor_Ref.length) {\n      campos.Fornecedor_Ref = f.Fornecedor_Ref;\n    }\n    novasDespesas.push({ fields: campos });\n\n    geradas += 1;\n    if (!semFim) restantes -= 1;\n\n    const [ano, mes] = vencimento.split(\"-\").map(Number);\n    vencimento = diaNoMes(ano, mes, diaDoMes);\n  }\n\n  if (!geradas) continue;\n\n  // A regra so volta atualizada depois de gerar: se algo falhar no meio, a\n  // data antiga continua la e a proxima tentativa refaz o que faltou.\n  ajustesNaRegra.push({\n    id: item.json.id,\n    fields: {\n      Proxima_Geracao: vencimento,\n      Restantes: semFim ? 0 : restantes,\n      Ativo: semFim ? true : restantes > 0,\n    },\n  });\n}\n\nif (!novasDespesas.length) {\n  return [{ json: { nada: true, gerou: 0 } }];\n}\n\n// Primeiro as despesas, depois as regras: o no de HTTP segue a ordem dos\n// itens, entao a regra so avanca depois da conta ter sido criada.\nconst chamadas = [];\nfor (let i = 0; i < novasDespesas.length; i += 10) {\n  chamadas.push({\n    metodo: \"POST\", url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0\",\n    corpo: { typecast: true, records: novasDespesas.slice(i, i + 10) },\n  });\n}\nfor (let i = 0; i < ajustesNaRegra.length; i += 10) {\n  chamadas.push({\n    metodo: \"PATCH\", url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblb8QplhcGRP6SZ7\",\n    corpo: { typecast: true, records: ajustesNaRegra.slice(i, i + 10) },\n  });\n}\n\nreturn chamadas.map((c) => ({ json: { ...c, nada: false, gerou: novasDespesas.length } }));"
       },
       "id": "c0000000-0000-4000-8000-000000000028",
       "name": "Monta o que gerar",
@@ -193,8 +192,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"

@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const id = String(($json.body || {}).id || \"\").trim();\nif (!/^rec[A-Za-z0-9]{14}$/.test(id)) throw new Error(\"Pedido sem o codigo do recebimento.\");\nreturn [{ json: {\n  metodo: \"DELETE\",\n  url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tbl4tMnm3t3peeLYo?records[]=\" + id,\n  corpo: null,\n} }];"
+        "jsCode": "const id = String(($json.body || {}).id || \"\").trim();\nif (!/^rec[A-Za-z0-9]{14}$/.test(id)) throw new Error(\"Pedido sem o codigo do recebimento.\");\nreturn [{ json: {\n  metodo: \"DELETE\",\n  url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tbl4tMnm3t3peeLYo?records[]=\" + id,\n  corpo: null,\n} }];"
       },
       "id": "c0000000-0000-4000-8000-000000000006",
       "name": "Monta a chamada",
@@ -106,8 +106,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"

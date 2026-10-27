@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// O app manda os codigos: um so, ou todos os de um grupo de parcelas.\n// Ele ja tem a lista carregada, entao o n8n nao precisa procurar de novo.\nconst b = $json.body || {};\nconst ids = String(b.ids || b.id || \"\").split(\",\").map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nif (!ids.length) throw new Error(\"Pedido sem o codigo da despesa.\");\n\n// O Airtable apaga no maximo 10 por chamada.\nconst chamadas = [];\nfor (let i = 0; i < ids.length; i += 10) {\n  const lote = ids.slice(i, i + 10);\n  chamadas.push({\n    metodo: \"DELETE\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0?\" + lote.map((id) => \"records[]=\" + id).join(\"&\"),\n    corpo: null,\n  });\n}\n\nreturn chamadas.map((c) => ({ json: c }));"
+        "jsCode": "// O app manda os codigos: um so, ou todos os de um grupo de parcelas.\n// Ele ja tem a lista carregada, entao o n8n nao precisa procurar de novo.\nconst b = $json.body || {};\nconst ids = String(b.ids || b.id || \"\").split(\",\").map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nif (!ids.length) throw new Error(\"Pedido sem o codigo da despesa.\");\n\n// O Airtable apaga no maximo 10 por chamada.\nconst chamadas = [];\nfor (let i = 0; i < ids.length; i += 10) {\n  const lote = ids.slice(i, i + 10);\n  chamadas.push({\n    metodo: \"DELETE\",\n    url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblNduEKl2jY280V0?\" + lote.map((id) => \"records[]=\" + id).join(\"&\"),\n    corpo: null,\n  });\n}\n\nreturn chamadas.map((c) => ({ json: c }));"
       },
       "id": "c0000000-0000-4000-8000-000000000040",
       "name": "Monta o que apagar",
@@ -106,8 +106,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"

@@ -72,40 +72,43 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblXXOEOCwQnC2qFX",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "={{ $json.formula }}"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tblXXOEOCwQnC2qFX",
-          "mode": "list",
-          "cachedResultName": "Contatos_Solicitantes"
-        },
-        "filterByFormula": "={{ $json.formula }}",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000017",
       "name": "Busca",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1300,
         -60
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -137,40 +140,43 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "app6PyYmtFduIMp7B",
-          "mode": "list",
-          "cachedResultName": "cadastro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "={{ (() => { const id = String($json.body.entidadeId || '').replace(/[^a-zA-Z0-9]/g, ''); if (id) return \"RECORD_ID() = '\" + id + \"'\"; const doc = String($json.body.documento || '').replace(/\\D/g, ''); return doc ? \"{CPF_CNPJ} = '\" + doc + \"'\" : 'FALSE()'; })() }}"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tbl5Joji6gAir3mNh",
-          "mode": "list",
-          "cachedResultName": "Entidades_Cadastradas"
-        },
-        "filterByFormula": "={{ (() => { const id = String($json.body.entidadeId || '').replace(/[^a-zA-Z0-9]/g, ''); if (id) return \"RECORD_ID() = '\" + id + \"'\"; const doc = String($json.body.documento || '').replace(/\\D/g, ''); return doc ? \"{CPF_CNPJ} = '\" + doc + \"'\" : 'FALSE()'; })() }}",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000027",
       "name": "Busca entidade",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         880,
         -60
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {

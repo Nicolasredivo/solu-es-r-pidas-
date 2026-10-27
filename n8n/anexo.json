@@ -1,0 +1,207 @@
+{
+  "name": "App - Anexo",
+  "nodes": [
+    {
+      "id": "an000000-0000-4000-8000-000000000001",
+      "name": "Recebe pedido",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "an000000-0000-4000-8000-0000000000a1",
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "anexo",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "an000000-0000-4000-8000-000000000002",
+      "name": "Confere o codigo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Só passa código no formato que o Airtable local gera (att + 32 letras/números).\nconst id = String(($json.query || {}).id || '');\nreturn [{ json: { id, valido: /^att[0-9a-f]{32}$/.test(id) } }];"
+      }
+    },
+    {
+      "id": "an000000-0000-4000-8000-000000000003",
+      "name": "Codigo valido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "an000000-0000-4000-8000-000000000004",
+      "name": "Busca o arquivo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        -100
+      ],
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'http://127.0.0.1:5690/anexos/' + $json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "an000000-0000-4000-8000-000000000005",
+      "name": "Entrega o arquivo",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        -160
+      ],
+      "parameters": {
+        "respondWith": "binary",
+        "inputDataFieldName": "data",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "private, max-age=86400"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "an000000-0000-4000-8000-000000000006",
+      "name": "Nao achou",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        60
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Anexo não encontrado.",
+        "options": {
+          "responseCode": 404
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Recebe pedido": {
+      "main": [
+        [
+          {
+            "node": "Confere o codigo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere o codigo": {
+      "main": [
+        [
+          {
+            "node": "Codigo valido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Codigo valido?": {
+      "main": [
+        [
+          {
+            "node": "Busca o arquivo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Nao achou",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca o arquivo": {
+      "main": [
+        [
+          {
+            "node": "Entrega o arquivo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Nao achou",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  }
+}

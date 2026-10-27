@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const b = $json.body || {};\nconst texto = (v) => String(v == null ? \"\" : v).trim();\nconst lista = (v) => texto(v) || null;\nconst numero = (v) => {\n  const n = Number(String(v == null ? \"\" : v).replace(\",\", \".\"));\n  return Number.isFinite(n) ? n : 0;\n};\nconst diaValido = (v) => Math.min(31, Math.max(1, Math.round(numero(v)) || 1));\n\nconst nome = texto(b.nome);\nif (!nome) {\n  return [{ json: { invalido: true, mensagem: \"Dê um nome ao cartão.\" } }];\n}\n\n// A chave PIX e para onde o dinheiro vai. Sem ela o cartao ate existe,\n// mas o sistema nunca vai conseguir pagar a fatura sozinho.\nconst chavePix = texto(b.chavePix);\nconst tipoChave = texto(b.tipoChavePix);\nif (chavePix && !tipoChave) {\n  return [{ json: { invalido: true, mensagem: \"Diga qual o tipo da chave PIX.\" } }];\n}\n\nconst fields = {\n  Nome: nome,\n  Banco: texto(b.banco),\n  Bandeira: lista(b.bandeira),\n  Final: texto(b.final).replace(/[^0-9]/g, \"\").slice(-4),\n  Chave_PIX: chavePix,\n  Tipo_Chave_PIX: lista(tipoChave),\n  Dia_Fechamento: diaValido(b.diaFechamento),\n  Dia_Vencimento: diaValido(b.diaVencimento),\n  Limite: numero(b.limite),\n  Ativo: texto(b.ativo) !== \"nao\",\n  Observacoes: texto(b.observacoes),\n};\n\nconst id = texto(b.id);\nconst ehExistente = /^rec[A-Za-z0-9]{14}$/.test(id);\nreturn [{\n  json: {\n    invalido: false,\n    metodo: ehExistente ? \"PATCH\" : \"POST\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tblzJwNGcTpvGmYiM\",\n    corpo: { typecast: true, records: [ehExistente ? { id, fields } : { fields }] },\n  },\n}];"
+        "jsCode": "const b = $json.body || {};\nconst texto = (v) => String(v == null ? \"\" : v).trim();\nconst lista = (v) => texto(v) || null;\nconst numero = (v) => {\n  const n = Number(String(v == null ? \"\" : v).replace(\",\", \".\"));\n  return Number.isFinite(n) ? n : 0;\n};\nconst diaValido = (v) => Math.min(31, Math.max(1, Math.round(numero(v)) || 1));\n\nconst nome = texto(b.nome);\nif (!nome) {\n  return [{ json: { invalido: true, mensagem: \"Dê um nome ao cartão.\" } }];\n}\n\n// A chave PIX e para onde o dinheiro vai. Sem ela o cartao ate existe,\n// mas o sistema nunca vai conseguir pagar a fatura sozinho.\nconst chavePix = texto(b.chavePix);\nconst tipoChave = texto(b.tipoChavePix);\nif (chavePix && !tipoChave) {\n  return [{ json: { invalido: true, mensagem: \"Diga qual o tipo da chave PIX.\" } }];\n}\n\nconst fields = {\n  Nome: nome,\n  Banco: texto(b.banco),\n  Bandeira: lista(b.bandeira),\n  Final: texto(b.final).replace(/[^0-9]/g, \"\").slice(-4),\n  Chave_PIX: chavePix,\n  Tipo_Chave_PIX: lista(tipoChave),\n  Dia_Fechamento: diaValido(b.diaFechamento),\n  Dia_Vencimento: diaValido(b.diaVencimento),\n  Limite: numero(b.limite),\n  Ativo: texto(b.ativo) !== \"nao\",\n  Observacoes: texto(b.observacoes),\n};\n\nconst id = texto(b.id);\nconst ehExistente = /^rec[A-Za-z0-9]{14}$/.test(id);\nreturn [{\n  json: {\n    invalido: false,\n    metodo: ehExistente ? \"PATCH\" : \"POST\",\n    url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tblzJwNGcTpvGmYiM\",\n    corpo: { typecast: true, records: [ehExistente ? { id, fields } : { fields }] },\n  },\n}];"
       },
       "id": "c0000000-0000-4000-8000-000000000006",
       "name": "Monta a chamada",
@@ -156,8 +156,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"

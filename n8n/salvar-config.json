@@ -72,44 +72,47 @@
     },
     {
       "parameters": {
-        "resource": "record",
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appjAmWXV7Zr33UqE",
-          "mode": "list",
-          "cachedResultName": "Financeiro"
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tbl3uT9h7ZYXnfR7E",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            },
+            {
+              "name": "filterByFormula",
+              "value": "{Chave} = 'principal'"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tbl3uT9h7ZYXnfR7E",
-          "mode": "list",
-          "cachedResultName": "Config_Financeiro"
-        },
-        "filterByFormula": "{Chave} = 'principal'",
-        "returnAll": true,
-        "options": {}
+        "options": {
+          "timeout": 20000
+        }
       },
       "id": "c0000000-0000-4000-8000-000000000015",
       "name": "Acha a linha principal",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         880,
         -60
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
-        "jsCode": "const b = $('Recebe pedido do app').first().json.body || {};\nconst texto = (v) => String(v == null ? \"\" : v).trim();\nconst lista = (v) => texto(v) || null;\nconst numero = (v) => {\n  const n = Number(String(v == null ? \"\" : v).replace(\",\", \".\"));\n  return Number.isFinite(n) ? n : 0;\n};\nconst ehRegistro = (v) => /^rec[A-Za-z0-9]{14}$/.test(texto(v));\n// [^0-9] em vez do atalho com barra invertida: escapar barra dentro de tanta\n// camada de texto ja quebrou este arquivo uma vez.\nconst soDigitos = (v) => texto(v).replace(/[^0-9]/g, \"\");\n\n// Quem manda no id e o n8n, nao o app. O app so diz O QUE mudar; ONDE\n// gravar sai da busca aqui do lado. Assim um pedido malformado nao tem como\n// criar uma segunda linha \"principal\" numa tabela que so aceita uma.\nconst achadas = $input.all().map((i) => i.json).filter((j) => j && j.id);\n// A mais antiga e a de verdade: se um dia sobrar duplicata, a original ganha.\nachadas.sort((x, y) => String(x.createdTime).localeCompare(String(y.createdTime)));\nconst id = achadas.length ? achadas[0].id : \"\";\n\n// SO grava o que o pedido REALMENTE trouxe. Ja aconteceu de um script de\n// teste mandar meia duzia de campos e zerar todo o resto da configuracao\n// do dono, sem volta. Campo ausente no pedido agora fica como esta.\nconst veio = (chave) => Object.prototype.hasOwnProperty.call(b, chave);\nconst so = (chave, valor) => (veio(chave) ? { [nomeNoAirtable[chave]]: valor } : {});\n\nconst nomeNoAirtable = {\n  saldoInicial: \"Saldo_Inicial\",\n  dataSaldoInicial: \"Data_Saldo_Inicial\",\n  reservaMeta: \"Reserva_Meta\",\n  giroMeta: \"Giro_Meta\",\n  regime: \"Regime\",\n  impostoFixoMensal: \"Imposto_Fixo_Mensal\",\n  aliquotaImposto: \"Aliquota_Imposto\",\n  tetoAnual: \"Teto_Anual\",\n  folhaMensal: \"Folha_Mensal\",\n  provisionaDecimoFerias: \"Provisiona_Decimo_Ferias\",\n  socio1Nome: \"Socio_1_Nome\",\n  socio2Nome: \"Socio_2_Nome\",\n  socio1Percentual: \"Socio_1_Percentual\",\n  socio2Percentual: \"Socio_2_Percentual\",\n};\n\nconst fields = {\n  Chave: \"principal\",\n  ...so(\"saldoInicial\", numero(b.saldoInicial)),\n  ...so(\"dataSaldoInicial\", lista(b.dataSaldoInicial)),\n  ...so(\"reservaMeta\", numero(b.reservaMeta)),\n  ...so(\"giroMeta\", numero(b.giroMeta)),\n  ...so(\"regime\", lista(b.regime) || \"MEI\"),\n  ...so(\"impostoFixoMensal\", numero(b.impostoFixoMensal)),\n  ...so(\"aliquotaImposto\", numero(b.aliquotaImposto) / 100),\n  ...so(\"tetoAnual\", numero(b.tetoAnual)),\n  ...so(\"folhaMensal\", numero(b.folhaMensal)),\n  ...so(\"provisionaDecimoFerias\", texto(b.provisionaDecimoFerias) === \"sim\"),\n  ...so(\"socio1Nome\", texto(b.socio1Nome)),\n  ...so(\"socio2Nome\", texto(b.socio2Nome)),\n  ...so(\"socio1Percentual\", numero(b.socio1Percentual) / 100),\n  ...so(\"socio2Percentual\", numero(b.socio2Percentual) / 100),\n};\n\nreturn [{\n  json: {\n    invalido: false,\n    metodo: ehRegistro(id) ? \"PATCH\" : \"POST\",\n    url: \"https://api.airtable.com/v0/appjAmWXV7Zr33UqE/tbl3uT9h7ZYXnfR7E\",\n    corpo: { typecast: true, records: [ehRegistro(id) ? { id, fields } : { fields }] },\n  },\n}];"
+        "jsCode": "const b = $('Recebe pedido do app').first().json.body || {};\nconst texto = (v) => String(v == null ? \"\" : v).trim();\nconst lista = (v) => texto(v) || null;\nconst numero = (v) => {\n  const n = Number(String(v == null ? \"\" : v).replace(\",\", \".\"));\n  return Number.isFinite(n) ? n : 0;\n};\nconst ehRegistro = (v) => /^rec[A-Za-z0-9]{14}$/.test(texto(v));\n// [^0-9] em vez do atalho com barra invertida: escapar barra dentro de tanta\n// camada de texto ja quebrou este arquivo uma vez.\nconst soDigitos = (v) => texto(v).replace(/[^0-9]/g, \"\");\n\n// Quem manda no id e o n8n, nao o app. O app so diz O QUE mudar; ONDE\n// gravar sai da busca aqui do lado. Assim um pedido malformado nao tem como\n// criar uma segunda linha \"principal\" numa tabela que so aceita uma.\nconst achadas = $input.all().map((i) => i.json).filter((j) => j && j.id);\n// A mais antiga e a de verdade: se um dia sobrar duplicata, a original ganha.\nachadas.sort((x, y) => String(x.createdTime).localeCompare(String(y.createdTime)));\nconst id = achadas.length ? achadas[0].id : \"\";\n\n// SO grava o que o pedido REALMENTE trouxe. Ja aconteceu de um script de\n// teste mandar meia duzia de campos e zerar todo o resto da configuracao\n// do dono, sem volta. Campo ausente no pedido agora fica como esta.\nconst veio = (chave) => Object.prototype.hasOwnProperty.call(b, chave);\nconst so = (chave, valor) => (veio(chave) ? { [nomeNoAirtable[chave]]: valor } : {});\n\nconst nomeNoAirtable = {\n  saldoInicial: \"Saldo_Inicial\",\n  dataSaldoInicial: \"Data_Saldo_Inicial\",\n  reservaMeta: \"Reserva_Meta\",\n  giroMeta: \"Giro_Meta\",\n  regime: \"Regime\",\n  impostoFixoMensal: \"Imposto_Fixo_Mensal\",\n  aliquotaImposto: \"Aliquota_Imposto\",\n  tetoAnual: \"Teto_Anual\",\n  folhaMensal: \"Folha_Mensal\",\n  provisionaDecimoFerias: \"Provisiona_Decimo_Ferias\",\n  socio1Nome: \"Socio_1_Nome\",\n  socio2Nome: \"Socio_2_Nome\",\n  socio1Percentual: \"Socio_1_Percentual\",\n  socio2Percentual: \"Socio_2_Percentual\",\n};\n\nconst fields = {\n  Chave: \"principal\",\n  ...so(\"saldoInicial\", numero(b.saldoInicial)),\n  ...so(\"dataSaldoInicial\", lista(b.dataSaldoInicial)),\n  ...so(\"reservaMeta\", numero(b.reservaMeta)),\n  ...so(\"giroMeta\", numero(b.giroMeta)),\n  ...so(\"regime\", lista(b.regime) || \"MEI\"),\n  ...so(\"impostoFixoMensal\", numero(b.impostoFixoMensal)),\n  ...so(\"aliquotaImposto\", numero(b.aliquotaImposto) / 100),\n  ...so(\"tetoAnual\", numero(b.tetoAnual)),\n  ...so(\"folhaMensal\", numero(b.folhaMensal)),\n  ...so(\"provisionaDecimoFerias\", texto(b.provisionaDecimoFerias) === \"sim\"),\n  ...so(\"socio1Nome\", texto(b.socio1Nome)),\n  ...so(\"socio2Nome\", texto(b.socio2Nome)),\n  ...so(\"socio1Percentual\", numero(b.socio1Percentual) / 100),\n  ...so(\"socio2Percentual\", numero(b.socio2Percentual) / 100),\n};\n\nreturn [{\n  json: {\n    invalido: false,\n    metodo: ehRegistro(id) ? \"PATCH\" : \"POST\",\n    url: \"http://127.0.0.1:5690/v0/appjAmWXV7Zr33UqE/tbl3uT9h7ZYXnfR7E\",\n    corpo: { typecast: true, records: [ehRegistro(id) ? { id, fields } : { fields }] },\n  },\n}];"
       },
       "id": "c0000000-0000-4000-8000-000000000016",
       "name": "Monta a chamada",
@@ -143,8 +146,8 @@
       ],
       "credentials": {
         "airtableTokenApi": {
-          "id": "IJB0DgRAc1qPMkVm",
-          "name": "Airtable Personal Access Token account"
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
         }
       },
       "onError": "continueErrorOutput"
