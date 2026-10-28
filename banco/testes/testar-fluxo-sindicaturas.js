@@ -59,6 +59,20 @@ async function testar(cad, criados) {
     const emailRuim = await chamar(webhook, { acao: 'salvar', nome: 'ZZ Teste Email Ruim', emails: '{x' });
     if (emailRuim.ok && emailRuim[item]) criados.push([tabela, emailRuim[item].id]);
     confere(t('lista de e-mails malformada é recusada'), emailRuim.ok === false && /E-mail inválido/.test(emailRuim.mensagem), emailRuim);
+
+    // ---- editar: troca só os e-mails ----
+    const editado = await chamar(webhook, { acao: 'editar', id: nova[item].id, nome: 'Outro nome',
+      emails: JSON.stringify(['novo@exemplo.invalid', 'segundo@exemplo.invalid']) });
+    let aposEditar = await local('GET', `/v0/${CAD}/${tabela}/${nova[item].id}`);
+    confere(t('editar troca os e-mails e não mexe no nome'), editado.ok && aposEditar.fields.Emails === 'novo@exemplo.invalid\nsegundo@exemplo.invalid'
+      && aposEditar.fields.Nome === nome && JSON.stringify(editado[item].emails) === JSON.stringify(['novo@exemplo.invalid', 'segundo@exemplo.invalid']), { editado, f: aposEditar.fields });
+    const semEmails = await chamar(webhook, { acao: 'editar', id: nova[item].id, emails: '[]' });
+    aposEditar = await local('GET', `/v0/${CAD}/${tabela}/${nova[item].id}`);
+    confere(t('editar pode deixar sem e-mail'), semEmails.ok && !aposEditar.fields.Emails, aposEditar.fields);
+    const fantasma = await chamar(webhook, { acao: 'editar', id: 'recFantasma0000000'.slice(0, 17), emails: '[]' });
+    confere(t('editar registro que não existe é recusado'), fantasma.ok === false && /não existe/.test(fantasma.mensagem), fantasma);
+    const semId = await chamar(webhook, { acao: 'editar', emails: '[]' });
+    confere(t('editar sem id é recusado'), semId.ok === false && /inválida/.test(semId.mensagem), semId);
   }
   const repetida = await chamar(webhook, { acao: 'salvar', nome: nome.toUpperCase().replace('A', 'Á') + '.' });
   if (repetida.ok && repetida[item]) criados.push([tabela, repetida[item].id]);

@@ -3609,6 +3609,46 @@ div.lembrete-item:hover {
   font-size: 0.85rem;
 }
 
+/* E-mails da administradora + "Editar e-mails" na mesma linha (quebra no celular). */
+.adm-emails-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.adm-emails-linha .sind-item-vazio {
+  overflow-wrap: anywhere;
+}
+
+.adm-emails-linha .link-button {
+  flex-shrink: 0;
+}
+
+.adm-editor {
+  padding: 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: rgba(91, 141, 239, 0.06);
+}
+
+.adm-editor-botoes {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.adm-editor-botoes button {
+  flex: 1;
+  padding: 9px 12px;
+  font-size: 0.9rem;
+}
+
+.adm-editor .doc-hint:empty {
+  display: none;
+}
+
 /* Cabeçalho de cada grupo quando a lista está agrupada por empresa. */
 .contatos-grupo {
   display: flex;

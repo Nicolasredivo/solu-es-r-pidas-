@@ -4983,6 +4983,10 @@ administradoras.
   Na edição isso aparece também fora do modo de editar. Nome novo pergunta "Cadastrar nova
   administradora?". O Sim abre por cima o mesmo formulário da tela de administradoras
   (`<dialog id="sobreposto-administradora">`) e, depois de salvar, põe o nome no campo.
+- **Editar e-mails da administradora** (pedido do dono, mesmo dia): em Consultar, cada uma tem
+  "Editar e-mails" (ou "+ Adicionar e-mail" quando não tem nenhum), que abre ali mesmo a lista
+  com "+", Salvar e Cancelar. O fluxo ganhou a ação `editar` (`id` + `emails`), que troca **só
+  os e-mails**: o nome não muda, porque é ele que liga os clientes. O teste agora tem 35.
 - **Janelas por cima (contato e administradora):** fechar e devolver o formulário agora é feito
   direto (`terminarSobreposto…`), e não só pelo evento `close` do `<dialog>`, que no painel de
   testes às vezes não chegava. O evento continua cobrindo o Esc.

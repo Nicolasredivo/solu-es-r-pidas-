@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.28n";
+const APP_VERSION = "2026.10.28o";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -9945,6 +9945,8 @@ function ligarCadastroDeEmpresas(c) {
   let itens = [];
   let carregadas = false;
   let buscando = null;
+  // Administradora com os e-mails abertos para editar na lista ("" = nenhuma).
+  let editandoId = "";
 
   if (emailsEl) {
     preencherCanais(emailsEl, "email");
@@ -10024,11 +10026,25 @@ function ligarCadastroDeEmpresas(c) {
       nome.className = "sind-item-nome";
       nome.textContent = s.nome;
       item.appendChild(nome);
-      if (c.comEmails) {
+      if (c.comEmails && s.id === editandoId) item.appendChild(editorDeEmails(s));
+      else if (c.comEmails) {
+        const linha = document.createElement("div");
+        linha.className = "adm-emails-linha";
         const emails = document.createElement("span");
         emails.className = "sind-item-vazio";
         emails.textContent = s.emails && s.emails.length ? `E-mails: ${s.emails.join(", ")}` : "Nenhum e-mail cadastrado.";
-        item.appendChild(emails);
+        const editar = document.createElement("button");
+        editar.type = "button";
+        editar.className = "link-button";
+        editar.textContent = s.emails && s.emails.length ? "Editar e-mails" : "+ Adicionar e-mail";
+        editar.addEventListener("click", () => {
+          editandoId = s.id;
+          desenhar();
+          const primeiro = listaEl.querySelector(".adm-editor .canal-valor");
+          if (primeiro) primeiro.focus();
+        });
+        linha.append(emails, editar);
+        item.appendChild(linha);
       }
       const pessoas = vinculados(s);
       if (!pessoas.length) {
@@ -10057,6 +10073,62 @@ function ligarCadastroDeEmpresas(c) {
       }
       listaEl.appendChild(item);
     });
+  }
+
+  // Editar os e-mails de uma já cadastrada, ali mesmo na lista (só os e-mails:
+  // o nome é o que liga os clientes a ela). Uma de cada vez.
+  function editorDeEmails(s) {
+    const caixa = document.createElement("div");
+    caixa.className = "adm-editor";
+    const lista = document.createElement("div");
+    lista.className = "contato-emails";
+    preencherCanais(lista, "email", s.emails);
+    const mais = document.createElement("button");
+    mais.type = "button";
+    mais.className = "link-button";
+    mais.textContent = "+ Adicionar e-mail";
+    mais.addEventListener("click", () => adicionarCanal(lista, "email", true));
+    const botoes = document.createElement("div");
+    botoes.className = "adm-editor-botoes";
+    const cancelar = document.createElement("button");
+    cancelar.type = "button";
+    cancelar.className = "botao-secundario";
+    cancelar.textContent = "Cancelar";
+    cancelar.addEventListener("click", () => {
+      editandoId = "";
+      desenhar();
+    });
+    const salvarEmails = document.createElement("button");
+    salvarEmails.type = "button";
+    salvarEmails.textContent = "Salvar e-mails";
+    const aviso = document.createElement("p");
+    aviso.className = "doc-hint";
+    salvarEmails.addEventListener("click", async () => {
+      salvarEmails.disabled = true;
+      aviso.textContent = "Salvando...";
+      aviso.className = "doc-hint neutral";
+      try {
+        const emails = valoresDosCanais(lista);
+        const resposta = await pedirAoN8n(c.webhook, { acao: "editar", id: s.id, emails: JSON.stringify(emails) });
+        if (!resposta || !resposta.ok) {
+          aviso.textContent = (resposta && resposta.mensagem) || "Não consegui salvar.";
+          aviso.className = "doc-hint error";
+          return;
+        }
+        s.emails = (resposta[c.chaveItem] && resposta[c.chaveItem].emails) || emails;
+        editandoId = "";
+        desenhar();
+        mostrarToast(`E-mails da ${s.nome} salvos.`);
+      } catch (err) {
+        aviso.textContent = "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?";
+        aviso.className = "doc-hint error";
+      } finally {
+        salvarEmails.disabled = false;
+      }
+    });
+    botoes.append(cancelar, salvarEmails);
+    caixa.append(lista, mais, botoes, aviso);
+    return caixa;
   }
 
   async function carregar() {
