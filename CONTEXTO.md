@@ -4826,7 +4826,8 @@ condomínio viraram um cadastro cada: 13 → 1, 14 → 1 e 9 → 1. Resultado: *
 **Pedido do dono:** um "×" pequeno, vermelho, em cada nome de empresa que aparece como sugestão
 no campo Empresas, para excluir.
 - **Tela:** cada sugestão de empresa já usada ganha o "×" (o item `Adicionar "…"` não). O 1º
-  toque mostra "Excluir de N contatos?" e o 2º exclui, como o "Excluir contato".
+  toque mostra "Excluir empresa?" e o 2º exclui, como o "Excluir contato". (Primeiro era
+  "Excluir de N contatos?", mas o dono leu como se fosse excluir o contato: trocado no mesmo dia.)
   `ligarSugestoesContato` aceita um 5º parâmetro (`aoExcluir`) e o campo `excluir` por item.
 - **`App - Contatos`:** ação nova `excluirEmpresa` (`empresa` = nome). Tira o nome de **todos**
   os contatos que o têm, em qualquer grafia que só mude acento, maiúscula ou pontuação (a mesma

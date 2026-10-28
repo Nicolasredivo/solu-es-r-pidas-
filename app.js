@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.28c";
+const APP_VERSION = "2026.10.28d";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -9198,7 +9198,7 @@ function abrirContatoNoForm(id) {
 // Sugestões que buscam enquanto digita, sem diferenciar acento nem
 // maiúscula ("sindico" acha "Síndico"). `coleta(termo)` devolve
 // [{ rotulo, detalhe, valor, excluir }]; `aoEscolher(valor)` faz o resto.
-// Item com `excluir` (o aviso, ex. "Excluir de 2 contatos?") ganha um "×"
+// Item com `excluir` (o aviso, ex. "Excluir empresa?") ganha um "×"
 // vermelho: o 1º toque mostra o aviso, o 2º chama `aoExcluir(valor)`.
 function ligarSugestoesContato(input, listaEl, coleta, aoEscolher, aoExcluir) {
   function atualizar() {
@@ -9309,11 +9309,6 @@ ligarSugestoesContato(ctFuncao, ctFuncaoSugestao, (termo) => {
 // Empresa = onde a pessoa trabalha, escrita à mão como a função: as já usadas
 // em outros contatos viram sugestão, e o que for novo entra com "Adicionar".
 // Até existir o cadastro de empresas, fica guardado só o nome.
-function contatosComEmpresa(nome) {
-  const chave = normalizarTexto(nome);
-  return contatosCadastrados.filter((c) => c.empresas.some((n) => normalizarTexto(n) === chave));
-}
-
 // O "×" de uma sugestão exclui a empresa: o nome sai de todos os contatos que
 // o têm, em qualquer grafia (como nas sugestões). Nada mais nos contatos muda.
 async function excluirEmpresaDosContatos(nome) {
@@ -9341,10 +9336,8 @@ async function excluirEmpresaDosContatos(nome) {
 }
 
 ligarSugestoesContato(ctEmpresaBusca, ctEmpresaSugestao, (termo) => {
-  const usadas = valoresJaUsados((c) => c.empresas, termo, { jaEscolhidos: ctEmpresas }).map((s) => {
-    const n = contatosComEmpresa(s.valor).length;
-    return { ...s, excluir: n === 1 ? "Excluir de 1 contato?" : `Excluir de ${n} contatos?` };
-  });
+  const usadas = valoresJaUsados((c) => c.empresas, termo, { jaEscolhidos: ctEmpresas })
+    .map((s) => ({ ...s, excluir: "Excluir empresa?" }));
   const digitada = ctEmpresaBusca.value.trim().replace(/\s+/g, " ");
   const jaExiste = usadas.some((s) => normalizarTexto(s.valor) === termo)
     || ctEmpresas.some((nome) => normalizarTexto(nome) === termo);
