@@ -649,6 +649,100 @@ select:disabled {
   margin-top: 18px;
 }
 
+/* "Contatos" no detalhe do cliente: parece o rótulo, mas é botão. */
+.d-contatos-botao {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  margin-bottom: 6px;
+  padding: 4px 10px;
+  border: 1px solid #2c3153;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.d-contatos-botao[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: rgba(91, 141, 239, 0.1);
+}
+
+.d-contatos-escolha {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  background: #12162a;
+}
+
+.d-contatos-escolha input[type="text"] {
+  margin-bottom: 8px;
+}
+
+.d-contatos-opcoes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.d-contato-opcao {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #2c3153;
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.d-contato-opcao.ligado {
+  border-color: var(--accent);
+}
+
+.d-contato-opcao-texto {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.d-contato-opcao-nome {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.d-contato-opcao-detalhe {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.d-contato-opcao button {
+  width: auto;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+.d-contato-opcao .d-contato-tirar {
+  background: transparent;
+  border: 1px solid var(--error);
+  color: var(--error);
+}
+
+.d-contato-opcao .d-contato-tirar.confirmando {
+  background: var(--error);
+  color: white;
+}
+
 /* ----- Aba Consultar ----- */
 
 .busca-linha {

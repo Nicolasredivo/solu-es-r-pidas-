@@ -4850,6 +4850,29 @@ e o 2º desliga.
   contato saiu para `itemDeContato(c)`.
 - O filtro não fica guardado: ao abrir o app, a lista volta sem agrupar.
 
+#### Escolher contatos salvos no detalhe do cliente (28/10/2026)
+
+**Pedido do dono:** em Cadastro de clientes > Consultar, a palavra "Contatos" do cliente vira
+um botão que abre uma busca nos contatos salvos no Cadastro de contatos, para trocar ou
+adicionar contato.
+- **Tela:** o rótulo virou o botão `.d-contatos-botao`, que abre `.d-contatos-escolha` com a
+  busca (nome, função, empresa, e-mail; telefone a partir de 3 dígitos). Os que já são deste
+  cliente ficam no topo com "Tirar" (dois toques: "Tirar deste cliente?"), e os outros têm
+  "Adicionar". **Grava na hora** e reabre o cadastro com a mensagem. Fica travado durante a
+  edição, porque reabrir jogaria fora o que não foi salvo. O código é `ligarEscolhaDeContatos`.
+  "Trocar" = tirar um e adicionar outro.
+- **`App - Contatos`:** ações novas `vincularCliente` e `desvincularCliente` (`id` do contato,
+  `clienteId`). Mexem só em `Entidades_Vinculadas`. Ligar duas vezes não duplica, e tirar
+  **nunca apaga** o contato. Ligar a um cliente que não existe é recusado.
+- Não atualiza o cliente na Asaas: isso continua acontecendo no próximo Salvar do cliente.
+- **Testes:** `testar-fluxo-contatos.js` agora tem 48 (7 novos). No navegador o teste foi
+  com respostas simuladas.
+- **Regra nova, pedida pelo dono:** o "Remover" de um contato no modo de edição do cliente
+  agora **só desfaz o vínculo** (`App - Atualizar cadastro`, nó `Monta as alteracoes`). Antes,
+  quem era só deste cliente era apagado. O contato continua no Cadastro de contatos.
+  `testar-contato-varias-empresas.js` foi ajustado (16 ok). **Excluir o cliente** continua
+  apagando os contatos que eram só dele, como antes, com o aviso de sempre.
+
 **Kaspersky derrubou o "Airtable local" (28/10/2026, 14:14 e 14:35).** O Inspetor do Sistema
 acusou `PDM:Trojan.Win32.Generic` no `node.exe` rodando `banco/airtable-local.js`, encerrou o
 processo e excluiu o arquivo. Foi alarme falso: o MD5 do arquivo excluído era idêntico ao do

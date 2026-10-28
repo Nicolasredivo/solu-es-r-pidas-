@@ -484,7 +484,16 @@
                 + Adicionar endereço
               </button>
 
-              <label class="rotulo-espacado">Contatos</label>
+              <!-- "Contatos" é um botão: abre a busca nos contatos salvos (Cadastro de
+                   contatos) para ligar um a este cliente ou tirar um que já é dele. -->
+              <button type="button" class="d-contatos-botao rotulo-espacado" aria-expanded="false"
+                      title="Escolher entre os contatos salvos">Contatos <span aria-hidden="true">▾</span></button>
+              <div class="d-contatos-escolha hidden">
+                <input type="text" class="d-contatos-busca" autocomplete="off" aria-label="Buscar contato salvo"
+                       placeholder="Buscar contato salvo (nome, função, empresa, telefone)" />
+                <p class="d-contatos-escolha-status doc-hint"></p>
+                <ul class="d-contatos-opcoes"></ul>
+              </div>
               <div class="d-contatos grade-responsiva"></div>
               <button type="button" class="d-adicionar-contato botao-secundario hidden">
                 + Adicionar contato

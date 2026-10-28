@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.28e";
+const APP_VERSION = "2026.10.28f";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -788,6 +788,143 @@ function contatosPreenchidos(caixa) {
 
 adicionarContatoBotao.addEventListener("click", () => adicionarContato(contatosBox, true));
 
+// "Contatos" no detalhe do cliente (Consultar) é um botão: abre a busca nos
+// contatos salvos no Cadastro de contatos. Tocar num contato o liga a este
+// cliente; os que já são dele ficam no topo, com "Tirar" (dois toques), que só
+// desfaz o vínculo -- o contato continua no Cadastro de contatos. Grava na hora
+// pelo fluxo "App - Contatos" e chama `recarregar(mensagem)`.
+function ligarEscolhaDeContatos(bloco, clienteId, recarregar) {
+  const botao = bloco.querySelector(".d-contatos-botao");
+  const painel = bloco.querySelector(".d-contatos-escolha");
+  const busca = bloco.querySelector(".d-contatos-busca");
+  const status = bloco.querySelector(".d-contatos-escolha-status");
+  const lista = bloco.querySelector(".d-contatos-opcoes");
+  let salvos = [];
+  let ocupado = false;
+
+  function mostrarStatus(tipo, mensagem) {
+    status.textContent = mensagem;
+    status.className = `d-contatos-escolha-status doc-hint ${tipo}`;
+  }
+
+  async function gravar(acao, contato) {
+    if (ocupado) return;
+    ocupado = true;
+    lista.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    mostrarStatus("neutral", acao === "vincularCliente" ? "Adicionando..." : "Tirando...");
+    try {
+      const resposta = await pedirAoN8n("contatos", { acao, id: contato.id, clienteId });
+      if (!resposta || !resposta.ok) {
+        mostrarStatus("error", (resposta && resposta.mensagem) || "Não consegui gravar.");
+        desenhar();
+        return;
+      }
+      // A tela de contatos e a lista de clientes mostram esses vínculos: buscam de novo.
+      contatosCarregados = false;
+      listaCarregada = false;
+      await recarregar(acao === "vincularCliente"
+        ? `${contato.nome || "Contato"} agora é contato deste cliente.`
+        : `${contato.nome || "Contato"} saiu deste cliente (continua no Cadastro de contatos).`);
+    } catch (err) {
+      mostrarStatus("error", "Não foi possível falar com o n8n.");
+      desenhar();
+    } finally {
+      ocupado = false;
+    }
+  }
+
+  function desenhar() {
+    const termo = normalizarTexto(busca.value);
+    const digitos = busca.value.replace(/\D/g, "");
+    const achados = salvos.filter((c) => {
+      if (!termo) return true;
+      const texto = normalizarTexto([c.nome, c.funcao, ...c.empresas, ...c.emails].join(" "));
+      return texto.includes(termo) || (digitos.length >= 3 && c.telefones.some((t) => t.includes(digitos)));
+    });
+    // Os que já são deste cliente primeiro; depois em ordem de nome.
+    const ehDeste = (c) => (c.clienteIds || []).includes(clienteId);
+    achados.sort((a, b) => Number(ehDeste(b)) - Number(ehDeste(a)) || (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+
+    lista.innerHTML = "";
+    if (!salvos.length) mostrarStatus("neutral", "Nenhum contato salvo ainda. Cadastre em Cadastro > Cadastro de contatos.");
+    else if (!achados.length) mostrarStatus("neutral", "Nenhum contato salvo com essa busca.");
+    else mostrarStatus("", "");
+
+    achados.forEach((c) => {
+      const deste = ehDeste(c);
+      const item = document.createElement("li");
+      item.className = `d-contato-opcao${deste ? " ligado" : ""}`;
+      const texto = document.createElement("span");
+      texto.className = "d-contato-opcao-texto";
+      const nome = document.createElement("span");
+      nome.className = "d-contato-opcao-nome";
+      nome.textContent = c.nome || "Contato sem nome";
+      const detalhe = document.createElement("span");
+      detalhe.className = "d-contato-opcao-detalhe";
+      detalhe.textContent = [deste ? "Já é contato deste cliente" : "", c.funcao, resumirNomes(c.empresas),
+        c.telefones[0] ? formatarTelefone(c.telefones[0]) : ""].filter(Boolean).join(" · ");
+      texto.append(nome, detalhe);
+
+      const acao = document.createElement("button");
+      acao.type = "button";
+      if (deste) {
+        acao.className = "d-contato-tirar";
+        acao.textContent = "Tirar";
+        acao.addEventListener("click", () => {
+          if (!acao.classList.contains("confirmando")) {
+            acao.classList.add("confirmando");
+            acao.textContent = "Tirar deste cliente?";
+            return;
+          }
+          gravar("desvincularCliente", c);
+        });
+      } else {
+        acao.className = "d-contato-adicionar";
+        acao.textContent = "Adicionar";
+        acao.addEventListener("click", () => gravar("vincularCliente", c));
+      }
+      item.append(texto, acao);
+      lista.appendChild(item);
+    });
+  }
+
+  async function abrir() {
+    painel.classList.remove("hidden");
+    botao.setAttribute("aria-expanded", "true");
+    busca.value = "";
+    lista.innerHTML = "";
+    mostrarStatus("neutral", "Carregando os contatos salvos...");
+    busca.focus();
+    try {
+      const dados = await pedirAoN8n("contatos", { acao: "listar" });
+      if (!dados || !dados.ok) {
+        mostrarStatus("error", (dados && dados.mensagem) || "Não consegui carregar os contatos.");
+        return;
+      }
+      salvos = dados.contatos || [];
+      desenhar();
+    } catch (err) {
+      mostrarStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+    }
+  }
+
+  function fechar() {
+    painel.classList.add("hidden");
+    botao.setAttribute("aria-expanded", "false");
+  }
+
+  botao.addEventListener("click", () => (painel.classList.contains("hidden") ? abrir() : fechar()));
+  busca.addEventListener("input", desenhar);
+
+  return {
+    travar(travado) {
+      botao.disabled = travado;
+      botao.title = travado ? "Salve ou cancele a edição para escolher contatos salvos" : "Escolher entre os contatos salvos";
+      if (travado) fechar();
+    },
+  };
+}
+
 // Trava ou destrava um pedaço da tela inteiro. Em modo leitura os botões somem
 // pelo CSS, em vez de esconder um por um — assim a renumeração não briga com
 // a visibilidade quando o bloco volta a ser editável.
@@ -1351,6 +1488,11 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
   botaoNovoLocal.addEventListener("click", () => adicionarLocal(caixaLocais, true));
   botaoNovoContato.addEventListener("click", () => adicionarContato(caixaContatos, true));
 
+  // Ligar/tirar um contato salvo grava na hora e reabre o cadastro para
+  // mostrar a lista nova.
+  const escolhaContatos = ligarEscolhaDeContatos(bloco, cadastro.id, (mensagem) =>
+    abrirLinha(linha, linha.querySelector(".cadastro-detalhe"), resumo, mensagem));
+
   const botaoEditar = bloco.querySelector(".acao-editar");
   const botaoSalvar = bloco.querySelector(".acao-salvar");
   const botaoCancelar = bloco.querySelector(".acao-cancelar");
@@ -1388,6 +1530,9 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
 
     travarBlocos(caixaLocais, !ligado);
     travarBlocos(caixaContatos, !ligado);
+    // Escolher um contato grava na hora e reabre o cadastro: no meio de uma
+    // edição isso jogaria fora o que ainda não foi salvo.
+    escolhaContatos.travar(ligado);
 
     if (ligado) {
       // Sem nenhum endereço ainda, entrar em edição já abre um bloco em branco:

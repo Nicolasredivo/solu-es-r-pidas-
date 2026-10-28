@@ -65,7 +65,8 @@ const vinculos = async (id) => {
     await t.esperar(1500);
     confere('atualizar-cadastro respondeu ok', ac.ok === true, ac);
     confere('contato de A e B tirado de A: continua, só com B', JSON.stringify(await vinculos(X)) === JSON.stringify([B]), await vinculos(X));
-    confere('contato só de A tirado de A: apagado como antes', (await vinculos(Y)) === null);
+    // Desde 28/10/2026 tirar do cliente nunca apaga: o contato fica no Cadastro de contatos.
+    confere('contato só de A tirado de A: continua existindo, sem cliente', JSON.stringify(await vinculos(Y)) === '[]', await vinculos(Y));
 
     // ---- Excluir cadastro (fluxo de verdade, só dados de teste): excluir o cliente B ----
     const W = (await local('POST', `/v0/${CAD}/Contatos_Solicitantes`, { fields: { Nome_Contato: 'TESTE VARIAS W (só B)', Entidades_Vinculadas: [B], Status: 'Ativo' } })).id;

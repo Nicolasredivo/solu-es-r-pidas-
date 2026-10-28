@@ -84,6 +84,29 @@ const ARQ_BACKUP = 'C:/Users/rediv/banco-solucoes/backup-cadastros.json';
     gravado = (await lista(CAD, 'Contatos_Solicitantes', `RECORD_ID()='${contatoId}'`))[0];
     confere('dá para deixar sem empresa de novo', semEmpresa.ok && !(gravado.fields.Entidades_Vinculadas || []).length, gravado.fields);
 
+    // ---- ligar / tirar o contato de um cliente (pela tela do cliente) ----
+    const semCliente = await chamar('contatos', { acao: 'vincularCliente', id: contatoId, clienteId: '' });
+    confere('ligar sem cliente é recusado', semCliente.ok === false && /Cliente inválido/.test(semCliente.mensagem), semCliente);
+    const clienteSumido = await chamar('contatos', { acao: 'vincularCliente', id: contatoId, clienteId: 'recNaoExiste0000000'.slice(0, 17) });
+    confere('ligar a cliente que não existe é recusado', clienteSumido.ok === false && /cliente/i.test(clienteSumido.mensagem), clienteSumido);
+    const contatoSumido = await chamar('contatos', { acao: 'vincularCliente', id: 'recFantasma0000000'.slice(0, 17), clienteId: empresaTeste.id });
+    confere('ligar contato que não existe é recusado', contatoSumido.ok === false && /não existe/.test(contatoSumido.mensagem), contatoSumido);
+    const antesDeLigar = gravado.fields;
+    const ligou = await chamar('contatos', { acao: 'vincularCliente', id: contatoId, clienteId: empresaTeste.id });
+    await chamar('contatos', { acao: 'vincularCliente', id: contatoId, clienteId: empresaTeste.id });
+    gravado = (await lista(CAD, 'Contatos_Solicitantes', `RECORD_ID()='${contatoId}'`))[0];
+    confere('ligar ao cliente grava o vínculo uma vez só (mesmo ligando duas vezes)', ligou.ok && ligou.contato.id === contatoId
+      && JSON.stringify(gravado.fields.Entidades_Vinculadas) === JSON.stringify([empresaTeste.id]), { ligou, f: gravado.fields });
+    const { Entidades_Vinculadas: _v1, ...restoDepois } = gravado.fields;
+    const { Entidades_Vinculadas: _v2, ...restoAntes } = antesDeLigar;
+    confere('ligar não mexe no resto do contato', JSON.stringify(restoDepois) === JSON.stringify(restoAntes), { restoAntes, restoDepois });
+    const peloCliente = await chamar('listar-contatos', { entidadeId: empresaTeste.id });
+    confere('contato ligado aparece na lista do cliente', peloCliente.ok && peloCliente.contatos.some((c) => c.id === contatoId), peloCliente);
+    const tirou = await chamar('contatos', { acao: 'desvincularCliente', id: contatoId, clienteId: empresaTeste.id });
+    gravado = (await lista(CAD, 'Contatos_Solicitantes', `RECORD_ID()='${contatoId}'`))[0];
+    confere('tirar do cliente desfaz só o vínculo e o contato continua existindo', tirou.ok && gravado
+      && !(gravado.fields.Entidades_Vinculadas || []).length && gravado.fields.Nome_Contato === 'TESTE Contato Migração', gravado && gravado.fields);
+
     // ---- empresas onde a pessoa trabalha (nomes) -- não mexe nos clientes da pessoa ----
     await chamar('contatos', { acao: 'salvar', id: contatoId, nome: 'TESTE Contato Migração', telefones: '[]', emails: '[]', empresaId: empresaTeste.id });
     const comNomes = await chamar('contatos', {
