@@ -4912,6 +4912,23 @@ menu é genérico. O conteúdo vem num próximo pedido.
 Logo depois, também vazio: **"Cadastro de sindicatura"**, embaixo do de administradoras
 (`data-page="sindicatura"`, `#page-sindicatura` só com o título).
 
+#### Menu lateral com ícones e mais separação (28/10/2026)
+
+**Pedido do dono:** as frases do menu lateral tinham um visual pouco agradável. Pediu alguma
+técnica visual para separar melhor.
+- Cada item ganhou um **ícone** (SVG de traço fino em `currentColor`, desenhado à mão no
+  `sistema.html`), e o nome fica em `.sidebar-texto`.
+- O texto fica um pouco mais apagado (`#c3c8dc`). O item da tela aberta fica azul, com fundo
+  leve e uma **barrinha na borda esquerda** (`::before`). Ao passar o mouse aparece um fundo
+  bem leve (só em quem tem mouse).
+- Grupos (Cadastro, Chamados): o "+" virou **seta** que gira ao abrir. Os subitens ficam
+  **pendurados numa linha-guia** que desce do ícone do grupo, com texto menor e apagado. No
+  subitem aberto, a barrinha cai em cima da linha-guia.
+- Largura do menu: 240 → **256px** (variável `--largura-menu`, usada também pelo conteúdo,
+  pelo topo e pela faixa do atendimento), para "Cadastro de administradoras" caber numa linha.
+- **Sair:** o texto agora fica em `#sair-texto` (o JS troca só ele, e o ícone fica). Continua
+  vermelho ao passar o mouse.
+
 **Kaspersky derrubou o "Airtable local" (28/10/2026, 14:14 e 14:35).** O Inspetor do Sistema
 acusou `PDM:Trojan.Win32.Generic` no `node.exe` rodando `banco/airtable-local.js`, encerrou o
 processo e excluiu o arquivo. Foi alarme falso: o MD5 do arquivo excluído era idêntico ao do

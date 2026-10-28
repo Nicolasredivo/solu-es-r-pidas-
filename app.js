@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.28j";
+const APP_VERSION = "2026.10.28k";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -8132,10 +8132,12 @@ document.querySelector('.sidebar-item[data-page="agenda"]').addEventListener("cl
 // ----- Sair -----
 
 const sairBotao = document.getElementById("sair");
+// Só o texto muda: o ícone do botão fica.
+const sairTexto = document.getElementById("sair-texto");
 
 function desarmarSaida() {
   sairBotao.classList.remove("confirmando");
-  sairBotao.textContent = "Sair";
+  sairTexto.textContent = "Sair";
 }
 
 // Um único ciclo de dois toques, não dois empilhados: o primeiro toque já
@@ -8145,7 +8147,7 @@ function desarmarSaida() {
 sairBotao.addEventListener("click", () => {
   if (!sairBotao.classList.contains("confirmando")) {
     sairBotao.classList.add("confirmando");
-    sairBotao.textContent = "Confirmar saída";
+    sairTexto.textContent = "Confirmar saída";
 
     if (haAlgoParaPerder()) {
       closeSidebar();

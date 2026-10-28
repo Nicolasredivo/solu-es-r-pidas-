@@ -70,12 +70,19 @@
 
     <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
+    <!-- Cada item tem um ícone (traço fino, cor do texto) e o nome num
+         .sidebar-texto. Os grupos (Cadastro, Chamados) têm uma seta que gira ao
+         abrir, e os subitens ficam pendurados numa linha-guia. -->
     <nav id="sidebar" class="sidebar">
-      <button type="button" class="sidebar-item active" data-page="inicio">Início</button>
+      <button type="button" class="sidebar-item active" data-page="inicio">
+        <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/></svg>
+        <span class="sidebar-texto">Início</span>
+      </button>
       <div class="sidebar-grupo">
         <button type="button" class="sidebar-item sidebar-grupo-cabecalho" aria-expanded="false">
-          <span>Cadastro</span>
-          <span class="sidebar-grupo-mais" aria-hidden="true">+</span>
+          <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.8 6.5-5.8s5.9 2.2 6.5 5.8"/><path d="M15.5 5.2a3.5 3.5 0 0 1 0 6.6"/><path d="M18 14.6c1.9.7 3.1 2.6 3.5 5.4"/></svg>
+          <span class="sidebar-texto">Cadastro</span>
+          <svg class="sidebar-grupo-seta" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
         </button>
         <div class="sidebar-grupo-itens hidden">
           <button type="button" class="sidebar-item sidebar-subitem" data-page="cadastro">Cadastro de clientes</button>
@@ -84,25 +91,45 @@
           <button type="button" class="sidebar-item sidebar-subitem" data-page="sindicatura">Cadastro de sindicatura</button>
         </div>
       </div>
-      <button type="button" class="sidebar-item" data-page="financeiro">Financeiro</button>
+      <button type="button" class="sidebar-item" data-page="financeiro">
+        <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h14.5a1.5 1.5 0 0 1 1.5 1.5v9.5a1.5 1.5 0 0 1-1.5 1.5H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M4 7.5 15.5 4v3.5"/><path d="M15.5 13.75h1.5"/></svg>
+        <span class="sidebar-texto">Financeiro</span>
+      </button>
       <div class="sidebar-grupo">
         <button type="button" class="sidebar-item sidebar-grupo-cabecalho" aria-expanded="false">
-          <span>Chamados</span>
-          <span class="sidebar-grupo-mais" aria-hidden="true">+</span>
+          <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3H9z"/><path d="M9 11.5h6M9 15.5h4"/></svg>
+          <span class="sidebar-texto">Chamados</span>
+          <svg class="sidebar-grupo-seta" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
         </button>
         <div class="sidebar-grupo-itens hidden">
           <button type="button" class="sidebar-item sidebar-subitem" data-page="chamados">Criar chamado</button>
           <button type="button" class="sidebar-item sidebar-subitem" data-page="consultar-chamados">Consultar chamados</button>
         </div>
       </div>
-      <button type="button" class="sidebar-item" data-page="agenda">Agenda</button>
-      <button type="button" class="sidebar-item" data-page="atendimento" id="menu-atendimento">Atendimento<span id="menu-atendimento-contagem" class="menu-contagem hidden"></span></button>
-      <button type="button" class="sidebar-item" data-page="documentos">Documentos</button>
-      <button type="button" class="sidebar-item hidden" data-page="usuarios" id="menu-usuarios">Usuários</button>
+      <button type="button" class="sidebar-item" data-page="agenda">
+        <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+        <span class="sidebar-texto">Agenda</span>
+      </button>
+      <button type="button" class="sidebar-item" data-page="atendimento" id="menu-atendimento">
+        <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 3.5a4.5 4.5 0 0 0-4.2 6.1L4 16.9A2.1 2.1 0 0 0 7 19.9l7.3-7.3a4.5 4.5 0 0 0 6.1-4.2l-2.9 2.9-2.4-.6-.6-2.4z"/></svg>
+        <span class="sidebar-texto">Atendimento</span>
+        <span id="menu-atendimento-contagem" class="menu-contagem hidden"></span>
+      </button>
+      <button type="button" class="sidebar-item" data-page="documentos">
+        <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 17h5"/></svg>
+        <span class="sidebar-texto">Documentos</span>
+      </button>
+      <button type="button" class="sidebar-item hidden" data-page="usuarios" id="menu-usuarios">
+        <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c.8-3.8 3.9-6 7.5-6s6.7 2.2 7.5 6"/></svg>
+        <span class="sidebar-texto">Usuários</span>
+      </button>
 
       <div class="sidebar-rodape">
         <p id="usuario-conectado" class="usuario-conectado hidden"></p>
-        <button type="button" id="sair" class="sidebar-item sair">Sair</button>
+        <button type="button" id="sair" class="sidebar-item sair">
+          <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="m10 16-4-4 4-4M6 12h10"/></svg>
+          <span class="sidebar-texto" id="sair-texto">Sair</span>
+        </button>
         <p id="versao-app" class="versao-app"></p>
       </div>
     </nav>
