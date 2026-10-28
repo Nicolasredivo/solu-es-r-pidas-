@@ -85,8 +85,11 @@ const SIM_CLIENTE = {
 
     const ex = await chamar('excluir-cadastro', { id: ent.id, locaisIds: locs[0].id, contatosIds: cons[0].id });
     await t.esperar(800);
-    confere('excluir-cadastro (cliente, local e contato)', ex.ok === true && !(await lista(CAD, 'Entidades_Cadastradas', "{CPF_CNPJ}='00000000000353'")).length
-      && (await local('GET', `/v0/${CAD}/Locais_Atendimento/${locs[0].id}`)).error !== undefined && (await local('GET', `/v0/${CAD}/Contatos_Solicitantes/${cons[0].id}`)).error !== undefined, ex);
+    // Desde 28/10/2026 o contato não vai junto: continua no Cadastro de contatos, sem o cliente.
+    const conDepois = await local('GET', `/v0/${CAD}/Contatos_Solicitantes/${cons[0].id}`);
+    confere('excluir-cadastro (apaga cliente e local; contato fica, sem o cliente)', ex.ok === true && !(await lista(CAD, 'Entidades_Cadastradas', "{CPF_CNPJ}='00000000000353'")).length
+      && (await local('GET', `/v0/${CAD}/Locais_Atendimento/${locs[0].id}`)).error !== undefined
+      && !conDepois.error && !(conDepois.fields.Entidades_Vinculadas || []).length, { ex, conDepois });
 
     // ================= Pagar fatura por PIX e por boleto (Asaas simulado) =================
     for (const modo of ['PIX', 'Boleto']) {

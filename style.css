@@ -1417,6 +1417,76 @@ button.lembrete-item:hover {
   background: rgba(5, 7, 15, 0.72);
 }
 
+/* Novo cadastro de contato por cima da tela do cliente: mais larga, e rola
+   por dentro quando o formulário é maior que a tela. */
+.dialogo-contato {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.dialogo-contato-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dialogo-contato-topo .dialogo-titulo {
+  margin: 0;
+}
+
+.dialogo-fechar {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid #2c3153;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+/* "Adicionar novo cadastro de contato?" embaixo do nome, no bloco de contato do cliente. */
+.contato-novo-pergunta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -8px 0 16px;
+  padding: 8px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: rgba(91, 141, 239, 0.1);
+  font-size: 0.85rem;
+}
+
+.contato-novo-pergunta span {
+  flex: 1;
+  min-width: 140px;
+}
+
+.contato-novo-pergunta button {
+  width: auto;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+
+.contato-novo-pergunta .contato-novo-fechar {
+  width: 30px;
+  padding: 0;
+  height: 30px;
+  background: transparent;
+  border: 1px solid #2c3153;
+  color: var(--muted);
+}
+
+.d-contatos-escolha .contato-novo-pergunta {
+  margin: 0 0 8px;
+}
+
 .dialogo-titulo {
   margin: 0 0 6px;
   font-size: 1.1rem;

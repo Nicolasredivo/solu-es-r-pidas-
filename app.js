@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.28g";
+const APP_VERSION = "2026.10.28h";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -721,35 +721,102 @@ function renumerarContatos(caixa) {
   });
 }
 
+// Põe no bloco os dados de um contato (o que já é do cliente, ou um escolhido
+// entre os salvos). Com `id`, o Salvar do cliente liga este contato em vez de
+// criar outro igual.
+function preencherBlocoContato(bloco, dados) {
+  if (dados.id) bloco.dataset.id = dados.id;
+  bloco.querySelector(".contato-nome").value = dados.nome || "";
+  // Função escrita no Cadastro de contatos pode não estar nesta lista fixa:
+  // sem a opção, o select ficaria em branco e o próximo Salvar apagaria a
+  // função do contato.
+  const cargo = bloco.querySelector(".contato-cargo");
+  if (dados.cargo && ![...cargo.options].some((opcao) => opcao.value === dados.cargo)) {
+    cargo.add(new Option(dados.cargo, dados.cargo));
+  }
+  cargo.value = dados.cargo || "";
+  bloco.querySelector(".contato-obs").value = dados.observacoes || "";
+  bloco.querySelector(".contato-status").value = dados.status || "Ativo";
+  // Cada contato já nasce com uma linha de cada, senão o campo fica invisível.
+  preencherCanais(bloco.querySelector(".contato-whatsapps"), "whatsapp", dados.whatsapps);
+  preencherCanais(bloco.querySelector(".contato-emails"), "email", dados.emails);
+}
+
+// Contato do Cadastro de contatos no formato dos blocos do cliente.
+function contatoSalvoParaBloco(c) {
+  return { id: c.id, nome: c.nome, cargo: c.funcao, whatsapps: c.telefones, emails: c.emails, observacoes: c.observacoes, status: c.status };
+}
+
+// Nome do bloco de contato do cliente: sugere os contatos salvos (com função
+// e telefone, pra separar homônimos) e, ao escolher, preenche tudo e liga o
+// bloco a ele. Nome que não está salvo ganha a pergunta "Adicionar novo
+// cadastro de contato?", que abre o cadastro completo por cima.
+function ligarNomeDoContato(bloco, caixa) {
+  const nome = bloco.querySelector(".contato-nome");
+  const listaEl = bloco.querySelector(".sugestao-lista");
+  const pergunta = bloco.querySelector(".contato-novo-pergunta");
+  let perguntaFechada = false;
+
+  function escolher(c) {
+    preencherBlocoContato(bloco, contatoSalvoParaBloco(c));
+    pergunta.classList.add("hidden");
+    ajustarAlturasAuto(bloco);
+  }
+
+  function atualizarPergunta() {
+    const termo = normalizarTexto(nome.value);
+    const salvo = contatosCadastrados.some((c) => normalizarTexto(c.nome) === termo);
+    // Bloco ligado a um contato (o que já era do cliente ou um escolhido):
+    // mudar o nome ali é corrigir o nome dele, não um contato novo.
+    const mostrar = !perguntaFechada && !bloco.dataset.id && termo.length >= 2 && contatosCarregados && !salvo;
+    pergunta.classList.toggle("hidden", !mostrar);
+  }
+
+  ligarSugestoesContato(nome, listaEl, (termo) => {
+    // Os que já estão noutro bloco deste cliente não aparecem de novo.
+    const usados = [...caixa.querySelectorAll(".contato")].filter((b) => b !== bloco).map((b) => b.dataset.id).filter(Boolean);
+    return contatosCadastrados
+      .filter((c) => !usados.includes(c.id) && c.id !== bloco.dataset.id)
+      .filter((c) => !termo || normalizarTexto(c.nome).includes(termo))
+      .map((c) => ({
+        rotulo: c.nome || "Contato sem nome",
+        detalhe: [c.funcao, resumirNomes(c.empresas), c.telefones[0] ? formatarTelefone(c.telefones[0]) : ""].filter(Boolean).join(" · "),
+        valor: c,
+      }));
+  }, escolher);
+
+  // A lista de contatos salvos vem do servidor na primeira vez que o campo é usado.
+  nome.addEventListener("focus", () => {
+    if (contatosCarregados) return;
+    buscarContatosSalvos().then(() => {
+      if (document.activeElement === nome) nome.dispatchEvent(new Event("input"));
+      atualizarPergunta();
+    });
+  });
+  nome.addEventListener("input", atualizarPergunta);
+
+  pergunta.querySelector(".contato-novo-fechar").addEventListener("click", () => {
+    perguntaFechada = true;
+    pergunta.classList.add("hidden");
+  });
+  pergunta.querySelector(".contato-novo-sim").addEventListener("click", async () => {
+    const salvo = await abrirCadastroContatoSobreposto(nome.value.trim());
+    if (salvo) escolher(salvo);
+  });
+}
+
 function adicionarContato(caixa, comFoco, dados) {
   const bloco = modeloContato.content.firstElementChild.cloneNode(true);
   const whatsapps = bloco.querySelector(".contato-whatsapps");
   const emails = bloco.querySelector(".contato-emails");
 
-  if (dados) {
-    if (dados.id) bloco.dataset.id = dados.id;
-    bloco.querySelector(".contato-nome").value = dados.nome || "";
-    // Função escrita no Cadastro de contatos pode não estar nesta lista fixa:
-    // sem a opção, o select ficaria em branco e o próximo Salvar apagaria a
-    // função do contato.
-    const cargo = bloco.querySelector(".contato-cargo");
-    if (dados.cargo && ![...cargo.options].some((opcao) => opcao.value === dados.cargo)) {
-      cargo.add(new Option(dados.cargo, dados.cargo));
-    }
-    cargo.value = dados.cargo || "";
-    bloco.querySelector(".contato-obs").value = dados.observacoes || "";
-    bloco.querySelector(".contato-status").value = dados.status || "Ativo";
+  if (dados) preencherBlocoContato(bloco, dados);
+  else {
+    preencherCanais(whatsapps, "whatsapp");
+    preencherCanais(emails, "email");
   }
 
-  // Cada contato já nasce com uma linha de cada, senão o campo fica invisível.
-  preencherCanais(whatsapps, "whatsapp", dados && dados.whatsapps);
-  preencherCanais(emails, "email", dados && dados.emails);
-
-  ligarSugestaoCampo(
-    bloco.querySelector(".contato-nome"),
-    bloco.querySelector(".sugestao-lista"),
-    () => valoresDistintosCadastro("contato")
-  );
+  ligarNomeDoContato(bloco, caixa);
 
   bloco.querySelector(".adicionar-whatsapp")
     .addEventListener("click", () => adicionarCanal(whatsapps, "whatsapp", true));
@@ -799,8 +866,21 @@ function ligarEscolhaDeContatos(bloco, clienteId, recarregar) {
   const busca = bloco.querySelector(".d-contatos-busca");
   const status = bloco.querySelector(".d-contatos-escolha-status");
   const lista = bloco.querySelector(".d-contatos-opcoes");
+  const pergunta = bloco.querySelector(".d-contatos-escolha .contato-novo-pergunta");
   let salvos = [];
   let ocupado = false;
+  let perguntaFechada = false;
+
+  // Nome que não está salvo: "Adicionar novo cadastro de contato?". O Sim abre
+  // o cadastro completo por cima e, salvo, já liga o contato a este cliente.
+  pergunta.querySelector(".contato-novo-fechar").addEventListener("click", () => {
+    perguntaFechada = true;
+    pergunta.classList.add("hidden");
+  });
+  pergunta.querySelector(".contato-novo-sim").addEventListener("click", async () => {
+    const salvo = await abrirCadastroContatoSobreposto(busca.value.trim());
+    if (salvo) gravar("vincularCliente", salvo);
+  });
 
   function mostrarStatus(tipo, mensagem) {
     status.textContent = mensagem;
@@ -844,6 +924,8 @@ function ligarEscolhaDeContatos(bloco, clienteId, recarregar) {
     // Os que já são deste cliente primeiro; depois em ordem de nome.
     const ehDeste = (c) => (c.clienteIds || []).includes(clienteId);
     achados.sort((a, b) => Number(ehDeste(b)) - Number(ehDeste(a)) || (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+    const nomeSalvo = salvos.some((c) => normalizarTexto(c.nome) === termo);
+    pergunta.classList.toggle("hidden", perguntaFechada || termo.length < 2 || nomeSalvo);
 
     lista.innerHTML = "";
     if (!salvos.length) mostrarStatus("neutral", "Nenhum contato salvo ainda. Cadastre em Cadastro > Cadastro de contatos.");
@@ -893,6 +975,8 @@ function ligarEscolhaDeContatos(bloco, clienteId, recarregar) {
     botao.setAttribute("aria-expanded", "true");
     busca.value = "";
     lista.innerHTML = "";
+    perguntaFechada = false;
+    pergunta.classList.add("hidden");
     mostrarStatus("neutral", "Carregando os contatos salvos...");
     busca.focus();
     try {
@@ -1083,6 +1167,8 @@ formEntidade.addEventListener("submit", async (event) => {
     if (dados && dados.ok) {
       salvarStatus.textContent = dados.mensagem || "Cadastro salvo!";
       salvarStatus.className = "status show ok";
+      // Contatos novos ou ligados agora: as sugestões e a tela de contatos buscam de novo.
+      contatosCarregados = false;
       formEntidade.classList.add("hidden");
       documentoInput.value = "";
       documentoAtual = "";
@@ -1616,6 +1702,8 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
         nomeFantasia: campos.nomeFantasia.value.trim(),
       });
       atualizarResumo(linha, resumo);
+      // Contatos novos, ligados ou tirados agora: sugestões e tela de contatos buscam de novo.
+      contatosCarregados = false;
 
       // Relê do n8n: é o que traz os códigos dos endereços e contatos recém
       // criados. Sem isso, salvar duas vezes seguidas criaria tudo de novo.
@@ -9359,6 +9447,65 @@ async function carregarContatos() {
   }
 }
 
+// Os contatos salvos sem desenhar a lista: usados pelas sugestões dos blocos
+// de contato do cliente. Dois pedidos ao mesmo tempo viram um só.
+let buscandoContatosSalvos = null;
+function buscarContatosSalvos() {
+  if (contatosCarregados) return Promise.resolve();
+  if (!buscandoContatosSalvos) {
+    buscandoContatosSalvos = pedirAoN8n("contatos", { acao: "listar" })
+      .then((dados) => {
+        if (!dados || !dados.ok) return;
+        contatosCadastrados = dados.contatos || [];
+        clientesDosContatos = dados.clientes || [];
+        contatosCarregados = true;
+      })
+      .catch(() => {})
+      .finally(() => { buscandoContatosSalvos = null; });
+  }
+  return buscandoContatosSalvos;
+}
+
+// Novo cadastro de contato por cima da tela do cliente. O formulário do
+// Cadastro de contatos vem para dentro da janela (mesmos campos, máscara,
+// sugestões e avisos) e volta pro lugar ao fechar. Devolve o contato salvo,
+// ou null se a pessoa fechou sem salvar.
+const sobrepostoContato = document.getElementById("sobreposto-contato");
+const sobrepostoCorpo = document.getElementById("sobreposto-contato-corpo");
+const lugarDoFormContato = { pai: formContato.parentElement, depois: formContato.nextSibling };
+let aoSalvarNoSobreposto = null;
+
+async function abrirCadastroContatoSobreposto(nomeDigitado) {
+  // Contato pela metade no Cadastro de contatos: não joga fora sem querer.
+  if (contatoEmAndamento()) {
+    mostrarToast("Há um contato por salvar em Cadastro de contatos. Salve ou cancele lá primeiro.", null, "erro");
+    return null;
+  }
+  // Os salvos são usados no aviso de telefone/e-mail repetido e nas sugestões.
+  await buscarContatosSalvos();
+  prepararFormContato(null);
+  ctNome.value = nomeDigitado || "";
+  ctEstadoOriginal = fotografiaContato();
+  sobrepostoCorpo.appendChild(formContato);
+  sobrepostoContato.showModal();
+  ctTelefones.querySelector(".canal-valor").focus();
+  return new Promise((resolver) => {
+    aoSalvarNoSobreposto = (contato) => {
+      aoSalvarNoSobreposto = null;
+      if (sobrepostoContato.open) sobrepostoContato.close();
+      resolver(contato);
+    };
+  });
+}
+
+// Fechar (×, Esc ou depois de salvar): o formulário volta para a tela de contatos.
+sobrepostoContato.addEventListener("close", () => {
+  lugarDoFormContato.pai.insertBefore(formContato, lugarDoFormContato.depois);
+  prepararFormContato(null);
+  if (aoSalvarNoSobreposto) aoSalvarNoSobreposto(null);
+});
+document.getElementById("sobreposto-contato-fechar").addEventListener("click", () => sobrepostoContato.close());
+
 function abrirContatoNoForm(id) {
   const contato = contatosCadastrados.find((c) => c.id === id);
   if (!contato || id === contatoEditandoId) return;
@@ -9569,9 +9716,14 @@ formContato.addEventListener("submit", async (evento) => {
     // Os nomes de contato da lista de clientes mudaram: busca de novo na
     // próxima vez que ela for aberta.
     listaCarregada = false;
-    prepararFormContato(null);
     desenharContatos();
     mostrarToast(eraEdicao ? "Contato atualizado." : "Contato salvo.");
+    // Aberto por cima da tela do cliente: fecha e entrega o contato pra lá.
+    if (aoSalvarNoSobreposto) {
+      aoSalvarNoSobreposto(resposta.contato);
+      return;
+    }
+    prepararFormContato(null);
     ctNome.focus();
   } catch (err) {
     mostrarCtStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");

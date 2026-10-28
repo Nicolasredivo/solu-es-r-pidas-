@@ -317,6 +317,12 @@
               <label>Nome</label>
               <input type="text" class="contato-nome" placeholder="Ex: Maria, do financeiro" autocomplete="off" />
               <div class="sugestao-lista hidden"></div>
+              <!-- Nome que não está no Cadastro de contatos: oferece cadastrar completo. -->
+              <div class="contato-novo-pergunta hidden">
+                <span>Adicionar novo cadastro de contato?</span>
+                <button type="button" class="contato-novo-sim">Sim</button>
+                <button type="button" class="contato-novo-fechar" aria-label="Fechar a pergunta">×</button>
+              </div>
 
               <label>Cargo / função</label>
               <select class="contato-cargo">
@@ -491,6 +497,11 @@
               <div class="d-contatos-escolha hidden">
                 <input type="text" class="d-contatos-busca" autocomplete="off" aria-label="Buscar contato salvo"
                        placeholder="Buscar contato salvo (nome, função, empresa, telefone)" />
+                <div class="contato-novo-pergunta hidden">
+                  <span>Adicionar novo cadastro de contato?</span>
+                  <button type="button" class="contato-novo-sim">Sim</button>
+                  <button type="button" class="contato-novo-fechar" aria-label="Fechar a pergunta">×</button>
+                </div>
                 <p class="d-contatos-escolha-status doc-hint"></p>
                 <ul class="d-contatos-opcoes"></ul>
               </div>
@@ -1840,6 +1851,17 @@
         <button type="submit" id="confirmar-senha-ok">Confirmar</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Novo cadastro de contato por cima da tela do cliente. O formulário é o
+       mesmo do Cadastro de contatos (#form-contato), trazido para cá enquanto a
+       janela está aberta e devolvido ao fechar. -->
+  <dialog id="sobreposto-contato" class="dialogo dialogo-contato" aria-labelledby="sobreposto-contato-titulo">
+    <div class="dialogo-contato-topo">
+      <h2 id="sobreposto-contato-titulo" class="dialogo-titulo">Novo cadastro de contato</h2>
+      <button type="button" id="sobreposto-contato-fechar" class="dialogo-fechar" aria-label="Fechar sem salvar">×</button>
+    </div>
+    <div id="sobreposto-contato-corpo"></div>
   </dialog>
 
   <div id="toast" class="toast" aria-live="polite"></div>

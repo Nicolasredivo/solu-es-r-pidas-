@@ -4875,6 +4875,33 @@ adicionar contato.
   `App - Excluir cadastro`, nó `Monta a lista do que apagar`, todo contato só perde o vínculo.
   O aviso do botão Excluir agora conta só os endereços e diz que os contatos continuam.
 
+#### Contato salvo no formulário do cliente + "Adicionar novo cadastro de contato?" (28/10/2026)
+
+**Pedido do dono:** ao escolher um contato já salvo no cadastro do cliente (novo ou editando),
+todos os dados dele entram sozinhos. Nome que não está salvo pergunta "Adicionar novo cadastro
+de contato?" (Sim / fechar). O Sim abre o cadastro completo de contato **por cima**, que some
+depois de salvar. Vale no Adicionar, na edição do cliente e na busca do botão Contatos.
+- **Blocos de contato do cliente** (`ligarNomeDoContato`): o nome sugere os contatos salvos (com
+  função · empresa · telefone), sem os que já estão noutro bloco. Escolher preenche nome, função,
+  WhatsApps, e-mails, observações e status (`preencherBlocoContato`), e põe o `id` no bloco. A
+  pergunta só aparece com nome de 2+ letras que não bate com nenhum contato salvo, e nunca num
+  bloco já ligado (lá, mudar o nome é corrigir o nome).
+- **Janela por cima:** `<dialog id="sobreposto-contato">`. O **mesmo** `#form-contato` do Cadastro
+  de contatos é levado para dentro da janela e devolvido ao fechar (×, Esc ou depois de salvar).
+  `abrirCadastroContatoSobreposto(nome)` devolve o contato salvo ou null. Recusa abrir se houver
+  um contato pela metade no Cadastro de contatos.
+- **Busca do botão Contatos:** a mesma pergunta. O Sim cria o contato e já o liga ao cliente.
+- **Servidor:** antes, escolher um nome só copiava o nome e o Salvar **criava outro contato
+  igual**. Agora:
+  - `App - Salvar entidade` (cliente novo): nó novo `Busca contatos escolhidos`. "Prepara
+    contatos" manda `id`/`vinculos`, e "Cria contatos no Airtable" faz PATCH quando tem id
+    (soma o cliente novo, sem tirar os outros).
+  - `App - Atualizar cadastro`: a busca também lê os contatos com id da tela, e o PATCH soma o
+    cliente aos vínculos. Um id que sumiu entra como contato novo.
+- **Testes:** `testar-contato-salvo-no-cliente.js` (13, em cópias com o Asaas simulado).
+  `testar-fluxos-copias.js` (22) foi ajustado para a regra nova do excluir.
+  `testar-contato-varias-empresas.js` (16) continua passando.
+
 **Kaspersky derrubou o "Airtable local" (28/10/2026, 14:14 e 14:35).** O Inspetor do Sistema
 acusou `PDM:Trojan.Win32.Generic` no `node.exe` rodando `banco/airtable-local.js`, encerrou o
 processo e excluiu o arquivo. Foi alarme falso: o MD5 do arquivo excluído era idêntico ao do

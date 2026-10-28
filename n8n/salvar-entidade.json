@@ -236,7 +236,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Transforma a lista de contatos do app em um item por contato, cada um\n// ja apontando para o cliente recem-criado.\nconst corpo = $('Recebe pedido do app').first().json.body || {};\nconst entidadeId = $('Cria no Airtable').first().json.id;\n\nlet recebidos = [];\ntry {\n  recebidos = JSON.parse(corpo.contatos || '[]');\n} catch (erro) {\n  // App antigo (sem o campo) ou texto quebrado: segue sem contato nenhum.\n  recebidos = [];\n}\nif (!Array.isArray(recebidos)) recebidos = [];\n\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => (Array.isArray(v) ? v.map(texto).filter(Boolean) : []);\n\nconst limpos = recebidos\n  .map((c) => ({\n    nome: texto(c.nome),\n    cargo: texto(c.cargo),\n    whatsapps: lista(c.whatsapps),\n    emails: lista(c.emails),\n    observacoes: texto(c.observacoes),\n    status: texto(c.status) || 'Ativo',\n  }))\n  .filter((c) => c.nome || c.whatsapps.length || c.emails.length || c.observacoes);\n\n// Sem contato nenhum ainda precisa sair um item, senao o fluxo morre aqui\n// e o app fica esperando uma resposta que nunca chega.\nif (limpos.length === 0) return [{ json: { temContato: false } }];\n\nreturn limpos.map((c) => ({\n  json: {\n    temContato: true,\n    entidadeId,\n    // Nome_Contato e o campo principal: em branco, o registro aparece sem\n    // titulo na lista do Airtable.\n    nome: c.nome || c.whatsapps[0] || c.emails[0] || 'Contato sem nome',\n    // Lista de escolha recusa texto vazio; null e 'em branco' para o Airtable.\n    cargo: c.cargo || null,\n    // Um valor por linha: e assim que o campo guarda varios sem criar coluna.\n    whatsapps: c.whatsapps.join('\\n'),\n    emails: c.emails.join('\\n'),\n    observacoes: c.observacoes,\n    status: c.status,\n  },\n}));"
+        "jsCode": "// Transforma a lista de contatos do app em um item por contato, cada um\n// ja apontando para o cliente recem-criado.\nconst corpo = $('Recebe pedido do app').first().json.body || {};\nconst entidadeId = $('Cria no Airtable').first().json.id;\n\nlet recebidos = [];\ntry {\n  recebidos = JSON.parse(corpo.contatos || '[]');\n} catch (erro) {\n  // App antigo (sem o campo) ou texto quebrado: segue sem contato nenhum.\n  recebidos = [];\n}\nif (!Array.isArray(recebidos)) recebidos = [];\n\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => (Array.isArray(v) ? v.map(texto).filter(Boolean) : []);\n\n// Contatos já salvos escolhidos na tela (com id): ligados ao cliente novo, sem perder os\n// clientes que já tinham. Sem conseguir ler, entram como novos (melhor repetido que perdido).\nconst lidos = $('Busca contatos escolhidos').all().map((i) => i.json);\nconst vinculosAtuais = lidos.some((j) => j && j.error) ? new Map()\n  : new Map(lidos.filter((j) => j && j.id).map((j) => [j.id, (j.fields && j.fields.Entidades_Vinculadas) || []]));\n\nconst limpos = recebidos\n  .map((c) => ({\n    id: vinculosAtuais.has(texto(c.id)) ? texto(c.id) : '',\n    nome: texto(c.nome),\n    cargo: texto(c.cargo),\n    whatsapps: lista(c.whatsapps),\n    emails: lista(c.emails),\n    observacoes: texto(c.observacoes),\n    status: texto(c.status) || 'Ativo',\n  }))\n  .filter((c) => c.nome || c.whatsapps.length || c.emails.length || c.observacoes);\n\n// Sem contato nenhum ainda precisa sair um item, senao o fluxo morre aqui\n// e o app fica esperando uma resposta que nunca chega.\nif (limpos.length === 0) return [{ json: { temContato: false } }];\n\nreturn limpos.map((c) => ({\n  json: {\n    temContato: true,\n    entidadeId,\n    id: c.id,\n    vinculos: c.id ? [...new Set([...vinculosAtuais.get(c.id), entidadeId])] : [entidadeId],\n    // Nome_Contato e o campo principal: em branco, o registro aparece sem\n    // titulo na lista do Airtable.\n    nome: c.nome || c.whatsapps[0] || c.emails[0] || 'Contato sem nome',\n    // Lista de escolha recusa texto vazio; null e 'em branco' para o Airtable.\n    cargo: c.cargo || null,\n    // Um valor por linha: e assim que o campo guarda varios sem criar coluna.\n    whatsapps: c.whatsapps.join('\\n'),\n    emails: c.emails.join('\\n'),\n    observacoes: c.observacoes,\n    status: c.status,\n  },\n}));"
       },
       "id": "50000000-0000-4000-8000-00000000000d",
       "name": "Prepara contatos",
@@ -286,11 +286,11 @@
       "parameters": {
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "airtableTokenApi",
-        "method": "POST",
-        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblXXOEOCwQnC2qFX",
+        "method": "={{ $json.id ? 'PATCH' : 'POST' }}",
+        "url": "={{ 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblXXOEOCwQnC2qFX' + ($json.id ? '/' + $json.id : '') }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ typecast: true, fields: { \"Nome_Contato\": ($json.nome), \"Cargo_Funcao\": ($json.cargo), \"WhatsApps\": ($json.whatsapps), \"Emails\": ($json.emails), \"Entidades_Vinculadas\": ([$json.entidadeId]), \"Observacoes\": ($json.observacoes), \"Status\": ($json.status) } }) }}",
+        "jsonBody": "={{ JSON.stringify({ typecast: true, fields: { \"Nome_Contato\": ($json.nome), \"Cargo_Funcao\": ($json.cargo), \"WhatsApps\": ($json.whatsapps), \"Emails\": ($json.emails), \"Entidades_Vinculadas\": ($json.vinculos), \"Observacoes\": ($json.observacoes), \"Status\": ($json.status) } }) }}",
         "options": {
           "timeout": 20000
         }
@@ -546,6 +546,35 @@
           "timeout": 20000
         }
       }
+    },
+    {
+      "id": "95d021f0-ad8c-448a-a791-b5a63663111d",
+      "name": "Busca contatos escolhidos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        120
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "={{ (() => { const b = $('Recebe pedido do app').first().json.body || {}; const ok = (x) => /^rec[A-Za-z0-9]{14}$/.test(String(x || '').trim()); let doForm = []; try { const l = JSON.parse(b.contatos || '[]'); doForm = Array.isArray(l) ? l.map((c) => String((c && c.id) || '').trim()) : []; } catch (e) { doForm = []; } const apagar = []; const ids = [...new Set([...doForm, ...apagar].filter(ok))]; return 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblXXOEOCwQnC2qFX?_itens=1&filterByFormula=' + encodeURIComponent(ids.length ? 'OR(' + ids.map((i) => \"RECORD_ID()='\" + i + \"'\").join(',') + ')' : 'FALSE()'); })() }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "notes": "Lê os contatos já salvos que foram escolhidos na tela: eles são ligados ao cliente novo, não criados de novo."
     }
   ],
   "connections": {
@@ -629,7 +658,7 @@
         ],
         [
           {
-            "node": "Prepara contatos",
+            "node": "Busca contatos escolhidos",
             "type": "main",
             "index": 0
           }
@@ -640,7 +669,7 @@
       "main": [
         [
           {
-            "node": "Prepara contatos",
+            "node": "Busca contatos escolhidos",
             "type": "main",
             "index": 0
           }
@@ -805,6 +834,17 @@
         [
           {
             "node": "Atualiza backup dos cadastros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca contatos escolhidos": {
+      "main": [
+        [
+          {
+            "node": "Prepara contatos",
             "type": "main",
             "index": 0
           }
