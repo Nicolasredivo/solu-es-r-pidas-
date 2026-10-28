@@ -4909,6 +4909,9 @@ ainda**. É o terceiro item do grupo (`data-page="administradoras"`), e a págin
 `#page-administradoras` tem só o título. Não precisou de código novo no `app.js`, porque o
 menu é genérico. O conteúdo vem num próximo pedido.
 
+Logo depois, também vazio: **"Cadastro de sindicatura"**, embaixo do de administradoras
+(`data-page="sindicatura"`, `#page-sindicatura` só com o título).
+
 **Kaspersky derrubou o "Airtable local" (28/10/2026, 14:14 e 14:35).** O Inspetor do Sistema
 acusou `PDM:Trojan.Win32.Generic` no `node.exe` rodando `banco/airtable-local.js`, encerrou o
 processo e excluiu o arquivo. Foi alarme falso: o MD5 do arquivo excluído era idêntico ao do
