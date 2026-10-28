@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.28f";
+const APP_VERSION = "2026.10.28g";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -1633,17 +1633,14 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
       botaoExcluir.classList.add("confirmando");
       botaoExcluir.textContent = "Confirmar exclusão";
 
-      const juntos = [];
-      if (dados.locais.length) {
-        juntos.push(`${dados.locais.length} endereço${dados.locais.length > 1 ? "s" : ""}`);
-      }
-      if (dados.contatos.length) {
-        juntos.push(`${dados.contatos.length} contato${dados.contatos.length > 1 ? "s" : ""}`);
-      }
-
-      mostrarStatus("error", juntos.length
-        ? `Isto apaga o cadastro e mais ${juntos.join(" e ")}. Clique de novo para confirmar.`
-        : "Isto apaga o cadastro de vez. Clique de novo para confirmar.");
+      const n = dados.locais.length;
+      // Os contatos não vão junto: só saem deste cliente e continuam no
+      // Cadastro de contatos.
+      const contatosFicam = dados.contatos.length
+        ? " Os contatos continuam no Cadastro de contatos." : "";
+      mostrarStatus("error", (n
+        ? `Isto apaga o cadastro e mais ${n} endereço${n > 1 ? "s" : ""}.`
+        : "Isto apaga o cadastro de vez.") + contatosFicam + " Clique de novo para confirmar.");
       return;
     }
 

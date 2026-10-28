@@ -4870,8 +4870,10 @@ adicionar contato.
 - **Regra nova, pedida pelo dono:** o "Remover" de um contato no modo de edição do cliente
   agora **só desfaz o vínculo** (`App - Atualizar cadastro`, nó `Monta as alteracoes`). Antes,
   quem era só deste cliente era apagado. O contato continua no Cadastro de contatos.
-  `testar-contato-varias-empresas.js` foi ajustado (16 ok). **Excluir o cliente** continua
-  apagando os contatos que eram só dele, como antes, com o aviso de sempre.
+  `testar-contato-varias-empresas.js` foi ajustado (16 ok).
+- **Excluir o cliente também não apaga mais contato** (confirmado pelo dono no mesmo dia). Em
+  `App - Excluir cadastro`, nó `Monta a lista do que apagar`, todo contato só perde o vínculo.
+  O aviso do botão Excluir agora conta só os endereços e diz que os contatos continuam.
 
 **Kaspersky derrubou o "Airtable local" (28/10/2026, 14:14 e 14:35).** O Inspetor do Sistema
 acusou `PDM:Trojan.Win32.Generic` no `node.exe` rodando `banco/airtable-local.js`, encerrou o

@@ -76,7 +76,9 @@ const vinculos = async (id) => {
     await t.esperar(800);
     confere('excluir-cadastro respondeu ok e o cliente sumiu', ex.ok === true && (await local('GET', `/v0/${CAD}/Entidades_Cadastradas/${B}`)).error !== undefined, ex);
     confere('contato de outras empresas continua, sem o cliente excluído', JSON.stringify(await vinculos(novo.contato.id)) === JSON.stringify([C, A]), await vinculos(novo.contato.id));
-    confere('contatos que eram só do cliente excluído foram apagados', (await vinculos(X)) === null && (await vinculos(W)) === null);
+    // Desde 28/10/2026 excluir o cliente nunca apaga contato: só desfaz o vínculo.
+    confere('contatos que eram só do cliente excluído continuam, sem cliente',
+      JSON.stringify(await vinculos(X)) === '[]' && JSON.stringify(await vinculos(W)) === '[]', { X: await vinculos(X), W: await vinculos(W) });
   } finally {
     if (copias.length) await t.apagarCopias(copias);
     for (const id of contatos) await local('DELETE', `/v0/${CAD}/Contatos_Solicitantes/${id}`).catch(() => {});
