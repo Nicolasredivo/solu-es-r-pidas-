@@ -4836,6 +4836,20 @@ no campo Empresas, para excluir.
 - **Testes:** `testar-fluxo-contatos.js` agora tem 41 (8 novos, com nomes "ZZ Teste…" que nenhum
   contato real usa, e conferindo que nenhum outro contato mudou).
 
+#### Filtros na lista de contatos: "Agrupar por empresa" (28/10/2026)
+
+**Pedido do dono:** um botão de filtros ao lado da busca que abre uma barra de opções. A primeira
+é "Agrupar por empresa": contatos da mesma empresa ficam juntos. O 1º toque liga (fundo escuro)
+e o 2º desliga.
+- **Tela:** botão "Filtros" ao lado da busca (`#ct-filtros-botao`) abre a barra `#ct-filtros`. O
+  filtro é `#ct-filtro-agrupar`, com `aria-pressed`. Com filtro ligado, o botão vira "Filtros (1)"
+  com a borda acesa, mesmo com a barra fechada. A busca continua valendo dentro dos grupos.
+- **Agrupamento** (decisão minha, o dono pode vetar): grupos em ordem alfabética, com cabeçalho
+  "Nome (N)". Quem é de duas empresas aparece nas duas, e quem não tem empresa fica em "Sem
+  empresa", no fim. "Acme" e "ACME" são o mesmo grupo (`normalizarTexto`). O desenho de cada
+  contato saiu para `itemDeContato(c)`.
+- O filtro não fica guardado: ao abrir o app, a lista volta sem agrupar.
+
 **Kaspersky derrubou o "Airtable local" (28/10/2026, 14:14 e 14:35).** O Inspetor do Sistema
 acusou `PDM:Trojan.Win32.Generic` no `node.exe` rodando `banco/airtable-local.js`, encerrou o
 processo e excluiu o arquivo. Foi alarme falso: o MD5 do arquivo excluído era idêntico ao do

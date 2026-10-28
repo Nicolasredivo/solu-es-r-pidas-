@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.28d";
+const APP_VERSION = "2026.10.28e";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -8901,8 +8901,13 @@ const ctBusca = document.getElementById("ct-busca");
 const ctLista = document.getElementById("ct-lista");
 const ctListaStatus = document.getElementById("ct-lista-status");
 const ctTotal = document.getElementById("ct-total");
+const ctFiltrosBotao = document.getElementById("ct-filtros-botao");
+const ctFiltros = document.getElementById("ct-filtros");
+const ctFiltroAgrupar = document.getElementById("ct-filtro-agrupar");
 
 let contatosCadastrados = [];
+// Filtro "Agrupar por empresa" da lista (liga e desliga no mesmo botão).
+let ctAgruparPorEmpresa = false;
 // Clientes (só para mostrar o nome de quem a pessoa é contato).
 let clientesDosContatos = [];
 let contatosCarregados = false;
@@ -9139,22 +9144,54 @@ function desenharContatos() {
   }
 
   ctLista.innerHTML = "";
+  if (!ctAgruparPorEmpresa) {
+    visiveis.forEach((c) => ctLista.appendChild(itemDeContato(c)));
+    return;
+  }
+  // Agrupado: cada empresa com os seus contatos embaixo, em ordem alfabética;
+  // quem é de duas empresas aparece nas duas, e quem não tem empresa fica no
+  // fim. "Acme" e "ACME" são o mesmo grupo (fica a grafia que aparecer antes).
+  const grupos = new Map();
+  const semEmpresa = [];
   visiveis.forEach((c) => {
-    const item = document.createElement("li");
-    const linha1 = [c.funcao, resumirNomes(c.empresas)].filter(Boolean).map(escapeHtml).join(" · ");
-    const linha2 = [c.telefones[0] ? formatarTelefone(c.telefones[0]) : "", c.emails[0] || ""].filter(Boolean).map(escapeHtml).join(" · ");
-    const clientes = nomesDosClientes(c.clienteIds);
-    const linha3 = clientes.length ? `Contato de: ${escapeHtml(resumirNomes(clientes))}` : "";
-    const inativo = c.status && c.status !== "Ativo" ? ` <span class="contato-item-tag">${escapeHtml(c.status)}</span>` : "";
-    item.innerHTML = `<button type="button" class="contato-item${c.id === contatoEditandoId ? " editando" : ""}">
-      <span class="contato-item-nome">${escapeHtml(c.nome || "Contato sem nome")}${inativo}</span>
-      ${linha1 ? `<span class="contato-item-linha">${linha1}</span>` : ""}
-      ${linha2 ? `<span class="contato-item-linha">${linha2}</span>` : ""}
-      ${linha3 ? `<span class="contato-item-linha contato-item-clientes">${linha3}</span>` : ""}
-    </button>`;
-    item.querySelector("button").addEventListener("click", () => abrirContatoNoForm(c.id));
-    ctLista.appendChild(item);
+    if (!c.empresas.length) semEmpresa.push(c);
+    c.empresas.forEach((nome) => {
+      const chave = normalizarTexto(nome);
+      const grupo = grupos.get(chave) || { nome, contatos: [] };
+      if (!grupo.contatos.includes(c)) grupo.contatos.push(c);
+      grupos.set(chave, grupo);
+    });
   });
+  const ordenados = [...grupos.values()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
+  if (semEmpresa.length) ordenados.push({ nome: "Sem empresa", contatos: semEmpresa });
+  ordenados.forEach((grupo) => {
+    const cabecalho = document.createElement("li");
+    cabecalho.className = "contatos-grupo";
+    cabecalho.textContent = grupo.nome;
+    const total = document.createElement("span");
+    total.className = "contatos-grupo-total";
+    total.textContent = `(${grupo.contatos.length})`;
+    cabecalho.appendChild(total);
+    ctLista.appendChild(cabecalho);
+    grupo.contatos.forEach((c) => ctLista.appendChild(itemDeContato(c)));
+  });
+}
+
+function itemDeContato(c) {
+  const item = document.createElement("li");
+  const linha1 = [c.funcao, resumirNomes(c.empresas)].filter(Boolean).map(escapeHtml).join(" · ");
+  const linha2 = [c.telefones[0] ? formatarTelefone(c.telefones[0]) : "", c.emails[0] || ""].filter(Boolean).map(escapeHtml).join(" · ");
+  const clientes = nomesDosClientes(c.clienteIds);
+  const linha3 = clientes.length ? `Contato de: ${escapeHtml(resumirNomes(clientes))}` : "";
+  const inativo = c.status && c.status !== "Ativo" ? ` <span class="contato-item-tag">${escapeHtml(c.status)}</span>` : "";
+  item.innerHTML = `<button type="button" class="contato-item${c.id === contatoEditandoId ? " editando" : ""}">
+    <span class="contato-item-nome">${escapeHtml(c.nome || "Contato sem nome")}${inativo}</span>
+    ${linha1 ? `<span class="contato-item-linha">${linha1}</span>` : ""}
+    ${linha2 ? `<span class="contato-item-linha">${linha2}</span>` : ""}
+    ${linha3 ? `<span class="contato-item-linha contato-item-clientes">${linha3}</span>` : ""}
+  </button>`;
+  item.querySelector("button").addEventListener("click", () => abrirContatoNoForm(c.id));
+  return item;
 }
 
 async function carregarContatos() {
@@ -9434,6 +9471,27 @@ formContato.addEventListener("input", () => {
 });
 
 ctBusca.addEventListener("input", desenharContatos);
+
+// "Filtros" abre e fecha a barra. Com a barra fechada e algum filtro ligado,
+// o botão fica com a borda acesa, pra lembrar que a lista está filtrada.
+function atualizarBotaoFiltros() {
+  const aberta = !ctFiltros.classList.contains("hidden");
+  ctFiltrosBotao.setAttribute("aria-expanded", String(aberta));
+  ctFiltrosBotao.classList.toggle("ligado", ctAgruparPorEmpresa);
+  ctFiltrosBotao.textContent = ctAgruparPorEmpresa ? "Filtros (1)" : "Filtros";
+}
+
+ctFiltrosBotao.addEventListener("click", () => {
+  ctFiltros.classList.toggle("hidden");
+  atualizarBotaoFiltros();
+});
+
+ctFiltroAgrupar.addEventListener("click", () => {
+  ctAgruparPorEmpresa = !ctAgruparPorEmpresa;
+  ctFiltroAgrupar.setAttribute("aria-pressed", String(ctAgruparPorEmpresa));
+  atualizarBotaoFiltros();
+  desenharContatos();
+});
 document.getElementById("ct-atualizar").addEventListener("click", carregarContatos);
 document.querySelector('.sidebar-item[data-page="contatos"]').addEventListener("click", () => {
   if (!contatosCarregados) carregarContatos();

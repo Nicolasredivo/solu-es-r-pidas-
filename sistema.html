@@ -164,8 +164,15 @@
               <h2 id="ct-lista-titulo" class="contatos-secao-titulo">Contatos <span id="ct-total" class="contatos-total"></span></h2>
               <button type="button" id="ct-atualizar" class="botao-secundario" title="Busca a lista de novo no servidor.">Atualizar</button>
             </div>
-            <input type="text" id="ct-busca" autocomplete="off" aria-label="Buscar contato"
-                   placeholder="Buscar por nome, função, empresa, telefone ou e-mail" />
+            <div class="ct-busca-linha">
+              <input type="text" id="ct-busca" autocomplete="off" aria-label="Buscar contato"
+                     placeholder="Buscar por nome, função, empresa, telefone ou e-mail" />
+              <button type="button" id="ct-filtros-botao" class="botao-secundario" aria-expanded="false" aria-controls="ct-filtros">Filtros</button>
+            </div>
+            <!-- Cada filtro liga no 1º toque (fica com fundo escuro) e desliga no 2º. -->
+            <div id="ct-filtros" class="ct-filtros hidden" role="group" aria-label="Filtros da lista">
+              <button type="button" id="ct-filtro-agrupar" class="ct-filtro" aria-pressed="false">Agrupar por empresa</button>
+            </div>
             <p id="ct-lista-status" class="doc-hint"></p>
             <ul id="ct-lista" class="contatos-lista" aria-live="polite"></ul>
           </section>
