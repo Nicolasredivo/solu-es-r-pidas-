@@ -549,9 +549,37 @@
         <h1>Cadastro de administradoras</h1>
       </div>
 
-      <!-- Cadastro de sindicatura: também só o título por enquanto (28/10/2026). -->
+      <!-- Cadastro de sindicatura (empresas de síndicos): só o nome. Quem
+           trabalha em cada uma vem do campo Empresas dos contatos (fluxo "App -
+           Sindicaturas": listar / salvar). -->
       <div id="page-sindicatura" class="card page hidden">
         <h1>Cadastro de sindicatura</h1>
+
+        <div class="subtabs">
+          <button type="button" class="subtab active" data-subpage="sind-adicionar">Adicionar sindicatura</button>
+          <button type="button" class="subtab" data-subpage="sind-consultar">Consultar sindicaturas</button>
+        </div>
+
+        <div id="subpage-sind-adicionar" class="subpage">
+          <form id="form-sindicatura" novalidate autocomplete="off">
+            <label for="sind-nome">Nome da sindicatura</label>
+            <input type="text" id="sind-nome" maxlength="120" placeholder="Ex: Síndicos Exemplo Ltda" />
+            <p id="sind-aviso" class="doc-hint" role="status"></p>
+            <button type="submit" id="sind-salvar">Salvar sindicatura</button>
+            <div id="sind-status" class="status" role="status"></div>
+          </form>
+        </div>
+
+        <div id="subpage-sind-consultar" class="subpage hidden">
+          <div class="contatos-lista-topo">
+            <h2 class="contatos-secao-titulo">Sindicaturas <span id="sind-total" class="contatos-total"></span></h2>
+            <button type="button" id="sind-atualizar" class="botao-secundario" title="Busca a lista de novo no servidor.">Atualizar</button>
+          </div>
+          <input type="text" id="sind-busca" autocomplete="off" aria-label="Buscar sindicatura"
+                 placeholder="Buscar pelo nome da sindicatura ou de um contato" />
+          <p id="sind-lista-status" class="doc-hint"></p>
+          <ul id="sind-lista" class="contatos-lista" aria-live="polite"></ul>
+        </div>
       </div>
 
       <div id="page-financeiro" class="card page hidden">

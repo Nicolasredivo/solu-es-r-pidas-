@@ -1,0 +1,601 @@
+{
+  "name": "App - Sindicaturas",
+  "nodes": [
+    {
+      "id": "7b0ba5cc-7da5-441c-94e2-b11ce90b44b7",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sindicaturas",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      },
+      "webhookId": "43982951-add7-43a0-b0fd-877003fb6b89"
+    },
+    {
+      "id": "9bcd1a9c-7509-4ee5-bdb2-2dafac37b050",
+      "name": "Confere acesso",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "acesso",
+            "senha": "={{ $json.body.senha }}",
+            "tokenAcesso": "={{ $json.body.tokenAcesso }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "9e7090a4-6838-482f-add7-d2fb6e925134",
+      "name": "Acesso permitido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7000000-0000-4000-8000-100000000002",
+              "leftValue": "={{ $json.permitido }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "1597b75d-f877-43cc-9465-2dcb20b3c798",
+      "name": "Monta acesso negado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        200
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, acessoNegado: true, mensagem: 'Acesso não autorizado. Entre de novo.' } }];"
+      }
+    },
+    {
+      "id": "7ab1ba0d-b81a-4ff7-9172-923d233d460d",
+      "name": "Le entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "// Tudo chega como texto (o app manda formulário simples).\nconst corpo = $('Recebe pedido do app').first().json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst ACOES = ['listar', 'salvar'];\nconst acao = ACOES.includes(texto(corpo.acao)) ? texto(corpo.acao) : '';\nconst nome = texto(corpo.nome).replace(/\\s+/g, ' ').slice(0, 120);\nlet erro = '';\nif (!acao) erro = 'Ação inválida.';\nelse if (acao === 'salvar' && !nome) erro = 'Escreva o nome da sindicatura.';\nreturn [{ json: { acao, nome, erro } }];"
+      }
+    },
+    {
+      "id": "ac413651-d9d7-4f28-b321-7473eff4ab42",
+      "name": "Entrada ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        -100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7000000-0000-4000-8000-100000000005",
+              "leftValue": "={{ !$json.erro }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "5ee7d815-e7c8-44bf-ae6f-4b9830437f9a",
+      "name": "Monta erro de entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        100
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, mensagem: $('Le entrada').first().json.erro } }];"
+      }
+    },
+    {
+      "id": "d802572c-d661-4fa9-8fbe-8764d2cc99f3",
+      "name": "Busca sindicaturas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -200
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblSindicatura001?_itens=1",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "id": "c1317d33-ae53-4a64-bbb3-99bd8ace429b",
+      "name": "Busca contatos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        -200
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblXXOEOCwQnC2qFX?_itens=1",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "id": "9c12efdd-471f-405e-91d3-424d2c3dd2a6",
+      "name": "Decide",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        -200
+      ],
+      "parameters": {
+        "jsCode": "const e = $('Le entrada').first().json;\nconst sindicaturasBrutas = $('Busca sindicaturas').all().map((i) => i.json);\nconst contatosBrutos = $('Busca contatos').all().map((i) => i.json);\nconst recusa = (mensagem) => [{ json: { gravar: false, resposta: { ok: false, mensagem } } }];\n\n// Banco fora do ar não pode parecer \"nenhuma sindicatura\".\nif (sindicaturasBrutas.some((j) => j && j.error) || contatosBrutos.some((j) => j && j.error)) {\n  return recusa('Não foi possível falar com o banco agora. Tente de novo em instantes.');\n}\n\n// \"Síndicos Exemplo\" e \"SINDICOS EXEMPLO.\" são a mesma: igual ao normalizarTexto do app.\nconst chave = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();\nconst QUEBRA = String.fromCharCode(10);\nconst porLinha = (t) => String(t || '').split(QUEBRA).map((v) => v.trim()).filter(Boolean);\nconst sindicaturas = sindicaturasBrutas.filter((j) => j && j.id)\n  .map((j) => ({ id: j.id, nome: (j.fields && j.fields.Nome) || '' }));\n\nif (e.acao === 'listar') {\n  // Quem trabalha nela: os contatos com o mesmo nome no campo Empresas.\n  const contatos = contatosBrutos.filter((j) => j && j.id).map((j) => {\n    const f = j.fields || {};\n    return { id: j.id, nome: f.Nome_Contato || '', funcao: f.Cargo_Funcao || '', chaves: porLinha(f.Empresas).map(chave) };\n  });\n  const lista = sindicaturas.map((s) => ({\n    ...s,\n    contatos: contatos.filter((c) => c.chaves.includes(chave(s.nome)))\n      .map((c) => ({ id: c.id, nome: c.nome, funcao: c.funcao }))\n      .sort((a, b) => (a.nome || '~').localeCompare(b.nome || '~', 'pt-BR')),\n  })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));\n  return [{ json: { gravar: false, resposta: { ok: true, sindicaturas: lista } } }];\n}\n\n// salvar: só o nome, e nunca duas com o mesmo nome.\nif (!chave(e.nome)) return recusa('Escreva o nome da sindicatura.');\nconst igual = sindicaturas.find((s) => chave(s.nome) === chave(e.nome));\nif (igual) return [{ json: { gravar: false, resposta: { ok: false, jaExiste: true, mensagem: 'Já existe a sindicatura \"' + igual.nome + '\".', sindicatura: igual } } }];\nreturn [{ json: { gravar: true, acao: 'salvar', metodo: 'POST', url: 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblSindicatura001', corpo: { records: [{ fields: { Nome: e.nome } }] } } }];"
+      }
+    },
+    {
+      "id": "5cd16cf2-dba4-4a5d-b139-fba3fe9fe221",
+      "name": "Precisa gravar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1760,
+        -200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7000000-0000-4000-8000-100000000010",
+              "leftValue": "={{ $json.gravar }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "d490032b-cabe-4deb-b32f-f2406acc3f92",
+      "name": "Monta resposta direta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: $input.first().json.resposta }];"
+      }
+    },
+    {
+      "id": "459a3c2d-8479-46fe-9567-56fba849484b",
+      "name": "Grava no banco",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        -300
+      ],
+      "parameters": {
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo || {}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "3c78c86e-8ff8-4f85-b2c5-da59b1175926",
+      "name": "Monta resposta gravada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        -400
+      ],
+      "parameters": {
+        "jsCode": "const reg = (($input.first().json.records) || [])[0];\nif (!reg || !reg.id) return [{ json: { ok: false, mensagem: 'Não foi possível salvar agora. Tente de novo em instantes.' } }];\nreturn [{ json: { ok: true, sindicatura: { id: reg.id, nome: (reg.fields && reg.fields.Nome) || '', contatos: [] } } }];"
+      }
+    },
+    {
+      "id": "475e691e-2b3f-42ed-8a2e-0e77205a1cf4",
+      "name": "Monta falha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        -200
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, mensagem: 'Não foi possível salvar agora. Tente de novo em instantes.' } }];"
+      }
+    },
+    {
+      "id": "1eca6b5d-d4eb-4ea4-b7f0-f81257372066",
+      "name": "Responde gravado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2420,
+        -400
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "72c78e3a-4bd3-4bad-8e54-539d719b0ade",
+      "name": "Atualiza backup dos cadastros",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        -400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:5690/backup-cadastros",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "notes": "Contato salvo ou excluído: refaz o arquivo único de backup dos cadastros (banco-solucoes/backup-cadastros.json). Falhar aqui não atrapalha, a resposta já foi dada."
+    },
+    {
+      "id": "59449d62-bd11-403a-bad1-c09ec8f83b1e",
+      "name": "Responde",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2420,
+        100
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Confere acesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere acesso": {
+      "main": [
+        [
+          {
+            "node": "Acesso permitido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acesso permitido?": {
+      "main": [
+        [
+          {
+            "node": "Le entrada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta acesso negado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta acesso negado": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le entrada": {
+      "main": [
+        [
+          {
+            "node": "Entrada ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada ok?": {
+      "main": [
+        [
+          {
+            "node": "Busca sindicaturas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta erro de entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta erro de entrada": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca sindicaturas": {
+      "main": [
+        [
+          {
+            "node": "Busca contatos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca contatos": {
+      "main": [
+        [
+          {
+            "node": "Decide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide": {
+      "main": [
+        [
+          {
+            "node": "Precisa gravar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Precisa gravar?": {
+      "main": [
+        [
+          {
+            "node": "Grava no banco",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta resposta direta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta direta": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava no banco": {
+      "main": [
+        [
+          {
+            "node": "Monta resposta gravada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta gravada": {
+      "main": [
+        [
+          {
+            "node": "Responde gravado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta falha": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responde gravado": {
+      "main": [
+        [
+          {
+            "node": "Atualiza backup dos cadastros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  }
+}

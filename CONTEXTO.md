@@ -4910,7 +4910,38 @@ ainda**. É o terceiro item do grupo (`data-page="administradoras"`), e a págin
 menu é genérico. O conteúdo vem num próximo pedido.
 
 Logo depois, também vazio: **"Cadastro de sindicatura"**, embaixo do de administradoras
-(`data-page="sindicatura"`, `#page-sindicatura` só com o título).
+(`data-page="sindicatura"`).
+
+#### Cadastro de sindicatura: Adicionar / Consultar (28/10/2026)
+
+**Pedido do dono:** abas "Adicionar sindicatura" (só o nome, com aviso se já existir) e
+"Consultar sindicaturas" (com os contatos que trabalham em cada uma). As sindicaturas são as
+empresas do campo Empresas do contato.
+- **Respostas do dono:** das 3 empresas que já estavam nos contatos, 2 viraram sindicatura (uma
+  delas com um erro de digitação corrigido, também no contato). A terceira, uma indústria,
+  **não** é sindicatura e fica só como empresa do contato. No campo Empresas aparecem as
+  sindicaturas **e** as outras empresas.
+- **Banco:** tabela nova `"Sindicaturas"` (`id`, `"Nome"`, `"Criado_Em"`) no `schema.sql`, com
+  grant para o `n8n_app`. No Airtable local ela é `tblSindicatura001`, na base cadastro, e
+  entra no `backup-cadastros.json`. O vínculo com o contato é **pelo nome**
+  (`Contatos_Solicitantes."Empresas"`, sem diferenciar acento, maiúscula nem pontuação), não
+  por id.
+- **`App - Sindicaturas`** (webhook `sindicaturas`, id `HgFlD0N4zrg8lSqh`, montado a partir do
+  `App - Contatos`):
+  - `listar`: todas, cada uma com `contatos` (id, nome, função).
+  - `salvar`: nome obrigatório. Repetido em qualquer grafia é recusado com `jaExiste` e a que
+    já existe.
+- **Tela:**
+  - Adicionar avisa enquanto digita ("Já existe a sindicatura…") e não salva repetida.
+  - Consultar tem busca pelo nome da sindicatura ou do contato e recarrega ao abrir.
+  - No **campo Empresas do contato**, as sindicaturas vêm primeiro, marcadas "Sindicatura", com
+    o nome do cadastro, e sem "×". Depois vêm as outras empresas já usadas, com "×". Nome novo
+    entra como empresa comum.
+  - Ainda não dá para excluir nem renomear uma sindicatura.
+- **Atalho do servidor:** o `ligar-banco.ps1` agora **sempre reinicia** o Airtable local. Antes,
+  reabrir o atalho deixava rodando o processo antigo (escondido), que não via a tabela nova.
+- **Testes:** `testar-fluxo-sindicaturas.js` (16). `comum.js` passou a contar `Sindicaturas`.
+  `testar-fluxo-contatos.js` continua com 48.
 
 #### Menu lateral com ícones e mais separação (28/10/2026)
 

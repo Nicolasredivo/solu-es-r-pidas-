@@ -64,7 +64,7 @@ const placar = () => ({ ok, falhas });
 
 async function contarTudo() {
   const q = {};
-  for (const [b, ts] of [[CAD, ['Entidades_Cadastradas', 'Locais_Atendimento', 'Contatos_Solicitantes', 'Chamados', 'Usuarios', 'Sessoes', 'Visitas']],
+  for (const [b, ts] of [[CAD, ['Entidades_Cadastradas', 'Locais_Atendimento', 'Contatos_Solicitantes', 'Chamados', 'Usuarios', 'Sessoes', 'Visitas', 'Sindicaturas']],
     [FIN, ['Despesas', 'Fornecedores', 'Recorrentes', 'Recebimentos', 'Config_Financeiro', 'Conferencias', 'Retiradas', 'Cartoes', 'Pagamentos_Fatura']]]) {
     for (const t of ts) q[t] = (await lista(b, t)).length;
   }

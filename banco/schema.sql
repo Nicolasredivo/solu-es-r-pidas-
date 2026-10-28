@@ -66,6 +66,15 @@ create table "Contatos_Solicitantes" (
 );
 create index on "Contatos_Solicitantes" using gin ("Entidades_Vinculadas");
 
+-- Sindicaturas (empresas de síndicos), 28/10/2026. Só o nome por enquanto. Quem trabalha
+-- nela é quem tem o mesmo nome em Contatos_Solicitantes."Empresas" (sem diferenciar acento,
+-- maiúscula nem pontuação), não um vínculo por id.
+create table "Sindicaturas" (
+  id text primary key default novo_id(),
+  "Nome" text not null,
+  "Criado_Em" timestamptz not null default now()
+);
+
 create table "Chamados" (
   id text primary key default novo_id(),
   "Numero_Chamado" integer unique,

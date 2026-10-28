@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.28k";
+const APP_VERSION = "2026.10.28l";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -9484,7 +9484,7 @@ async function abrirCadastroContatoSobreposto(nomeDigitado) {
     return null;
   }
   // Os salvos são usados no aviso de telefone/e-mail repetido e nas sugestões.
-  await buscarContatosSalvos();
+  await Promise.all([buscarContatosSalvos(), buscarSindicaturas().catch(() => {})]);
   prepararFormContato(null);
   ctNome.value = nomeDigitado || "";
   ctEstadoOriginal = fotografiaContato();
@@ -9663,9 +9663,19 @@ async function excluirEmpresaDosContatos(nome) {
   }
 }
 
+// As sindicaturas cadastradas vêm primeiro, marcadas, com o nome escrito como
+// no cadastro delas (é por ele que a sindicatura acha quem trabalha nela).
+// Depois, as outras empresas já usadas (ex.: uma indústria), com o "×". Nome
+// novo entra como empresa comum: sindicatura se cadastra na tela dela.
 ligarSugestoesContato(ctEmpresaBusca, ctEmpresaSugestao, (termo) => {
-  const usadas = valoresJaUsados((c) => c.empresas, termo, { jaEscolhidos: ctEmpresas })
+  const escolhidas = ctEmpresas.map(normalizarTexto);
+  const sinds = sindicaturas
+    .filter((s) => !escolhidas.includes(normalizarTexto(s.nome)) && (!termo || normalizarTexto(s.nome).includes(termo)))
+    .map((s) => ({ rotulo: s.nome, detalhe: "Sindicatura", valor: s.nome }));
+  const outras = valoresJaUsados((c) => c.empresas, termo, { jaEscolhidos: ctEmpresas })
+    .filter((s) => !sindicaturaComNome(s.valor))
     .map((s) => ({ ...s, excluir: "Excluir empresa?" }));
+  const usadas = [...sinds, ...outras];
   const digitada = ctEmpresaBusca.value.trim().replace(/\s+/g, " ");
   const jaExiste = usadas.some((s) => normalizarTexto(s.valor) === termo)
     || ctEmpresas.some((nome) => normalizarTexto(nome) === termo);
@@ -9791,9 +9801,201 @@ ctFiltroAgrupar.addEventListener("click", () => {
 document.getElementById("ct-atualizar").addEventListener("click", carregarContatos);
 document.querySelector('.sidebar-item[data-page="contatos"]').addEventListener("click", () => {
   if (!contatosCarregados) carregarContatos();
+  // As sugestões do campo Empresas: vêm de novo a cada abertura da tela.
+  buscarSindicaturas().catch(() => {});
+});
+
+// Campo Empresas usado antes de as sindicaturas chegarem: busca e mostra.
+ctEmpresaBusca.addEventListener("focus", () => {
+  if (sindicaturasCarregadas) return;
+  buscarSindicaturas().then(() => {
+    if (document.activeElement === ctEmpresaBusca) ctEmpresaBusca.dispatchEvent(new Event("input"));
+  }).catch(() => {});
 });
 
 prepararFormContato(null);
+
+// ----- Sindicaturas -----
+//
+// Empresas de síndicos (fluxo "App - Sindicaturas": listar / salvar). Por
+// enquanto só o nome, sem repetir. Quem trabalha em cada uma é quem tem o
+// mesmo nome no campo Empresas do contato: o servidor junta na hora de listar.
+
+const formSindicatura = document.getElementById("form-sindicatura");
+const sindNome = document.getElementById("sind-nome");
+const sindAviso = document.getElementById("sind-aviso");
+const sindSalvar = document.getElementById("sind-salvar");
+const sindStatus = document.getElementById("sind-status");
+const sindBusca = document.getElementById("sind-busca");
+const sindLista = document.getElementById("sind-lista");
+const sindListaStatus = document.getElementById("sind-lista-status");
+const sindTotal = document.getElementById("sind-total");
+
+let sindicaturas = [];
+let sindicaturasCarregadas = false;
+let buscandoSindicaturas = null;
+
+// Também usada pelo campo Empresas do contato. Dois pedidos juntos viram um.
+function buscarSindicaturas() {
+  if (!buscandoSindicaturas) {
+    buscandoSindicaturas = pedirAoN8n("sindicaturas", { acao: "listar" })
+      .then((dados) => {
+        if (!dados || !dados.ok) return dados;
+        sindicaturas = dados.sindicaturas || [];
+        sindicaturasCarregadas = true;
+        return dados;
+      })
+      .finally(() => { buscandoSindicaturas = null; });
+  }
+  return buscandoSindicaturas;
+}
+
+function sindicaturaComNome(nome) {
+  const chave = normalizarTexto(nome);
+  return chave ? sindicaturas.find((s) => normalizarTexto(s.nome) === chave) : null;
+}
+
+function mostrarSindStatus(tipo, mensagem) {
+  sindStatus.textContent = mensagem;
+  sindStatus.className = mensagem ? `status show ${tipo}` : "status";
+}
+
+// Aviso enquanto digita: o nome já existe (sem diferenciar acento nem maiúscula).
+function avisarSindicaturaRepetida() {
+  const igual = sindicaturaComNome(sindNome.value);
+  sindAviso.textContent = igual ? `Já existe a sindicatura "${igual.nome}".` : "";
+  sindAviso.className = igual ? "doc-hint error" : "doc-hint";
+  return igual;
+}
+
+function desenharSindicaturas() {
+  sindLista.setAttribute("aria-busy", "false");
+  const termo = normalizarTexto(sindBusca.value);
+  const visiveis = sindicaturas.filter((s) => !termo
+    || normalizarTexto([s.nome, ...s.contatos.map((c) => c.nome)].join(" ")).includes(termo));
+
+  sindTotal.textContent = sindicaturas.length ? `(${sindicaturas.length})` : "";
+  if (!sindicaturas.length) {
+    sindListaStatus.textContent = "Nenhuma sindicatura ainda. Cadastre em Adicionar sindicatura.";
+    sindListaStatus.className = "doc-hint neutral";
+  } else if (!visiveis.length) {
+    sindListaStatus.textContent = "Nenhuma sindicatura encontrada com essa busca.";
+    sindListaStatus.className = "doc-hint neutral";
+  } else {
+    sindListaStatus.textContent = "";
+    sindListaStatus.className = "doc-hint";
+  }
+
+  sindLista.innerHTML = "";
+  visiveis.forEach((s) => {
+    const item = document.createElement("li");
+    item.className = "sind-item";
+    const nome = document.createElement("span");
+    nome.className = "sind-item-nome";
+    nome.textContent = s.nome;
+    item.appendChild(nome);
+    if (!s.contatos.length) {
+      const vazio = document.createElement("span");
+      vazio.className = "sind-item-vazio";
+      vazio.textContent = "Nenhum contato trabalha nela ainda. Ela aparece no campo Empresas do Cadastro de contatos.";
+      item.appendChild(vazio);
+    } else {
+      const titulo = document.createElement("span");
+      titulo.className = "sind-item-vazio";
+      titulo.textContent = s.contatos.length === 1 ? "1 contato trabalha nela:" : `${s.contatos.length} contatos trabalham nela:`;
+      const pessoas = document.createElement("ul");
+      pessoas.className = "sind-item-contatos";
+      s.contatos.forEach((c) => {
+        const pessoa = document.createElement("li");
+        pessoa.textContent = c.nome || "Contato sem nome";
+        if (c.funcao) {
+          const funcao = document.createElement("span");
+          funcao.className = "sind-item-funcao";
+          funcao.textContent = ` · ${c.funcao}`;
+          pessoa.appendChild(funcao);
+        }
+        pessoas.appendChild(pessoa);
+      });
+      item.append(titulo, pessoas);
+    }
+    sindLista.appendChild(item);
+  });
+}
+
+async function carregarSindicaturas() {
+  sindListaStatus.textContent = "";
+  sindListaStatus.className = "doc-hint";
+  sindLista.setAttribute("aria-busy", "true");
+  sindLista.innerHTML = Array.from({ length: 3 }, () =>
+    `<li class="contato-esqueleto" aria-hidden="true"><span></span><span></span></li>`).join("");
+  try {
+    const dados = await buscarSindicaturas();
+    if (!dados || !dados.ok) {
+      sindLista.innerHTML = "";
+      sindListaStatus.textContent = (dados && dados.mensagem) || "Não consegui carregar as sindicaturas.";
+      sindListaStatus.className = "doc-hint error";
+      return;
+    }
+    desenharSindicaturas();
+    avisarSindicaturaRepetida();
+  } catch (err) {
+    sindLista.innerHTML = "";
+    sindListaStatus.textContent = "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?";
+    sindListaStatus.className = "doc-hint error";
+  }
+}
+
+sindNome.addEventListener("input", () => {
+  avisarSindicaturaRepetida();
+  mostrarSindStatus("", "");
+});
+
+formSindicatura.addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  const nome = sindNome.value.trim().replace(/\s+/g, " ");
+  if (!nome) {
+    mostrarSindStatus("error", "Escreva o nome da sindicatura.");
+    sindNome.focus();
+    return;
+  }
+  if (avisarSindicaturaRepetida()) {
+    sindNome.focus();
+    return;
+  }
+  sindSalvar.disabled = true;
+  mostrarSindStatus("loading", "Salvando...");
+  try {
+    const resposta = await pedirAoN8n("sindicaturas", { acao: "salvar", nome });
+    if (!resposta || !resposta.ok || !resposta.sindicatura) {
+      // Outro aparelho pode ter cadastrado o mesmo nome agora há pouco.
+      if (resposta && resposta.jaExiste && resposta.sindicatura) {
+        sindicaturas.push({ ...resposta.sindicatura, contatos: [] });
+        avisarSindicaturaRepetida();
+      }
+      mostrarSindStatus("error", (resposta && resposta.mensagem) || "Não consegui salvar.");
+      return;
+    }
+    sindicaturas.push(resposta.sindicatura);
+    sindicaturas.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
+    desenharSindicaturas();
+    sindNome.value = "";
+    sindAviso.textContent = "";
+    mostrarSindStatus("", "");
+    mostrarToast(`Sindicatura "${resposta.sindicatura.nome}" salva.`);
+    sindNome.focus();
+  } catch (err) {
+    mostrarSindStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+  } finally {
+    sindSalvar.disabled = false;
+  }
+});
+
+sindBusca.addEventListener("input", desenharSindicaturas);
+document.getElementById("sind-atualizar").addEventListener("click", carregarSindicaturas);
+// A lista sempre vem de novo ao abrir: os contatos de cada uma mudam pelo
+// Cadastro de contatos, noutra tela.
+document.querySelector('.sidebar-item[data-page="sindicatura"]').addEventListener("click", carregarSindicaturas);
+document.querySelector('[data-subpage="sind-consultar"]').addEventListener("click", carregarSindicaturas);
 
 // ----- Documentos (PDF) -----
 //
