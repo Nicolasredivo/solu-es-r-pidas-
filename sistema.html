@@ -139,14 +139,11 @@
               <input type="text" id="ct-funcao" maxlength="60" placeholder="Ex: Síndico, Zelador, Gerente" />
               <div id="ct-funcao-sugestao" class="sugestao-lista hidden"></div>
 
-              <label for="ct-empresa-busca">Empresa</label>
-              <div id="ct-empresa-escolhida" class="ct-empresa-escolhida hidden">
-                <span class="ct-empresa-nome"></span>
-                <button type="button" id="ct-empresa-tirar" class="remover-canal" aria-label="Tirar a empresa">×</button>
-              </div>
+              <label for="ct-empresa-busca">Empresas</label>
+              <ul id="ct-empresas-escolhidas" class="ct-empresas-escolhidas hidden" aria-label="Empresas escolhidas"></ul>
               <input type="text" id="ct-empresa-busca" placeholder="Buscar cliente cadastrado" />
               <div id="ct-empresa-sugestao" class="sugestao-lista hidden"></div>
-              <p id="ct-empresa-ajuda" class="placeholder-text ct-ajuda">Opcional. Deixe em branco se a pessoa não for de nenhuma empresa.</p>
+              <p id="ct-empresa-ajuda" class="placeholder-text ct-ajuda">Opcional, e pode ter mais de uma. Deixe em branco se a pessoa não for de nenhuma empresa.</p>
 
               <label for="ct-notas">Notas</label>
               <textarea id="ct-notas" rows="3" maxlength="2000" placeholder="Qualquer coisa que valha lembrar sobre a pessoa"></textarea>

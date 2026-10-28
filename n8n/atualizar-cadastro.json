@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Monta, em ordem, todas as chamadas que o Airtable precisa receber.\n// Um no HTTP so executa todas: o endereco e o metodo mudam por item.\nconst b = $('Recebe pedido do app').first().json.body || {};\nconst BASE = 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/';\nconst T = { entidades: 'tbl5Joji6gAir3mNh', locais: 'tblffVczCf1VeNxs7', contatos: 'tblXXOEOCwQnC2qFX' };\n\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => texto(v) || null;\nconst linhas = (v) => (Array.isArray(v) ? v.map(texto).filter(Boolean) : []);\nconst ids = (v) => String(v || '').split(',').map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nconst entidadeId = ids(b.id)[0];\nif (!entidadeId) throw new Error('Pedido sem o codigo do cadastro.');\n\nconst lerJson = (t) => {\n  try { const v = JSON.parse(t || '[]'); return Array.isArray(v) ? v : []; }\n  catch (erro) { return []; }\n};\n\n// O Airtable aceita no maximo 10 registros por chamada.\nconst emLotes = (arr) => {\n  const lotes = [];\n  for (let i = 0; i < arr.length; i += 10) lotes.push(arr.slice(i, i + 10));\n  return lotes;\n};\n\nconst chamadas = [];\nconst gravar = (tabela, registros, novo) => {\n  for (const lote of emLotes(registros)) {\n    chamadas.push({\n      metodo: novo ? 'POST' : 'PATCH',\n      url: BASE + tabela,\n      corpo: { typecast: true, records: lote },\n    });\n  }\n};\nconst apagar = (tabela, lista) => {\n  for (const lote of emLotes(lista)) {\n    chamadas.push({\n      metodo: 'DELETE',\n      url: BASE + tabela + '?' + lote.map((id) => 'records[]=' + id).join('&'),\n      corpo: null,\n    });\n  }\n};\n\n// ---- 1. o cadastro em si ----\nchamadas.push({\n  metodo: 'PATCH',\n  url: BASE + T.entidades,\n  corpo: { typecast: true, records: [{ id: entidadeId, fields: {\n    CPF_CNPJ: texto(b.documento).replace(/\\D/g, ''),\n    Razao_Social_Nome: texto(b.razaoSocial),\n    Nome_Fantasia_Identificador: texto(b.nomeFantasia),\n    Tipo_Documento: lista(b.tipo),\n    Exigencia_Fiscal: lista(b.exigenciaFiscal),\n    Emails_Financeiro_NFE: texto(b.emails),\n    WhatsApp_CNPJ: texto(b.whatsappCnpj),\n    Administradora: texto(b.administradora),\n    Empresa_Sindicos: texto(b.empresaSindicos),\n    Status: lista(b.status) || 'Ativo',\n    Observacoes: texto(b.observacoes),\n  } }] },\n});\n\n// ---- 2. enderecos ----\nconst locais = lerJson(b.locais)\n  .map((l) => ({\n    id: ids(l.id)[0] || null,\n    nome: texto(l.nome), endereco: texto(l.endereco),\n    bairroCidade: texto(l.bairroCidade), acesso: texto(l.acesso),\n    status: lista(l.status) || 'Ativo',\n  }))\n  .filter((l) => l.nome || l.endereco || l.bairroCidade || l.acesso);\n\nconst camposLocal = (l) => ({\n  Nome_do_Local: l.nome || l.endereco || 'Local sem nome',\n  Endereco_Completo: l.endereco,\n  Bairro_Cidade: l.bairroCidade,\n  Observacoes_Acesso: l.acesso,\n  Status: l.status,\n});\n\ngravar(T.locais, locais.filter((l) => l.id).map((l) => ({ id: l.id, fields: camposLocal(l) })), false);\ngravar(T.locais, locais.filter((l) => !l.id).map((l) => ({\n  fields: { ...camposLocal(l), Cliente_Vinculado: [entidadeId] },\n})), true);\napagar(T.locais, ids(b.locaisApagar));\n\n// ---- 3. contatos ----\nconst contatos = lerJson(b.contatos)\n  .map((c) => ({\n    id: ids(c.id)[0] || null,\n    nome: texto(c.nome), cargo: texto(c.cargo),\n    whatsapps: linhas(c.whatsapps), emails: linhas(c.emails),\n    observacoes: texto(c.observacoes),\n    status: lista(c.status) || 'Ativo',\n  }))\n  .filter((c) => c.nome || c.whatsapps.length || c.emails.length || c.observacoes);\n\nconst camposContato = (c) => ({\n  Nome_Contato: c.nome || c.whatsapps[0] || c.emails[0] || 'Contato sem nome',\n  Cargo_Funcao: c.cargo || null,\n  WhatsApps: c.whatsapps.join('\\n'),\n  Emails: c.emails.join('\\n'),\n  Observacoes: c.observacoes,\n  Status: c.status,\n});\n\ngravar(T.contatos, contatos.filter((c) => c.id).map((c) => ({ id: c.id, fields: camposContato(c) })), false);\ngravar(T.contatos, contatos.filter((c) => !c.id).map((c) => ({\n  fields: { ...camposContato(c), Entidades_Vinculadas: [entidadeId] },\n})), true);\napagar(T.contatos, ids(b.contatosApagar));\n\nreturn chamadas.map((c) => ({ json: c }));"
+        "jsCode": "// Monta, em ordem, todas as chamadas que o Airtable precisa receber.\n// Um no HTTP so executa todas: o endereco e o metodo mudam por item.\nconst b = $('Recebe pedido do app').first().json.body || {};\nconst BASE = 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/';\nconst T = { entidades: 'tbl5Joji6gAir3mNh', locais: 'tblffVczCf1VeNxs7', contatos: 'tblXXOEOCwQnC2qFX' };\n\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => texto(v) || null;\nconst linhas = (v) => (Array.isArray(v) ? v.map(texto).filter(Boolean) : []);\nconst ids = (v) => String(v || '').split(',').map((x) => x.trim())\n  .filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x));\n\nconst entidadeId = ids(b.id)[0];\nif (!entidadeId) throw new Error('Pedido sem o codigo do cadastro.');\n\nconst lidos = $('Busca contatos a tirar').all().map((i) => i.json);\nif (lidos.some((j) => j && j.error)) throw new Error('Nao consegui conferir os contatos antes de tirar.');\nconst vinculosAtuais = new Map(lidos.filter((j) => j && j.id).map((j) => [j.id, (j.fields && j.fields.Entidades_Vinculadas) || []]));\nconst separaContatos = (idsContatos) => {\n  const soDeste = [], deOutros = [];\n  for (const id of idsContatos) {\n    const vinculos = vinculosAtuais.get(id);\n    if (vinculos && vinculos.some((e) => e !== entidadeId)) {\n      deOutros.push({ id, fields: { Entidades_Vinculadas: vinculos.filter((e) => e !== entidadeId) } });\n    } else soDeste.push(id);\n  }\n  return { soDeste, deOutros };\n};\n\nconst lerJson = (t) => {\n  try { const v = JSON.parse(t || '[]'); return Array.isArray(v) ? v : []; }\n  catch (erro) { return []; }\n};\n\n// O Airtable aceita no maximo 10 registros por chamada.\nconst emLotes = (arr) => {\n  const lotes = [];\n  for (let i = 0; i < arr.length; i += 10) lotes.push(arr.slice(i, i + 10));\n  return lotes;\n};\n\nconst chamadas = [];\nconst gravar = (tabela, registros, novo) => {\n  for (const lote of emLotes(registros)) {\n    chamadas.push({\n      metodo: novo ? 'POST' : 'PATCH',\n      url: BASE + tabela,\n      corpo: { typecast: true, records: lote },\n    });\n  }\n};\nconst apagar = (tabela, lista) => {\n  for (const lote of emLotes(lista)) {\n    chamadas.push({\n      metodo: 'DELETE',\n      url: BASE + tabela + '?' + lote.map((id) => 'records[]=' + id).join('&'),\n      corpo: null,\n    });\n  }\n};\n\n// ---- 1. o cadastro em si ----\nchamadas.push({\n  metodo: 'PATCH',\n  url: BASE + T.entidades,\n  corpo: { typecast: true, records: [{ id: entidadeId, fields: {\n    CPF_CNPJ: texto(b.documento).replace(/\\D/g, ''),\n    Razao_Social_Nome: texto(b.razaoSocial),\n    Nome_Fantasia_Identificador: texto(b.nomeFantasia),\n    Tipo_Documento: lista(b.tipo),\n    Exigencia_Fiscal: lista(b.exigenciaFiscal),\n    Emails_Financeiro_NFE: texto(b.emails),\n    WhatsApp_CNPJ: texto(b.whatsappCnpj),\n    Administradora: texto(b.administradora),\n    Empresa_Sindicos: texto(b.empresaSindicos),\n    Status: lista(b.status) || 'Ativo',\n    Observacoes: texto(b.observacoes),\n  } }] },\n});\n\n// ---- 2. enderecos ----\nconst locais = lerJson(b.locais)\n  .map((l) => ({\n    id: ids(l.id)[0] || null,\n    nome: texto(l.nome), endereco: texto(l.endereco),\n    bairroCidade: texto(l.bairroCidade), acesso: texto(l.acesso),\n    status: lista(l.status) || 'Ativo',\n  }))\n  .filter((l) => l.nome || l.endereco || l.bairroCidade || l.acesso);\n\nconst camposLocal = (l) => ({\n  Nome_do_Local: l.nome || l.endereco || 'Local sem nome',\n  Endereco_Completo: l.endereco,\n  Bairro_Cidade: l.bairroCidade,\n  Observacoes_Acesso: l.acesso,\n  Status: l.status,\n});\n\ngravar(T.locais, locais.filter((l) => l.id).map((l) => ({ id: l.id, fields: camposLocal(l) })), false);\ngravar(T.locais, locais.filter((l) => !l.id).map((l) => ({\n  fields: { ...camposLocal(l), Cliente_Vinculado: [entidadeId] },\n})), true);\napagar(T.locais, ids(b.locaisApagar));\n\n// ---- 3. contatos ----\nconst contatos = lerJson(b.contatos)\n  .map((c) => ({\n    id: ids(c.id)[0] || null,\n    nome: texto(c.nome), cargo: texto(c.cargo),\n    whatsapps: linhas(c.whatsapps), emails: linhas(c.emails),\n    observacoes: texto(c.observacoes),\n    status: lista(c.status) || 'Ativo',\n  }))\n  .filter((c) => c.nome || c.whatsapps.length || c.emails.length || c.observacoes);\n\nconst camposContato = (c) => ({\n  Nome_Contato: c.nome || c.whatsapps[0] || c.emails[0] || 'Contato sem nome',\n  Cargo_Funcao: c.cargo || null,\n  WhatsApps: c.whatsapps.join('\\n'),\n  Emails: c.emails.join('\\n'),\n  Observacoes: c.observacoes,\n  Status: c.status,\n});\n\ngravar(T.contatos, contatos.filter((c) => c.id).map((c) => ({ id: c.id, fields: camposContato(c) })), false);\ngravar(T.contatos, contatos.filter((c) => !c.id).map((c) => ({\n  fields: { ...camposContato(c), Entidades_Vinculadas: [entidadeId] },\n})), true);\n// Contato que também é de outra empresa só sai deste cliente; o resto é apagado.\nconst tirar = separaContatos(ids(b.contatosApagar));\ngravar(T.contatos, tirar.deOutros, false);\napagar(T.contatos, tirar.soDeste);\n\nreturn chamadas.map((c) => ({ json: c }));"
       },
       "id": "a0000000-0000-4000-8000-000000000006",
       "name": "Monta as alteracoes",
@@ -618,6 +618,35 @@
         660,
         -60
       ]
+    },
+    {
+      "id": "ve000000-0000-4000-8000-000000000001",
+      "name": "Busca contatos a tirar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1310,
+        140
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "notes": "Lê os contatos que vão sair deste cliente, para saber se algum também é de outra empresa.",
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "={{ (() => { const ids = String($('Recebe pedido do app').first().json.body.contatosApagar || '').split(',').map((x) => x.trim()).filter((x) => /^rec[A-Za-z0-9]{14}$/.test(x)); return 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblXXOEOCwQnC2qFX?_itens=1&filterByFormula=' + encodeURIComponent(ids.length ? 'OR(' + ids.map((i) => \"RECORD_ID()='\" + i + \"'\").join(',') + ')' : 'FALSE()'); })() }}",
+        "options": {
+          "timeout": 20000
+        }
+      }
     }
   ],
   "connections": {
@@ -712,7 +741,7 @@
         ],
         [
           {
-            "node": "Monta as alteracoes",
+            "node": "Busca contatos a tirar",
             "type": "main",
             "index": 0
           }
@@ -885,6 +914,17 @@
         [
           {
             "node": "Busca duplicado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca contatos a tirar": {
+      "main": [
+        [
+          {
+            "node": "Monta as alteracoes",
             "type": "main",
             "index": 0
           }

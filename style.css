@@ -3155,13 +3155,22 @@ div.lembrete-item:hover {
   }
 }
 
+/* Empresas escolhidas: uma etiqueta por linha, com o "×" de tirar. */
+.ct-empresas-escolhidas {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .ct-empresa-escolhida {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 4px 4px 4px 14px;
-  margin-bottom: 16px;
   border: 1px solid var(--accent);
   border-radius: 10px;
   background: rgba(91, 141, 239, 0.1);

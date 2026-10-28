@@ -4759,3 +4759,28 @@ barra. Para religar, volte a linha `backupDoDia()` em `entrarNoApp` junto com o 
 teste, confere o lado do cliente e o `listar-contatos` antigo, e devolve o backup dos cadastros
 igual ao de antes. No navegador, usuário de teste injetado direto na sessão (sem digitar senha),
 empresa de teste, e tudo apagado no fim, com a contagem das tabelas igual à de antes.
+
+#### Contato com várias empresas (27/10/2026, mesmo dia)
+
+O dono respondeu que uma pessoa pode ser de várias empresas (síndica profissional de vários
+condomínios). Mudou:
+- **Tela:** "Empresas" vira uma lista de etiquetas. Cada escolha entra como etiqueta com "×",
+  e o campo continua aberto para a próxima ("Adicionar outra empresa"). As já escolhidas
+  não aparecem de novo nas sugestões. Na lista aparecem duas empresas e "e mais N".
+- **`App - Contatos`:** recebe `empresaIds` (lista em JSON, até 50, sem repetidas, todas
+  precisam existir). `empresaId` sozinho (o formato da versão 2026.10.27a) continua aceito
+  enquanto algum aparelho ainda estiver com ela.
+- **`App - Atualizar cadastro`:** nó novo `Busca contatos a tirar`. Tirar do cliente um
+  contato que também é de outra empresa **só desfaz o vínculo** com este cliente. O que era
+  só dele continua sendo apagado, como antes.
+- **`App - Excluir cadastro`:** mesma regra, com o nó novo `Busca contatos do cadastro`. O nó
+  `Apaga no Airtable` passou a aceitar `metodo` e `corpo` por item (PATCH para desligar,
+  DELETE para apagar).
+- **Testes:** `banco/testes/testar-contato-varias-empresas.js` (16 ok), com três empresas de
+  teste. O Atualizar cadastro roda numa cópia, com o Asaas simulado. Os testes antigos
+  (`testar-fluxo-contatos` 28, `testar-fluxos-copias` 22, `testar-fluxos-leitura` 24) continuam
+  passando.
+
+**Cadastros repetidos:** do jeito antigo, o mesmo síndico era cadastrado uma vez por
+condomínio. Hoje há três pessoas nessa situação (13, 14 e 9 cadastros cada). Juntar exige a
+autorização do dono e um backup antes. Ver a conversa de 27/10.

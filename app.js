@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.27a";
+const APP_VERSION = "2026.10.27b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -8889,7 +8889,7 @@ const ctFuncao = document.getElementById("ct-funcao");
 const ctFuncaoSugestao = document.getElementById("ct-funcao-sugestao");
 const ctEmpresaBusca = document.getElementById("ct-empresa-busca");
 const ctEmpresaSugestao = document.getElementById("ct-empresa-sugestao");
-const ctEmpresaEscolhida = document.getElementById("ct-empresa-escolhida");
+const ctEmpresasEscolhidas = document.getElementById("ct-empresas-escolhidas");
 const ctEmpresaAjuda = document.getElementById("ct-empresa-ajuda");
 const ctNotas = document.getElementById("ct-notas");
 const ctSalvar = document.getElementById("ct-salvar");
@@ -8905,7 +8905,9 @@ let contatosCadastrados = [];
 let empresasDosContatos = [];
 let contatosCarregados = false;
 let contatoEditandoId = "";
-let ctEmpresaId = "";
+// Uma pessoa pode ser de várias empresas (síndica profissional de vários
+// condomínios, por exemplo).
+let ctEmpresaIds = [];
 let ctEstadoOriginal = "";
 // Telefones/e-mails que o contato já tinha ao abrir: só os novos passam pelo
 // aviso de repetido (a mesma síndica em vários condomínios já é repetida).
@@ -8978,14 +8980,41 @@ function preencherLinhasContato(lista, tipo, valores) {
   itens.forEach((valor) => adicionarLinhaContato(lista, tipo, valor, false));
 }
 
-function escolherEmpresaContato(id) {
-  ctEmpresaId = id && nomeDaEmpresa(id) ? id : "";
-  ctEmpresaEscolhida.querySelector(".ct-empresa-nome").textContent = nomeDaEmpresa(ctEmpresaId);
-  ctEmpresaEscolhida.classList.toggle("hidden", !ctEmpresaId);
-  ctEmpresaBusca.classList.toggle("hidden", Boolean(ctEmpresaId));
-  ctEmpresaAjuda.classList.toggle("hidden", Boolean(ctEmpresaId));
+// Cada empresa escolhida vira uma etiqueta com "×". Empresa que não está mais
+// no cadastro (excluída no meio tempo) sai sozinha.
+function definirEmpresasContato(ids) {
+  ctEmpresaIds = [...new Set(ids || [])].filter((id) => nomeDaEmpresa(id));
+  ctEmpresasEscolhidas.innerHTML = "";
+  ctEmpresaIds.forEach((id) => {
+    const etiqueta = document.createElement("li");
+    etiqueta.className = "ct-empresa-escolhida";
+    const nome = document.createElement("span");
+    nome.className = "ct-empresa-nome";
+    nome.textContent = nomeDaEmpresa(id);
+    const tirar = document.createElement("button");
+    tirar.type = "button";
+    tirar.className = "remover-canal";
+    tirar.textContent = "×";
+    tirar.title = `Tirar ${nomeDaEmpresa(id)}`;
+    tirar.setAttribute("aria-label", tirar.title);
+    tirar.addEventListener("click", () => {
+      definirEmpresasContato(ctEmpresaIds.filter((outro) => outro !== id));
+      // A mudança não passa por um campo de texto: avisa o formulário à mão.
+      formContato.dispatchEvent(new Event("input"));
+      ctEmpresaBusca.focus();
+    });
+    etiqueta.append(nome, tirar);
+    ctEmpresasEscolhidas.appendChild(etiqueta);
+  });
+  ctEmpresasEscolhidas.classList.toggle("hidden", !ctEmpresaIds.length);
+  ctEmpresaAjuda.classList.toggle("hidden", Boolean(ctEmpresaIds.length));
+  ctEmpresaBusca.placeholder = ctEmpresaIds.length ? "Adicionar outra empresa" : "Buscar cliente cadastrado";
   ctEmpresaBusca.value = "";
   ctEmpresaSugestao.classList.add("hidden");
+}
+
+function nomesDasEmpresas(ids) {
+  return (ids || []).map(nomeDaEmpresa).filter(Boolean);
 }
 
 function dadosDoFormContato() {
@@ -8994,7 +9023,7 @@ function dadosDoFormContato() {
     telefones: valoresDosCanais(ctTelefones),
     emails: valoresDosCanais(ctEmails),
     funcao: ctFuncao.value.trim().replace(/\s+/g, " "),
-    empresaId: ctEmpresaId,
+    empresaIds: [...ctEmpresaIds],
     observacoes: ctNotas.value.trim(),
   };
 }
@@ -9022,7 +9051,7 @@ function prepararFormContato(contato) {
   preencherLinhasContato(ctEmails, "email", contato && contato.emails);
   ctFuncao.value = contato ? contato.funcao : "";
   ctFuncaoSugestao.classList.add("hidden");
-  escolherEmpresaContato(contato ? contato.empresaIds[0] : "");
+  definirEmpresasContato(contato ? contato.empresaIds : []);
   ctNotas.value = contato ? contato.observacoes : "";
   ctSalvar.textContent = contato ? "Salvar alterações" : "Salvar contato";
   ctCancelar.classList.toggle("hidden", !contato);
@@ -9065,7 +9094,7 @@ function desenharContatos() {
 
   const visiveis = contatosCadastrados.filter((c) => {
     if (!termo) return true;
-    const texto = normalizarTexto([c.nome, c.funcao, nomeDaEmpresa(c.empresaIds[0]), ...c.emails, c.observacoes].join(" "));
+    const texto = normalizarTexto([c.nome, c.funcao, ...nomesDasEmpresas(c.empresaIds), ...c.emails, c.observacoes].join(" "));
     // Procurar por número ignora a pontuação; com menos de 3 dígitos, "47"
     // casaria com quase todo telefone.
     return texto.includes(termo) || (digitos.length >= 3 && c.telefones.some((t) => t.includes(digitos)));
@@ -9086,8 +9115,10 @@ function desenharContatos() {
   ctLista.innerHTML = "";
   visiveis.forEach((c) => {
     const item = document.createElement("li");
-    const empresa = nomeDaEmpresa(c.empresaIds[0]);
-    const linha1 = [c.funcao, empresa].filter(Boolean).map(escapeHtml).join(" · ");
+    // Com muitas empresas, a linha mostra duas e quantas faltam.
+    const nomes = nomesDasEmpresas(c.empresaIds);
+    const empresas = nomes.length > 2 ? `${nomes.slice(0, 2).join(", ")} e mais ${nomes.length - 2}` : nomes.join(", ");
+    const linha1 = [c.funcao, empresas].filter(Boolean).map(escapeHtml).join(" · ");
     const linha2 = [c.telefones[0] ? formatarTelefone(c.telefones[0]) : "", c.emails[0] || ""].filter(Boolean).map(escapeHtml).join(" · ");
     const inativo = c.status && c.status !== "Ativo" ? ` <span class="contato-item-tag">${escapeHtml(c.status)}</span>` : "";
     item.innerHTML = `<button type="button" class="contato-item${c.id === contatoEditandoId ? " editando" : ""}">
@@ -9115,8 +9146,8 @@ async function carregarContatos() {
     contatosCadastrados = dados.contatos || [];
     empresasDosContatos = dados.empresas || [];
     contatosCarregados = true;
-    // A empresa escolhida pode ter sido excluída no meio tempo.
-    if (ctEmpresaId && !nomeDaEmpresa(ctEmpresaId)) escolherEmpresaContato("");
+    // Alguma empresa escolhida pode ter sido excluída no meio tempo.
+    if (ctEmpresaIds.some((id) => !nomeDaEmpresa(id))) definirEmpresasContato(ctEmpresaIds);
     desenharContatos();
   } catch (err) {
     ctLista.innerHTML = "";
@@ -9209,10 +9240,11 @@ ligarSugestoesContato(ctFuncao, ctFuncaoSugestao, (termo) => {
 
 // Empresa = um cliente já cadastrado (vínculo de verdade, não texto solto).
 // Só sugere depois que começa a digitar: com dezenas de clientes, a lista
-// inteira ao tocar no campo não ajudaria.
+// inteira ao tocar no campo não ajudaria. As já escolhidas não aparecem.
 ligarSugestoesContato(ctEmpresaBusca, ctEmpresaSugestao, (termo) => {
   if (!termo) return [];
   return empresasDosContatos
+    .filter((e) => !ctEmpresaIds.includes(e.id))
     .filter((e) => normalizarTexto(`${e.nomeFantasia} ${e.razaoSocial}`).includes(termo))
     .sort((a, b) => (a.status === "Inativo") - (b.status === "Inativo") || nomeDaEmpresa(a.id).localeCompare(nomeDaEmpresa(b.id), "pt-BR"))
     .map((e) => {
@@ -9221,12 +9253,9 @@ ligarSugestoesContato(ctEmpresaBusca, ctEmpresaSugestao, (termo) => {
       return { rotulo: nome, detalhe, valor: e.id };
     });
 }, (id) => {
-  escolherEmpresaContato(id);
-  ctNotas.focus();
-});
-
-document.getElementById("ct-empresa-tirar").addEventListener("click", () => {
-  escolherEmpresaContato("");
+  definirEmpresasContato([...ctEmpresaIds, id]);
+  formContato.dispatchEvent(new Event("input"));
+  // Fica no campo, pronto para a próxima empresa, se houver.
   ctEmpresaBusca.focus();
 });
 
@@ -9255,7 +9284,7 @@ formContato.addEventListener("submit", async (evento) => {
       id: contatoEditandoId,
       nome: dados.nome,
       funcao: dados.funcao,
-      empresaId: dados.empresaId,
+      empresaIds: JSON.stringify(dados.empresaIds),
       observacoes: dados.observacoes,
       telefones: JSON.stringify(dados.telefones),
       emails: JSON.stringify(dados.emails),
