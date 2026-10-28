@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.28m";
+const APP_VERSION = "2026.10.28n";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -1034,6 +1034,7 @@ function limparFormulario() {
   reiniciarContatos(contatosBox);
   desarmarCancelamento();
   salvarStatus.className = "status";
+  campoAdmNovoCliente.atualizar();
 }
 
 async function consultarDocumento(digitos) {
@@ -1346,7 +1347,7 @@ function ligarSugestaoCampo(input, listaEl, coletaValores) {
 }
 
 ligarSugestaoCampo(emailsInput, document.getElementById("emails-sugestao"), () => valoresDistintosCadastro("emails"));
-ligarSugestaoCampo(administradoraInput, document.getElementById("administradora-sugestao"), () => valoresDistintosCadastro("administradora"));
+// O campo Administradora tem sugestões próprias (ligarCampoAdministradora).
 ligarSugestaoCampo(empresaSindicosInput, document.getElementById("empresa-sindicos-sugestao"), () => valoresDistintosCadastro("empresaSindicos"));
 
 function desenharLista() {
@@ -1526,8 +1527,14 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
     campos.empresaSindicos.value = cadastro.empresaSindicos || "";
     campos.status.value = cadastro.status || "Ativo";
     campos.observacoes.value = cadastro.observacoes;
+    if (campoAdm) campoAdm.atualizar();
   }
+  // Administradora: sugestões do cadastro delas e, embaixo, o nome e os
+  // e-mails da escolhida (aparecem também fora da edição).
+  const campoAdm = ligarCampoAdministradora(campos.administradora, bloco.querySelector(".d-administradora-sugestao"),
+    bloco.querySelector(".adm-cliente-info"), bloco.querySelector(".adm-cliente-pergunta"));
   preencher();
+  if (!cadastroAdministradoras.carregadas()) cadastroAdministradoras.buscar().then(campoAdm.atualizar).catch(() => {});
 
   campos.documento.addEventListener("input", () => {
     const digitos = campos.documento.value.replace(/\D/g, "").slice(0, 14);
@@ -1608,6 +1615,8 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
 
   function modoEdicao(ligado) {
     editaveis.forEach((campo) => (campo.disabled = !ligado));
+    // A pergunta de administradora nova só aparece editando.
+    campoAdm.atualizar();
     botaoEditar.classList.toggle("hidden", ligado);
     botaoSalvar.classList.toggle("hidden", !ligado);
     botaoCancelar.classList.toggle("hidden", !ligado);
@@ -9489,29 +9498,31 @@ async function abrirCadastroContatoSobreposto(nomeDigitado) {
     return null;
   }
   // Os salvos são usados no aviso de telefone/e-mail repetido e nas sugestões.
-  await Promise.all([buscarContatosSalvos(), buscarSindicaturas().catch(() => {})]);
+  await Promise.all([buscarContatosSalvos(), buscarCadastrosDeEmpresas()]);
   prepararFormContato(null);
   ctNome.value = nomeDigitado || "";
   ctEstadoOriginal = fotografiaContato();
   sobrepostoCorpo.appendChild(formContato);
   sobrepostoContato.showModal();
   ctTelefones.querySelector(".canal-valor").focus();
-  return new Promise((resolver) => {
-    aoSalvarNoSobreposto = (contato) => {
-      aoSalvarNoSobreposto = null;
-      if (sobrepostoContato.open) sobrepostoContato.close();
-      resolver(contato);
-    };
-  });
+  return new Promise((resolver) => { aoSalvarNoSobreposto = resolver; });
 }
 
-// Fechar (×, Esc ou depois de salvar): o formulário volta para a tela de contatos.
-sobrepostoContato.addEventListener("close", () => {
-  lugarDoFormContato.pai.insertBefore(formContato, lugarDoFormContato.depois);
-  prepararFormContato(null);
-  if (aoSalvarNoSobreposto) aoSalvarNoSobreposto(null);
-});
-document.getElementById("sobreposto-contato-fechar").addEventListener("click", () => sobrepostoContato.close());
+// Fechar (×, Esc ou depois de salvar): o formulário volta para a tela de
+// contatos. Pode ser chamada mais de uma vez (o evento "close" também chama,
+// no Esc): só a primeira conta.
+function terminarSobrepostoContato(contato) {
+  if (sobrepostoContato.open) sobrepostoContato.close();
+  if (formContato.parentElement !== lugarDoFormContato.pai) {
+    lugarDoFormContato.pai.insertBefore(formContato, lugarDoFormContato.depois);
+    prepararFormContato(null);
+  }
+  const resolver = aoSalvarNoSobreposto;
+  aoSalvarNoSobreposto = null;
+  if (resolver) resolver(contato);
+}
+sobrepostoContato.addEventListener("close", () => terminarSobrepostoContato(null));
+document.getElementById("sobreposto-contato-fechar").addEventListener("click", () => terminarSobrepostoContato(null));
 
 function abrirContatoNoForm(id) {
   const contato = contatosCadastrados.find((c) => c.id === id);
@@ -9669,16 +9680,22 @@ async function excluirEmpresaDosContatos(nome) {
 }
 
 // As sindicaturas cadastradas vêm primeiro, marcadas, com o nome escrito como
-// no cadastro delas (é por ele que a sindicatura acha quem trabalha nela).
-// Depois, as outras empresas já usadas (ex.: uma indústria), com o "×". Nome
-// novo pergunta antes: "é uma sindicatura ou uma empresa comum?".
+// no cadastro delas (é por ele que cada uma acha quem trabalha nela). Depois,
+// as outras empresas já usadas (ex.: uma indústria), com o "×". Nome novo
+// pergunta antes: sindicatura ou empresa comum? (Administradora é do
+// cliente, não do contato.)
 let ctEmpresaPendente = "";
 
-// Nome que ainda não existe em lugar nenhum (nem sindicatura, nem empresa de
+// Cadastros do campo Empresas em que o nome está (hoje só "Sindicatura").
+function tiposDaEmpresa(nome) {
+  return cadastrosDeEmpresas.filter((cad) => cad.comNome(nome)).map((cad) => cad.tipo);
+}
+
+// Nome que ainda não existe em lugar nenhum (nem cadastrado, nem empresa de
 // outro contato, nem já escolhido neste).
 function empresaNova(nome) {
   const chave = normalizarTexto(nome);
-  return Boolean(chave) && !sindicaturaComNome(nome)
+  return Boolean(chave) && !tiposDaEmpresa(nome).length
     && !ctEmpresas.some((n) => normalizarTexto(n) === chave)
     && !contatosCadastrados.some((c) => c.empresas.some((n) => normalizarTexto(n) === chave));
 }
@@ -9700,31 +9717,28 @@ function adicionarEmpresaNoContato(nome) {
 
 ctEmpresaComumBotao.addEventListener("click", () => adicionarEmpresaNoContato(ctEmpresaPendente));
 
-// Sindicatura: cadastra na hora (fluxo "App - Sindicaturas") e entra no
-// contato com o nome do cadastro. Se outro aparelho cadastrou o mesmo nome
-// agora há pouco, usa o que já existe.
-ctEmpresaSindicaturaBotao.addEventListener("click", async () => {
+// Sindicatura: cadastra na hora e entra no contato com o nome do cadastro. Se
+// outro aparelho cadastrou o mesmo nome agora há pouco, usa o que já existe.
+const botoesDaPergunta = [ctEmpresaSindicaturaBotao, ctEmpresaComumBotao];
+async function cadastrarEmpresaComo(cadastro) {
   const nome = ctEmpresaPendente;
-  ctEmpresaSindicaturaBotao.disabled = true;
-  ctEmpresaComumBotao.disabled = true;
+  botoesDaPergunta.forEach((b) => (b.disabled = true));
   try {
-    const resposta = await pedirAoN8n("sindicaturas", { acao: "salvar", nome });
-    const sindicatura = resposta && resposta.sindicatura;
-    if (!sindicatura || (!resposta.ok && !resposta.jaExiste)) {
-      mostrarCtStatus("error", (resposta && resposta.mensagem) || "Não consegui cadastrar a sindicatura.");
+    const r = await cadastro.cadastrar(nome);
+    if (!r.item || (!r.ok && !r.jaExiste)) {
+      mostrarCtStatus("error", r.mensagem);
       return;
     }
-    if (!sindicaturaComNome(sindicatura.nome)) sindicaturas.push({ contatos: [], ...sindicatura });
     mostrarCtStatus("", "");
-    if (resposta.ok) mostrarToast(`Sindicatura "${sindicatura.nome}" cadastrada.`);
-    adicionarEmpresaNoContato(sindicatura.nome);
+    if (r.ok) mostrarToast(`${cadastro.tipo} "${r.item.nome}" cadastrada.`);
+    adicionarEmpresaNoContato(r.item.nome);
   } catch (err) {
     mostrarCtStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
   } finally {
-    ctEmpresaSindicaturaBotao.disabled = false;
-    ctEmpresaComumBotao.disabled = false;
+    botoesDaPergunta.forEach((b) => (b.disabled = false));
   }
-});
+}
+ctEmpresaSindicaturaBotao.addEventListener("click", () => cadastrarEmpresaComo(cadastroSindicaturas));
 
 document.getElementById("ct-empresa-pergunta-fechar").addEventListener("click", () => {
   ctEmpresaPendente = "";
@@ -9741,13 +9755,19 @@ ctEmpresaBusca.addEventListener("input", () => {
 
 ligarSugestoesContato(ctEmpresaBusca, ctEmpresaSugestao, (termo) => {
   const escolhidas = ctEmpresas.map(normalizarTexto);
-  const sinds = sindicaturas
-    .filter((s) => !escolhidas.includes(normalizarTexto(s.nome)) && (!termo || normalizarTexto(s.nome).includes(termo)))
-    .map((s) => ({ rotulo: s.nome, detalhe: "Sindicatura", valor: s.nome }));
+  // Cada nome cadastrado uma vez só, mesmo se estiver em mais de um cadastro.
+  const cadastradas = new Map();
+  cadastrosDeEmpresas.forEach((cad) => cad.lista().forEach((s) => {
+    const chave = normalizarTexto(s.nome);
+    if (escolhidas.includes(chave) || (termo && !chave.includes(termo)) || cadastradas.has(chave)) return;
+    cadastradas.set(chave, { rotulo: s.nome, detalhe: tiposDaEmpresa(s.nome).join(" · "), valor: s.nome });
+  }));
   const outras = valoresJaUsados((c) => c.empresas, termo, { jaEscolhidos: ctEmpresas })
-    .filter((s) => !sindicaturaComNome(s.valor))
+    .filter((s) => !tiposDaEmpresa(s.valor).length)
     .map((s) => ({ ...s, excluir: "Excluir empresa?" }));
-  const usadas = [...sinds, ...outras];
+  const usadas = [...cadastradas.values()]
+    .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR", { sensitivity: "base" }))
+    .concat(outras);
   const digitada = ctEmpresaBusca.value.trim().replace(/\s+/g, " ");
   const jaExiste = usadas.some((s) => normalizarTexto(s.valor) === termo)
     || ctEmpresas.some((nome) => normalizarTexto(nome) === termo);
@@ -9812,7 +9832,7 @@ formContato.addEventListener("submit", async (evento) => {
     mostrarToast(eraEdicao ? "Contato atualizado." : "Contato salvo.");
     // Aberto por cima da tela do cliente: fecha e entrega o contato pra lá.
     if (aoSalvarNoSobreposto) {
-      aoSalvarNoSobreposto(resposta.contato);
+      terminarSobrepostoContato(resposta.contato);
       return;
     }
     prepararFormContato(null);
@@ -9882,200 +9902,365 @@ document.getElementById("ct-atualizar").addEventListener("click", carregarContat
 document.querySelector('.sidebar-item[data-page="contatos"]').addEventListener("click", () => {
   if (!contatosCarregados) carregarContatos();
   // As sugestões do campo Empresas: vêm de novo a cada abertura da tela.
-  buscarSindicaturas().catch(() => {});
+  buscarCadastrosDeEmpresas();
 });
 
-// Campo Empresas usado antes de as sindicaturas chegarem: busca e mostra.
+// Sindicaturas e administradoras (as sugestões do campo Empresas do contato).
+// Falhar aqui só deixa as sugestões sem elas.
+function buscarCadastrosDeEmpresas() {
+  return Promise.all(cadastrosDeEmpresas.map((cad) => cad.buscar().catch(() => {})));
+}
+
+// Campo Empresas usado antes de as listas chegarem: busca e mostra.
 ctEmpresaBusca.addEventListener("focus", () => {
-  if (sindicaturasCarregadas) return;
-  buscarSindicaturas().then(() => {
+  if (cadastrosDeEmpresas.every((cad) => cad.carregadas())) return;
+  buscarCadastrosDeEmpresas().then(() => {
     if (document.activeElement === ctEmpresaBusca) ctEmpresaBusca.dispatchEvent(new Event("input"));
-  }).catch(() => {});
+  });
 });
 
 prepararFormContato(null);
 
-// ----- Sindicaturas -----
+// ----- Sindicaturas e Administradoras -----
 //
-// Empresas de síndicos (fluxo "App - Sindicaturas": listar / salvar). Por
-// enquanto só o nome, sem repetir. Quem trabalha em cada uma é quem tem o
-// mesmo nome no campo Empresas do contato: o servidor junta na hora de listar.
+// Duas telas iguais (fluxos "App - Sindicaturas" e "App - Administradoras":
+// listar / salvar), sem repetir nome. A sindicatura é só o nome, e quem
+// trabalha nela vem do campo Empresas do contato. A administradora tem nome e
+// e-mails, e os clientes dela vêm do campo Administradora do cliente. O
+// servidor junta na hora de listar. `c` traz o que muda de uma tela para a
+// outra (prefixo dos ids, webhook, textos, e-mails, janela por cima).
+function ligarCadastroDeEmpresas(c) {
+  const el = (sufixo) => document.getElementById(`${c.prefixo}-${sufixo}`);
+  const form = el("form");
+  const campoNome = el("nome");
+  const aviso = el("aviso");
+  const salvar = el("salvar");
+  const status = el("status");
+  const busca = el("busca");
+  const listaEl = el("lista");
+  const listaStatus = el("lista-status");
+  const total = el("total");
+  const emailsEl = c.comEmails ? el("emails") : null;
 
-const formSindicatura = document.getElementById("form-sindicatura");
-const sindNome = document.getElementById("sind-nome");
-const sindAviso = document.getElementById("sind-aviso");
-const sindSalvar = document.getElementById("sind-salvar");
-const sindStatus = document.getElementById("sind-status");
-const sindBusca = document.getElementById("sind-busca");
-const sindLista = document.getElementById("sind-lista");
-const sindListaStatus = document.getElementById("sind-lista-status");
-const sindTotal = document.getElementById("sind-total");
+  let itens = [];
+  let carregadas = false;
+  let buscando = null;
 
-let sindicaturas = [];
-let sindicaturasCarregadas = false;
-let buscandoSindicaturas = null;
-
-// Também usada pelo campo Empresas do contato. Dois pedidos juntos viram um.
-function buscarSindicaturas() {
-  if (!buscandoSindicaturas) {
-    buscandoSindicaturas = pedirAoN8n("sindicaturas", { acao: "listar" })
-      .then((dados) => {
-        if (!dados || !dados.ok) return dados;
-        sindicaturas = dados.sindicaturas || [];
-        sindicaturasCarregadas = true;
-        return dados;
-      })
-      .finally(() => { buscandoSindicaturas = null; });
-  }
-  return buscandoSindicaturas;
-}
-
-function sindicaturaComNome(nome) {
-  const chave = normalizarTexto(nome);
-  return chave ? sindicaturas.find((s) => normalizarTexto(s.nome) === chave) : null;
-}
-
-function mostrarSindStatus(tipo, mensagem) {
-  sindStatus.textContent = mensagem;
-  sindStatus.className = mensagem ? `status show ${tipo}` : "status";
-}
-
-// Aviso enquanto digita: o nome já existe (sem diferenciar acento nem maiúscula).
-function avisarSindicaturaRepetida() {
-  const igual = sindicaturaComNome(sindNome.value);
-  sindAviso.textContent = igual ? `Já existe a sindicatura "${igual.nome}".` : "";
-  sindAviso.className = igual ? "doc-hint error" : "doc-hint";
-  return igual;
-}
-
-function desenharSindicaturas() {
-  sindLista.setAttribute("aria-busy", "false");
-  const termo = normalizarTexto(sindBusca.value);
-  const visiveis = sindicaturas.filter((s) => !termo
-    || normalizarTexto([s.nome, ...s.contatos.map((c) => c.nome)].join(" ")).includes(termo));
-
-  sindTotal.textContent = sindicaturas.length ? `(${sindicaturas.length})` : "";
-  if (!sindicaturas.length) {
-    sindListaStatus.textContent = "Nenhuma sindicatura ainda. Cadastre em Adicionar sindicatura.";
-    sindListaStatus.className = "doc-hint neutral";
-  } else if (!visiveis.length) {
-    sindListaStatus.textContent = "Nenhuma sindicatura encontrada com essa busca.";
-    sindListaStatus.className = "doc-hint neutral";
-  } else {
-    sindListaStatus.textContent = "";
-    sindListaStatus.className = "doc-hint";
+  if (emailsEl) {
+    preencherCanais(emailsEl, "email");
+    el("mais-email").addEventListener("click", () => adicionarCanal(emailsEl, "email", true));
   }
 
-  sindLista.innerHTML = "";
-  visiveis.forEach((s) => {
-    const item = document.createElement("li");
-    item.className = "sind-item";
-    const nome = document.createElement("span");
-    nome.className = "sind-item-nome";
-    nome.textContent = s.nome;
-    item.appendChild(nome);
-    if (!s.contatos.length) {
-      const vazio = document.createElement("span");
-      vazio.className = "sind-item-vazio";
-      vazio.textContent = "Nenhum contato trabalha nela ainda. Ela aparece no campo Empresas do Cadastro de contatos.";
-      item.appendChild(vazio);
+  // Também usada pelos campos que escolhem uma delas. Dois pedidos juntos viram um.
+  function buscar() {
+    if (!buscando) {
+      buscando = pedirAoN8n(c.webhook, { acao: "listar" })
+        .then((dados) => {
+          if (!dados || !dados.ok) return dados;
+          itens = dados[c.webhook] || [];
+          carregadas = true;
+          return dados;
+        })
+        .finally(() => { buscando = null; });
+    }
+    return buscando;
+  }
+
+  function comNome(nome) {
+    const chave = normalizarTexto(nome);
+    return chave ? itens.find((s) => normalizarTexto(s.nome) === chave) : null;
+  }
+
+  function guardar(item) {
+    if (comNome(item.nome)) return;
+    itens.push({ [c.vinculos.campo]: [], emails: [], ...item });
+    itens.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
+  }
+
+  function mostrarStatus(tipo, mensagem) {
+    status.textContent = mensagem;
+    status.className = mensagem ? `status show ${tipo}` : "status";
+  }
+
+  // Aviso enquanto digita: o nome já existe (sem diferenciar acento nem maiúscula).
+  function avisarRepetida() {
+    const igual = comNome(campoNome.value);
+    aviso.textContent = igual ? `Já existe a ${c.singular} "${igual.nome}".` : "";
+    aviso.className = igual ? "doc-hint error" : "doc-hint";
+    return igual;
+  }
+
+  function limparForm(nome) {
+    campoNome.value = nome || "";
+    if (emailsEl) preencherCanais(emailsEl, "email");
+    avisarRepetida();
+    mostrarStatus("", "");
+  }
+
+  function desenhar() {
+    listaEl.setAttribute("aria-busy", "false");
+    const termo = normalizarTexto(busca.value);
+    const vinculados = (s) => s[c.vinculos.campo] || [];
+    const visiveis = itens.filter((s) => !termo
+      || normalizarTexto([s.nome, ...(s.emails || []), ...vinculados(s).map((p) => p.nome)].join(" ")).includes(termo));
+
+    total.textContent = itens.length ? `(${itens.length})` : "";
+    if (!itens.length) {
+      listaStatus.textContent = `Nenhuma ${c.singular} ainda. Cadastre em Adicionar ${c.singular}.`;
+      listaStatus.className = "doc-hint neutral";
+    } else if (!visiveis.length) {
+      listaStatus.textContent = `Nenhuma ${c.singular} encontrada com essa busca.`;
+      listaStatus.className = "doc-hint neutral";
     } else {
-      const titulo = document.createElement("span");
-      titulo.className = "sind-item-vazio";
-      titulo.textContent = s.contatos.length === 1 ? "1 contato trabalha nela:" : `${s.contatos.length} contatos trabalham nela:`;
-      const pessoas = document.createElement("ul");
-      pessoas.className = "sind-item-contatos";
-      s.contatos.forEach((c) => {
-        const pessoa = document.createElement("li");
-        pessoa.textContent = c.nome || "Contato sem nome";
-        if (c.funcao) {
-          const funcao = document.createElement("span");
-          funcao.className = "sind-item-funcao";
-          funcao.textContent = ` · ${c.funcao}`;
-          pessoa.appendChild(funcao);
-        }
-        pessoas.appendChild(pessoa);
-      });
-      item.append(titulo, pessoas);
+      listaStatus.textContent = "";
+      listaStatus.className = "doc-hint";
     }
-    sindLista.appendChild(item);
-  });
-}
 
-async function carregarSindicaturas() {
-  sindListaStatus.textContent = "";
-  sindListaStatus.className = "doc-hint";
-  sindLista.setAttribute("aria-busy", "true");
-  sindLista.innerHTML = Array.from({ length: 3 }, () =>
-    `<li class="contato-esqueleto" aria-hidden="true"><span></span><span></span></li>`).join("");
-  try {
-    const dados = await buscarSindicaturas();
-    if (!dados || !dados.ok) {
-      sindLista.innerHTML = "";
-      sindListaStatus.textContent = (dados && dados.mensagem) || "Não consegui carregar as sindicaturas.";
-      sindListaStatus.className = "doc-hint error";
-      return;
-    }
-    desenharSindicaturas();
-    avisarSindicaturaRepetida();
-  } catch (err) {
-    sindLista.innerHTML = "";
-    sindListaStatus.textContent = "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?";
-    sindListaStatus.className = "doc-hint error";
-  }
-}
-
-sindNome.addEventListener("input", () => {
-  avisarSindicaturaRepetida();
-  mostrarSindStatus("", "");
-});
-
-formSindicatura.addEventListener("submit", async (evento) => {
-  evento.preventDefault();
-  const nome = sindNome.value.trim().replace(/\s+/g, " ");
-  if (!nome) {
-    mostrarSindStatus("error", "Escreva o nome da sindicatura.");
-    sindNome.focus();
-    return;
-  }
-  if (avisarSindicaturaRepetida()) {
-    sindNome.focus();
-    return;
-  }
-  sindSalvar.disabled = true;
-  mostrarSindStatus("loading", "Salvando...");
-  try {
-    const resposta = await pedirAoN8n("sindicaturas", { acao: "salvar", nome });
-    if (!resposta || !resposta.ok || !resposta.sindicatura) {
-      // Outro aparelho pode ter cadastrado o mesmo nome agora há pouco.
-      if (resposta && resposta.jaExiste && resposta.sindicatura) {
-        sindicaturas.push({ ...resposta.sindicatura, contatos: [] });
-        avisarSindicaturaRepetida();
+    listaEl.innerHTML = "";
+    visiveis.forEach((s) => {
+      const item = document.createElement("li");
+      item.className = "sind-item";
+      const nome = document.createElement("span");
+      nome.className = "sind-item-nome";
+      nome.textContent = s.nome;
+      item.appendChild(nome);
+      if (c.comEmails) {
+        const emails = document.createElement("span");
+        emails.className = "sind-item-vazio";
+        emails.textContent = s.emails && s.emails.length ? `E-mails: ${s.emails.join(", ")}` : "Nenhum e-mail cadastrado.";
+        item.appendChild(emails);
       }
-      mostrarSindStatus("error", (resposta && resposta.mensagem) || "Não consegui salvar.");
+      const pessoas = vinculados(s);
+      if (!pessoas.length) {
+        const vazio = document.createElement("span");
+        vazio.className = "sind-item-vazio";
+        vazio.textContent = c.vinculos.vazio;
+        item.appendChild(vazio);
+      } else {
+        const titulo = document.createElement("span");
+        titulo.className = "sind-item-vazio";
+        titulo.textContent = c.vinculos.titulo(pessoas.length);
+        const chips = document.createElement("ul");
+        chips.className = "sind-item-contatos";
+        pessoas.forEach((p) => {
+          const chip = document.createElement("li");
+          chip.textContent = p.nome || "Sem nome";
+          if (p.funcao) {
+            const funcao = document.createElement("span");
+            funcao.className = "sind-item-funcao";
+            funcao.textContent = ` · ${p.funcao}`;
+            chip.appendChild(funcao);
+          }
+          chips.appendChild(chip);
+        });
+        item.append(titulo, chips);
+      }
+      listaEl.appendChild(item);
+    });
+  }
+
+  async function carregar() {
+    listaStatus.textContent = "";
+    listaStatus.className = "doc-hint";
+    listaEl.setAttribute("aria-busy", "true");
+    listaEl.innerHTML = Array.from({ length: 3 }, () =>
+      `<li class="contato-esqueleto" aria-hidden="true"><span></span><span></span></li>`).join("");
+    try {
+      const dados = await buscar();
+      if (!dados || !dados.ok) {
+        listaEl.innerHTML = "";
+        listaStatus.textContent = (dados && dados.mensagem) || `Não consegui carregar as ${c.plural}.`;
+        listaStatus.className = "doc-hint error";
+        return;
+      }
+      desenhar();
+      avisarRepetida();
+    } catch (err) {
+      listaEl.innerHTML = "";
+      listaStatus.textContent = "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?";
+      listaStatus.className = "doc-hint error";
+    }
+  }
+
+  // Cadastra um nome (tela própria ou a pergunta de outro campo). Se outro
+  // aparelho cadastrou o mesmo nome agora há pouco, a resposta traz o que já
+  // existe, que também entra na lista.
+  async function cadastrar(nome, emails = []) {
+    const resposta = await pedirAoN8n(c.webhook, { acao: "salvar", nome, emails: JSON.stringify(emails) });
+    const item = resposta && resposta[c.chaveItem];
+    if (item) guardar(item);
+    return { ok: Boolean(resposta && resposta.ok && item), jaExiste: Boolean(resposta && resposta.jaExiste), item,
+      mensagem: (resposta && resposta.mensagem) || "Não consegui salvar." };
+  }
+
+  // Janela por cima (cadastrar sem sair da tela do cliente): o mesmo
+  // formulário vem para dentro dela e volta pro lugar ao fechar. Devolve o
+  // que foi salvo, ou null se fechou sem salvar.
+  const dialogo = c.sobreposto ? document.getElementById(c.sobreposto) : null;
+  const lugarDoForm = { pai: form.parentElement, depois: form.nextSibling };
+  let aoSalvarNoSobreposto = null;
+  function abrirSobreposto(nome) {
+    limparForm(nome);
+    document.getElementById(`${c.sobreposto}-corpo`).appendChild(form);
+    dialogo.showModal();
+    (emailsEl ? emailsEl.querySelector(".canal-valor") : campoNome).focus();
+    return new Promise((resolver) => { aoSalvarNoSobreposto = resolver; });
+  }
+  // Fecha, devolve o formulário e entrega o resultado. Pode ser chamada mais
+  // de uma vez (o evento "close" também chama, no Esc): só a primeira conta.
+  function terminarSobreposto(item) {
+    if (dialogo.open) dialogo.close();
+    if (form.parentElement !== lugarDoForm.pai) {
+      lugarDoForm.pai.insertBefore(form, lugarDoForm.depois);
+      limparForm("");
+    }
+    const resolver = aoSalvarNoSobreposto;
+    aoSalvarNoSobreposto = null;
+    if (resolver) resolver(item);
+  }
+  if (dialogo) {
+    dialogo.addEventListener("close", () => terminarSobreposto(null));
+    document.getElementById(`${c.sobreposto}-fechar`).addEventListener("click", () => terminarSobreposto(null));
+  }
+
+  campoNome.addEventListener("input", () => {
+    avisarRepetida();
+    mostrarStatus("", "");
+  });
+
+  form.addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    const nome = campoNome.value.trim().replace(/\s+/g, " ");
+    if (!nome) {
+      mostrarStatus("error", `Escreva o nome da ${c.singular}.`);
+      campoNome.focus();
       return;
     }
-    sindicaturas.push(resposta.sindicatura);
-    sindicaturas.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
-    desenharSindicaturas();
-    sindNome.value = "";
-    sindAviso.textContent = "";
-    mostrarSindStatus("", "");
-    mostrarToast(`Sindicatura "${resposta.sindicatura.nome}" salva.`);
-    sindNome.focus();
-  } catch (err) {
-    mostrarSindStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
-  } finally {
-    sindSalvar.disabled = false;
-  }
-});
+    if (avisarRepetida()) {
+      campoNome.focus();
+      return;
+    }
+    salvar.disabled = true;
+    mostrarStatus("loading", "Salvando...");
+    try {
+      const r = await cadastrar(nome, emailsEl ? valoresDosCanais(emailsEl) : []);
+      if (!r.ok) {
+        if (r.jaExiste) avisarRepetida();
+        mostrarStatus("error", r.mensagem);
+        return;
+      }
+      desenhar();
+      mostrarToast(`${c.Singular} "${r.item.nome}" salva.`);
+      if (aoSalvarNoSobreposto) {
+        terminarSobreposto(r.item);
+        return;
+      }
+      limparForm("");
+      campoNome.focus();
+    } catch (err) {
+      mostrarStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+    } finally {
+      salvar.disabled = false;
+    }
+  });
 
-sindBusca.addEventListener("input", desenharSindicaturas);
-document.getElementById("sind-atualizar").addEventListener("click", carregarSindicaturas);
-// A lista sempre vem de novo ao abrir: os contatos de cada uma mudam pelo
-// Cadastro de contatos, noutra tela.
-document.querySelector('.sidebar-item[data-page="sindicatura"]').addEventListener("click", carregarSindicaturas);
-document.querySelector('[data-subpage="sind-consultar"]').addEventListener("click", carregarSindicaturas);
+  busca.addEventListener("input", desenhar);
+  el("atualizar").addEventListener("click", carregar);
+  // A lista sempre vem de novo ao abrir: quem é de cada uma muda por outras telas.
+  document.querySelector(`.sidebar-item[data-page="${c.pagina}"]`).addEventListener("click", carregar);
+  document.querySelector(`[data-subpage="${c.prefixo}-consultar"]`).addEventListener("click", carregar);
+
+  return {
+    tipo: c.Singular,
+    buscar,
+    comNome,
+    cadastrar,
+    abrirSobreposto,
+    lista: () => itens,
+    carregadas: () => carregadas,
+  };
+}
+
+const cadastroSindicaturas = ligarCadastroDeEmpresas({
+  prefixo: "sind", pagina: "sindicatura", webhook: "sindicaturas", chaveItem: "sindicatura",
+  singular: "sindicatura", Singular: "Sindicatura", plural: "sindicaturas",
+  vinculos: {
+    campo: "contatos",
+    titulo: (n) => (n === 1 ? "1 contato trabalha nela:" : `${n} contatos trabalham nela:`),
+    vazio: "Nenhum contato trabalha nela ainda. Ela aparece no campo Empresas do Cadastro de contatos.",
+  },
+});
+const cadastroAdministradoras = ligarCadastroDeEmpresas({
+  prefixo: "adm", pagina: "administradoras", webhook: "administradoras", chaveItem: "administradora",
+  singular: "administradora", Singular: "Administradora", plural: "administradoras",
+  comEmails: true, sobreposto: "sobreposto-administradora",
+  vinculos: {
+    campo: "clientes",
+    titulo: (n) => (n === 1 ? "1 cliente usa esta administradora:" : `${n} clientes usam esta administradora:`),
+    vazio: "Nenhum cliente usa esta administradora ainda. Ela aparece no campo Administradora do Cadastro de clientes.",
+  },
+});
+// O campo Empresas do contato usa só as sindicaturas: as administradoras são
+// dos clientes (campo Administradora do cliente).
+const cadastrosDeEmpresas = [cadastroSindicaturas];
+
+// Campo Administradora do cliente (cadastro novo e edição): sugere as
+// administradoras cadastradas, mostra embaixo o nome e os e-mails da escolhida
+// e, para nome novo, pergunta "Cadastrar nova administradora?" (abre o
+// cadastro dela por cima e, salvo, já põe o nome no campo).
+function ligarCampoAdministradora(input, listaEl, info, pergunta) {
+  let perguntaFechada = false;
+
+  function atualizar() {
+    const adm = cadastroAdministradoras.comNome(input.value);
+    info.textContent = !adm ? ""
+      : adm.emails.length ? `${adm.nome} · e-mails: ${adm.emails.join(", ")}` : `${adm.nome} · nenhum e-mail cadastrado.`;
+    info.classList.toggle("hidden", !adm);
+    const novo = Boolean(normalizarTexto(input.value)) && !adm && cadastroAdministradoras.carregadas();
+    pergunta.classList.toggle("hidden", perguntaFechada || input.disabled || !novo);
+  }
+
+  ligarSugestoesContato(input, listaEl, (termo) => cadastroAdministradoras.lista()
+    .filter((a) => !termo || normalizarTexto(a.nome).includes(termo))
+    .map((a) => ({ rotulo: a.nome, detalhe: a.emails.join(" · "), valor: a.nome })), (nome) => {
+    input.value = nome;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  input.addEventListener("focus", () => {
+    if (cadastroAdministradoras.carregadas()) return;
+    cadastroAdministradoras.buscar().then(() => {
+      if (document.activeElement === input) input.dispatchEvent(new Event("input"));
+      atualizar();
+    }).catch(() => {});
+  });
+  input.addEventListener("input", () => {
+    perguntaFechada = false;
+    atualizar();
+  });
+
+  pergunta.querySelector(".contato-novo-fechar").addEventListener("click", () => {
+    perguntaFechada = true;
+    pergunta.classList.add("hidden");
+  });
+  pergunta.querySelector(".contato-novo-sim").addEventListener("click", async () => {
+    const adm = await cadastroAdministradoras.abrirSobreposto(input.value.trim());
+    if (adm) {
+      input.value = adm.nome;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  });
+
+  return { atualizar };
+}
+
+// Cadastro novo de cliente: o campo Administradora do formulário de Adicionar.
+const campoAdmNovoCliente = ligarCampoAdministradora(
+  administradoraInput,
+  document.getElementById("administradora-sugestao"),
+  administradoraInput.parentElement.querySelector(".adm-cliente-info"),
+  administradoraInput.parentElement.querySelector(".adm-cliente-pergunta"),
+);
 
 // ----- Documentos (PDF) -----
 //

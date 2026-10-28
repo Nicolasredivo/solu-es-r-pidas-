@@ -41,8 +41,8 @@ const BASES = {
     Entidades_Cadastradas: 'tbl5Joji6gAir3mNh', Locais_Atendimento: 'tblffVczCf1VeNxs7',
     Contatos_Solicitantes: 'tblXXOEOCwQnC2qFX', Chamados: 'tbltipxOIw8F96QHO', Usuarios: 'tblucYjrD3SKf1azh',
     Sessoes: 'tblYDslwEMH6tKfzL', Visitas: 'tblmeNdVfOE9AYptk',
-    // Tabela nova (28/10/2026), sem par no Airtable: o código foi escolhido aqui.
-    Sindicaturas: 'tblSindicatura001',
+    // Tabelas novas (28/10/2026), sem par no Airtable: os códigos foram escolhidos aqui.
+    Sindicaturas: 'tblSindicatura001', Administradoras: 'tblAdministrad001',
   },
   appjAmWXV7Zr33UqE: {
     Despesas: 'tblNduEKl2jY280V0', Fornecedores: 'tblhsabIIg8SLqMMj', Recorrentes: 'tblb8QplhcGRP6SZ7',
@@ -618,7 +618,7 @@ function servirAnexo(res, attId) {
 // única cópia. Se a leitura do banco falhar, o arquivo anterior fica como está.
 
 const ARQ_BACKUP_CADASTROS = 'C:/Users/rediv/banco-solucoes/backup-cadastros.json';
-const TABELAS_CADASTRO = ['Entidades_Cadastradas', 'Locais_Atendimento', 'Contatos_Solicitantes', 'Sindicaturas'];
+const TABELAS_CADASTRO = ['Entidades_Cadastradas', 'Locais_Atendimento', 'Contatos_Solicitantes', 'Sindicaturas', 'Administradoras'];
 
 async function backupCadastros() {
   const atuais = {};
@@ -655,7 +655,7 @@ async function backupCadastros() {
   return {
     ok: true, arquivo: ARQ_BACKUP_CADASTROS, feito_em: agora,
     clientes: atuais.Entidades_Cadastradas.length, locais: atuais.Locais_Atendimento.length, contatos: atuais.Contatos_Solicitantes.length,
-    sindicaturas: atuais.Sindicaturas.length,
+    sindicaturas: atuais.Sindicaturas.length, administradoras: atuais.Administradoras.length,
     apagados_guardados: TABELAS_CADASTRO.reduce((s, t) => s + apagados[t].length, 0),
   };
 }

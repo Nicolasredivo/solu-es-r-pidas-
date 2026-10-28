@@ -266,6 +266,14 @@
             <label for="administradora">Administradora</label>
             <input type="text" id="administradora" autocomplete="off" />
             <div id="administradora-sugestao" class="sugestao-lista hidden"></div>
+            <!-- Nome e e-mails da administradora escolhida (do Cadastro de administradoras),
+                 e a pergunta para nome que ainda não está cadastrado. -->
+            <p class="adm-cliente-info doc-hint hidden"></p>
+            <div class="contato-novo-pergunta adm-cliente-pergunta hidden">
+              <span>Cadastrar nova administradora?</span>
+              <button type="button" class="contato-novo-sim">Sim</button>
+              <button type="button" class="contato-novo-fechar" aria-label="Fechar a pergunta">×</button>
+            </div>
 
             <label for="empresa-sindicos">Empresa de síndicos</label>
             <input type="text" id="empresa-sindicos" placeholder="Opcional" autocomplete="off" />
@@ -506,7 +514,14 @@
               <input type="text" class="d-whatsapp-cnpj" disabled />
 
               <label>Administradora</label>
-              <input type="text" class="d-administradora" disabled />
+              <input type="text" class="d-administradora" disabled autocomplete="off" />
+              <div class="sugestao-lista hidden d-administradora-sugestao"></div>
+              <p class="adm-cliente-info doc-hint hidden"></p>
+              <div class="contato-novo-pergunta adm-cliente-pergunta hidden">
+                <span>Cadastrar nova administradora?</span>
+                <button type="button" class="contato-novo-sim">Sim</button>
+                <button type="button" class="contato-novo-fechar" aria-label="Fechar a pergunta">×</button>
+              </div>
 
               <label>Empresa de síndicos</label>
               <input type="text" class="d-empresa-sindicos" disabled />
@@ -550,10 +565,42 @@
         </div>
       </div>
 
-      <!-- Cadastro de administradoras: só o título por enquanto (pedido do dono,
-           28/10/2026); o conteúdo vem depois. -->
+      <!-- Cadastro de administradoras: nome e e-mails. Os clientes de cada uma
+           vêm do campo Administradora do cliente. Fluxo "App - Administradoras":
+           listar / salvar. -->
       <div id="page-administradoras" class="card page hidden">
         <h1>Cadastro de administradoras</h1>
+
+        <div class="subtabs">
+          <button type="button" class="subtab active" data-subpage="adm-adicionar">Adicionar administradora</button>
+          <button type="button" class="subtab" data-subpage="adm-consultar">Consultar administradoras</button>
+        </div>
+
+        <div id="subpage-adm-adicionar" class="subpage">
+          <form id="adm-form" novalidate autocomplete="off">
+            <label for="adm-nome">Nome da administradora</label>
+            <input type="text" id="adm-nome" maxlength="120" placeholder="Ex: Administradora Exemplo Ltda" />
+            <p id="adm-aviso" class="doc-hint" role="status"></p>
+
+            <label>E-mails</label>
+            <!-- Mesma lista dos e-mails dos contatos do cliente: aviso de e-mail com jeito de errado. -->
+            <div id="adm-emails" class="contato-emails"></div>
+            <button type="button" id="adm-mais-email" class="link-button">+ Adicionar e-mail</button>
+            <button type="submit" id="adm-salvar">Salvar administradora</button>
+            <div id="adm-status" class="status" role="status"></div>
+          </form>
+        </div>
+
+        <div id="subpage-adm-consultar" class="subpage hidden">
+          <div class="contatos-lista-topo">
+            <h2 class="contatos-secao-titulo">Administradoras <span id="adm-total" class="contatos-total"></span></h2>
+            <button type="button" id="adm-atualizar" class="botao-secundario" title="Busca a lista de novo no servidor.">Atualizar</button>
+          </div>
+          <input type="text" id="adm-busca" autocomplete="off" aria-label="Buscar administradora"
+                 placeholder="Buscar pelo nome da administradora, e-mail ou cliente" />
+          <p id="adm-lista-status" class="doc-hint"></p>
+          <ul id="adm-lista" class="contatos-lista" aria-live="polite"></ul>
+        </div>
       </div>
 
       <!-- Cadastro de sindicatura (empresas de síndicos): só o nome. Quem
@@ -568,7 +615,7 @@
         </div>
 
         <div id="subpage-sind-adicionar" class="subpage">
-          <form id="form-sindicatura" novalidate autocomplete="off">
+          <form id="sind-form" novalidate autocomplete="off">
             <label for="sind-nome">Nome da sindicatura</label>
             <input type="text" id="sind-nome" maxlength="120" placeholder="Ex: Síndicos Exemplo Ltda" />
             <p id="sind-aviso" class="doc-hint" role="status"></p>
@@ -1937,6 +1984,16 @@
       <button type="button" id="sobreposto-contato-fechar" class="dialogo-fechar" aria-label="Fechar sem salvar">×</button>
     </div>
     <div id="sobreposto-contato-corpo"></div>
+  </dialog>
+
+  <!-- Nova administradora por cima da tela do cliente: o formulário é o mesmo
+       da tela de administradoras (#adm-form), trazido para cá e devolvido ao fechar. -->
+  <dialog id="sobreposto-administradora" class="dialogo dialogo-contato" aria-labelledby="sobreposto-administradora-titulo">
+    <div class="dialogo-contato-topo">
+      <h2 id="sobreposto-administradora-titulo" class="dialogo-titulo">Nova administradora</h2>
+      <button type="button" id="sobreposto-administradora-fechar" class="dialogo-fechar" aria-label="Fechar sem salvar">×</button>
+    </div>
+    <div id="sobreposto-administradora-corpo"></div>
   </dialog>
 
   <div id="toast" class="toast" aria-live="polite"></div>

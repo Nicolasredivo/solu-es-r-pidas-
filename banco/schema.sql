@@ -75,6 +75,16 @@ create table "Sindicaturas" (
   "Criado_Em" timestamptz not null default now()
 );
 
+-- Administradoras de condomínio, 28/10/2026: nome e e-mails. Ficam ligadas aos CLIENTES (não aos
+-- contatos), pelo mesmo nome em Entidades_Cadastradas."Administradora" (sem diferenciar
+-- acento, maiúscula nem pontuação).
+create table "Administradoras" (
+  id text primary key default novo_id(),
+  "Nome" text not null,
+  "Emails" text,                     -- um por linha
+  "Criado_Em" timestamptz not null default now()
+);
+
 create table "Chamados" (
   id text primary key default novo_id(),
   "Numero_Chamado" integer unique,

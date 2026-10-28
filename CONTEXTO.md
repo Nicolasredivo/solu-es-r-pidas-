@@ -4943,6 +4943,49 @@ empresas do campo Empresas do contato.
     (`App - Sindicaturas` salvar; se já existir, usa a que existe) e entra no contato com o nome
     do cadastro. Salvar o contato com um nome novo ainda escrito no campo mostra a mesma
     pergunta antes de gravar. O código é `perguntarTipoEmpresa` / `empresaNova`.
+
+#### Cadastro de administradoras: Adicionar / Consultar (28/10/2026)
+
+**Pedido do dono:** os mesmos passos e as mesmas regras da sindicatura, dentro do Cadastro de
+administradoras.
+- **Resposta do dono:** a empresa que já estava cadastrada como sindicatura e é uma
+  administradora (o "ADM" está no nome) **saiu das sindicaturas e virou administradora**. O
+  contato dela não mudou.
+- **Banco:** tabela `"Administradoras"` igual à `"Sindicaturas"`. No Airtable local ela é
+  `tblAdministrad001` e entra no backup dos cadastros.
+- **`App - Administradoras`** (webhook `administradoras`, id `nt8yPSHcISDeFcWn`) é uma cópia do
+  de sindicaturas: `listar` devolve `administradoras`, e `salvar` devolve `administradora` ou
+  `jaExiste`.
+- **Tela:** o código das duas telas virou uma peça só, `ligarCadastroDeEmpresas(c)` (ids com
+  prefixo `sind-` / `adm-`), e devolve `cadastroSindicaturas` / `cadastroAdministradoras`. O
+  campo Empresas do contato usa as duas listas: sugestões marcadas "Sindicatura" /
+  "Administradora". A pergunta do nome novo agora tem **três** opções: Sindicatura,
+  Administradora ou Empresa comum.
+- **Testes:** `testar-fluxo-sindicaturas.js` agora testa os dois fluxos.
+
+**Mudança do dono no mesmo dia: administradora é do CLIENTE, não do contato.**
+- O campo Empresas do contato voltou a ter só sindicaturas e outras empresas. A pergunta do
+  nome novo voltou a ter duas opções (Sindicatura / Empresa comum).
+- **Administradora tem nome + e-mails** (coluna nova `"Emails"`, um por linha). O "+ Adicionar
+  e-mail" usa a mesma lista dos e-mails dos contatos do cliente, com o aviso de e-mail com
+  jeito de errado.
+- **Ligação:** pelo nome no campo `Entidades_Cadastradas."Administradora"`, que já existia como
+  texto livre. Consultar administradoras mostra os e-mails e os **clientes** de cada uma. O
+  fluxo troca "Busca contatos" por "Busca clientes".
+- **Dados já existentes (autorizado pelo dono, backup antes em
+  `banco-solucoes\backups\solucoes-2026-10-28-antes-administradoras.dump`):** as grafias
+  repetidas do campo Administradora dos clientes foram juntadas, viraram 7 administradoras
+  novas (mais a que já existia), e o texto dos clientes foi trocado pelo nome cadastrado (37
+  clientes). Dois valores que eram nomes de pessoa (5 clientes) foram **apagados** do campo, a
+  pedido do dono.
+- **Campo Administradora do cliente** (`ligarCampoAdministradora`, no Adicionar e na edição):
+  sugere as administradoras cadastradas (com os e-mails) e mostra embaixo "Nome · e-mails: …".
+  Na edição isso aparece também fora do modo de editar. Nome novo pergunta "Cadastrar nova
+  administradora?". O Sim abre por cima o mesmo formulário da tela de administradoras
+  (`<dialog id="sobreposto-administradora">`) e, depois de salvar, põe o nome no campo.
+- **Janelas por cima (contato e administradora):** fechar e devolver o formulário agora é feito
+  direto (`terminarSobreposto…`), e não só pelo evento `close` do `<dialog>`, que no painel de
+  testes às vezes não chegava. O evento continua cobrindo o Esc.
 - **Atalho do servidor:** o `ligar-banco.ps1` agora **sempre reinicia** o Airtable local. Antes,
   reabrir o atalho deixava rodando o processo antigo (escondido), que não via a tabela nova.
 - **Testes:** `testar-fluxo-sindicaturas.js` (16). `comum.js` passou a contar `Sindicaturas`.
