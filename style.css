@@ -103,8 +103,8 @@ body {
   color: var(--accent);
 }
 
-/* Grupo "Chamados": não tem página própria (só abre/fecha os dois itens de
-   baixo), então o cabeçalho nunca ganha .active -- em vez disso acende
+/* Grupos do menu (Cadastro, Chamados): não têm página própria (só abrem/
+   fecham os itens de baixo), então o cabeçalho nunca ganha .active -- em vez disso acende
    sozinho quando um dos itens dentro dele está na tela (:has, suportado nos
    navegadores que o app roda). */
 .sidebar-grupo-cabecalho {
@@ -3114,3 +3114,215 @@ div.lembrete-item:hover {
   cursor: pointer;
 }
 .alerta-horario-combinado-fechar { opacity: 0.85; }
+
+/* ----- Cadastro de contatos -----
+   Celular: formulário em cima, lista embaixo. Computador largo: lado a lado,
+   com o formulário parado no alto enquanto a lista rola. Espaços em
+   múltiplos de 4px, cores só pelas variáveis do :root. */
+.contatos-layout {
+  display: grid;
+  gap: 32px;
+  margin-top: 16px;
+}
+
+.contatos-secao-titulo {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 16px;
+}
+
+.contatos-total {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.ct-ajuda {
+  margin: -8px 0 16px;
+  font-size: 0.8rem;
+}
+
+/* O "+" do e-mail tem o mesmo tamanho do "×", mas na cor de ação. */
+.remover-canal.ct-mais {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .remover-canal.ct-mais:hover {
+    background: rgba(91, 141, 239, 0.12);
+    filter: none;
+  }
+}
+
+.ct-empresa-escolhida {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 4px 4px 14px;
+  margin-bottom: 16px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: rgba(91, 141, 239, 0.1);
+}
+
+.ct-empresa-nome {
+  overflow-wrap: anywhere;
+}
+
+.ct-empresa-escolhida .remover-canal {
+  border-color: transparent;
+}
+
+.ct-acoes-edicao {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ct-acoes-edicao button {
+  flex: 1;
+}
+
+/* Linha de baixo de uma sugestão (razão social, "inativo"). */
+.sugestao-detalhe {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.contatos-lista-topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.contatos-lista-topo .contatos-secao-titulo {
+  margin-bottom: 12px;
+}
+
+.contatos-lista-topo button {
+  width: auto;
+  padding: 8px 12px;
+}
+
+.contatos-lista {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contato-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  text-align: left;
+  background: #12162a;
+  border: 1px solid #2c3153;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.contato-item.editando {
+  border-color: var(--accent);
+  background: rgba(91, 141, 239, 0.1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .contato-item:not(:disabled):hover {
+    border-color: var(--accent);
+    filter: none;
+  }
+}
+
+.contato-item-nome {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.contato-item-linha {
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.contato-item-tag {
+  margin-left: 4px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(154, 160, 180, 0.15);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Esqueleto enquanto a lista carrega: o lugar dos contatos já aparece, sem
+   a tela "pular" quando eles chegam. */
+.contato-esqueleto {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+}
+
+.contato-esqueleto span {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #1f2440 25%, #2c3256 50%, #1f2440 75%);
+  background-size: 300% 100%;
+  animation: contato-esqueleto 1.4s ease-in-out infinite;
+}
+
+.contato-esqueleto span:first-child {
+  width: 55%;
+}
+
+.contato-esqueleto span:last-child {
+  width: 80%;
+}
+
+@keyframes contato-esqueleto {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .contato-esqueleto span {
+    animation: none;
+  }
+}
+
+@media (min-width: 1100px) {
+  #page-contatos {
+    max-width: 1100px;
+  }
+
+  .contatos-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 40px;
+  }
+
+  /* Parado logo abaixo da barra do topo (que também é fixa). */
+  .contatos-layout > .contatos-secao:first-child {
+    position: sticky;
+    top: 80px;
+  }
+}
+
+/* Listas de telefone/e-mail: cada linha já tem 8px embaixo; mais 8px aqui
+   fecham os 16px de distância de qualquer campo até o próximo rótulo. */
+.contatos-secao .contato-whatsapps,
+.contatos-secao .contato-emails {
+  margin-bottom: 8px;
+}

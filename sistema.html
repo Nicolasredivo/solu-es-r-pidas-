@@ -72,14 +72,23 @@
 
     <nav id="sidebar" class="sidebar">
       <button type="button" class="sidebar-item active" data-page="inicio">Início</button>
-      <button type="button" class="sidebar-item" data-page="cadastro">Cadastro</button>
+      <div class="sidebar-grupo">
+        <button type="button" class="sidebar-item sidebar-grupo-cabecalho" aria-expanded="false">
+          <span>Cadastro</span>
+          <span class="sidebar-grupo-mais" aria-hidden="true">+</span>
+        </button>
+        <div class="sidebar-grupo-itens hidden">
+          <button type="button" class="sidebar-item sidebar-subitem" data-page="contatos">Cadastro de contatos</button>
+          <button type="button" class="sidebar-item sidebar-subitem" data-page="cadastro">Cadastro de clientes</button>
+        </div>
+      </div>
       <button type="button" class="sidebar-item" data-page="financeiro">Financeiro</button>
       <div class="sidebar-grupo">
-        <button type="button" class="sidebar-item sidebar-grupo-cabecalho" id="chamados-grupo-botao" aria-expanded="false">
+        <button type="button" class="sidebar-item sidebar-grupo-cabecalho" aria-expanded="false">
           <span>Chamados</span>
           <span class="sidebar-grupo-mais" aria-hidden="true">+</span>
         </button>
-        <div id="chamados-grupo-itens" class="sidebar-grupo-itens hidden">
+        <div class="sidebar-grupo-itens hidden">
           <button type="button" class="sidebar-item sidebar-subitem" data-page="chamados">Criar chamado</button>
           <button type="button" class="sidebar-item sidebar-subitem" data-page="consultar-chamados">Consultar chamados</button>
         </div>
@@ -102,8 +111,70 @@
         <p class="placeholder-text">Em breve, mais opções aparecem aqui.</p>
       </div>
 
+      <!-- Cadastro de contatos: pessoas (síndico, zelador, gerente...), com ou
+           sem empresa. Grava em Contatos_Solicitantes pelo fluxo "App -
+           Contatos" -- a mesma tabela dos contatos do Cadastro de clientes,
+           então quem tem empresa aparece lá e no Criar chamado também. -->
+      <div id="page-contatos" class="card page hidden">
+        <h1>Cadastro de contatos</h1>
+
+        <div class="contatos-layout">
+          <section class="contatos-secao" aria-labelledby="ct-form-titulo">
+            <h2 id="ct-form-titulo" class="contatos-secao-titulo">Novo contato</h2>
+
+            <form id="form-contato" novalidate autocomplete="off">
+              <label for="ct-nome">Nome</label>
+              <input type="text" id="ct-nome" maxlength="120" required />
+
+              <label for="ct-telefone-0">Telefone</label>
+              <!-- Mesmas classes das listas do Cadastro de clientes: o telefone
+                   ganha a mesma máscara (+55, DDD) e os dois o mesmo aviso de
+                   valor com jeito de errado, sem código repetido. -->
+              <div id="ct-telefones" class="contato-whatsapps"></div>
+
+              <label for="ct-email-0">E-mail</label>
+              <div id="ct-emails" class="contato-emails"></div>
+
+              <label for="ct-funcao">Função</label>
+              <input type="text" id="ct-funcao" maxlength="60" placeholder="Ex: Síndico, Zelador, Gerente" />
+              <div id="ct-funcao-sugestao" class="sugestao-lista hidden"></div>
+
+              <label for="ct-empresa-busca">Empresa</label>
+              <div id="ct-empresa-escolhida" class="ct-empresa-escolhida hidden">
+                <span class="ct-empresa-nome"></span>
+                <button type="button" id="ct-empresa-tirar" class="remover-canal" aria-label="Tirar a empresa">×</button>
+              </div>
+              <input type="text" id="ct-empresa-busca" placeholder="Buscar cliente cadastrado" />
+              <div id="ct-empresa-sugestao" class="sugestao-lista hidden"></div>
+              <p id="ct-empresa-ajuda" class="placeholder-text ct-ajuda">Opcional. Deixe em branco se a pessoa não for de nenhuma empresa.</p>
+
+              <label for="ct-notas">Notas</label>
+              <textarea id="ct-notas" rows="3" maxlength="2000" placeholder="Qualquer coisa que valha lembrar sobre a pessoa"></textarea>
+
+              <button type="submit" id="ct-salvar">Salvar contato</button>
+              <div class="ct-acoes-edicao">
+                <button type="button" id="ct-cancelar" class="botao-secundario hidden">Cancelar edição</button>
+                <button type="button" id="ct-excluir" class="botao-secundario botao-perigo hidden">Excluir contato</button>
+              </div>
+              <div id="ct-status" class="status" role="status"></div>
+            </form>
+          </section>
+
+          <section class="contatos-secao" aria-labelledby="ct-lista-titulo">
+            <div class="contatos-lista-topo">
+              <h2 id="ct-lista-titulo" class="contatos-secao-titulo">Contatos <span id="ct-total" class="contatos-total"></span></h2>
+              <button type="button" id="ct-atualizar" class="botao-secundario" title="Busca a lista de novo no servidor.">Atualizar</button>
+            </div>
+            <input type="text" id="ct-busca" autocomplete="off" aria-label="Buscar contato"
+                   placeholder="Buscar por nome, função, empresa, telefone ou e-mail" />
+            <p id="ct-lista-status" class="doc-hint"></p>
+            <ul id="ct-lista" class="contatos-lista" aria-live="polite"></ul>
+          </section>
+        </div>
+      </div>
+
       <div id="page-cadastro" class="card page hidden">
-        <h1>Cadastro</h1>
+        <h1>Cadastro de clientes</h1>
 
         <div class="subtabs">
           <button type="button" class="subtab active" data-subpage="adicionar">Adicionar</button>

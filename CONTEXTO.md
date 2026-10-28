@@ -161,6 +161,7 @@ Todos criados, publicados e testados de ponta a ponta:
 | `App - Pagar fatura do cartao por boleto` | `/webhook/pagar-fatura-boleto` | `FayraViYiF44HN6p` |
 | `App - Confirmar fatura paga` | `/webhook/confirmar-fatura` | `D5VnSvfkddLSxhNL` |
 | `App - Anexo` (27/10/2026, sem senha: o código do anexo é a chave) | `/webhook/anexo?id=att...` | `hR3mriNGyScrMXUY` |
+| `App - Contatos` (27/10/2026: listar / salvar / excluir) | `/webhook/contatos` | `E5iBUS3bqsfjm4R2` |
 
 Cada arquivo em `n8n/` tem o nome do caminho do webhook correspondente.
 
@@ -4696,3 +4697,65 @@ O dono pediu que só ele e eu tenhamos acesso, sem brecha fácil. O que foi conf
 - **Ainda vale lembrar:** o repositório público mostra a arquitetura (portas, nomes de arquivo,
   ids dos fluxos), mas nenhum valor secreto. Para usar qualquer coisa disso, a pessoa precisaria
   estar dentro do PC.
+### Menu Cadastro em grupo + Cadastro de contatos (27/10/2026)
+
+**Pedido do dono:** Cadastro no menu vira uma lista igual à de Chamados. O primeiro item é
+"Cadastro de contatos", uma tela nova para cadastrar a pessoa com: nome, telefone (regra do DDD
+já combinada), e-mail com "+" ao lado para quantos quiser, função escrita à mão, mas com toda
+função já salva virando sugestão nos próximos cadastros (um clique), empresa (pode não ser de
+nenhuma) e notas. Ele também colou um roteiro de boas práticas de interface (HTML semântico,
+espaços em múltiplos de 4/8px, cores em variáveis, estados de foco/hover/desativado, celular
+primeiro, esqueleto de carregamento) e pediu a construção no sistema, não só o código.
+
+**Menu:** os grupos do menu (`.sidebar-grupo`) agora são genéricos no `app.js`: cada
+cabeçalho abre/fecha o bloco logo abaixo dele. Cadastro → "Cadastro de contatos" (tela nova,
+`page-contatos`) e "Cadastro de clientes" (a tela de antes, `page-cadastro`, só com o título
+trocado; o nome "clientes" foi decisão minha, o dono pode vetar).
+
+**Dados:** nada novo no banco. O contato grava em `Contatos_Solicitantes`, a mesma tabela dos
+contatos do Cadastro de clientes: `Nome_Contato`, `WhatsApps` (telefone, um por linha, com 55),
+`Emails` (um por linha), `Cargo_Funcao` (agora texto livre), `Entidades_Vinculadas` (a empresa:
+um cliente já cadastrado, ou vazio) e `Observacoes` (as notas). Assim quem tem empresa aparece
+no cadastro do cliente e no Criar chamado sem mudar nenhum fluxo antigo (testado).
+
+**n8n:** fluxo novo `App - Contatos` (webhook `contatos`, mesma checagem de acesso dos outros):
+- `listar`: todos os contatos e todas as empresas (id, razão social, nome fantasia, status).
+- `salvar` (com `id` edita; sem `id` cria com Status "Ativo"): nome obrigatório; telefone só
+  com dígitos e sem repetido; e-mail repetido com outra caixa entra uma vez; empresa precisa
+  existir; contato a editar precisa existir (não cria outro por engano).
+- `excluir`: contato precisa existir.
+- Depois de gravar ou excluir, refaz o arquivo único `backup-cadastros.json` (mesmo nó do
+  "App - Salvar entidade"; quem foi excluído fica em `apagados_do_sistema`).
+
+**Tela:** formulário e lista lado a lado no computador largo (o formulário fica parado no alto
+enquanto a lista rola) e um embaixo do outro no celular. A lista tem busca (nome, função,
+empresa, e-mail, notas; telefone a partir de 3 dígitos) e mostra esqueleto enquanto carrega.
+Tocar num contato abre ele no formulário para editar ("Cancelar edição", "Excluir contato" com
+dois toques).
+- Telefone e e-mail usam as mesmas classes das listas do Cadastro de clientes
+  (`.contato-whatsapps` / `.contato-emails`), então ganham sozinhos a máscara `+55 (47) …` e o
+  aviso âmbar de valor com jeito de errado.
+- Função: sugestões sem diferenciar acento nem maiúscula ("sin" acha "Síndico"), a mais usada
+  primeiro; grafias diferentes da mesma função viram uma (fica a mais usada).
+- Empresa: busca entre os clientes cadastrados conforme digita; a escolhida vira uma etiqueta
+  com "×".
+- Telefone ou e-mail que já está noutro contato: avisa e o segundo toque em Salvar grava
+  (pode ser legítimo, por exemplo o celular da portaria). Só os valores **novos** passam por
+  esse aviso: a mesma síndica cadastrada em vários condomínios (caso real: uma pessoa aparece 9
+  vezes, uma por condomínio) não dispara aviso a cada edição.
+- Alterações por salvar entram no aviso de saída de sempre (`haAlgoParaPerder` /
+  `avisarPerda`), e trocar de contato com algo por salvar pede um segundo toque.
+
+**Cuidado que apareceu no Cadastro de clientes:** a função lá é um `<select>` com lista fixa.
+Um contato com função escrita à mão ("Síndica profissional") abria com o select em branco, e o
+próximo Salvar do cliente **apagaria a função**. Agora a função que não está na lista entra
+como opção ao abrir (testado no navegador).
+
+**Também nesta rodada:** o app parou de chamar `fazer-backup` ao abrir. O fluxo "App - Backup
+de tudo" está desligado (decisão do dono até o SSD), e a chamada só piscava "sem conexão" na
+barra. Para religar, volte a linha `backupDoDia()` em `entrarNoApp` junto com o fluxo.
+
+**Testes:** `banco/testes/testar-fluxo-contatos.js` (28 ok) usa só uma empresa e um contato de
+teste, confere o lado do cliente e o `listar-contatos` antigo, e devolve o backup dos cadastros
+igual ao de antes. No navegador, usuário de teste injetado direto na sessão (sem digitar senha),
+empresa de teste, e tudo apagado no fim, com a contagem das tabelas igual à de antes.

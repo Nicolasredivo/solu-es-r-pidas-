@@ -115,6 +115,10 @@
               {
                 "name": "Cache-Control",
                 "value": "private, max-age=86400"
+              },
+              {
+                "name": "X-Content-Type-Options",
+                "value": "nosniff"
               }
             ]
           }

@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.06b";
+const APP_VERSION = "2026.10.27a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -271,15 +271,16 @@ document.querySelectorAll(".sidebar-item[data-page]").forEach((item) => {
   });
 });
 
-// Grupo "Chamados" no menu: some tem duas telas (Criar/Consultar) que não
-// cabem num botão só, então o "+" abre/fecha os dois por baixo dele --
-// mesmo padrão simples de outros toggles do app (ver toggleConfig).
-const chamadosGrupoBotao = document.getElementById("chamados-grupo-botao");
-const chamadosGrupoItens = document.getElementById("chamados-grupo-itens");
-chamadosGrupoBotao.addEventListener("click", () => {
-  const abrindo = chamadosGrupoItens.classList.contains("hidden");
-  chamadosGrupoItens.classList.toggle("hidden", !abrindo);
-  chamadosGrupoBotao.setAttribute("aria-expanded", String(abrindo));
+// Grupos do menu (Cadastro, Chamados): juntam telas que não cabem num botão
+// só, então o "+" abre/fecha os itens por baixo dele -- mesmo padrão simples
+// de outros toggles do app (ver toggleConfig).
+document.querySelectorAll(".sidebar-grupo-cabecalho").forEach((botao) => {
+  const itens = botao.nextElementSibling;
+  botao.addEventListener("click", () => {
+    const abrindo = itens.classList.contains("hidden");
+    itens.classList.toggle("hidden", !abrindo);
+    botao.setAttribute("aria-expanded", String(abrindo));
+  });
 });
 
 // ----- Abas internas de uma página -----
@@ -728,7 +729,14 @@ function adicionarContato(caixa, comFoco, dados) {
   if (dados) {
     if (dados.id) bloco.dataset.id = dados.id;
     bloco.querySelector(".contato-nome").value = dados.nome || "";
-    bloco.querySelector(".contato-cargo").value = dados.cargo || "";
+    // Função escrita no Cadastro de contatos pode não estar nesta lista fixa:
+    // sem a opção, o select ficaria em branco e o próximo Salvar apagaria a
+    // função do contato.
+    const cargo = bloco.querySelector(".contato-cargo");
+    if (dados.cargo && ![...cargo.options].some((opcao) => opcao.value === dados.cargo)) {
+      cargo.add(new Option(dados.cargo, dados.cargo));
+    }
+    cargo.value = dados.cargo || "";
     bloco.querySelector(".contato-obs").value = dados.observacoes || "";
     bloco.querySelector(".contato-status").value = dados.status || "Ativo";
   }
@@ -4832,7 +4840,11 @@ function entrarNoApp() {
   gateView.classList.add("hidden");
   appView.classList.remove("hidden");
   mostrarUsuarioConectado();
-  backupDoDia();
+  // Backup diário desligado por decisão do dono até chegar o SSD (27/10/2026):
+  // o fluxo "App - Backup de tudo" está desativado, e chamar o webhook dele a
+  // cada abertura só piscava "sem conexão" na barra. Para religar, volte esta
+  // linha junto com o fluxo.
+  // backupDoDia();
   // Carrega os chamados em segundo plano já ao entrar, sem esperar a
   // pessoa abrir Consultar chamados ou a Agenda -- os lembretes flutuantes
   // precisam disso pra funcionar em qualquer aba, desde o início.
@@ -4984,7 +4996,8 @@ function formularioFinanceiroEmAndamento() {
 }
 
 function haAlgoParaPerder() {
-  return cadastroEmAndamento() || edicaoDaConsultaAbertaEmEdicao() || formularioFinanceiroEmAndamento();
+  return cadastroEmAndamento() || edicaoDaConsultaAbertaEmEdicao() || formularioFinanceiroEmAndamento()
+    || contatoEmAndamento();
 }
 
 // Usado quando o usuário confirma que quer sair mesmo assim: devolve o bloco
@@ -5004,6 +5017,13 @@ let saidaPendente = null;
 // cadastro sendo editado na Consulta, escrever em salvarStatus (que vive na
 // aba Adicionar, hoje fora da tela) passaria batido.
 function avisarPerda(mensagem) {
+  // Cadastro de contatos só conta com a tela à vista: se ele está em
+  // andamento, é onde o usuário está olhando agora.
+  if (contatoEmAndamento()) {
+    mostrarCtStatus("error", mensagem);
+    return;
+  }
+
   // Formulário do Financeiro em andamento tem prioridade: se ele está aberto,
   // é onde o usuário está olhando agora.
   if (formularioFinanceiroEmAndamento()) {
@@ -8852,6 +8872,454 @@ window.addEventListener("popstate", () => {
   const aberto = listaBox.querySelector(".cadastro.aberto");
   if (aberto) fecharLinhaSemVoltar(aberto);
 });
+
+// ----- Cadastro de contatos -----
+//
+// Pessoas, com ou sem empresa (fluxo "App - Contatos": listar / salvar /
+// excluir). Grava na mesma tabela dos contatos do Cadastro de clientes, então
+// quem tem empresa aparece lá e no Criar chamado. A função é texto livre, mas
+// toda função já usada vira sugestão nos próximos cadastros.
+
+const formContato = document.getElementById("form-contato");
+const ctTitulo = document.getElementById("ct-form-titulo");
+const ctNome = document.getElementById("ct-nome");
+const ctTelefones = document.getElementById("ct-telefones");
+const ctEmails = document.getElementById("ct-emails");
+const ctFuncao = document.getElementById("ct-funcao");
+const ctFuncaoSugestao = document.getElementById("ct-funcao-sugestao");
+const ctEmpresaBusca = document.getElementById("ct-empresa-busca");
+const ctEmpresaSugestao = document.getElementById("ct-empresa-sugestao");
+const ctEmpresaEscolhida = document.getElementById("ct-empresa-escolhida");
+const ctEmpresaAjuda = document.getElementById("ct-empresa-ajuda");
+const ctNotas = document.getElementById("ct-notas");
+const ctSalvar = document.getElementById("ct-salvar");
+const ctCancelar = document.getElementById("ct-cancelar");
+const ctExcluir = document.getElementById("ct-excluir");
+const ctStatus = document.getElementById("ct-status");
+const ctBusca = document.getElementById("ct-busca");
+const ctLista = document.getElementById("ct-lista");
+const ctListaStatus = document.getElementById("ct-lista-status");
+const ctTotal = document.getElementById("ct-total");
+
+let contatosCadastrados = [];
+let empresasDosContatos = [];
+let contatosCarregados = false;
+let contatoEditandoId = "";
+let ctEmpresaId = "";
+let ctEstadoOriginal = "";
+// Telefones/e-mails que o contato já tinha ao abrir: só os novos passam pelo
+// aviso de repetido (a mesma síndica em vários condomínios já é repetida).
+let ctCanaisOriginais = { telefones: [], emails: [] };
+// Aviso de telefone/e-mail repetido já dado para estes dados: o 2º Salvar grava.
+let ctRepetidoAvisado = "";
+// Contato da lista tocado com o formulário por salvar: o 2º toque descarta.
+let ctTrocaPendente = "";
+let ctLinhasCriadas = 0;
+
+function mostrarCtStatus(tipo, mensagem) {
+  ctStatus.textContent = mensagem;
+  ctStatus.className = mensagem ? `status show ${tipo}` : "status";
+}
+
+function nomeDaEmpresa(id) {
+  const empresa = empresasDosContatos.find((e) => e.id === id);
+  if (!empresa) return "";
+  return empresa.nomeFantasia || empresa.razaoSocial || "Cliente sem nome";
+}
+
+// Telefone: uma linha só (contato antigo com mais de um mostra todos).
+// E-mail: o "+" ao lado da primeira linha abre outra, quantas precisar.
+function adicionarLinhaContato(lista, tipo, valor, comFoco) {
+  const linha = modeloCanal.content.firstElementChild.cloneNode(true);
+  const campo = linha.querySelector(".canal-valor");
+  const botao = linha.querySelector(".remover-canal");
+  const primeira = !lista.querySelector(".canal");
+
+  // A primeira linha tem id fixo: é para onde o rótulo do campo aponta.
+  campo.id = primeira ? `ct-${tipo}-0` : `ct-${tipo}-${++ctLinhasCriadas}`;
+  if (tipo === "telefone") {
+    campo.placeholder = "+55 (47) 99999-9999";
+    campo.inputMode = "tel";
+    campo.maxLength = 25;
+  } else {
+    campo.placeholder = "nome@empresa.com.br";
+    campo.inputMode = "email";
+    campo.maxLength = 254;
+    campo.autocapitalize = "off";
+    campo.spellcheck = false;
+  }
+  if (valor) campo.value = tipo === "telefone" ? formatarTelefone(valor) : valor;
+
+  if (primeira && tipo === "email") {
+    botao.textContent = "+";
+    botao.classList.add("ct-mais");
+    botao.title = "Adicionar outro e-mail";
+    botao.setAttribute("aria-label", "Adicionar outro e-mail");
+    botao.addEventListener("click", () => adicionarLinhaContato(lista, tipo, "", true));
+  } else if (primeira) {
+    botao.remove();
+  } else {
+    const rotulo = tipo === "email" ? "Tirar este e-mail" : "Tirar este telefone";
+    botao.title = rotulo;
+    botao.setAttribute("aria-label", rotulo);
+    botao.addEventListener("click", () => {
+      linha.remove();
+      lista.querySelector(".canal-valor").focus();
+    });
+  }
+
+  lista.appendChild(linha);
+  if (comFoco) campo.focus();
+}
+
+function preencherLinhasContato(lista, tipo, valores) {
+  lista.innerHTML = "";
+  const itens = valores && valores.length ? valores : [""];
+  itens.forEach((valor) => adicionarLinhaContato(lista, tipo, valor, false));
+}
+
+function escolherEmpresaContato(id) {
+  ctEmpresaId = id && nomeDaEmpresa(id) ? id : "";
+  ctEmpresaEscolhida.querySelector(".ct-empresa-nome").textContent = nomeDaEmpresa(ctEmpresaId);
+  ctEmpresaEscolhida.classList.toggle("hidden", !ctEmpresaId);
+  ctEmpresaBusca.classList.toggle("hidden", Boolean(ctEmpresaId));
+  ctEmpresaAjuda.classList.toggle("hidden", Boolean(ctEmpresaId));
+  ctEmpresaBusca.value = "";
+  ctEmpresaSugestao.classList.add("hidden");
+}
+
+function dadosDoFormContato() {
+  return {
+    nome: ctNome.value.trim().replace(/\s+/g, " "),
+    telefones: valoresDosCanais(ctTelefones),
+    emails: valoresDosCanais(ctEmails),
+    funcao: ctFuncao.value.trim().replace(/\s+/g, " "),
+    empresaId: ctEmpresaId,
+    observacoes: ctNotas.value.trim(),
+  };
+}
+
+// Compara o formulário com o que estava ao abrir: só o que mudou de verdade
+// conta como "por salvar" (abrir um contato e não mexer não trava a saída).
+function fotografiaContato() {
+  return JSON.stringify(dadosDoFormContato());
+}
+
+function contatoEmAndamento() {
+  if (formContato.closest(".hidden")) return false;
+  return fotografiaContato() !== ctEstadoOriginal;
+}
+
+function limparAvisosContato() {
+  formContato.querySelectorAll(".campo-aviso").forEach((aviso) => aviso.remove());
+}
+
+function prepararFormContato(contato) {
+  contatoEditandoId = contato ? contato.id : "";
+  ctTitulo.textContent = contato ? "Editar contato" : "Novo contato";
+  ctNome.value = contato ? contato.nome : "";
+  preencherLinhasContato(ctTelefones, "telefone", contato && contato.telefones);
+  preencherLinhasContato(ctEmails, "email", contato && contato.emails);
+  ctFuncao.value = contato ? contato.funcao : "";
+  ctFuncaoSugestao.classList.add("hidden");
+  escolherEmpresaContato(contato ? contato.empresaIds[0] : "");
+  ctNotas.value = contato ? contato.observacoes : "";
+  ctSalvar.textContent = contato ? "Salvar alterações" : "Salvar contato";
+  ctCancelar.classList.toggle("hidden", !contato);
+  ctExcluir.classList.toggle("hidden", !contato);
+  desarmarConfirmacao(ctExcluir, "Excluir contato");
+  limparAvisosContato();
+  mostrarCtStatus("", "");
+  ctRepetidoAvisado = "";
+  ctTrocaPendente = "";
+  ctEstadoOriginal = fotografiaContato();
+  const original = dadosDoFormContato();
+  ctCanaisOriginais = { telefones: original.telefones, emails: original.emails.map((e) => e.toLowerCase()) };
+}
+
+// Mesmo telefone ou e-mail já guardado noutro contato quase sempre é a mesma
+// pessoa cadastrada duas vezes. Avisa, mas não impede (o celular da portaria,
+// por exemplo, pode ser de mais de um).
+function contatoRepetido(dados) {
+  const telefones = dados.telefones.filter((t) => !ctCanaisOriginais.telefones.includes(t));
+  const emails = dados.emails.map((e) => e.toLowerCase()).filter((e) => !ctCanaisOriginais.emails.includes(e));
+  for (const outro of contatosCadastrados) {
+    if (outro.id === contatoEditandoId) continue;
+    if (telefones.some((t) => outro.telefones.includes(t))) return { nome: outro.nome, oque: "Esse telefone" };
+    if (outro.emails.some((e) => emails.includes(e.toLowerCase()))) return { nome: outro.nome, oque: "Esse e-mail" };
+  }
+  return null;
+}
+
+function mostrarEsqueletoContatos() {
+  ctLista.setAttribute("aria-busy", "true");
+  ctLista.innerHTML = Array.from({ length: 4 }, () =>
+    `<li class="contato-esqueleto" aria-hidden="true"><span></span><span></span></li>`
+  ).join("");
+}
+
+function desenharContatos() {
+  ctLista.setAttribute("aria-busy", "false");
+  const termo = normalizarTexto(ctBusca.value);
+  const digitos = ctBusca.value.replace(/\D/g, "");
+
+  const visiveis = contatosCadastrados.filter((c) => {
+    if (!termo) return true;
+    const texto = normalizarTexto([c.nome, c.funcao, nomeDaEmpresa(c.empresaIds[0]), ...c.emails, c.observacoes].join(" "));
+    // Procurar por número ignora a pontuação; com menos de 3 dígitos, "47"
+    // casaria com quase todo telefone.
+    return texto.includes(termo) || (digitos.length >= 3 && c.telefones.some((t) => t.includes(digitos)));
+  });
+
+  ctTotal.textContent = contatosCadastrados.length ? `(${contatosCadastrados.length})` : "";
+  if (!contatosCadastrados.length) {
+    ctListaStatus.textContent = "Nenhum contato ainda.";
+    ctListaStatus.className = "doc-hint neutral";
+  } else if (!visiveis.length) {
+    ctListaStatus.textContent = "Nenhum contato encontrado com essa busca.";
+    ctListaStatus.className = "doc-hint neutral";
+  } else {
+    ctListaStatus.textContent = "";
+    ctListaStatus.className = "doc-hint";
+  }
+
+  ctLista.innerHTML = "";
+  visiveis.forEach((c) => {
+    const item = document.createElement("li");
+    const empresa = nomeDaEmpresa(c.empresaIds[0]);
+    const linha1 = [c.funcao, empresa].filter(Boolean).map(escapeHtml).join(" · ");
+    const linha2 = [c.telefones[0] ? formatarTelefone(c.telefones[0]) : "", c.emails[0] || ""].filter(Boolean).map(escapeHtml).join(" · ");
+    const inativo = c.status && c.status !== "Ativo" ? ` <span class="contato-item-tag">${escapeHtml(c.status)}</span>` : "";
+    item.innerHTML = `<button type="button" class="contato-item${c.id === contatoEditandoId ? " editando" : ""}">
+      <span class="contato-item-nome">${escapeHtml(c.nome || "Contato sem nome")}${inativo}</span>
+      ${linha1 ? `<span class="contato-item-linha">${linha1}</span>` : ""}
+      ${linha2 ? `<span class="contato-item-linha">${linha2}</span>` : ""}
+    </button>`;
+    item.querySelector("button").addEventListener("click", () => abrirContatoNoForm(c.id));
+    ctLista.appendChild(item);
+  });
+}
+
+async function carregarContatos() {
+  ctListaStatus.textContent = "";
+  ctListaStatus.className = "doc-hint";
+  mostrarEsqueletoContatos();
+  try {
+    const dados = await pedirAoN8n("contatos", { acao: "listar" });
+    if (!dados || !dados.ok) {
+      ctLista.innerHTML = "";
+      ctListaStatus.textContent = (dados && dados.mensagem) || "Não consegui carregar os contatos.";
+      ctListaStatus.className = "doc-hint error";
+      return;
+    }
+    contatosCadastrados = dados.contatos || [];
+    empresasDosContatos = dados.empresas || [];
+    contatosCarregados = true;
+    // A empresa escolhida pode ter sido excluída no meio tempo.
+    if (ctEmpresaId && !nomeDaEmpresa(ctEmpresaId)) escolherEmpresaContato("");
+    desenharContatos();
+  } catch (err) {
+    ctLista.innerHTML = "";
+    ctListaStatus.textContent = "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?";
+    ctListaStatus.className = "doc-hint error";
+  }
+}
+
+function abrirContatoNoForm(id) {
+  const contato = contatosCadastrados.find((c) => c.id === id);
+  if (!contato || id === contatoEditandoId) return;
+  if (contatoEmAndamento() && ctTrocaPendente !== id) {
+    ctTrocaPendente = id;
+    mostrarCtStatus("error", "Este contato tem alterações não salvas. Toque de novo no outro contato para descartar.");
+    return;
+  }
+  prepararFormContato(contato);
+  desenharContatos();
+  // No celular o formulário fica em cima da lista: sem isso, tocar num
+  // contato lá embaixo não mostraria nada mudando.
+  if (formContato.getBoundingClientRect().top < 0) ctTitulo.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// Sugestões que buscam enquanto digita, sem diferenciar acento nem
+// maiúscula ("sindico" acha "Síndico"). `coleta(termo)` devolve
+// [{ rotulo, detalhe, valor }]; `aoEscolher(valor)` faz o resto.
+function ligarSugestoesContato(input, listaEl, coleta, aoEscolher) {
+  function atualizar() {
+    const itens = coleta(normalizarTexto(input.value)).slice(0, 8);
+    listaEl.innerHTML = "";
+    listaEl.classList.toggle("hidden", !itens.length);
+    itens.forEach(({ rotulo, detalhe, valor }) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "sugestao-item";
+      item.textContent = rotulo;
+      if (detalhe) {
+        const extra = document.createElement("span");
+        extra.className = "sugestao-detalhe";
+        extra.textContent = detalhe;
+        item.appendChild(extra);
+      }
+      // mousedown (não click) dispara antes do blur do campo, senão a lista
+      // já teria sumido quando o clique chegasse.
+      item.addEventListener("mousedown", (evento) => {
+        evento.preventDefault();
+        listaEl.classList.add("hidden");
+        aoEscolher(valor);
+      });
+      listaEl.appendChild(item);
+    });
+  }
+
+  input.addEventListener("focus", atualizar);
+  input.addEventListener("input", atualizar);
+  input.addEventListener("blur", () => listaEl.classList.add("hidden"));
+  // Enter escolhe a primeira sugestão, em vez de mandar o formulário.
+  input.addEventListener("keydown", (evento) => {
+    if (evento.key !== "Enter") return;
+    const primeira = listaEl.classList.contains("hidden") ? null : listaEl.querySelector(".sugestao-item");
+    if (!primeira) return;
+    evento.preventDefault();
+    primeira.dispatchEvent(new MouseEvent("mousedown"));
+  });
+}
+
+// Cada função já usada vira sugestão, a mais usada primeiro. "síndico" e
+// "Síndico" são a mesma: fica a grafia que mais aparece.
+ligarSugestoesContato(ctFuncao, ctFuncaoSugestao, (termo) => {
+  const porChave = new Map();
+  contatosCadastrados.forEach((c) => {
+    const chave = normalizarTexto(c.funcao);
+    if (!chave) return;
+    const grupo = porChave.get(chave) || { total: 0, grafias: new Map() };
+    grupo.total += 1;
+    grupo.grafias.set(c.funcao, (grupo.grafias.get(c.funcao) || 0) + 1);
+    porChave.set(chave, grupo);
+  });
+  return [...porChave.entries()]
+    .filter(([chave]) => chave !== termo && (!termo || chave.includes(termo)))
+    .sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0], "pt-BR"))
+    .map(([, grupo]) => {
+      const grafia = [...grupo.grafias.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      return { rotulo: grafia, valor: grafia };
+    });
+}, (valor) => {
+  ctFuncao.value = valor;
+  ctFuncao.focus();
+});
+
+// Empresa = um cliente já cadastrado (vínculo de verdade, não texto solto).
+// Só sugere depois que começa a digitar: com dezenas de clientes, a lista
+// inteira ao tocar no campo não ajudaria.
+ligarSugestoesContato(ctEmpresaBusca, ctEmpresaSugestao, (termo) => {
+  if (!termo) return [];
+  return empresasDosContatos
+    .filter((e) => normalizarTexto(`${e.nomeFantasia} ${e.razaoSocial}`).includes(termo))
+    .sort((a, b) => (a.status === "Inativo") - (b.status === "Inativo") || nomeDaEmpresa(a.id).localeCompare(nomeDaEmpresa(b.id), "pt-BR"))
+    .map((e) => {
+      const nome = nomeDaEmpresa(e.id);
+      const detalhe = [e.razaoSocial && e.razaoSocial !== nome ? e.razaoSocial : "", e.status === "Inativo" ? "inativo" : ""].filter(Boolean).join(" · ");
+      return { rotulo: nome, detalhe, valor: e.id };
+    });
+}, (id) => {
+  escolherEmpresaContato(id);
+  ctNotas.focus();
+});
+
+document.getElementById("ct-empresa-tirar").addEventListener("click", () => {
+  escolherEmpresaContato("");
+  ctEmpresaBusca.focus();
+});
+
+formContato.addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  const dados = dadosDoFormContato();
+  if (!dados.nome) {
+    mostrarCtStatus("error", "Escreva o nome do contato.");
+    ctNome.focus();
+    return;
+  }
+
+  const repetido = contatoRepetido(dados);
+  const chave = JSON.stringify(dados);
+  if (repetido && ctRepetidoAvisado !== chave) {
+    ctRepetidoAvisado = chave;
+    mostrarCtStatus("error", `${repetido.oque} já está no contato "${repetido.nome}". Toque em Salvar de novo para salvar assim mesmo.`);
+    return;
+  }
+
+  ctSalvar.disabled = true;
+  mostrarCtStatus("loading", "Salvando...");
+  try {
+    const resposta = await pedirAoN8n("contatos", {
+      acao: "salvar",
+      id: contatoEditandoId,
+      nome: dados.nome,
+      funcao: dados.funcao,
+      empresaId: dados.empresaId,
+      observacoes: dados.observacoes,
+      telefones: JSON.stringify(dados.telefones),
+      emails: JSON.stringify(dados.emails),
+    });
+    if (!resposta || !resposta.ok || !resposta.contato) {
+      mostrarCtStatus("error", (resposta && resposta.mensagem) || "Não consegui salvar.");
+      return;
+    }
+    const eraEdicao = Boolean(contatoEditandoId);
+    contatosCadastrados = contatosCadastrados.filter((c) => c.id !== resposta.contato.id).concat(resposta.contato);
+    contatosCadastrados.sort((a, b) => (a.nome || "~").localeCompare(b.nome || "~", "pt-BR"));
+    // Os nomes de contato da lista de clientes mudaram: busca de novo na
+    // próxima vez que ela for aberta.
+    listaCarregada = false;
+    prepararFormContato(null);
+    desenharContatos();
+    mostrarToast(eraEdicao ? "Contato atualizado." : "Contato salvo.");
+    ctNome.focus();
+  } catch (err) {
+    mostrarCtStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+  } finally {
+    ctSalvar.disabled = false;
+  }
+});
+
+ctCancelar.addEventListener("click", () => {
+  prepararFormContato(null);
+  desenharContatos();
+});
+
+ligarExclusao(ctExcluir, "Excluir contato", "Confirmar exclusão", async () => {
+  const id = contatoEditandoId;
+  try {
+    const resposta = await pedirAoN8n("contatos", { acao: "excluir", id });
+    if (!resposta || !resposta.ok) {
+      mostrarCtStatus("error", (resposta && resposta.mensagem) || "Não consegui excluir.");
+      return;
+    }
+    contatosCadastrados = contatosCadastrados.filter((c) => c.id !== id);
+    listaCarregada = false;
+    prepararFormContato(null);
+    desenharContatos();
+    mostrarToast("Contato excluído.");
+  } catch (err) {
+    mostrarCtStatus("error", "Não foi possível falar com o n8n.");
+  }
+});
+
+// Qualquer digitação desarma o "toque de novo" pendente (salvar repetido,
+// trocar de contato, sair da tela).
+formContato.addEventListener("input", () => {
+  ctRepetidoAvisado = "";
+  ctTrocaPendente = "";
+  desarmarConfirmacao(ctExcluir, "Excluir contato");
+  esquecerSaidaPendente();
+});
+
+ctBusca.addEventListener("input", desenharContatos);
+document.getElementById("ct-atualizar").addEventListener("click", carregarContatos);
+document.querySelector('.sidebar-item[data-page="contatos"]').addEventListener("click", () => {
+  if (!contatosCarregados) carregarContatos();
+});
+
+prepararFormContato(null);
 
 // ----- Aviso de e-mail e telefone com jeito de errado -----
 
