@@ -95,6 +95,7 @@
       </div>
       <button type="button" class="sidebar-item" data-page="agenda">Agenda</button>
       <button type="button" class="sidebar-item" data-page="atendimento" id="menu-atendimento">Atendimento<span id="menu-atendimento-contagem" class="menu-contagem hidden"></span></button>
+      <button type="button" class="sidebar-item" data-page="documentos">Documentos</button>
       <button type="button" class="sidebar-item hidden" data-page="usuarios" id="menu-usuarios">Usuários</button>
 
       <div class="sidebar-rodape">
@@ -1640,6 +1641,106 @@
         <div id="atendimento-conteudo"></div>
       </div>
 
+      <!-- Documentos: os 4 PDFs padrão da empresa, gerados no próprio aparelho
+           (pdf-documentos.js, cópia fiel do gerador em Python da skill). Os
+           campos aparecem conforme o tipo escolhido (data-tipos). -->
+      <div id="page-documentos" class="card page hidden">
+        <h1>Documentos</h1>
+        <p class="subtitle">Orçamento, recibo, comunicado e laudo em PDF, no modelo da Soluções Rápidas.</p>
+
+        <div class="opcoes doc-tipos" id="doc-tipo">
+          <button type="button" class="opcao active" data-valor="orcamento">Orçamento</button>
+          <button type="button" class="opcao" data-valor="recibo">Recibo</button>
+          <button type="button" class="opcao" data-valor="comunicado">Comunicado</button>
+          <button type="button" class="opcao" data-valor="laudo">Laudo</button>
+        </div>
+
+        <form id="form-documento" novalidate autocomplete="off">
+          <label for="doc-cliente-busca">Puxar dados de um cliente</label>
+          <input type="text" id="doc-cliente-busca" placeholder="Buscar cliente cadastrado (opcional)" />
+          <div id="doc-cliente-sugestao" class="sugestao-lista hidden"></div>
+          <p id="doc-cliente-status" class="placeholder-text ct-ajuda">Preenche cliente, endereço e solicitante. Dá para mudar tudo depois.</p>
+
+          <div data-tipos="recibo">
+            <label for="doc-referente">Referente a</label>
+            <input type="text" id="doc-referente" placeholder="Ex: Limpeza de caixa d'água" />
+          </div>
+
+          <div data-tipos="orcamento recibo comunicado">
+            <label for="doc-cliente">Cliente</label>
+            <input type="text" id="doc-cliente" placeholder="Ex: Residencial Jardim das Flores" />
+          </div>
+
+          <div data-tipos="laudo">
+            <label for="doc-edificio">Nome do edifício</label>
+            <input type="text" id="doc-edificio" placeholder="Ex: Jardim das Flores" />
+            <p class="placeholder-text ct-ajuda">Sem "Residencial": no laudo vira "no Edifício Jardim das Flores".</p>
+          </div>
+
+          <div data-tipos="orcamento recibo comunicado">
+            <label for="doc-solicitante">Solicitante</label>
+            <input type="text" id="doc-solicitante" />
+            <div id="doc-solicitante-sugestao" class="sugestao-lista hidden"></div>
+          </div>
+
+          <label for="doc-endereco" id="doc-endereco-rotulo">Endereço</label>
+          <textarea id="doc-endereco" class="auto-altura" rows="1"></textarea>
+          <div id="doc-endereco-sugestao" class="sugestao-lista hidden"></div>
+
+          <label for="doc-data" id="doc-data-rotulo">Data</label>
+          <input type="date" id="doc-data" />
+
+          <div data-tipos="recibo">
+            <label for="doc-valor">Valor total</label>
+            <input type="text" id="doc-valor" inputmode="numeric" placeholder="R$ 0,00" />
+          </div>
+
+          <div data-tipos="orcamento">
+            <label>Itens</label>
+            <ul id="doc-itens" class="doc-itens"></ul>
+            <button type="button" id="doc-adicionar-item" class="botao-secundario doc-adicionar-item">+ Adicionar item</button>
+            <p id="doc-total" class="doc-total">Total geral: R$ 0,00</p>
+
+            <label for="doc-validade">Validade da proposta</label>
+            <input type="text" id="doc-validade" value="10 dias" />
+            <label class="checkbox-linha" for="doc-sem-validade">
+              <input type="checkbox" id="doc-sem-validade" />
+              <span>Não mostrar validade no PDF</span>
+            </label>
+
+            <label for="doc-condicoes">Condições de pagamento</label>
+            <input type="text" id="doc-condicoes" placeholder="Ex: 50% na aprovação e 50% na conclusão" />
+
+            <label for="doc-obs">Observações</label>
+            <textarea id="doc-obs" rows="2" placeholder="Opcional"></textarea>
+          </div>
+
+          <!-- O recibo não tem esta linha (igual ao modelo em Python). -->
+          <div data-tipos="orcamento comunicado laudo">
+            <label for="doc-responsavel">Responsável pela execução</label>
+            <input type="text" id="doc-responsavel" />
+            <p id="doc-responsavel-ajuda" class="placeholder-text ct-ajuda hidden">Opcional no orçamento: só aparece no PDF se preenchido.</p>
+          </div>
+
+          <button type="submit" id="doc-gerar">Gerar PDF</button>
+          <button type="button" id="doc-limpar" class="botao-secundario doc-limpar">Limpar campos</button>
+          <div id="doc-status" class="status" role="status"></div>
+        </form>
+
+        <!-- Uma linha de item do orçamento. -->
+        <template id="modelo-doc-item">
+          <li class="doc-item">
+            <textarea class="doc-item-desc auto-altura" rows="1" placeholder="Descrição do serviço ou material" aria-label="Descrição"></textarea>
+            <div class="doc-item-numeros">
+              <label class="doc-item-campo">Qtd.<input type="text" class="doc-item-qtd" inputmode="decimal" value="1" /></label>
+              <label class="doc-item-campo">Valor unit.<input type="text" class="doc-item-unit" inputmode="numeric" placeholder="R$ 0,00" /></label>
+              <span class="doc-item-total"></span>
+              <button type="button" class="remover-canal doc-item-tirar" aria-label="Tirar este item" title="Tirar este item">×</button>
+            </div>
+          </li>
+        </template>
+      </div>
+
       <!-- Usuários: só aparece no menu pra quem entrou por e-mail com acesso
            total. Toda ação aqui pede a senha da própria conta de novo. -->
       <div id="page-usuarios" class="card page hidden">
@@ -1774,6 +1875,9 @@
   <div id="agenda-menu" class="agenda-menu hidden"></div>
 
   <script src="config.js"></script>
+  <!-- Desenho dos PDFs (leve). O jsPDF, pesado, só carrega quando a aba
+       Documentos abre (ver carregarGeradorPdf no app.js). -->
+  <script src="pdf-documentos.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

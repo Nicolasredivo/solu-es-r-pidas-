@@ -1,5 +1,5 @@
 // Sobe junto com o APP_VERSION do app.js a cada publicação.
-const CACHE_NAME = "solucoes-rapidas-2026.10.27c";
+const CACHE_NAME = "solucoes-rapidas-2026.10.28a";
 // "./" e "./index.html" são a landing institucional; "./sistema.html" é o
 // app de verdade (painel), que antes ocupava a raiz; "./conta.html" é a
 // entrada por e-mail e senha, criar conta e recuperar senha.
@@ -12,6 +12,11 @@ const APP_SHELL = [
   "./sistema.html",
   "./style.css",
   "./app.js",
+  // Aba Documentos: o gerador de PDF funciona sem internet.
+  "./pdf-documentos.js",
+  "./vendor/jspdf.umd.min.js",
+  "./imagens/pdf-logo-principal.jpg",
+  "./imagens/pdf-logo-selo.jpg",
   "./conta.html",
   "./conta.css",
   "./conta.js",

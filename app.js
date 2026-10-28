@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.27c";
+const APP_VERSION = "2026.10.28a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -9378,6 +9378,393 @@ document.querySelector('.sidebar-item[data-page="contatos"]').addEventListener("
 });
 
 prepararFormContato(null);
+
+// ----- Documentos (PDF) -----
+//
+// Os 4 PDFs padrão (orçamento, recibo, comunicado, laudo) gerados no próprio
+// aparelho, sem passar pelo servidor: funciona no celular e até sem internet.
+// O desenho mora em pdf-documentos.js (cópia fiel do gerador em Python da
+// skill "pdf-solucoes-rapidas"); aqui fica só o formulário. O jsPDF (pesado)
+// e as duas logos só carregam quando a aba é aberta.
+
+const docTipoGrupo = document.getElementById("doc-tipo");
+const formDocumento = document.getElementById("form-documento");
+const docClienteBusca = document.getElementById("doc-cliente-busca");
+const docClienteStatus = document.getElementById("doc-cliente-status");
+const docEnderecoRotulo = document.getElementById("doc-endereco-rotulo");
+const docDataRotulo = document.getElementById("doc-data-rotulo");
+const docResponsavelAjuda = document.getElementById("doc-responsavel-ajuda");
+const docItens = document.getElementById("doc-itens");
+const docTotal = document.getElementById("doc-total");
+const docGerar = document.getElementById("doc-gerar");
+const docStatus = document.getElementById("doc-status");
+const modeloDocItem = document.getElementById("modelo-doc-item");
+const docCampos = {
+  referente: document.getElementById("doc-referente"),
+  cliente: document.getElementById("doc-cliente"),
+  edificio: document.getElementById("doc-edificio"),
+  solicitante: document.getElementById("doc-solicitante"),
+  endereco: document.getElementById("doc-endereco"),
+  data: document.getElementById("doc-data"),
+  valor: document.getElementById("doc-valor"),
+  validade: document.getElementById("doc-validade"),
+  semValidade: document.getElementById("doc-sem-validade"),
+  condicoes: document.getElementById("doc-condicoes"),
+  obs: document.getElementById("doc-obs"),
+  responsavel: document.getElementById("doc-responsavel"),
+};
+const RESPONSAVEL_PADRAO = DocumentosPdf.RESPONSAVEL_PADRAO;
+
+// Endereços e contatos do cliente puxado do cadastro: viram sugestão nos
+// campos, caso ele tenha mais de um.
+let docEnderecosCliente = [];
+let docContatosCliente = [];
+
+function mostrarDocStatus(tipo, mensagem) {
+  docStatus.textContent = mensagem;
+  docStatus.className = mensagem ? `status show ${tipo}` : "status";
+}
+
+function tipoDocumento() {
+  return escolhaDoGrupo(docTipoGrupo);
+}
+
+function hojeParaCampoData() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Nome vindo da Receita em maiúsculas ("CONDOMINIO RESIDENCIAL BELLA CITTA")
+// fica com cara de documento: "Condominio Residencial Bella Citta".
+function nomeComIniciais(nome) {
+  const texto = String(nome || "").trim();
+  if (!texto || texto !== texto.toUpperCase()) return texto;
+  const pequenas = ["de", "da", "do", "das", "dos", "e", "di"];
+  return texto.toLowerCase().split(/\s+/)
+    .map((p, i) => (i > 0 && pequenas.includes(p) ? p : p.charAt(0).toUpperCase() + p.slice(1)))
+    .join(" ");
+}
+
+// No laudo o modelo já escreve "no Edifício ...": o nome vai sem o prefixo.
+function nomeDoEdificio(nome) {
+  let texto = String(nome || "").trim();
+  const prefixo = /^(condom[ií]nio|residencial|edif[ií]cio|ed\.)\s+/i;
+  while (prefixo.test(texto)) texto = texto.replace(prefixo, "");
+  return texto;
+}
+
+function mostrarCamposDoTipo() {
+  const tipo = tipoDocumento();
+  formDocumento.querySelectorAll("[data-tipos]").forEach((bloco) => {
+    bloco.classList.toggle("hidden", !bloco.dataset.tipos.split(" ").includes(tipo));
+  });
+  docEnderecoRotulo.textContent = tipo === "recibo" ? "Endereço do serviço prestado" : "Endereço";
+  docDataRotulo.textContent = tipo === "comunicado" ? "Data da limpeza (dia sem água)" : tipo === "laudo" ? "Data da limpeza" : "Data";
+  // Comunicado e laudo sempre têm responsável (padrão: Cirlei). No orçamento
+  // ele é opcional e só sai no PDF se preenchido, então o padrão não vem junto.
+  const opcional = tipo === "orcamento";
+  const valor = docCampos.responsavel.value.trim();
+  if (opcional && valor === RESPONSAVEL_PADRAO) docCampos.responsavel.value = "";
+  if (!opcional && !valor) docCampos.responsavel.value = RESPONSAVEL_PADRAO;
+  docCampos.responsavel.placeholder = opcional ? "Opcional" : "";
+  docResponsavelAjuda.classList.toggle("hidden", !opcional);
+  mostrarDocStatus("", "");
+  ajustarAlturasAuto(formDocumento);
+}
+
+// ---- itens do orçamento ----
+
+function quantidadeDoItem(campo) {
+  const texto = campo.value.trim();
+  const numero = texto ? DocumentosPdf.paraNumero(texto) : 1;
+  return Number.isFinite(numero) && numero > 0 ? numero : 0;
+}
+
+function itensDoDocumento() {
+  return [...docItens.querySelectorAll(".doc-item")].map((linha) => ({
+    desc: linha.querySelector(".doc-item-desc").value.trim().replace(/\s+/g, " "),
+    qtd: quantidadeDoItem(linha.querySelector(".doc-item-qtd")),
+    unit: valorDoCampo(linha.querySelector(".doc-item-unit")),
+  })).filter((item) => item.desc || item.unit);
+}
+
+function atualizarTotalDocumento() {
+  docItens.querySelectorAll(".doc-item").forEach((linha) => {
+    const qtd = quantidadeDoItem(linha.querySelector(".doc-item-qtd"));
+    const unit = valorDoCampo(linha.querySelector(".doc-item-unit"));
+    linha.querySelector(".doc-item-total").textContent = unit ? DocumentosPdf.reais(qtd * unit) : "";
+  });
+  const total = itensDoDocumento().reduce((soma, item) => soma + item.qtd * item.unit, 0);
+  docTotal.textContent = `Total geral: ${DocumentosPdf.reais(total)}`;
+}
+
+// Com um item só, tirar deixaria a lista vazia e sem pista do que fazer.
+function renumerarItensDocumento() {
+  const linhas = docItens.querySelectorAll(".doc-item");
+  linhas.forEach((linha) => linha.querySelector(".doc-item-tirar").classList.toggle("hidden", linhas.length < 2));
+}
+
+function adicionarItemDocumento(comFoco) {
+  const linha = modeloDocItem.content.firstElementChild.cloneNode(true);
+  const desc = linha.querySelector(".doc-item-desc");
+  const qtd = linha.querySelector(".doc-item-qtd");
+  const unit = linha.querySelector(".doc-item-unit");
+  ligarMascaraDinheiro(unit);
+  // A descrição quebra sozinha no PDF: Enter aqui viraria quebra perdida.
+  desc.addEventListener("keydown", (evento) => {
+    if (evento.key === "Enter") evento.preventDefault();
+  });
+  desc.addEventListener("input", () => ajustarAlturaAuto(desc));
+  qtd.addEventListener("input", () => {
+    qtd.value = qtd.value.replace(/[^\d,]/g, "");
+  });
+  [desc, qtd, unit].forEach((campo) => campo.addEventListener("input", atualizarTotalDocumento));
+  linha.querySelector(".doc-item-tirar").addEventListener("click", () => {
+    linha.remove();
+    renumerarItensDocumento();
+    atualizarTotalDocumento();
+  });
+  docItens.appendChild(linha);
+  renumerarItensDocumento();
+  ajustarAlturaAuto(desc);
+  if (comFoco) desc.focus();
+}
+
+document.getElementById("doc-adicionar-item").addEventListener("click", () => adicionarItemDocumento(true));
+
+// ---- puxar dados de um cliente do cadastro ----
+
+// Endereço da Receita vem em maiúsculas: fica com iniciais, mas "CEP" e a
+// sigla do estado ("SC") continuam em maiúsculas.
+function enderecoComIniciais(texto) {
+  const valor = String(texto || "").trim();
+  if (!valor || valor !== valor.toUpperCase()) return valor;
+  const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR",
+    "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
+  const pequenas = ["de", "da", "do", "das", "dos", "e"];
+  return valor.replace(/[A-ZÀ-Ý]+/g, (palavra, posicao) => {
+    if (palavra === "CEP" || UFS.includes(palavra)) return palavra;
+    const minuscula = palavra.toLowerCase();
+    if (posicao > 0 && pequenas.includes(minuscula)) return minuscula;
+    return minuscula.charAt(0).toUpperCase() + minuscula.slice(1);
+  });
+}
+
+function enderecoDoLocal(local) {
+  return enderecoComIniciais([local.endereco, local.bairroCidade].map((parte) => String(parte || "").trim()).filter(Boolean).join(" - "));
+}
+
+async function puxarClienteNoDocumento(id) {
+  const cliente = cadastros.find((c) => c.id === id);
+  if (!cliente) return;
+  const nome = nomeComIniciais(cliente.nomeFantasia || cliente.razaoSocial);
+  docCampos.cliente.value = nome;
+  docCampos.edificio.value = nomeDoEdificio(nome);
+  docClienteBusca.value = "";
+  docClienteStatus.textContent = `Buscando endereço e contatos de ${nome}...`;
+  try {
+    const [deLocais, deContatos] = await Promise.all([
+      pedirAoN8n("listar-locais", { entidadeId: id }),
+      pedirAoN8n("listar-contatos", { entidadeId: id }),
+    ]);
+    docEnderecosCliente = ((deLocais && deLocais.ok && deLocais.locais) || [])
+      .filter((local) => local.status !== "Arquivado").map(enderecoDoLocal).filter(Boolean);
+    docContatosCliente = ((deContatos && deContatos.ok && deContatos.contatos) || [])
+      .filter((contato) => contato.status !== "Arquivado").map((contato) => contato.nome).filter(Boolean);
+    if (docEnderecosCliente.length) docCampos.endereco.value = docEnderecosCliente[0];
+    if (docContatosCliente.length) docCampos.solicitante.value = docContatosCliente[0];
+    ajustarAlturasAuto(formDocumento);
+    const extras = [
+      docEnderecosCliente.length > 1 ? "endereço" : "",
+      docContatosCliente.length > 1 ? "solicitante" : "",
+    ].filter(Boolean);
+    docClienteStatus.textContent = `Dados de ${nome} preenchidos.`
+      + (extras.length ? ` Tem mais de uma opção de ${extras.join(" e de ")}: toque no campo para trocar.` : "");
+  } catch (err) {
+    docClienteStatus.textContent = "Não consegui buscar o endereço e os contatos agora. Preencha à mão.";
+  }
+}
+
+// Mesma busca das sugestões do Cadastro de contatos (sem acento, enquanto digita).
+ligarSugestoesContato(docClienteBusca, document.getElementById("doc-cliente-sugestao"), (termo) => {
+  if (!termo) return [];
+  return cadastros
+    .filter((c) => normalizarTexto(`${c.razaoSocial} ${c.nomeFantasia} ${c.documento}`).includes(termo))
+    .map((c) => {
+      const nome = c.nomeFantasia || c.razaoSocial || "Cliente sem nome";
+      return { rotulo: nome, detalhe: c.razaoSocial && c.razaoSocial !== nome ? c.razaoSocial : "", valor: c.id };
+    });
+}, puxarClienteNoDocumento);
+docClienteBusca.addEventListener("focus", () => garantirCadastrosCarregados());
+
+const termoCasa = (valor, termo) => !termo || normalizarTexto(valor).includes(termo);
+ligarSugestoesContato(docCampos.endereco, document.getElementById("doc-endereco-sugestao"),
+  (termo) => (docEnderecosCliente.length > 1 ? docEnderecosCliente.filter((e) => termoCasa(e, termo)).map((e) => ({ rotulo: e, valor: e })) : []),
+  (valor) => {
+    docCampos.endereco.value = valor;
+    ajustarAlturaAuto(docCampos.endereco);
+  });
+ligarSugestoesContato(docCampos.solicitante, document.getElementById("doc-solicitante-sugestao"),
+  (termo) => (docContatosCliente.length > 1 ? docContatosCliente.filter((n) => termoCasa(n, termo)).map((n) => ({ rotulo: n, valor: n })) : []),
+  (valor) => {
+    docCampos.solicitante.value = valor;
+  });
+docCampos.endereco.addEventListener("input", () => ajustarAlturaAuto(docCampos.endereco));
+ligarMascaraDinheiro(docCampos.valor);
+
+// ---- gerar ----
+
+function dadosDoDocumento() {
+  const [ano, mes, dia] = docCampos.data.value.split("-");
+  const texto = (campo) => campo.value.trim().replace(/\s+/g, " ");
+  return {
+    data: docCampos.data.value ? `${dia}/${mes}/${ano}` : "",
+    referente: texto(docCampos.referente),
+    cliente: texto(docCampos.cliente),
+    edificio: texto(docCampos.edificio),
+    solicitante: texto(docCampos.solicitante),
+    endereco: texto(docCampos.endereco),
+    valor: valorDoCampo(docCampos.valor),
+    itens: itensDoDocumento(),
+    validade: texto(docCampos.validade),
+    semValidade: docCampos.semValidade.checked,
+    condicoes: texto(docCampos.condicoes),
+    obs: texto(docCampos.obs),
+    responsavel: texto(docCampos.responsavel),
+  };
+}
+
+// Documento de verdade não sai com campo em branco para preencher à mão.
+const CAMPOS_DO_DOCUMENTO = {
+  orcamento: [["cliente", "cliente"], ["solicitante", "solicitante"], ["endereco", "endereço"], ["data", "data"], ["condicoes", "condições de pagamento"]],
+  recibo: [["referente", "referente a"], ["data", "data"], ["solicitante", "solicitante"], ["cliente", "cliente"], ["endereco", "endereço"], ["valor", "valor total"]],
+  comunicado: [["data", "data"], ["solicitante", "solicitante"], ["endereco", "endereço"], ["cliente", "cliente"], ["responsavel", "responsável"]],
+  laudo: [["data", "data"], ["edificio", "nome do edifício"], ["endereco", "endereço"], ["responsavel", "responsável"]],
+};
+
+function camposFaltando(tipo, dados) {
+  const faltando = CAMPOS_DO_DOCUMENTO[tipo].filter(([chave]) => !dados[chave]).map(([, nome]) => nome);
+  if (tipo === "orcamento") {
+    if (!dados.itens.length) faltando.push("pelo menos um item");
+    else if (dados.itens.some((item) => !item.desc || !item.unit || !item.qtd)) faltando.push("descrição, quantidade e valor de cada item");
+  }
+  return faltando;
+}
+
+function carregarScript(src) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.onload = resolve;
+    script.onerror = () => reject(new Error(`Não carregou ${src}`));
+    document.head.appendChild(script);
+  });
+}
+
+async function lerImagemComoDataUrl(caminho) {
+  const resposta = await fetch(caminho);
+  if (!resposta.ok) throw new Error(`Não carregou ${caminho}`);
+  const blob = await resposta.blob();
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onload = () => resolve(leitor.result);
+    leitor.onerror = () => reject(new Error(`Não li ${caminho}`));
+    leitor.readAsDataURL(blob);
+  });
+}
+
+// Carrega uma vez só (ao abrir a aba), para o "Gerar PDF" ser instantâneo: o
+// compartilhar do celular só funciona logo depois do toque.
+let geradorPdf = null;
+function carregarGeradorPdf() {
+  if (!geradorPdf) {
+    geradorPdf = Promise.all([
+      window.jspdf ? null : carregarScript("vendor/jspdf.umd.min.js"),
+      lerImagemComoDataUrl("imagens/pdf-logo-principal.jpg"),
+      lerImagemComoDataUrl("imagens/pdf-logo-selo.jpg"),
+    ]).then(([, principal, selo]) => {
+      const { width, height } = new window.jspdf.jsPDF().getImageProperties(principal);
+      return { principal: { img: principal, largura: width, altura: height }, selo: { img: selo } };
+    }).catch((err) => {
+      geradorPdf = null; // tenta de novo no próximo toque
+      throw err;
+    });
+  }
+  return geradorPdf;
+}
+
+// Celular: abre o "compartilhar" (WhatsApp, e-mail, salvar). Computador:
+// baixa o arquivo direto.
+async function entregarPdf(blob, nomeArquivo) {
+  const arquivo = new File([blob], nomeArquivo, { type: "application/pdf" });
+  const toque = window.matchMedia("(pointer: coarse)").matches;
+  if (toque && navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+    try {
+      await navigator.share({ files: [arquivo], title: nomeArquivo });
+      return "compartilhado";
+    } catch (err) {
+      if (err && err.name === "AbortError") return "cancelado";
+      // Sem permissão para compartilhar agora: baixa, que sempre funciona.
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = nomeArquivo;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return "baixado";
+}
+
+formDocumento.addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  const tipo = tipoDocumento();
+  const dados = dadosDoDocumento();
+  const faltando = camposFaltando(tipo, dados);
+  if (faltando.length) {
+    mostrarDocStatus("error", `Falta preencher: ${faltando.join(", ")}.`);
+    return;
+  }
+
+  docGerar.disabled = true;
+  try {
+    const logos = await carregarGeradorPdf();
+    const { doc, nomeArquivo } = DocumentosPdf.gerar(tipo, dados, logos);
+    const resultado = await entregarPdf(doc.output("blob"), nomeArquivo);
+    if (resultado === "cancelado") mostrarDocStatus("", "");
+    else mostrarDocStatus("ok", `PDF pronto: ${nomeArquivo}`);
+  } catch (err) {
+    mostrarDocStatus("error", "Não consegui gerar o PDF. Confira a internet e tente de novo.");
+  } finally {
+    docGerar.disabled = false;
+  }
+});
+
+function limparDocumento() {
+  formDocumento.querySelectorAll('input[type="text"], textarea').forEach((campo) => (campo.value = ""));
+  docCampos.validade.value = "10 dias";
+  docCampos.semValidade.checked = false;
+  docCampos.data.value = hojeParaCampoData();
+  docEnderecosCliente = [];
+  docContatosCliente = [];
+  docClienteStatus.textContent = "Preenche cliente, endereço e solicitante. Dá para mudar tudo depois.";
+  docItens.innerHTML = "";
+  adicionarItemDocumento(false);
+  atualizarTotalDocumento();
+  mostrarCamposDoTipo();
+}
+
+document.getElementById("doc-limpar").addEventListener("click", limparDocumento);
+configurarGrupo(docTipoGrupo, mostrarCamposDoTipo);
+document.querySelector('.sidebar-item[data-page="documentos"]').addEventListener("click", () => {
+  carregarGeradorPdf().catch(() => {});
+  garantirCadastrosCarregados();
+  // A aba estava escondida: só agora os campos de altura automática medem certo.
+  requestAnimationFrame(() => ajustarAlturasAuto(formDocumento));
+});
+limparDocumento();
 
 // ----- Aviso de e-mail e telefone com jeito de errado -----
 

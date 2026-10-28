@@ -4820,3 +4820,34 @@ condomínio viraram um cadastro cada: 13 → 1, 14 → 1 e 9 → 1. Resultado: *
   Os cadastros que saíram também ficaram em `apagados_do_sistema` no `backup-cadastros.json`.
 - Nenhum cliente perdeu contato: cada vínculo foi somado ao cadastro que ficou. Os chamados
   guardam uma cópia do nome do contato, então não mudam.
+
+### Aba Documentos: gerador de PDF dentro do sistema (28/10/2026)
+
+**Pedido do dono:** colocar o gerador de PDF da skill `pdf-solucoes-rapidas` (orçamento, recibo,
+comunicado, laudo) dentro do sistema, com aba própria.
+
+**Como ficou:** item **Documentos** no menu. O PDF é gerado **no próprio aparelho**, sem passar
+pelo servidor: funciona no celular, sem internet, e não depende do PC ligado.
+- `pdf-documentos.js`: cópia fiel, medida por medida, do `gerar_documento.py` da skill. Usa a
+  mesma Helvetica, então as quebras de linha batem. Exporta `DocumentosPdf.gerar(tipo, dados,
+  logos)`. Conferido gerando os 4 modelos pelos dois caminhos e comparando o texto do PDF (via
+  pdf.js): mesmo número de linhas, mesmas posições (x/y) e mesmos textos. Detalhe que pegou na
+  comparação: a data usa **espaço não-quebrável** antes do dia da semana, como no Python.
+  **Se o layout mudar num, mudar no outro** (anotado também no SKILL.md da skill).
+- `vendor/jspdf.umd.min.js`: jsPDF 2.5.2 (MIT, npm), servido pelo próprio app.
+- `imagens/pdf-logo-principal.jpg` e `pdf-logo-selo.jpg`: as mesmas logos da skill.
+- Os três arquivos acima entram no cache do service worker (funciona offline). O jsPDF e as
+  logos só carregam quando a aba é aberta (`carregarGeradorPdf`).
+- **Formulário:** os campos aparecem conforme o tipo (`data-tipos`). Data com calendário, que
+  vira "dd/mm/aaaa (dia da semana)". Valor com a máscara de dinheiro de sempre. No orçamento,
+  itens com descrição, quantidade e valor unitário, e total ao vivo.
+  - **Responsável:** no comunicado e no laudo já vem "Cirlei Luis Zomer". No orçamento é
+    opcional, só sai no PDF se preenchido. O recibo não tem essa linha.
+  - Documento não sai com campo obrigatório em branco: o sistema avisa o que falta.
+- **Puxar dados de um cliente:** a busca no cadastro preenche cliente, edifício (sem
+  "Condomínio/Residencial/Edifício"), endereço e solicitante (`listar-locais` e
+  `listar-contatos`). Nome e endereço da Receita, que vêm em maiúsculas, ficam com iniciais;
+  "CEP" e a sigla do estado continuam em maiúsculas. Se o cliente tiver mais de um endereço ou
+  contato, eles viram sugestão no campo.
+- **Entrega:** no celular abre o compartilhar (WhatsApp, e-mail, salvar). No computador baixa
+  o arquivo. O nome do arquivo segue a regra da skill ("orcamento <cliente>.pdf").

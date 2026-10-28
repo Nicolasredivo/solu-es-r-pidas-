@@ -3340,3 +3340,123 @@ div.lembrete-item:hover {
 .contato-item-clientes {
   font-size: 0.8rem;
 }
+
+/* ----- Documentos (PDF) ----- */
+
+/* Os 4 tipos cabem numa linha no computador e quebram em duas no celular. */
+.doc-tipos {
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.doc-tipos .opcao {
+  flex: 1 1 110px;
+  width: auto;
+}
+
+#page-documentos input[type="date"] {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #2c3153;
+  background: #12162a;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 1rem;
+  margin-bottom: 16px;
+  color-scheme: dark;
+}
+
+#page-documentos input[type="date"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.doc-itens {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.doc-item {
+  padding: 12px;
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+}
+
+.doc-item textarea {
+  margin-bottom: 8px;
+}
+
+/* Qtd., valor unitário, total da linha e o "×" lado a lado. */
+.doc-item-numeros {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.doc-item-campo {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.doc-item-campo:first-child {
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.doc-item-campo:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-item-campo input[type="text"] {
+  margin: 4px 0 0;
+}
+
+.doc-item-total {
+  min-width: 88px;
+  padding-bottom: 12px;
+  text-align: right;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.doc-item-tirar {
+  margin-bottom: 4px;
+}
+
+.doc-adicionar-item {
+  width: auto;
+  padding: 8px 12px;
+}
+
+.doc-total {
+  margin: 12px 0 24px;
+  font-weight: 600;
+}
+
+.doc-limpar {
+  margin-top: 8px;
+}
+
+/* Celular: o total da linha desce para baixo, senão o valor unitário some
+   espremido entre a quantidade e o total. */
+@media (max-width: 600px) {
+  .doc-item-numeros {
+    flex-wrap: wrap;
+  }
+
+  .doc-item-tirar {
+    order: 1;
+  }
+
+  .doc-item-total {
+    order: 2;
+    flex-basis: 100%;
+    padding: 4px 0 0;
+  }
+}
