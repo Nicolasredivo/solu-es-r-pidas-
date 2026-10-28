@@ -4902,6 +4902,13 @@ depois de salvar. Vale no Adicionar, na edição do cliente e na busca do botão
   `testar-fluxos-copias.js` (22) foi ajustado para a regra nova do excluir.
   `testar-contato-varias-empresas.js` (16) continua passando.
 
+#### Cadastro de administradoras: item no menu, página vazia (28/10/2026)
+
+O dono pediu mais uma opção no grupo Cadastro, "Cadastro de administradoras", **sem nada dentro
+ainda**. É o terceiro item do grupo (`data-page="administradoras"`), e a página
+`#page-administradoras` tem só o título. Não precisou de código novo no `app.js`, porque o
+menu é genérico. O conteúdo vem num próximo pedido.
+
 **Kaspersky derrubou o "Airtable local" (28/10/2026, 14:14 e 14:35).** O Inspetor do Sistema
 acusou `PDM:Trojan.Win32.Generic` no `node.exe` rodando `banco/airtable-local.js`, encerrou o
 processo e excluiu o arquivo. Foi alarme falso: o MD5 do arquivo excluído era idêntico ao do
