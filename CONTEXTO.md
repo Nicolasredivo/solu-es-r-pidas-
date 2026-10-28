@@ -4938,6 +4938,11 @@ empresas do campo Empresas do contato.
     o nome do cadastro, e sem "×". Depois vêm as outras empresas já usadas, com "×". Nome novo
     entra como empresa comum.
   - Ainda não dá para excluir nem renomear uma sindicatura.
+  - **Nome novo no campo Empresas pergunta** (pedido do dono, mesmo dia): "X é uma sindicatura
+    ou uma empresa comum?" (Sindicatura / Empresa comum / ×). Sindicatura é cadastrada na hora
+    (`App - Sindicaturas` salvar; se já existir, usa a que existe) e entra no contato com o nome
+    do cadastro. Salvar o contato com um nome novo ainda escrito no campo mostra a mesma
+    pergunta antes de gravar. O código é `perguntarTipoEmpresa` / `empresaNova`.
 - **Atalho do servidor:** o `ligar-banco.ps1` agora **sempre reinicia** o Airtable local. Antes,
   reabrir o atalho deixava rodando o processo antigo (escondido), que não via a tabela nova.
 - **Testes:** `testar-fluxo-sindicaturas.js` (16). `comum.js` passou a contar `Sindicaturas`.

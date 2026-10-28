@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.28l";
+const APP_VERSION = "2026.10.28m";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -9123,6 +9123,10 @@ const ctEmpresaBusca = document.getElementById("ct-empresa-busca");
 const ctEmpresaSugestao = document.getElementById("ct-empresa-sugestao");
 const ctEmpresasEscolhidas = document.getElementById("ct-empresas-escolhidas");
 const ctEmpresaAjuda = document.getElementById("ct-empresa-ajuda");
+const ctEmpresaPergunta = document.getElementById("ct-empresa-pergunta");
+const ctEmpresaPerguntaTexto = document.getElementById("ct-empresa-pergunta-texto");
+const ctEmpresaSindicaturaBotao = document.getElementById("ct-empresa-sindicatura");
+const ctEmpresaComumBotao = document.getElementById("ct-empresa-comum");
 const ctClientesInfo = document.getElementById("ct-clientes-info");
 const ctNotas = document.getElementById("ct-notas");
 const ctSalvar = document.getElementById("ct-salvar");
@@ -9259,6 +9263,7 @@ function definirEmpresasContato(nomes) {
   });
   ctEmpresasEscolhidas.classList.toggle("hidden", !ctEmpresas.length);
   ctEmpresaAjuda.classList.toggle("hidden", Boolean(ctEmpresas.length));
+  ctEmpresaPergunta.classList.add("hidden");
   ctEmpresaBusca.placeholder = ctEmpresas.length ? "Adicionar outra empresa" : "Ex: Administradora Exemplo";
   ctEmpresaBusca.value = "";
   ctEmpresaSugestao.classList.add("hidden");
@@ -9666,7 +9671,74 @@ async function excluirEmpresaDosContatos(nome) {
 // As sindicaturas cadastradas vêm primeiro, marcadas, com o nome escrito como
 // no cadastro delas (é por ele que a sindicatura acha quem trabalha nela).
 // Depois, as outras empresas já usadas (ex.: uma indústria), com o "×". Nome
-// novo entra como empresa comum: sindicatura se cadastra na tela dela.
+// novo pergunta antes: "é uma sindicatura ou uma empresa comum?".
+let ctEmpresaPendente = "";
+
+// Nome que ainda não existe em lugar nenhum (nem sindicatura, nem empresa de
+// outro contato, nem já escolhido neste).
+function empresaNova(nome) {
+  const chave = normalizarTexto(nome);
+  return Boolean(chave) && !sindicaturaComNome(nome)
+    && !ctEmpresas.some((n) => normalizarTexto(n) === chave)
+    && !contatosCadastrados.some((c) => c.empresas.some((n) => normalizarTexto(n) === chave));
+}
+
+function perguntarTipoEmpresa(nome) {
+  ctEmpresaPendente = nome;
+  ctEmpresaPerguntaTexto.textContent = `"${nome}" é uma sindicatura ou uma empresa comum?`;
+  ctEmpresaSugestao.classList.add("hidden");
+  ctEmpresaPergunta.classList.remove("hidden");
+  ctEmpresaSindicaturaBotao.focus();
+}
+
+function adicionarEmpresaNoContato(nome) {
+  ctEmpresaPendente = "";
+  definirEmpresasContato([...ctEmpresas, nome]);
+  formContato.dispatchEvent(new Event("input"));
+  ctEmpresaBusca.focus();
+}
+
+ctEmpresaComumBotao.addEventListener("click", () => adicionarEmpresaNoContato(ctEmpresaPendente));
+
+// Sindicatura: cadastra na hora (fluxo "App - Sindicaturas") e entra no
+// contato com o nome do cadastro. Se outro aparelho cadastrou o mesmo nome
+// agora há pouco, usa o que já existe.
+ctEmpresaSindicaturaBotao.addEventListener("click", async () => {
+  const nome = ctEmpresaPendente;
+  ctEmpresaSindicaturaBotao.disabled = true;
+  ctEmpresaComumBotao.disabled = true;
+  try {
+    const resposta = await pedirAoN8n("sindicaturas", { acao: "salvar", nome });
+    const sindicatura = resposta && resposta.sindicatura;
+    if (!sindicatura || (!resposta.ok && !resposta.jaExiste)) {
+      mostrarCtStatus("error", (resposta && resposta.mensagem) || "Não consegui cadastrar a sindicatura.");
+      return;
+    }
+    if (!sindicaturaComNome(sindicatura.nome)) sindicaturas.push({ contatos: [], ...sindicatura });
+    mostrarCtStatus("", "");
+    if (resposta.ok) mostrarToast(`Sindicatura "${sindicatura.nome}" cadastrada.`);
+    adicionarEmpresaNoContato(sindicatura.nome);
+  } catch (err) {
+    mostrarCtStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+  } finally {
+    ctEmpresaSindicaturaBotao.disabled = false;
+    ctEmpresaComumBotao.disabled = false;
+  }
+});
+
+document.getElementById("ct-empresa-pergunta-fechar").addEventListener("click", () => {
+  ctEmpresaPendente = "";
+  ctEmpresaPergunta.classList.add("hidden");
+  ctEmpresaBusca.focus();
+});
+
+// Digitar de novo no campo vale como desistir da pergunta.
+ctEmpresaBusca.addEventListener("input", () => {
+  if (!ctEmpresaPendente) return;
+  ctEmpresaPendente = "";
+  ctEmpresaPergunta.classList.add("hidden");
+});
+
 ligarSugestoesContato(ctEmpresaBusca, ctEmpresaSugestao, (termo) => {
   const escolhidas = ctEmpresas.map(normalizarTexto);
   const sinds = sindicaturas
@@ -9679,13 +9751,13 @@ ligarSugestoesContato(ctEmpresaBusca, ctEmpresaSugestao, (termo) => {
   const digitada = ctEmpresaBusca.value.trim().replace(/\s+/g, " ");
   const jaExiste = usadas.some((s) => normalizarTexto(s.valor) === termo)
     || ctEmpresas.some((nome) => normalizarTexto(nome) === termo);
-  if (termo && !jaExiste) usadas.push({ rotulo: `Adicionar "${digitada}"`, valor: digitada });
+  if (termo && !jaExiste) usadas.push({ rotulo: `Adicionar "${digitada}"`, valor: { novo: digitada } });
   return usadas;
-}, (nome) => {
-  definirEmpresasContato([...ctEmpresas, nome]);
-  formContato.dispatchEvent(new Event("input"));
-  // Fica no campo, pronto para a próxima empresa, se houver.
-  ctEmpresaBusca.focus();
+}, (escolha) => {
+  // "Adicionar …" (nome novo) pergunta o que é; o resto entra direto e o
+  // campo fica pronto para a próxima empresa, se houver.
+  if (escolha && escolha.novo) perguntarTipoEmpresa(escolha.novo);
+  else adicionarEmpresaNoContato(escolha);
 }, excluirEmpresaDosContatos);
 
 formContato.addEventListener("submit", async (evento) => {
@@ -9694,6 +9766,14 @@ formContato.addEventListener("submit", async (evento) => {
   if (!dados.nome) {
     mostrarCtStatus("error", "Escreva o nome do contato.");
     ctNome.focus();
+    return;
+  }
+
+  // Nome novo deixado escrito no campo Empresas: pergunta o que ele é antes.
+  const empresaDigitada = ctEmpresaBusca.value.trim().replace(/\s+/g, " ");
+  if (empresaNova(empresaDigitada)) {
+    perguntarTipoEmpresa(empresaDigitada);
+    mostrarCtStatus("error", `Antes de salvar, diga se "${empresaDigitada}" é uma sindicatura ou uma empresa comum.`);
     return;
   }
 

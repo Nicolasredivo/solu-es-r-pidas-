@@ -1567,6 +1567,16 @@ button.lembrete-item:hover {
   margin: 0 0 8px;
 }
 
+/* "É uma sindicatura ou uma empresa comum?": pergunta numa linha, os dois
+   botões embaixo e o fechar no canto. */
+#ct-empresa-pergunta span {
+  flex-basis: 100%;
+}
+
+#ct-empresa-pergunta .contato-novo-fechar {
+  margin-left: auto;
+}
+
 .dialogo-titulo {
   margin: 0 0 6px;
   font-size: 1.1rem;

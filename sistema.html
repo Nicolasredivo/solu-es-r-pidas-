@@ -173,6 +173,13 @@
               <ul id="ct-empresas-escolhidas" class="ct-empresas-escolhidas hidden" aria-label="Empresas escolhidas"></ul>
               <input type="text" id="ct-empresa-busca" maxlength="120" placeholder="Ex: Administradora Exemplo" />
               <div id="ct-empresa-sugestao" class="sugestao-lista hidden"></div>
+              <!-- Nome novo no campo Empresas: pergunta o que ele é antes de entrar. -->
+              <div id="ct-empresa-pergunta" class="contato-novo-pergunta hidden" role="group" aria-labelledby="ct-empresa-pergunta-texto">
+                <span id="ct-empresa-pergunta-texto"></span>
+                <button type="button" id="ct-empresa-sindicatura">Sindicatura</button>
+                <button type="button" id="ct-empresa-comum" class="botao-secundario">Empresa comum</button>
+                <button type="button" id="ct-empresa-pergunta-fechar" class="contato-novo-fechar" aria-label="Fechar a pergunta">×</button>
+              </div>
               <p id="ct-empresa-ajuda" class="placeholder-text ct-ajuda">Onde a pessoa trabalha (não é o cliente). Opcional, e pode ter mais de uma.</p>
               <p id="ct-clientes-info" class="placeholder-text ct-ajuda hidden"></p>
 
