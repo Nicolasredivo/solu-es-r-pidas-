@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.28o";
+const APP_VERSION = "2026.10.28p";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -1035,6 +1035,7 @@ function limparFormulario() {
   desarmarCancelamento();
   salvarStatus.className = "status";
   campoAdmNovoCliente.atualizar();
+  campoSindNovoCliente.atualizar();
 }
 
 async function consultarDocumento(digitos) {
@@ -1347,8 +1348,8 @@ function ligarSugestaoCampo(input, listaEl, coletaValores) {
 }
 
 ligarSugestaoCampo(emailsInput, document.getElementById("emails-sugestao"), () => valoresDistintosCadastro("emails"));
-// O campo Administradora tem sugestões próprias (ligarCampoAdministradora).
-ligarSugestaoCampo(empresaSindicosInput, document.getElementById("empresa-sindicos-sugestao"), () => valoresDistintosCadastro("empresaSindicos"));
+// O campo Administradora tem sugestões próprias (ligarCampoDeCadastro).
+// O campo Empresa de síndicos tem sugestões próprias (ligarCampoDeCadastro).
 
 function desenharLista() {
   const termo = buscaInput.value.trim().toLowerCase();
@@ -1527,14 +1528,21 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
     campos.empresaSindicos.value = cadastro.empresaSindicos || "";
     campos.status.value = cadastro.status || "Ativo";
     campos.observacoes.value = cadastro.observacoes;
-    if (campoAdm) campoAdm.atualizar();
+    if (camposDeCadastro) camposDeCadastro.forEach((campo) => campo.atualizar());
   }
-  // Administradora: sugestões do cadastro delas e, embaixo, o nome e os
-  // e-mails da escolhida (aparecem também fora da edição).
-  const campoAdm = ligarCampoAdministradora(campos.administradora, bloco.querySelector(".d-administradora-sugestao"),
-    bloco.querySelector(".adm-cliente-info"), bloco.querySelector(".adm-cliente-pergunta"));
+  // Administradora e Empresa de síndicos: sugestões dos cadastros delas. Na
+  // administradora, embaixo, o nome e os e-mails da escolhida (aparecem também
+  // fora da edição).
+  const camposDeCadastro = [
+    ligarCampoDeCadastro(cadastroAdministradoras, campos.administradora, bloco.querySelector(".d-administradora-sugestao"),
+      bloco.querySelector(".adm-cliente-info"), bloco.querySelector(".adm-cliente-pergunta")),
+    ligarCampoDeCadastro(cadastroSindicaturas, campos.empresaSindicos, bloco.querySelector(".d-empresa-sindicos-sugestao"),
+      bloco.querySelector(".sind-cliente-info"), bloco.querySelector(".sind-cliente-pergunta")),
+  ];
   preencher();
-  if (!cadastroAdministradoras.carregadas()) cadastroAdministradoras.buscar().then(campoAdm.atualizar).catch(() => {});
+  [cadastroAdministradoras, cadastroSindicaturas].forEach((cad, i) => {
+    if (!cad.carregadas()) cad.buscar().then(camposDeCadastro[i].atualizar).catch(() => {});
+  });
 
   campos.documento.addEventListener("input", () => {
     const digitos = campos.documento.value.replace(/\D/g, "").slice(0, 14);
@@ -1615,8 +1623,8 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
 
   function modoEdicao(ligado) {
     editaveis.forEach((campo) => (campo.disabled = !ligado));
-    // A pergunta de administradora nova só aparece editando.
-    campoAdm.atualizar();
+    // A pergunta de administradora/sindicatura nova só aparece editando.
+    camposDeCadastro.forEach((campo) => campo.atualizar());
     botaoEditar.classList.toggle("hidden", ligado);
     botaoSalvar.classList.toggle("hidden", !ligado);
     botaoCancelar.classList.toggle("hidden", !ligado);
@@ -10256,6 +10264,7 @@ function ligarCadastroDeEmpresas(c) {
 const cadastroSindicaturas = ligarCadastroDeEmpresas({
   prefixo: "sind", pagina: "sindicatura", webhook: "sindicaturas", chaveItem: "sindicatura",
   singular: "sindicatura", Singular: "Sindicatura", plural: "sindicaturas",
+  sobreposto: "sobreposto-sindicatura",
   vinculos: {
     campo: "contatos",
     titulo: (n) => (n === 1 ? "1 contato trabalha nela:" : `${n} contatos trabalham nela:`),
@@ -10276,32 +10285,34 @@ const cadastroAdministradoras = ligarCadastroDeEmpresas({
 // dos clientes (campo Administradora do cliente).
 const cadastrosDeEmpresas = [cadastroSindicaturas];
 
-// Campo Administradora do cliente (cadastro novo e edição): sugere as
-// administradoras cadastradas, mostra embaixo o nome e os e-mails da escolhida
-// e, para nome novo, pergunta "Cadastrar nova administradora?" (abre o
-// cadastro dela por cima e, salvo, já põe o nome no campo).
-function ligarCampoAdministradora(input, listaEl, info, pergunta) {
+// Campos do cliente ligados a um cadastro (Administradora e Empresa de
+// síndicos, no cadastro novo e na edição): sugerem os nomes cadastrados e,
+// para nome novo, perguntam "Cadastrar nova …?" (abre o cadastro por cima e,
+// salvo, já põe o nome no campo). Na administradora, embaixo aparecem o nome
+// e os e-mails da escolhida.
+function ligarCampoDeCadastro(cadastro, input, listaEl, info, pergunta) {
   let perguntaFechada = false;
 
   function atualizar() {
-    const adm = cadastroAdministradoras.comNome(input.value);
-    info.textContent = !adm ? ""
-      : adm.emails.length ? `${adm.nome} · e-mails: ${adm.emails.join(", ")}` : `${adm.nome} · nenhum e-mail cadastrado.`;
-    info.classList.toggle("hidden", !adm);
-    const novo = Boolean(normalizarTexto(input.value)) && !adm && cadastroAdministradoras.carregadas();
+    const item = cadastro.comNome(input.value);
+    const comEmails = Boolean(item && item.emails);
+    info.textContent = !comEmails ? ""
+      : item.emails.length ? `${item.nome} · e-mails: ${item.emails.join(", ")}` : `${item.nome} · nenhum e-mail cadastrado.`;
+    info.classList.toggle("hidden", !comEmails);
+    const novo = Boolean(normalizarTexto(input.value)) && !item && cadastro.carregadas();
     pergunta.classList.toggle("hidden", perguntaFechada || input.disabled || !novo);
   }
 
-  ligarSugestoesContato(input, listaEl, (termo) => cadastroAdministradoras.lista()
+  ligarSugestoesContato(input, listaEl, (termo) => cadastro.lista()
     .filter((a) => !termo || normalizarTexto(a.nome).includes(termo))
-    .map((a) => ({ rotulo: a.nome, detalhe: a.emails.join(" · "), valor: a.nome })), (nome) => {
+    .map((a) => ({ rotulo: a.nome, detalhe: (a.emails || []).join(" · "), valor: a.nome })), (nome) => {
     input.value = nome;
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 
   input.addEventListener("focus", () => {
-    if (cadastroAdministradoras.carregadas()) return;
-    cadastroAdministradoras.buscar().then(() => {
+    if (cadastro.carregadas()) return;
+    cadastro.buscar().then(() => {
       if (document.activeElement === input) input.dispatchEvent(new Event("input"));
       atualizar();
     }).catch(() => {});
@@ -10316,9 +10327,9 @@ function ligarCampoAdministradora(input, listaEl, info, pergunta) {
     pergunta.classList.add("hidden");
   });
   pergunta.querySelector(".contato-novo-sim").addEventListener("click", async () => {
-    const adm = await cadastroAdministradoras.abrirSobreposto(input.value.trim());
-    if (adm) {
-      input.value = adm.nome;
+    const item = await cadastro.abrirSobreposto(input.value.trim());
+    if (item) {
+      input.value = item.nome;
       input.dispatchEvent(new Event("input", { bubbles: true }));
     }
   });
@@ -10326,12 +10337,18 @@ function ligarCampoAdministradora(input, listaEl, info, pergunta) {
   return { atualizar };
 }
 
-// Cadastro novo de cliente: o campo Administradora do formulário de Adicionar.
-const campoAdmNovoCliente = ligarCampoAdministradora(
+// Cadastro novo de cliente: os campos do formulário de Adicionar.
+const campoAdmNovoCliente = ligarCampoDeCadastro(cadastroAdministradoras,
   administradoraInput,
   document.getElementById("administradora-sugestao"),
   administradoraInput.parentElement.querySelector(".adm-cliente-info"),
   administradoraInput.parentElement.querySelector(".adm-cliente-pergunta"),
+);
+const campoSindNovoCliente = ligarCampoDeCadastro(cadastroSindicaturas,
+  empresaSindicosInput,
+  document.getElementById("empresa-sindicos-sugestao"),
+  empresaSindicosInput.parentElement.querySelector(".sind-cliente-info"),
+  empresaSindicosInput.parentElement.querySelector(".sind-cliente-pergunta"),
 );
 
 // ----- Documentos (PDF) -----

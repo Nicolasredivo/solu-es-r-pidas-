@@ -278,6 +278,13 @@
             <label for="empresa-sindicos">Empresa de síndicos</label>
             <input type="text" id="empresa-sindicos" placeholder="Opcional" autocomplete="off" />
             <div id="empresa-sindicos-sugestao" class="sugestao-lista hidden"></div>
+            <!-- Sindicatura do Cadastro de sindicatura: pergunta para nome ainda não cadastrado. -->
+            <p class="sind-cliente-info doc-hint hidden"></p>
+            <div class="contato-novo-pergunta sind-cliente-pergunta hidden">
+              <span>Cadastrar nova sindicatura?</span>
+              <button type="button" class="contato-novo-sim">Sim</button>
+              <button type="button" class="contato-novo-fechar" aria-label="Fechar a pergunta">×</button>
+            </div>
 
             <div class="grupo">
               <label>Status</label>
@@ -524,7 +531,14 @@
               </div>
 
               <label>Empresa de síndicos</label>
-              <input type="text" class="d-empresa-sindicos" disabled />
+              <input type="text" class="d-empresa-sindicos" disabled autocomplete="off" />
+              <div class="sugestao-lista hidden d-empresa-sindicos-sugestao"></div>
+              <p class="sind-cliente-info doc-hint hidden"></p>
+              <div class="contato-novo-pergunta sind-cliente-pergunta hidden">
+                <span>Cadastrar nova sindicatura?</span>
+                <button type="button" class="contato-novo-sim">Sim</button>
+                <button type="button" class="contato-novo-fechar" aria-label="Fechar a pergunta">×</button>
+              </div>
 
               <label>Status</label>
               <select class="d-status" disabled>
@@ -1984,6 +1998,16 @@
       <button type="button" id="sobreposto-contato-fechar" class="dialogo-fechar" aria-label="Fechar sem salvar">×</button>
     </div>
     <div id="sobreposto-contato-corpo"></div>
+  </dialog>
+
+  <!-- Nova sindicatura por cima da tela do cliente: o formulário é o mesmo da
+       tela de sindicatura (#sind-form), trazido para cá e devolvido ao fechar. -->
+  <dialog id="sobreposto-sindicatura" class="dialogo dialogo-contato" aria-labelledby="sobreposto-sindicatura-titulo">
+    <div class="dialogo-contato-topo">
+      <h2 id="sobreposto-sindicatura-titulo" class="dialogo-titulo">Nova sindicatura</h2>
+      <button type="button" id="sobreposto-sindicatura-fechar" class="dialogo-fechar" aria-label="Fechar sem salvar">×</button>
+    </div>
+    <div id="sobreposto-sindicatura-corpo"></div>
   </dialog>
 
   <!-- Nova administradora por cima da tela do cliente: o formulário é o mesmo

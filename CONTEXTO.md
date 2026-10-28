@@ -4987,6 +4987,17 @@ administradoras.
   "Editar e-mails" (ou "+ Adicionar e-mail" quando não tem nenhum), que abre ali mesmo a lista
   com "+", Salvar e Cancelar. O fluxo ganhou a ação `editar` (`id` + `emails`), que troca **só
   os e-mails**: o nome não muda, porque é ele que liga os clientes. O teste agora tem 35.
+- **Empresa de síndicos do cliente ligada às sindicaturas** (pedido do dono, mesmo dia): o campo
+  `Empresa_Sindicos` (cadastro novo e edição) usa a mesma peça do campo Administradora, agora
+  `ligarCampoDeCadastro(cadastro, …)`. Ele sugere as sindicaturas e, para nome novo, pergunta
+  "Cadastrar nova sindicatura?", abrindo por cima o formulário da tela de sindicatura
+  (`<dialog id="sobreposto-sindicatura">`).
+  - **Dados (autorizado, backup antes em `solucoes-2026-10-28-antes-empresa-sindicos.dump`):**
+    as duas grafias de uma sindicatura já cadastrada (17 clientes) viraram o nome do cadastro. Os nomes de
+    administradoras e de pessoas que estavam nesse campo (19 clientes) foram **apagados**, a
+    pedido do dono.
+  - Ainda **não** feito: Consultar sindicaturas mostrar também os clientes de cada uma (hoje
+    mostra só os contatos).
 - **Janelas por cima (contato e administradora):** fechar e devolver o formulário agora é feito
   direto (`terminarSobreposto…`), e não só pelo evento `close` do `<dialog>`, que no painel de
   testes às vezes não chegava. O evento continua cobrindo o Esc.
