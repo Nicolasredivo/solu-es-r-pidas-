@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.28b";
+const APP_VERSION = "2026.10.28c";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -9197,13 +9197,15 @@ function abrirContatoNoForm(id) {
 
 // Sugestões que buscam enquanto digita, sem diferenciar acento nem
 // maiúscula ("sindico" acha "Síndico"). `coleta(termo)` devolve
-// [{ rotulo, detalhe, valor }]; `aoEscolher(valor)` faz o resto.
-function ligarSugestoesContato(input, listaEl, coleta, aoEscolher) {
+// [{ rotulo, detalhe, valor, excluir }]; `aoEscolher(valor)` faz o resto.
+// Item com `excluir` (o aviso, ex. "Excluir de 2 contatos?") ganha um "×"
+// vermelho: o 1º toque mostra o aviso, o 2º chama `aoExcluir(valor)`.
+function ligarSugestoesContato(input, listaEl, coleta, aoEscolher, aoExcluir) {
   function atualizar() {
     const itens = coleta(normalizarTexto(input.value)).slice(0, 8);
     listaEl.innerHTML = "";
     listaEl.classList.toggle("hidden", !itens.length);
-    itens.forEach(({ rotulo, detalhe, valor }) => {
+    itens.forEach(({ rotulo, detalhe, valor, excluir }) => {
       const item = document.createElement("button");
       item.type = "button";
       item.className = "sugestao-item";
@@ -9221,7 +9223,40 @@ function ligarSugestoesContato(input, listaEl, coleta, aoEscolher) {
         listaEl.classList.add("hidden");
         aoEscolher(valor);
       });
-      listaEl.appendChild(item);
+      if (!aoExcluir || !excluir) {
+        listaEl.appendChild(item);
+        return;
+      }
+      const linha = document.createElement("div");
+      linha.className = "sugestao-linha";
+      const tirar = document.createElement("button");
+      tirar.type = "button";
+      tirar.className = "sugestao-excluir";
+      tirar.textContent = "×";
+      tirar.title = `Excluir ${valor}`;
+      tirar.setAttribute("aria-label", tirar.title);
+      // mousedown pelo mesmo motivo dos itens: o campo não perde o foco.
+      tirar.addEventListener("mousedown", async (evento) => {
+        evento.preventDefault();
+        if (!tirar.classList.contains("confirmando")) {
+          listaEl.querySelectorAll(".sugestao-excluir.confirmando").forEach((outro) => {
+            outro.classList.remove("confirmando");
+            outro.textContent = "×";
+          });
+          tirar.classList.add("confirmando");
+          tirar.textContent = excluir;
+          return;
+        }
+        tirar.disabled = true;
+        tirar.textContent = "Excluindo...";
+        try {
+          await aoExcluir(valor);
+        } finally {
+          if (document.activeElement === input) atualizar();
+        }
+      });
+      linha.append(item, tirar);
+      listaEl.appendChild(linha);
     });
   }
 
@@ -9274,8 +9309,42 @@ ligarSugestoesContato(ctFuncao, ctFuncaoSugestao, (termo) => {
 // Empresa = onde a pessoa trabalha, escrita à mão como a função: as já usadas
 // em outros contatos viram sugestão, e o que for novo entra com "Adicionar".
 // Até existir o cadastro de empresas, fica guardado só o nome.
+function contatosComEmpresa(nome) {
+  const chave = normalizarTexto(nome);
+  return contatosCadastrados.filter((c) => c.empresas.some((n) => normalizarTexto(n) === chave));
+}
+
+// O "×" de uma sugestão exclui a empresa: o nome sai de todos os contatos que
+// o têm, em qualquer grafia (como nas sugestões). Nada mais nos contatos muda.
+async function excluirEmpresaDosContatos(nome) {
+  mostrarCtStatus("", "");
+  try {
+    const resposta = await pedirAoN8n("contatos", { acao: "excluirEmpresa", empresa: nome });
+    if (!resposta || !resposta.ok) {
+      mostrarCtStatus("error", (resposta && resposta.mensagem) || "Não consegui excluir a empresa.");
+      return;
+    }
+    const alterados = resposta.contatos || [];
+    contatosCadastrados = contatosCadastrados.map((c) => alterados.find((a) => a.id === c.id) || c);
+    // Contato aberto que perdeu o nome: o "como estava ao abrir" perde também,
+    // senão o formulário pareceria ter algo por salvar.
+    if (alterados.some((c) => c.id === contatoEditandoId)) {
+      const original = JSON.parse(ctEstadoOriginal);
+      original.empresas = original.empresas.filter((n) => normalizarTexto(n) !== normalizarTexto(nome));
+      ctEstadoOriginal = JSON.stringify(original);
+    }
+    desenharContatos();
+    mostrarToast(`Empresa "${nome}" excluída.`);
+  } catch (err) {
+    mostrarCtStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+  }
+}
+
 ligarSugestoesContato(ctEmpresaBusca, ctEmpresaSugestao, (termo) => {
-  const usadas = valoresJaUsados((c) => c.empresas, termo, { jaEscolhidos: ctEmpresas });
+  const usadas = valoresJaUsados((c) => c.empresas, termo, { jaEscolhidos: ctEmpresas }).map((s) => {
+    const n = contatosComEmpresa(s.valor).length;
+    return { ...s, excluir: n === 1 ? "Excluir de 1 contato?" : `Excluir de ${n} contatos?` };
+  });
   const digitada = ctEmpresaBusca.value.trim().replace(/\s+/g, " ");
   const jaExiste = usadas.some((s) => normalizarTexto(s.valor) === termo)
     || ctEmpresas.some((nome) => normalizarTexto(nome) === termo);
@@ -9286,7 +9355,7 @@ ligarSugestoesContato(ctEmpresaBusca, ctEmpresaSugestao, (termo) => {
   formContato.dispatchEvent(new Event("input"));
   // Fica no campo, pronto para a próxima empresa, se houver.
   ctEmpresaBusca.focus();
-});
+}, excluirEmpresaDosContatos);
 
 formContato.addEventListener("submit", async (evento) => {
   evento.preventDefault();

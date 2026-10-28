@@ -11,7 +11,7 @@ const ARQ_BACKUP = 'C:/Users/rediv/banco-solucoes/backup-cadastros.json';
   const inicio = new Date().toISOString();
   const antes = await contarTudo();
   const backupAntes = fs.existsSync(ARQ_BACKUP) ? fs.readFileSync(ARQ_BACKUP) : null;
-  let empresaTeste = null, contatoId = null;
+  let empresaTeste = null, contatoId = null, contato2Id = null;
 
   try {
     await entrarComUsuarioDeTeste();
@@ -105,6 +105,38 @@ const ARQ_BACKUP = 'C:/Users/rediv/banco-solucoes/backup-cadastros.json';
     confere('tirar as empresas de trabalho deixa os clientes como estavam', semNomes.ok && !gravado.fields.Empresas
       && JSON.stringify(gravado.fields.Entidades_Vinculadas) === JSON.stringify([empresaTeste.id]), gravado.fields);
 
+    // ---- excluir uma empresa (nome) de todos os contatos que a têm ----
+    // Nomes que nenhum contato real usa: só os dois contatos de teste podem mudar.
+    const doTesteAntes = (await lista(CAD, 'Contatos_Solicitantes')).filter((c) => /zz teste/i.test(c.fields.Empresas || ''));
+    confere('nenhum contato real usa os nomes de teste', !doTesteAntes.length, doTesteAntes.map((c) => c.id));
+    await chamar('contatos', { acao: 'salvar', id: contatoId, nome: 'TESTE Contato Migração', telefones: '[]', emails: '[]',
+      empresas: JSON.stringify(['zz teste excluir EMPRESA', 'ZZ Teste Outra']) });
+    const segundo = await chamar('contatos', { acao: 'salvar', nome: 'TESTE Contato Migração 2', telefones: '[]', emails: '[]',
+      empresas: JSON.stringify(['ZZ Teste Fica', 'ZZ Teste Excluir Empresa.']) });
+    contato2Id = segundo.contato && segundo.contato.id;
+    const fotoDosOutros = async () => JSON.stringify((await lista(CAD, 'Contatos_Solicitantes'))
+      .filter((c) => c.id !== contatoId && c.id !== contato2Id).sort((a, b) => a.id.localeCompare(b.id)));
+    const outrosAntes = await fotoDosOutros();
+    const semNomeEmpresa = await chamar('contatos', { acao: 'excluirEmpresa', empresa: '  ' });
+    confere('excluir empresa sem nome é recusado', semNomeEmpresa.ok === false && /Empresa inválida/.test(semNomeEmpresa.mensagem), semNomeEmpresa);
+    const soPontuacao = await chamar('contatos', { acao: 'excluirEmpresa', empresa: '...' });
+    confere('excluir empresa só com pontuação é recusado', soPontuacao.ok === false && /Empresa inválida/.test(soPontuacao.mensagem), soPontuacao);
+    // Acento, maiúscula, espaço e ponto a mais: é a mesma empresa das sugestões do app.
+    const excEmpresa = await chamar('contatos', { acao: 'excluirEmpresa', empresa: 'ZZ Teste  Excluír Empresa' });
+    const g1 = (await lista(CAD, 'Contatos_Solicitantes', `RECORD_ID()='${contatoId}'`))[0].fields;
+    const g2 = (await lista(CAD, 'Contatos_Solicitantes', `RECORD_ID()='${contato2Id}'`))[0].fields;
+    confere('excluir empresa tira o nome dos dois contatos, em qualquer grafia', excEmpresa.ok && g1.Empresas === 'ZZ Teste Outra' && g2.Empresas === 'ZZ Teste Fica', { excEmpresa, g1, g2 });
+    confere('excluir empresa não mexe no resto do contato', g1.Nome_Contato === 'TESTE Contato Migração' && g1.Status === 'Ativo'
+      && JSON.stringify(g1.Entidades_Vinculadas) === JSON.stringify([empresaTeste.id]), g1);
+    const devolvido = (excEmpresa.contatos || []).find((c) => c.id === contato2Id);
+    confere('excluir empresa devolve os contatos como ficaram', (excEmpresa.contatos || []).length === 2 && devolvido
+      && JSON.stringify(devolvido.empresas) === JSON.stringify(['ZZ Teste Fica']) && devolvido.nome === 'TESTE Contato Migração 2', excEmpresa);
+    confere('excluir empresa não mexe em nenhum outro contato', outrosAntes === await fotoDosOutros());
+    const excDeNovo = await chamar('contatos', { acao: 'excluirEmpresa', empresa: 'ZZ Teste Excluir Empresa' });
+    confere('excluir empresa que ninguém tem mais responde ok, sem gravar', excDeNovo.ok === true && excDeNovo.contatos.length === 0, excDeNovo);
+    const exc2o = await chamar('contatos', { acao: 'excluir', id: contato2Id });
+    if (exc2o.ok) contato2Id = null;
+
     // ---- contato que não existe ----
     const fantasma = await chamar('contatos', { acao: 'salvar', id: 'recFantasma0000000'.slice(0, 17), nome: 'X', telefones: '[]', emails: '[]' });
     confere('editar contato que não existe é recusado (não cria outro)', fantasma.ok === false && /não existe/.test(fantasma.mensagem), fantasma);
@@ -118,6 +150,7 @@ const ARQ_BACKUP = 'C:/Users/rediv/banco-solucoes/backup-cadastros.json';
     confere('excluir de novo é recusado', exc2.ok === false && /não existe/.test(exc2.mensagem), exc2);
   } finally {
     if (contatoId) await local('DELETE', `/v0/${CAD}/Contatos_Solicitantes/${contatoId}`);
+    if (contato2Id) await local('DELETE', `/v0/${CAD}/Contatos_Solicitantes/${contato2Id}`);
     if (empresaTeste && empresaTeste.id) await local('DELETE', `/v0/${CAD}/Entidades_Cadastradas/${empresaTeste.id}`);
     await sairEApagarUsuarioDeTeste();
     await esperar(1500); // o backup é refeito logo depois da resposta: espera antes de devolver o arquivo

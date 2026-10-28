@@ -4821,6 +4821,32 @@ condomínio viraram um cadastro cada: 13 → 1, 14 → 1 e 9 → 1. Resultado: *
 - Nenhum cliente perdeu contato: cada vínculo foi somado ao cadastro que ficou. Os chamados
   guardam uma cópia do nome do contato, então não mudam.
 
+#### "×" para excluir uma empresa das sugestões (28/10/2026)
+
+**Pedido do dono:** um "×" pequeno, vermelho, em cada nome de empresa que aparece como sugestão
+no campo Empresas, para excluir.
+- **Tela:** cada sugestão de empresa já usada ganha o "×" (o item `Adicionar "…"` não). O 1º
+  toque mostra "Excluir de N contatos?" e o 2º exclui, como o "Excluir contato".
+  `ligarSugestoesContato` aceita um 5º parâmetro (`aoExcluir`) e o campo `excluir` por item.
+- **`App - Contatos`:** ação nova `excluirEmpresa` (`empresa` = nome). Tira o nome de **todos**
+  os contatos que o têm, em qualquer grafia que só mude acento, maiúscula ou pontuação (a mesma
+  regra do `normalizarTexto` do app), mexendo só no campo `Empresas`, num PATCH só. Se ninguém
+  mais tem o nome, responde ok sem gravar. Devolve `contatos` (os alterados, já como ficaram).
+- **Testes:** `testar-fluxo-contatos.js` agora tem 41 (8 novos, com nomes "ZZ Teste…" que nenhum
+  contato real usa, e conferindo que nenhum outro contato mudou).
+
+**Kaspersky derrubou o "Airtable local" (28/10/2026, 14:14 e 14:35).** O Inspetor do Sistema
+acusou `PDM:Trojan.Win32.Generic` no `node.exe` rodando `banco/airtable-local.js`, encerrou o
+processo e excluiu o arquivo. Foi alarme falso: o MD5 do arquivo excluído era idêntico ao do
+git, e nas duas vezes o disparo veio logo depois de refazer o `backup-cadastros.json` (grava
+`.novo` e troca pelo antigo, padrão parecido com o de vírus que sequestra arquivo). Começou
+com a atualização das bases do Kaspersky de 28/10 às 12:40.
+- Resolvido pelo dono no Kaspersky: exclusão do arquivo `airtable-local.js` **e**
+  `node.exe` como aplicativo confiável com "Não monitorar a atividade do aplicativo". Só a
+  exclusão do arquivo não basta: ela não vale para o Inspetor do Sistema.
+- O arquivo foi restaurado pelo git (mesmo MD5). Se o servidor cair do nada de novo, olhar
+  primeiro o log de eventos (Aplicativo, fonte `avp`, evento 4662).
+
 ### Aba Documentos: gerador de PDF dentro do sistema (28/10/2026)
 
 **Pedido do dono:** colocar o gerador de PDF da skill `pdf-solucoes-rapidas` (orçamento, recibo,

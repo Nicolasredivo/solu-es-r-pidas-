@@ -508,6 +508,50 @@ input[type="text"]:focus {
   font-size: 0.85rem;
 }
 
+/* Sugestão com "×" de excluir (empresas): o "×" fica dentro da mesma caixa. */
+.sugestao-linha {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  background: var(--card);
+  border: 1px solid #2c3153;
+  border-radius: 8px;
+}
+
+.sugestao-linha .sugestao-item {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  border: 0;
+  background: transparent;
+}
+
+.sugestao-excluir {
+  width: auto;
+  min-width: 32px;
+  flex-shrink: 0;
+  margin: 2px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--error);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.sugestao-excluir.confirmando {
+  background: var(--error);
+  color: white;
+  font-size: 0.8rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sugestao-excluir:not(.confirmando):not(:disabled):hover {
+    background: rgba(229, 72, 77, 0.12);
+    filter: none;
+  }
+}
+
 /* Locais de atendimento: bloco que se repete, um por endereço */
 .locais-ajuda {
   margin: -2px 0 12px;
