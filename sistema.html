@@ -141,9 +141,10 @@
 
               <label for="ct-empresa-busca">Empresas</label>
               <ul id="ct-empresas-escolhidas" class="ct-empresas-escolhidas hidden" aria-label="Empresas escolhidas"></ul>
-              <input type="text" id="ct-empresa-busca" placeholder="Buscar cliente cadastrado" />
+              <input type="text" id="ct-empresa-busca" maxlength="120" placeholder="Ex: Administradora Exemplo" />
               <div id="ct-empresa-sugestao" class="sugestao-lista hidden"></div>
-              <p id="ct-empresa-ajuda" class="placeholder-text ct-ajuda">Opcional, e pode ter mais de uma. Deixe em branco se a pessoa não for de nenhuma empresa.</p>
+              <p id="ct-empresa-ajuda" class="placeholder-text ct-ajuda">Onde a pessoa trabalha (não é o cliente). Opcional, e pode ter mais de uma.</p>
+              <p id="ct-clientes-info" class="placeholder-text ct-ajuda hidden"></p>
 
               <label for="ct-notas">Notas</label>
               <textarea id="ct-notas" rows="3" maxlength="2000" placeholder="Qualquer coisa que valha lembrar sobre a pessoa"></textarea>

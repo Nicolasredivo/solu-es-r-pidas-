@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.27b";
+const APP_VERSION = "2026.10.27c";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -8891,6 +8891,7 @@ const ctEmpresaBusca = document.getElementById("ct-empresa-busca");
 const ctEmpresaSugestao = document.getElementById("ct-empresa-sugestao");
 const ctEmpresasEscolhidas = document.getElementById("ct-empresas-escolhidas");
 const ctEmpresaAjuda = document.getElementById("ct-empresa-ajuda");
+const ctClientesInfo = document.getElementById("ct-clientes-info");
 const ctNotas = document.getElementById("ct-notas");
 const ctSalvar = document.getElementById("ct-salvar");
 const ctCancelar = document.getElementById("ct-cancelar");
@@ -8902,12 +8903,13 @@ const ctListaStatus = document.getElementById("ct-lista-status");
 const ctTotal = document.getElementById("ct-total");
 
 let contatosCadastrados = [];
-let empresasDosContatos = [];
+// Clientes (só para mostrar o nome de quem a pessoa é contato).
+let clientesDosContatos = [];
 let contatosCarregados = false;
 let contatoEditandoId = "";
-// Uma pessoa pode ser de várias empresas (síndica profissional de vários
-// condomínios, por exemplo).
-let ctEmpresaIds = [];
+// Empresas onde a pessoa trabalha, por nome (pode ser mais de uma). Não são
+// os clientes: esses o Cadastro de clientes cuida, e esta tela não mexe.
+let ctEmpresas = [];
 let ctEstadoOriginal = "";
 // Telefones/e-mails que o contato já tinha ao abrir: só os novos passam pelo
 // aviso de repetido (a mesma síndica em vários condomínios já é repetida).
@@ -8923,10 +8925,19 @@ function mostrarCtStatus(tipo, mensagem) {
   ctStatus.className = mensagem ? `status show ${tipo}` : "status";
 }
 
-function nomeDaEmpresa(id) {
-  const empresa = empresasDosContatos.find((e) => e.id === id);
-  if (!empresa) return "";
-  return empresa.nomeFantasia || empresa.razaoSocial || "Cliente sem nome";
+function nomeDoCliente(id) {
+  const cliente = clientesDosContatos.find((e) => e.id === id);
+  if (!cliente) return "";
+  return cliente.nomeFantasia || cliente.razaoSocial || "Cliente sem nome";
+}
+
+function nomesDosClientes(ids) {
+  return (ids || []).map(nomeDoCliente).filter(Boolean);
+}
+
+// Muitos nomes numa linha só: mostra dois e quantos faltam.
+function resumirNomes(nomes) {
+  return nomes.length > 2 ? `${nomes.slice(0, 2).join(", ")} e mais ${nomes.length - 2}` : nomes.join(", ");
 }
 
 // Telefone: uma linha só (contato antigo com mais de um mostra todos).
@@ -8980,41 +8991,48 @@ function preencherLinhasContato(lista, tipo, valores) {
   itens.forEach((valor) => adicionarLinhaContato(lista, tipo, valor, false));
 }
 
-// Cada empresa escolhida vira uma etiqueta com "×". Empresa que não está mais
-// no cadastro (excluída no meio tempo) sai sozinha.
-function definirEmpresasContato(ids) {
-  ctEmpresaIds = [...new Set(ids || [])].filter((id) => nomeDaEmpresa(id));
+// Cada empresa vira uma etiqueta com "×". "acme" e "Acme" são a
+// mesma: a segunda não entra.
+function definirEmpresasContato(nomes) {
+  ctEmpresas = [];
+  (nomes || []).map((n) => String(n).trim().replace(/\s+/g, " ")).filter(Boolean).forEach((nome) => {
+    if (!ctEmpresas.some((outra) => normalizarTexto(outra) === normalizarTexto(nome))) ctEmpresas.push(nome);
+  });
   ctEmpresasEscolhidas.innerHTML = "";
-  ctEmpresaIds.forEach((id) => {
+  ctEmpresas.forEach((nome) => {
     const etiqueta = document.createElement("li");
     etiqueta.className = "ct-empresa-escolhida";
-    const nome = document.createElement("span");
-    nome.className = "ct-empresa-nome";
-    nome.textContent = nomeDaEmpresa(id);
+    const texto = document.createElement("span");
+    texto.className = "ct-empresa-nome";
+    texto.textContent = nome;
     const tirar = document.createElement("button");
     tirar.type = "button";
     tirar.className = "remover-canal";
     tirar.textContent = "×";
-    tirar.title = `Tirar ${nomeDaEmpresa(id)}`;
+    tirar.title = `Tirar ${nome}`;
     tirar.setAttribute("aria-label", tirar.title);
     tirar.addEventListener("click", () => {
-      definirEmpresasContato(ctEmpresaIds.filter((outro) => outro !== id));
+      definirEmpresasContato(ctEmpresas.filter((outra) => outra !== nome));
       // A mudança não passa por um campo de texto: avisa o formulário à mão.
       formContato.dispatchEvent(new Event("input"));
       ctEmpresaBusca.focus();
     });
-    etiqueta.append(nome, tirar);
+    etiqueta.append(texto, tirar);
     ctEmpresasEscolhidas.appendChild(etiqueta);
   });
-  ctEmpresasEscolhidas.classList.toggle("hidden", !ctEmpresaIds.length);
-  ctEmpresaAjuda.classList.toggle("hidden", Boolean(ctEmpresaIds.length));
-  ctEmpresaBusca.placeholder = ctEmpresaIds.length ? "Adicionar outra empresa" : "Buscar cliente cadastrado";
+  ctEmpresasEscolhidas.classList.toggle("hidden", !ctEmpresas.length);
+  ctEmpresaAjuda.classList.toggle("hidden", Boolean(ctEmpresas.length));
+  ctEmpresaBusca.placeholder = ctEmpresas.length ? "Adicionar outra empresa" : "Ex: Administradora Exemplo";
   ctEmpresaBusca.value = "";
   ctEmpresaSugestao.classList.add("hidden");
 }
 
-function nomesDasEmpresas(ids) {
-  return (ids || []).map(nomeDaEmpresa).filter(Boolean);
+// O que ficou digitado no campo de empresa sem virar etiqueta também conta
+// (quem digita o nome e vai direto no Salvar não perde a empresa).
+function empresasDoFormContato() {
+  const digitada = ctEmpresaBusca.value.trim().replace(/\s+/g, " ");
+  const todas = digitada ? [...ctEmpresas, digitada] : [...ctEmpresas];
+  return todas.filter((nome, i) => todas.findIndex((outra) => normalizarTexto(outra) === normalizarTexto(nome)) === i);
 }
 
 function dadosDoFormContato() {
@@ -9023,7 +9041,7 @@ function dadosDoFormContato() {
     telefones: valoresDosCanais(ctTelefones),
     emails: valoresDosCanais(ctEmails),
     funcao: ctFuncao.value.trim().replace(/\s+/g, " "),
-    empresaIds: [...ctEmpresaIds],
+    empresas: empresasDoFormContato(),
     observacoes: ctNotas.value.trim(),
   };
 }
@@ -9051,7 +9069,14 @@ function prepararFormContato(contato) {
   preencherLinhasContato(ctEmails, "email", contato && contato.emails);
   ctFuncao.value = contato ? contato.funcao : "";
   ctFuncaoSugestao.classList.add("hidden");
-  definirEmpresasContato(contato ? contato.empresaIds : []);
+  definirEmpresasContato(contato ? contato.empresas : []);
+  // Clientes de quem a pessoa é contato: só informação, quem cuida é o
+  // Cadastro de clientes.
+  const clientes = contato ? nomesDosClientes(contato.clienteIds) : [];
+  ctClientesInfo.textContent = clientes.length
+    ? `Aparece como contato de ${clientes.length === 1 ? "1 cliente" : `${clientes.length} clientes`} no Cadastro de clientes: ${resumirNomes(clientes)}.`
+    : "";
+  ctClientesInfo.classList.toggle("hidden", !clientes.length);
   ctNotas.value = contato ? contato.observacoes : "";
   ctSalvar.textContent = contato ? "Salvar alterações" : "Salvar contato";
   ctCancelar.classList.toggle("hidden", !contato);
@@ -9094,7 +9119,8 @@ function desenharContatos() {
 
   const visiveis = contatosCadastrados.filter((c) => {
     if (!termo) return true;
-    const texto = normalizarTexto([c.nome, c.funcao, ...nomesDasEmpresas(c.empresaIds), ...c.emails, c.observacoes].join(" "));
+    // Acha também pelo cliente: "aurora" traz quem é contato do Edifício Aurora.
+    const texto = normalizarTexto([c.nome, c.funcao, ...c.empresas, ...nomesDosClientes(c.clienteIds), ...c.emails, c.observacoes].join(" "));
     // Procurar por número ignora a pontuação; com menos de 3 dígitos, "47"
     // casaria com quase todo telefone.
     return texto.includes(termo) || (digitos.length >= 3 && c.telefones.some((t) => t.includes(digitos)));
@@ -9115,16 +9141,16 @@ function desenharContatos() {
   ctLista.innerHTML = "";
   visiveis.forEach((c) => {
     const item = document.createElement("li");
-    // Com muitas empresas, a linha mostra duas e quantas faltam.
-    const nomes = nomesDasEmpresas(c.empresaIds);
-    const empresas = nomes.length > 2 ? `${nomes.slice(0, 2).join(", ")} e mais ${nomes.length - 2}` : nomes.join(", ");
-    const linha1 = [c.funcao, empresas].filter(Boolean).map(escapeHtml).join(" · ");
+    const linha1 = [c.funcao, resumirNomes(c.empresas)].filter(Boolean).map(escapeHtml).join(" · ");
     const linha2 = [c.telefones[0] ? formatarTelefone(c.telefones[0]) : "", c.emails[0] || ""].filter(Boolean).map(escapeHtml).join(" · ");
+    const clientes = nomesDosClientes(c.clienteIds);
+    const linha3 = clientes.length ? `Contato de: ${escapeHtml(resumirNomes(clientes))}` : "";
     const inativo = c.status && c.status !== "Ativo" ? ` <span class="contato-item-tag">${escapeHtml(c.status)}</span>` : "";
     item.innerHTML = `<button type="button" class="contato-item${c.id === contatoEditandoId ? " editando" : ""}">
       <span class="contato-item-nome">${escapeHtml(c.nome || "Contato sem nome")}${inativo}</span>
       ${linha1 ? `<span class="contato-item-linha">${linha1}</span>` : ""}
       ${linha2 ? `<span class="contato-item-linha">${linha2}</span>` : ""}
+      ${linha3 ? `<span class="contato-item-linha contato-item-clientes">${linha3}</span>` : ""}
     </button>`;
     item.querySelector("button").addEventListener("click", () => abrirContatoNoForm(c.id));
     ctLista.appendChild(item);
@@ -9144,10 +9170,8 @@ async function carregarContatos() {
       return;
     }
     contatosCadastrados = dados.contatos || [];
-    empresasDosContatos = dados.empresas || [];
+    clientesDosContatos = dados.clientes || [];
     contatosCarregados = true;
-    // Alguma empresa escolhida pode ter sido excluída no meio tempo.
-    if (ctEmpresaIds.some((id) => !nomeDaEmpresa(id))) definirEmpresasContato(ctEmpresaIds);
     desenharContatos();
   } catch (err) {
     ctLista.innerHTML = "";
@@ -9214,46 +9238,51 @@ function ligarSugestoesContato(input, listaEl, coleta, aoEscolher) {
   });
 }
 
-// Cada função já usada vira sugestão, a mais usada primeiro. "síndico" e
-// "Síndico" são a mesma: fica a grafia que mais aparece.
-ligarSugestoesContato(ctFuncao, ctFuncaoSugestao, (termo) => {
+// Valores já usados nos contatos (função, empresa), o mais usado primeiro.
+// "síndico" e "Síndico" são o mesmo: fica a grafia que mais aparece.
+// `tirarIgual` esconde o que já está escrito igualzinho no campo;
+// `jaEscolhidos` esconde as etiquetas que o contato já tem.
+function valoresJaUsados(pegaValores, termo, { tirarIgual = false, jaEscolhidos = [] } = {}) {
   const porChave = new Map();
   contatosCadastrados.forEach((c) => {
-    const chave = normalizarTexto(c.funcao);
-    if (!chave) return;
-    const grupo = porChave.get(chave) || { total: 0, grafias: new Map() };
-    grupo.total += 1;
-    grupo.grafias.set(c.funcao, (grupo.grafias.get(c.funcao) || 0) + 1);
-    porChave.set(chave, grupo);
+    pegaValores(c).forEach((valor) => {
+      const chave = normalizarTexto(valor);
+      if (!chave) return;
+      const grupo = porChave.get(chave) || { total: 0, grafias: new Map() };
+      grupo.total += 1;
+      grupo.grafias.set(valor, (grupo.grafias.get(valor) || 0) + 1);
+      porChave.set(chave, grupo);
+    });
   });
+  const escolhidos = jaEscolhidos.map(normalizarTexto);
   return [...porChave.entries()]
-    .filter(([chave]) => chave !== termo && (!termo || chave.includes(termo)))
+    .filter(([chave]) => !(tirarIgual && chave === termo) && !escolhidos.includes(chave) && (!termo || chave.includes(termo)))
     .sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0], "pt-BR"))
     .map(([, grupo]) => {
       const grafia = [...grupo.grafias.entries()].sort((a, b) => b[1] - a[1])[0][0];
       return { rotulo: grafia, valor: grafia };
     });
+}
+
+ligarSugestoesContato(ctFuncao, ctFuncaoSugestao, (termo) => {
+  return valoresJaUsados((c) => [c.funcao], termo, { tirarIgual: true });
 }, (valor) => {
   ctFuncao.value = valor;
   ctFuncao.focus();
 });
 
-// Empresa = um cliente já cadastrado (vínculo de verdade, não texto solto).
-// Só sugere depois que começa a digitar: com dezenas de clientes, a lista
-// inteira ao tocar no campo não ajudaria. As já escolhidas não aparecem.
+// Empresa = onde a pessoa trabalha, escrita à mão como a função: as já usadas
+// em outros contatos viram sugestão, e o que for novo entra com "Adicionar".
+// Até existir o cadastro de empresas, fica guardado só o nome.
 ligarSugestoesContato(ctEmpresaBusca, ctEmpresaSugestao, (termo) => {
-  if (!termo) return [];
-  return empresasDosContatos
-    .filter((e) => !ctEmpresaIds.includes(e.id))
-    .filter((e) => normalizarTexto(`${e.nomeFantasia} ${e.razaoSocial}`).includes(termo))
-    .sort((a, b) => (a.status === "Inativo") - (b.status === "Inativo") || nomeDaEmpresa(a.id).localeCompare(nomeDaEmpresa(b.id), "pt-BR"))
-    .map((e) => {
-      const nome = nomeDaEmpresa(e.id);
-      const detalhe = [e.razaoSocial && e.razaoSocial !== nome ? e.razaoSocial : "", e.status === "Inativo" ? "inativo" : ""].filter(Boolean).join(" · ");
-      return { rotulo: nome, detalhe, valor: e.id };
-    });
-}, (id) => {
-  definirEmpresasContato([...ctEmpresaIds, id]);
+  const usadas = valoresJaUsados((c) => c.empresas, termo, { jaEscolhidos: ctEmpresas });
+  const digitada = ctEmpresaBusca.value.trim().replace(/\s+/g, " ");
+  const jaExiste = usadas.some((s) => normalizarTexto(s.valor) === termo)
+    || ctEmpresas.some((nome) => normalizarTexto(nome) === termo);
+  if (termo && !jaExiste) usadas.push({ rotulo: `Adicionar "${digitada}"`, valor: digitada });
+  return usadas;
+}, (nome) => {
+  definirEmpresasContato([...ctEmpresas, nome]);
   formContato.dispatchEvent(new Event("input"));
   // Fica no campo, pronto para a próxima empresa, se houver.
   ctEmpresaBusca.focus();
@@ -9284,7 +9313,7 @@ formContato.addEventListener("submit", async (evento) => {
       id: contatoEditandoId,
       nome: dados.nome,
       funcao: dados.funcao,
-      empresaIds: JSON.stringify(dados.empresaIds),
+      empresas: JSON.stringify(dados.empresas),
       observacoes: dados.observacoes,
       telefones: JSON.stringify(dados.telefones),
       emails: JSON.stringify(dados.emails),

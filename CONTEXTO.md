@@ -4784,3 +4784,39 @@ condomínios). Mudou:
 **Cadastros repetidos:** do jeito antigo, o mesmo síndico era cadastrado uma vez por
 condomínio. Hoje há três pessoas nessa situação (13, 14 e 9 cadastros cada). Juntar exige a
 autorização do dono e um backup antes. Ver a conversa de 27/10.
+
+#### Empresa do contato = onde a pessoa trabalha; cadastros repetidos juntados (27/10/2026, noite)
+
+**Correção do dono:** a empresa de um contato **não é** o condomínio nem o cliente. É a
+empresa onde a pessoa trabalha de verdade (ex.: a administradora ou a empresa de síndicos). Ele
+mesmo vai preencher, e depois vamos fazer a página de cadastro de empresa.
+
+- **Banco:** coluna nova `Contatos_Solicitantes."Empresas"` (texto, uma por linha), no
+  `schema.sql`. O Airtable local foi reiniciado para enxergar a coluna, porque o esquema é lido
+  na partida. Quando existir a página de cadastro de empresa, os nomes digitados aqui viram
+  registros dela.
+- **`Entidades_Vinculadas` continua sendo "de quais clientes a pessoa é contato"**: é o que
+  faz ela aparecer no cadastro do cliente e no Criar chamado. A tela de contatos **não mexe
+  mais** nisso, só mostra ("Aparece como contato de 13 clientes no Cadastro de clientes: …"),
+  e a lista mostra "Contato de: …". A busca também acha pelo nome do cliente.
+- **`App - Contatos`:** quando o pedido traz `empresas` (lista de nomes em JSON), grava
+  `Empresas` e não toca nos clientes. Sem `empresas` (versões 2026.10.27a/b do app), segue o
+  formato antigo. O `listar` devolve por contato `empresas` (nomes) e `clienteIds`, e no topo
+  `clientes`. `empresaIds`/`empresas` continuam no formato antigo para as versões 27a/b.
+- **Tela:** "Empresas" é texto livre com etiquetas, igual à Função. As já usadas viram
+  sugestão (a mais usada primeiro, e já aparecem ao tocar no campo), e o nome novo entra pelo
+  item `Adicionar "…"` ou pelo Enter. O que ficou digitado sem virar etiqueta entra ao
+  salvar.
+- **Testes:** `testar-fluxo-contatos.js` agora tem 33, com 5 novos do modo "empresas de
+  trabalho". O `testar-contato-varias-empresas.js` continua valendo (usa o formato antigo).
+
+**Cadastros repetidos juntados (autorizado pelo dono):** os três síndicos com um cadastro por
+condomínio viraram um cadastro cada: 13 → 1, 14 → 1 e 9 → 1. Resultado: **42 → 9 contatos**.
+- Fica o cadastro com o nome mais completo, com o nome em maiúsculas iniciais.
+- Clientes, telefones e e-mails de todos os cadastros juntados vão para ele.
+- Celular antigo sem o 9 (55 + DDD + 8 dígitos começando com 6–9) ganhou o 9.
+- Pessoas diferentes que dividem e-mail ficaram separadas.
+- Backup antes: `banco-solucoes\backups\solucoes-2026-10-27-antes-de-juntar-contatos.dump`.
+  Os cadastros que saíram também ficaram em `apagados_do_sistema` no `backup-cadastros.json`.
+- Nenhum cliente perdeu contato: cada vínculo foi somado ao cadastro que ficou. Os chamados
+  guardam uma cópia do nome do contato, então não mudam.

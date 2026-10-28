@@ -61,6 +61,7 @@ create table "Contatos_Solicitantes" (
   "Status" text,                    -- Ativo | Inativo | Arquivado
   "WhatsApps" text,                  -- um por linha
   "Emails" text,                     -- um por linha
+  "Empresas" text,                   -- onde a pessoa trabalha (não é o cliente), uma por linha; 27/10/2026
   "Criado_Em" timestamptz not null default now()
 );
 create index on "Contatos_Solicitantes" using gin ("Entidades_Vinculadas");

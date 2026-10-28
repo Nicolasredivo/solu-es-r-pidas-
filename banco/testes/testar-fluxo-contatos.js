@@ -84,6 +84,27 @@ const ARQ_BACKUP = 'C:/Users/rediv/banco-solucoes/backup-cadastros.json';
     gravado = (await lista(CAD, 'Contatos_Solicitantes', `RECORD_ID()='${contatoId}'`))[0];
     confere('dá para deixar sem empresa de novo', semEmpresa.ok && !(gravado.fields.Entidades_Vinculadas || []).length, gravado.fields);
 
+    // ---- empresas onde a pessoa trabalha (nomes) -- não mexe nos clientes da pessoa ----
+    await chamar('contatos', { acao: 'salvar', id: contatoId, nome: 'TESTE Contato Migração', telefones: '[]', emails: '[]', empresaId: empresaTeste.id });
+    const comNomes = await chamar('contatos', {
+      acao: 'salvar', id: contatoId, nome: 'TESTE Contato Migração', telefones: '[]', emails: '[]',
+      empresas: JSON.stringify(['Empresa  Teste Síndicos', 'empresa teste síndicos', 'Outra Empresa']),
+    });
+    gravado = (await lista(CAD, 'Contatos_Solicitantes', `RECORD_ID()='${contatoId}'`))[0];
+    confere('empresas de trabalho gravadas (repetida entra uma vez)', comNomes.ok && gravado.fields.Empresas === 'Empresa Teste Síndicos\nOutra Empresa'
+      && JSON.stringify(comNomes.contato.empresas) === JSON.stringify(['Empresa Teste Síndicos', 'Outra Empresa']), { comNomes, f: gravado.fields });
+    confere('gravar empresas de trabalho não mexe nos clientes da pessoa', JSON.stringify(gravado.fields.Entidades_Vinculadas) === JSON.stringify([empresaTeste.id]), gravado.fields);
+    const lst2 = await chamar('contatos', { acao: 'listar' });
+    const doTeste = lst2.contatos.find((c) => c.id === contatoId);
+    confere('listar devolve empresas de trabalho e clientes separados', doTeste && doTeste.empresas.length === 2
+      && JSON.stringify(doTeste.clienteIds) === JSON.stringify([empresaTeste.id]) && lst2.clientes.length === lst2.empresas.length, doTeste);
+    const nomesRuins = await chamar('contatos', { acao: 'salvar', id: contatoId, nome: 'X', telefones: '[]', emails: '[]', empresas: '{x' });
+    confere('lista de empresas malformada é recusada', nomesRuins.ok === false && /Empresa inválida/.test(nomesRuins.mensagem), nomesRuins);
+    const semNomes = await chamar('contatos', { acao: 'salvar', id: contatoId, nome: 'TESTE Contato Migração', telefones: '[]', emails: '[]', empresas: '[]' });
+    gravado = (await lista(CAD, 'Contatos_Solicitantes', `RECORD_ID()='${contatoId}'`))[0];
+    confere('tirar as empresas de trabalho deixa os clientes como estavam', semNomes.ok && !gravado.fields.Empresas
+      && JSON.stringify(gravado.fields.Entidades_Vinculadas) === JSON.stringify([empresaTeste.id]), gravado.fields);
+
     // ---- contato que não existe ----
     const fantasma = await chamar('contatos', { acao: 'salvar', id: 'recFantasma0000000'.slice(0, 17), nome: 'X', telefones: '[]', emails: '[]' });
     confere('editar contato que não existe é recusado (não cria outro)', fantasma.ok === false && /não existe/.test(fantasma.mensagem), fantasma);

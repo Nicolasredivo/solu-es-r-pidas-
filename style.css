@@ -3335,3 +3335,8 @@ div.lembrete-item:hover {
 .contatos-secao .contato-emails {
   margin-bottom: 8px;
 }
+
+/* "Contato de: ..." na lista de contatos: informação de apoio, menor. */
+.contato-item-clientes {
+  font-size: 0.8rem;
+}
