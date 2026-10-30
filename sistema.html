@@ -242,13 +242,15 @@
           <div id="aviso-existe" class="aviso hidden"></div>
 
           <form id="form-entidade" class="hidden">
+            <!-- Quatro molduras, como no Consultar (o CPF/CNPJ e o tipo ficam acima, na consulta). -->
+            <div class="moldura">
             <label for="razao-social">Razão social / Nome</label>
             <input type="text" id="razao-social" required />
 
             <label for="nome-fantasia">Nome fantasia / Identificador</label>
             <input type="text" id="nome-fantasia" />
 
-            <div class="grupo">
+            <div class="grupo campo-destaque">
               <label>Exigência fiscal</label>
               <div class="opcoes" id="grupo-exigencia">
                 <button type="button" class="opcao" data-valor="Exige Nota Fiscal">Nota fiscal</button>
@@ -256,13 +258,19 @@
               </div>
             </div>
 
-            <label for="emails">E-mails (financeiro / NF-e)</label>
-            <input type="text" id="emails" autocomplete="off" />
-            <div id="emails-sugestao" class="sugestao-lista hidden"></div>
-
             <label for="whatsapp-cnpj">WhatsApp vinculado ao CNPJ</label>
             <input type="text" id="whatsapp-cnpj" inputmode="tel" />
+            </div>
 
+            <div class="moldura moldura-emails">
+            <label class="moldura-titulo">E-mails (financeiro / NF-e)</label>
+            <!-- Guarda os e-mails (um por linha); a tela é a lista abaixo. -->
+            <input type="hidden" id="emails" />
+            <div class="emails-fin"></div>
+            </div>
+
+            <div class="moldura moldura-gestao">
+            <div class="moldura-parte">
             <label for="administradora">Administradora</label>
             <input type="text" id="administradora" autocomplete="off" />
             <div id="administradora-sugestao" class="sugestao-lista hidden"></div>
@@ -274,7 +282,9 @@
               <button type="button" class="contato-novo-sim">Sim</button>
               <button type="button" class="contato-novo-fechar" aria-label="Fechar a pergunta">×</button>
             </div>
+            </div>
 
+            <div class="moldura-parte">
             <label for="empresa-sindicos">Empresa de síndicos</label>
             <input type="text" id="empresa-sindicos" placeholder="Opcional" autocomplete="off" />
             <div id="empresa-sindicos-sugestao" class="sugestao-lista hidden"></div>
@@ -285,7 +295,10 @@
               <button type="button" class="contato-novo-sim">Sim</button>
               <button type="button" class="contato-novo-fechar" aria-label="Fechar a pergunta">×</button>
             </div>
+            </div>
+            </div>
 
+            <div class="moldura">
             <div class="grupo">
               <label>Status</label>
               <div class="opcoes" id="grupo-status">
@@ -296,7 +309,10 @@
 
             <label for="observacoes">Observações</label>
             <textarea id="observacoes" rows="3"></textarea>
+            </div>
 
+            <!-- Endereços e contatos lado a lado no computador (um embaixo do outro no celular). -->
+            <div class="lado-a-lado">
             <div class="grupo">
               <label>Locais de atendimento</label>
               <p class="placeholder-text locais-ajuda">
@@ -318,6 +334,7 @@
               <button type="button" id="adicionar-contato" class="botao-secundario">
                 + Adicionar contato
               </button>
+            </div>
             </div>
 
             <button type="submit" id="salvar-entidade">Salvar cadastro</button>
@@ -368,6 +385,8 @@
               <label>Nome</label>
               <input type="text" class="contato-nome" placeholder="Ex: Maria, do financeiro" autocomplete="off" />
               <div class="sugestao-lista hidden"></div>
+              <!-- Onde a pessoa trabalha (campo Empresas do Cadastro de contatos): só leitura aqui. -->
+              <p class="contato-empresas-info doc-hint hidden"></p>
               <!-- Nome que não está no Cadastro de contatos: oferece cadastrar completo. -->
               <div class="contato-novo-pergunta hidden">
                 <span>Adicionar novo cadastro de contato?</span>
@@ -490,6 +509,9 @@
 
               <div class="detalhe-status status"></div>
 
+              <!-- Quatro molduras (pedido do dono, 30/10/2026): identificação; e-mails do
+                   financeiro (destacada); administradora + sindicatura; status + observações. -->
+              <div class="moldura">
               <label>CPF / CNPJ</label>
               <input type="text" class="d-documento" disabled />
 
@@ -507,19 +529,28 @@
                 <option>CPF - Pessoa Física</option>
               </select>
 
+              <div class="campo-destaque">
               <label>Exigência fiscal</label>
               <select class="d-exigencia" disabled>
                 <option value="">—</option>
                 <option>Exige Nota Fiscal</option>
                 <option>Apenas Recibo</option>
               </select>
-
-              <label>E-mails (financeiro / NF-e)</label>
-              <input type="text" class="d-emails" disabled />
+              </div>
 
               <label>WhatsApp vinculado ao CNPJ</label>
               <input type="text" class="d-whatsapp-cnpj" disabled />
+              </div>
 
+              <div class="moldura moldura-emails">
+              <label class="moldura-titulo">E-mails (financeiro / NF-e)</label>
+              <!-- Guarda os e-mails (um por linha); a tela é a lista abaixo. -->
+              <input type="hidden" class="d-emails" disabled />
+              <div class="emails-fin"></div>
+              </div>
+
+              <div class="moldura moldura-gestao">
+              <div class="moldura-parte">
               <label>Administradora</label>
               <input type="text" class="d-administradora" disabled autocomplete="off" />
               <div class="sugestao-lista hidden d-administradora-sugestao"></div>
@@ -529,7 +560,9 @@
                 <button type="button" class="contato-novo-sim">Sim</button>
                 <button type="button" class="contato-novo-fechar" aria-label="Fechar a pergunta">×</button>
               </div>
+              </div>
 
+              <div class="moldura-parte">
               <label>Empresa de síndicos</label>
               <input type="text" class="d-empresa-sindicos" disabled autocomplete="off" />
               <div class="sugestao-lista hidden d-empresa-sindicos-sugestao"></div>
@@ -539,7 +572,10 @@
                 <button type="button" class="contato-novo-sim">Sim</button>
                 <button type="button" class="contato-novo-fechar" aria-label="Fechar a pergunta">×</button>
               </div>
+              </div>
+              </div>
 
+              <div class="moldura">
               <label>Status</label>
               <select class="d-status" disabled>
                 <option>Ativo</option>
@@ -548,13 +584,19 @@
 
               <label>Observações</label>
               <textarea class="d-observacoes" rows="3" disabled></textarea>
+              </div>
 
+              <!-- Endereços e contatos lado a lado no computador (um embaixo do outro no celular). -->
+              <div class="lado-a-lado">
+              <div class="lado-a-lado-coluna">
               <label class="rotulo-espacado">Endereços</label>
               <div class="d-locais grade-responsiva"></div>
               <button type="button" class="d-adicionar-local botao-secundario hidden">
                 + Adicionar endereço
               </button>
+              </div>
 
+              <div class="lado-a-lado-coluna">
               <!-- "Contatos" é um botão: abre a busca nos contatos salvos (Cadastro de
                    contatos) para ligar um a este cliente ou tirar um que já é dele. -->
               <button type="button" class="d-contatos-botao rotulo-espacado" aria-expanded="false"
@@ -574,6 +616,8 @@
               <button type="button" class="d-adicionar-contato botao-secundario hidden">
                 + Adicionar contato
               </button>
+              </div>
+              </div>
             </div>
           </template>
         </div>

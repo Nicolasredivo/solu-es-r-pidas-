@@ -296,6 +296,24 @@ body {
   .grade-responsiva > .aberta {
     grid-column: 1 / -1;
   }
+
+  /* Cliente (Adicionar e Consultar): endereços numa coluna, contatos na
+     outra, cada bloco com a mesma moldura de sempre (pedido do dono). */
+  .lado-a-lado {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .lado-a-lado-coluna,
+  .lado-a-lado > .grupo {
+    min-width: 0;
+  }
+
+  .lado-a-lado .grade-responsiva {
+    grid-template-columns: 1fr;
+  }
 }
 
 .card h1 {
@@ -635,6 +653,120 @@ input[type="text"]:focus {
   border-radius: 10px;
   padding: 14px;
   margin-bottom: 12px;
+}
+
+/* Cliente (Adicionar e Consultar): os campos em quatro molduras, com a mesma
+   borda dos blocos de endereço e contato. O último campo de cada moldura não
+   precisa da margem de baixo: a moldura já separa. */
+.moldura {
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.moldura > :last-child,
+.moldura-parte > :last-child {
+  margin-bottom: 0;
+}
+
+/* E-mails do financeiro: a moldura que mais importa, bem destacada. */
+.moldura-emails {
+  border: 2px solid var(--accent);
+  background: rgba(91, 141, 239, 0.08);
+}
+
+.moldura-titulo {
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+/* Administradora e Empresa de síndicos: bem separadas uma da outra. */
+.moldura-gestao .moldura-parte + .moldura-parte {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px dashed #2c3153;
+}
+
+/* Exigência fiscal um pouco mais destacada que os outros campos. */
+.campo-destaque {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--aviso);
+  border-radius: 6px;
+  background: rgba(245, 166, 35, 0.08);
+}
+
+.campo-destaque > label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.campo-destaque > :last-child {
+  margin-bottom: 0;
+}
+
+/* Etiquetas dos e-mails do financeiro. */
+.emails-fin-lista {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.emails-fin-item {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #12162a;
+  border: 1px solid #2c3153;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.emails-fin-item:has(button) {
+  padding: 0 4px 0 0;
+}
+
+.emails-fin-texto {
+  width: auto;
+  padding: 6px 4px 6px 12px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 400;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.emails-fin-tirar {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--error);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.emails-fin-vazio {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.moldura-emails input[type="text"] {
+  margin-bottom: 6px;
+}
+
+.moldura-emails .doc-hint:empty {
+  display: none;
 }
 
 .local-topo,
@@ -3607,6 +3739,38 @@ div.lembrete-item:hover {
 .sind-item-vazio {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+/* Nome + "Editar nome" / "Excluir" no topo de cada sindicatura/administradora. */
+.sind-item-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.sind-item-acoes {
+  display: flex;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.sind-item-acoes .link-button,
+.adm-emails-linha .link-button {
+  margin-top: 0;
+}
+
+.sind-item-acoes .sind-excluir {
+  color: var(--error);
+}
+
+.sind-item-acoes .sind-excluir.confirmando {
+  font-weight: 700;
+}
+
+.sind-renomear input[type="text"] {
+  margin-bottom: 6px;
 }
 
 /* E-mails da administradora + "Editar e-mails" na mesma linha (quebra no celular). */

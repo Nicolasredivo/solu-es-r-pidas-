@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.28p";
+const APP_VERSION = "2026.10.30a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -740,6 +740,22 @@ function preencherBlocoContato(bloco, dados) {
   // Cada contato já nasce com uma linha de cada, senão o campo fica invisível.
   preencherCanais(bloco.querySelector(".contato-whatsapps"), "whatsapp", dados.whatsapps);
   preencherCanais(bloco.querySelector(".contato-emails"), "email", dados.emails);
+  mostrarEmpresasDoBloco(bloco);
+}
+
+// "Empresas: …" embaixo do nome do bloco: onde a pessoa trabalha, do Cadastro
+// de contatos (pelo id do bloco). Só leitura; muda-se lá.
+function mostrarEmpresasDoBloco(bloco) {
+  const info = bloco.querySelector(".contato-empresas-info");
+  const salvo = bloco.dataset.id ? contatosCadastrados.find((c) => c.id === bloco.dataset.id) : null;
+  const empresas = salvo ? salvo.empresas : [];
+  info.textContent = empresas.length ? `Empresas: ${empresas.join(", ")}` : "";
+  info.classList.toggle("hidden", !empresas.length);
+}
+
+// Os blocos de contato de uma caixa, depois de a lista de contatos salvos chegar.
+function mostrarEmpresasDosBlocos(caixa) {
+  buscarContatosSalvos().then(() => caixa.querySelectorAll(".contato").forEach(mostrarEmpresasDoBloco));
 }
 
 // Contato do Cadastro de contatos no formato dos blocos do cliente.
@@ -1036,6 +1052,7 @@ function limparFormulario() {
   salvarStatus.className = "status";
   campoAdmNovoCliente.atualizar();
   campoSindNovoCliente.atualizar();
+  emailsFinNovoCliente.atualizar();
 }
 
 async function consultarDocumento(digitos) {
@@ -1077,6 +1094,7 @@ async function consultarDocumento(digitos) {
       razaoSocialInput.value = dados.receita.razaoSocial || "";
       nomeFantasiaInput.value = dados.receita.nomeFantasia || "";
       emailsInput.value = dados.receita.email || "";
+      emailsFinNovoCliente.atualizar();
       whatsappCnpjInput.value = formatarTelefone(dados.receita.telefone);
       mostrarDica("ok", "Dados encontrados na Receita — confira antes de salvar.");
     } else if (dados.avisoReceita) {
@@ -1347,7 +1365,148 @@ function ligarSugestaoCampo(input, listaEl, coletaValores) {
   input.addEventListener("blur", () => listaEl.classList.add("hidden"));
 }
 
-ligarSugestaoCampo(emailsInput, document.getElementById("emails-sugestao"), () => valoresDistintosCadastro("emails"));
+// ----- E-mails do financeiro / NF-e do cliente -----
+//
+// Vários e-mails, guardados no mesmo campo de antes (um por linha, num input
+// escondido que o Salvar já lê). Na tela: uma etiqueta por e-mail (toque para
+// editar, × para tirar) e, editando, uma busca com todos os e-mails já usados
+// no sistema (clientes, contatos e administradoras) ou "Adicionar …" um novo.
+const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function separarEmails(texto) {
+  const vistos = [];
+  String(texto || "").split(/[\n,;]+/).map((e) => e.trim()).filter(Boolean).forEach((e) => {
+    if (!vistos.some((x) => x.toLowerCase() === e.toLowerCase())) vistos.push(e);
+  });
+  return vistos;
+}
+
+// Todos os e-mails conhecidos, cada um com de onde veio (para a sugestão).
+function emailsDoSistema() {
+  const mapa = new Map();
+  const guardar = (email, origem) => {
+    const chave = email.toLowerCase();
+    if (EMAIL_VALIDO.test(email) && !mapa.has(chave)) mapa.set(chave, { email, origem });
+  };
+  cadastros.forEach((c) => separarEmails(c.emails).forEach((e) => guardar(e, `Cliente ${c.nomeFantasia || c.razaoSocial || ""}`.trim())));
+  if (contatosCarregados) contatosCadastrados.forEach((c) => c.emails.forEach((e) => guardar(e, `Contato ${c.nome || ""}`.trim())));
+  cadastroAdministradoras.lista().forEach((a) => (a.emails || []).forEach((e) => guardar(e, `Administradora ${a.nome}`)));
+  return [...mapa.values()].sort((a, b) => a.email.localeCompare(b.email));
+}
+
+function ligarEmailsFinanceiro(campo, caixa) {
+  const lista = document.createElement("ul");
+  lista.className = "emails-fin-lista";
+  const busca = document.createElement("input");
+  busca.type = "text";
+  busca.autocomplete = "off";
+  busca.inputMode = "email";
+  busca.placeholder = "Buscar ou adicionar e-mail";
+  busca.setAttribute("aria-label", "Buscar ou adicionar e-mail do financeiro");
+  const sugestoes = document.createElement("div");
+  sugestoes.className = "sugestao-lista hidden";
+  const aviso = document.createElement("p");
+  aviso.className = "doc-hint";
+  caixa.append(lista, busca, sugestoes, aviso);
+
+  const atuais = () => separarEmails(campo.value);
+  function gravar(emails) {
+    campo.value = emails.join("\n");
+    // O formulário acompanha alterações não salvas pelo "input".
+    campo.dispatchEvent(new Event("input", { bubbles: true }));
+    desenhar();
+  }
+
+  function adicionar(email) {
+    const limpo = email.trim();
+    if (!EMAIL_VALIDO.test(limpo)) {
+      aviso.textContent = `"${limpo}" não parece um e-mail. Confira e tente de novo.`;
+      aviso.className = "doc-hint error";
+      return;
+    }
+    aviso.textContent = "";
+    aviso.className = "doc-hint";
+    if (!atuais().some((e) => e.toLowerCase() === limpo.toLowerCase())) gravar([...atuais(), limpo]);
+    busca.value = "";
+    busca.focus();
+  }
+
+  function desenhar() {
+    const editando = !campo.disabled;
+    const emails = atuais();
+    lista.innerHTML = "";
+    if (!emails.length) {
+      const vazio = document.createElement("li");
+      vazio.className = "emails-fin-vazio";
+      vazio.textContent = "Nenhum e-mail cadastrado.";
+      lista.appendChild(vazio);
+    }
+    emails.forEach((email) => {
+      const item = document.createElement("li");
+      item.className = "emails-fin-item";
+      if (!editando) {
+        item.textContent = email;
+      } else {
+        // Toque no e-mail: volta para a busca, para corrigir.
+        const texto = document.createElement("button");
+        texto.type = "button";
+        texto.className = "emails-fin-texto";
+        texto.textContent = email;
+        texto.title = "Editar este e-mail";
+        texto.addEventListener("click", () => {
+          gravar(atuais().filter((e) => e !== email));
+          busca.value = email;
+          busca.focus();
+          busca.dispatchEvent(new Event("input"));
+        });
+        const tirar = document.createElement("button");
+        tirar.type = "button";
+        tirar.className = "emails-fin-tirar";
+        tirar.textContent = "×";
+        tirar.setAttribute("aria-label", `Tirar ${email}`);
+        tirar.addEventListener("click", () => gravar(atuais().filter((e) => e !== email)));
+        item.append(texto, tirar);
+      }
+      lista.appendChild(item);
+    });
+    busca.classList.toggle("hidden", !editando);
+    if (!editando) {
+      busca.value = "";
+      sugestoes.classList.add("hidden");
+      aviso.textContent = "";
+    }
+  }
+
+  ligarSugestoesContato(busca, sugestoes, (termo) => {
+    const ja = atuais().map((e) => e.toLowerCase());
+    const digitado = busca.value.trim();
+    const itens = emailsDoSistema()
+      .filter((x) => !ja.includes(x.email.toLowerCase()) && (!termo || normalizarTexto(x.email).includes(termo)))
+      .map((x) => ({ rotulo: x.email, detalhe: x.origem, valor: x.email }));
+    const existe = digitado && (ja.includes(digitado.toLowerCase()) || itens.some((x) => x.valor.toLowerCase() === digitado.toLowerCase()));
+    if (digitado && !existe) itens.unshift({ rotulo: `Adicionar "${digitado}"`, valor: digitado });
+    return itens;
+  }, adicionar);
+
+  // As listas de onde vêm as sugestões chegam na primeira vez que a busca é usada.
+  busca.addEventListener("focus", () => {
+    Promise.all([garantirCadastrosCarregados(), buscarContatosSalvos(), cadastroAdministradoras.buscar().catch(() => {})])
+      .then(() => { if (document.activeElement === busca) busca.dispatchEvent(new Event("input")); })
+      .catch(() => {});
+  });
+  // Enter adiciona o que foi digitado (sem enviar o formulário).
+  busca.addEventListener("keydown", (evento) => {
+    if (evento.key !== "Enter") return;
+    evento.preventDefault();
+    if (busca.value.trim()) adicionar(busca.value);
+  });
+
+  desenhar();
+  return { atualizar: desenhar };
+}
+
+// Cadastro novo de cliente.
+const emailsFinNovoCliente = ligarEmailsFinanceiro(emailsInput, emailsInput.parentElement.querySelector(".emails-fin"));
 // O campo Administradora tem sugestões próprias (ligarCampoDeCadastro).
 // O campo Empresa de síndicos tem sugestões próprias (ligarCampoDeCadastro).
 
@@ -1495,6 +1654,8 @@ async function abrirLinha(linha, caixa, cadastro, avisoDepois) {
   // Só agora o bloco está na tela: montarDetalhe monta tudo solto da página, e
   // ali qualquer altura medida daria zero.
   ajustarAlturasAuto(caixa);
+  // Empresas de cada contato: vêm do Cadastro de contatos, que pode ainda não ter chegado.
+  mostrarEmpresasDosBlocos(caixa);
 }
 
 function montarDetalhe(linha, resumo, dados, avisoDepois) {
@@ -1538,6 +1699,8 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
       bloco.querySelector(".adm-cliente-info"), bloco.querySelector(".adm-cliente-pergunta")),
     ligarCampoDeCadastro(cadastroSindicaturas, campos.empresaSindicos, bloco.querySelector(".d-empresa-sindicos-sugestao"),
       bloco.querySelector(".sind-cliente-info"), bloco.querySelector(".sind-cliente-pergunta")),
+    // E-mails do financeiro: etiquetas + busca (a busca só aparece editando).
+    ligarEmailsFinanceiro(campos.emails, bloco.querySelector(".emails-fin")),
   ];
   preencher();
   [cadastroAdministradoras, cadastroSindicaturas].forEach((cad, i) => {
@@ -9955,6 +10118,9 @@ function ligarCadastroDeEmpresas(c) {
   let buscando = null;
   // Administradora com os e-mails abertos para editar na lista ("" = nenhuma).
   let editandoId = "";
+  // Com o nome aberto para trocar, e com o "Excluir" armado (segundo toque apaga).
+  let renomeandoId = "";
+  let excluindoId = "";
 
   if (emailsEl) {
     preencherCanais(emailsEl, "email");
@@ -10030,10 +10196,7 @@ function ligarCadastroDeEmpresas(c) {
     visiveis.forEach((s) => {
       const item = document.createElement("li");
       item.className = "sind-item";
-      const nome = document.createElement("span");
-      nome.className = "sind-item-nome";
-      nome.textContent = s.nome;
-      item.appendChild(nome);
+      item.appendChild(s.id === renomeandoId ? editorDeNome(s) : topoDoItem(s));
       if (c.comEmails && s.id === editandoId) item.appendChild(editorDeEmails(s));
       else if (c.comEmails) {
         const linha = document.createElement("div");
@@ -10081,6 +10244,121 @@ function ligarCadastroDeEmpresas(c) {
       }
       listaEl.appendChild(item);
     });
+  }
+
+  // Renomear e excluir mexem em outras telas também (o nome sai ou muda nos
+  // contatos e clientes que o usam): o servidor faz tudo, e a lista vem de novo.
+  async function mudarNoServidor(dados, botao, aviso) {
+    botao.disabled = true;
+    aviso.textContent = dados.acao === "excluir" ? "Excluindo..." : "Salvando...";
+    aviso.className = "doc-hint neutral";
+    try {
+      const resposta = await pedirAoN8n(c.webhook, dados);
+      if (!resposta || !resposta.ok) {
+        aviso.textContent = (resposta && resposta.mensagem) || "Não consegui salvar.";
+        aviso.className = "doc-hint error";
+        return;
+      }
+      renomeandoId = "";
+      excluindoId = "";
+      // Contatos e clientes mudaram: as outras telas buscam de novo.
+      contatosCarregados = false;
+      listaCarregada = false;
+      mostrarToast(resposta.mensagem || "Pronto.");
+      await carregar();
+    } catch (err) {
+      aviso.textContent = "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?";
+      aviso.className = "doc-hint error";
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+  // Nome + "Editar nome" e "Excluir" (dois toques).
+  function topoDoItem(s) {
+    const topo = document.createElement("div");
+    topo.className = "sind-item-topo";
+    const nome = document.createElement("span");
+    nome.className = "sind-item-nome";
+    nome.textContent = s.nome;
+    const acoes = document.createElement("span");
+    acoes.className = "sind-item-acoes";
+    const renomear = document.createElement("button");
+    renomear.type = "button";
+    renomear.className = "link-button";
+    renomear.textContent = "Editar nome";
+    renomear.addEventListener("click", () => {
+      renomeandoId = s.id;
+      excluindoId = "";
+      desenhar();
+      const campo = listaEl.querySelector(".sind-renomear input");
+      if (campo) { campo.focus(); campo.select(); }
+    });
+    const excluir = document.createElement("button");
+    excluir.type = "button";
+    excluir.className = `link-button sind-excluir${s.id === excluindoId ? " confirmando" : ""}`;
+    excluir.textContent = s.id === excluindoId ? "Confirmar exclusão" : "Excluir";
+    const aviso = document.createElement("p");
+    aviso.className = "doc-hint";
+    excluir.addEventListener("click", () => {
+      if (s.id !== excluindoId) {
+        excluindoId = s.id;
+        renomeandoId = "";
+        desenhar();
+        return;
+      }
+      mudarNoServidor({ acao: "excluir", id: s.id }, excluir, aviso);
+    });
+    acoes.append(renomear, excluir);
+    topo.append(nome, acoes);
+    if (s.id !== excluindoId) return topo;
+    // Armado: diz o que vai acontecer antes do segundo toque.
+    const caixa = document.createElement("div");
+    aviso.className = "doc-hint error";
+    aviso.textContent = `Excluir "${s.nome}"? O nome sai também ${c.excluiDe}. Toque em "Confirmar exclusão" para apagar.`;
+    caixa.append(topo, aviso);
+    return caixa;
+  }
+
+  // Trocar o nome ali mesmo na lista.
+  function editorDeNome(s) {
+    const form = document.createElement("form");
+    form.className = "sind-renomear";
+    form.noValidate = true;
+    const campo = document.createElement("input");
+    campo.type = "text";
+    campo.maxLength = 120;
+    campo.value = s.nome;
+    campo.setAttribute("aria-label", `Novo nome da ${c.singular}`);
+    const aviso = document.createElement("p");
+    aviso.className = "doc-hint";
+    aviso.textContent = `O nome muda também ${c.excluiDe}.`;
+    const botoes = document.createElement("div");
+    botoes.className = "adm-editor-botoes";
+    const cancelar = document.createElement("button");
+    cancelar.type = "button";
+    cancelar.className = "botao-secundario";
+    cancelar.textContent = "Cancelar";
+    cancelar.addEventListener("click", () => {
+      renomeandoId = "";
+      desenhar();
+    });
+    const salvarNome = document.createElement("button");
+    salvarNome.type = "submit";
+    salvarNome.textContent = "Salvar nome";
+    form.addEventListener("submit", (evento) => {
+      evento.preventDefault();
+      const novo = campo.value.trim().replace(/\s+/g, " ");
+      if (!novo) {
+        aviso.textContent = "Escreva o novo nome.";
+        aviso.className = "doc-hint error";
+        return;
+      }
+      mudarNoServidor({ acao: "renomear", id: s.id, nome: novo }, salvarNome, aviso);
+    });
+    botoes.append(cancelar, salvarNome);
+    form.append(campo, aviso, botoes);
+    return form;
   }
 
   // Editar os e-mails de uma já cadastrada, ali mesmo na lista (só os e-mails:
@@ -10264,6 +10542,7 @@ function ligarCadastroDeEmpresas(c) {
 const cadastroSindicaturas = ligarCadastroDeEmpresas({
   prefixo: "sind", pagina: "sindicatura", webhook: "sindicaturas", chaveItem: "sindicatura",
   singular: "sindicatura", Singular: "Sindicatura", plural: "sindicaturas",
+  excluiDe: "dos contatos (campo Empresas) e dos clientes (campo Empresa de síndicos) que o usam",
   sobreposto: "sobreposto-sindicatura",
   vinculos: {
     campo: "contatos",
@@ -10274,6 +10553,7 @@ const cadastroSindicaturas = ligarCadastroDeEmpresas({
 const cadastroAdministradoras = ligarCadastroDeEmpresas({
   prefixo: "adm", pagina: "administradoras", webhook: "administradoras", chaveItem: "administradora",
   singular: "administradora", Singular: "Administradora", plural: "administradoras",
+  excluiDe: "dos clientes que o usam (campo Administradora)",
   comEmails: true, sobreposto: "sobreposto-administradora",
   vinculos: {
     campo: "clientes",

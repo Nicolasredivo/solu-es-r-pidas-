@@ -4998,6 +4998,37 @@ administradoras.
     pedido do dono.
   - Ainda **não** feito: Consultar sindicaturas mostrar também os clientes de cada uma (hoje
     mostra só os contatos).
+- **Editar nome e Excluir** (sindicatura e administradora, pedido do dono em 30/10/2026): em
+  Consultar, cada uma tem "Editar nome" (abre o nome ali, com Salvar/Cancelar) e "Excluir"
+  (dois toques, com aviso). Os fluxos ganharam `renomear` (id + nome) e `excluir` (id).
+  - O nome muda, ou **sai**, também onde é usado: sindicatura no campo Empresas dos contatos
+    e no `Empresa_Sindicos` dos clientes (o fluxo de sindicaturas ganhou "Busca clientes");
+    administradora no campo `Administradora` dos clientes.
+  - Nome que já existe é recusado. Gravação em lotes de 10.
+  - O teste agora tem 55.
+- **Empresas do contato no cliente** (30/10/2026): o bloco de contato do cliente mostra
+  "Empresas: …" embaixo do nome (`.contato-empresas-info`), em só leitura, vindo do Cadastro
+  de contatos pelo id do bloco (`mostrarEmpresasDoBloco`).
+- **Endereços e contatos lado a lado no computador** (30/10/2026), no Adicionar e no
+  Consultar do cliente: envelope `.lado-a-lado` com duas colunas a partir de 768px, mantendo a
+  moldura de cada bloco. No celular continua um embaixo do outro.
+- **Dados (30/10/2026, autorizado, com backup antes de cada um):** os 8 clientes de uma
+  administradora passaram para outra, e também os 4 clientes de um mesmo contato que estavam
+  sem administradora. A administradora antiga ficou cadastrada, sem clientes.
+- **Cliente em quatro molduras** (pedido do dono, 30/10/2026), no Adicionar e no Consultar:
+  1. Identificação: CPF/CNPJ, razão social, fantasia, tipo, exigência fiscal (destacada em
+     amarelo, `.campo-destaque`) e WhatsApp do CNPJ. No Adicionar, o CPF/CNPJ e o tipo ficam
+     acima, na consulta.
+  2. **E-mails do financeiro / NF-e** (`.moldura-emails`, borda azul): vários e-mails,
+     guardados no mesmo campo `Emails_Financeiro_NFE`, **um por linha**. Na tela
+     (`ligarEmailsFinanceiro`) cada e-mail é uma etiqueta: tocar edita e × tira. Editando
+     aparece "Buscar ou adicionar e-mail", com todos os e-mails do sistema (clientes, contatos
+     e administradoras, com a origem) e "Adicionar …". E-mail com jeito de errado é recusado.
+  3. Administradora + Empresa de síndicos, separadas por uma linha tracejada.
+  4. Status + Observações.
+  - **Asaas:** "Monta cliente Asaas" (Salvar entidade e Atualizar cadastro) agora separa o
+    campo por linha, vírgula ou ponto e vírgula. O primeiro vai como `email` e os outros como
+    `additionalEmails`. Antes, o campo inteiro ia como um e-mail só.
 - **Janelas por cima (contato e administradora):** fechar e devolver o formulário agora é feito
   direto (`terminarSobreposto…`), e não só pelo evento `close` do `<dialog>`, que no painel de
   testes às vezes não chegava. O evento continua cobrindo o Esc.
