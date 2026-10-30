@@ -98,6 +98,50 @@ async function testar(cad, criados) {
   await esperar(1500);
   const backupDepois = JSON.parse(fs.readFileSync(ARQ_BACKUP, 'utf8'));
   confere(t('backup dos cadastros inclui a tabela'), (backupDepois.tabelas[tabela] || []).some((s) => s.id === (nova[item] || {}).id));
+
+  // ---- renomear e excluir: o nome muda (ou sai) também nos contatos e clientes ----
+  const campoCliente = vinculo === 'contatos' ? 'Empresa_Sindicos' : 'Administradora';
+  let clienteId = vinculo === 'clientes' ? ligadoId : '';
+  if (!clienteId) {
+    const cli = await local('POST', `/v0/${CAD}/Entidades_Cadastradas`, { fields: { Razao_Social_Nome: 'TESTE SIND Cliente', [campoCliente]: nome.toLowerCase(), Status: 'Ativo' } });
+    criados.push(['Entidades_Cadastradas', cli.id]);
+    clienteId = cli.id;
+  }
+  const outra = await chamar(webhook, { acao: 'salvar', nome: 'ZZ Teste outra ' + item, emails: '[]' });
+  if (outra[item]) criados.push([tabela, outra[item].id]);
+  const semIdR = await chamar(webhook, { acao: 'renomear', nome: 'x' });
+  confere(t('renomear sem id é recusado'), semIdR.ok === false && /inválida/.test(semIdR.mensagem), semIdR);
+  const paraRepetido = await chamar(webhook, { acao: 'renomear', id: nova[item].id, nome: 'zz teste OUTRA ' + item });
+  confere(t('renomear para um nome que já existe é recusado'), paraRepetido.ok === false && paraRepetido.jaExiste === true, paraRepetido);
+  const novoNome = 'ZZ Teste ' + item + ' renomeada';
+  const ren = await chamar(webhook, { acao: 'renomear', id: nova[item].id, nome: novoNome });
+  await esperar(500);
+  const regRen = await local('GET', `/v0/${CAD}/${tabela}/${nova[item].id}`);
+  const cliRen = await local('GET', `/v0/${CAD}/Entidades_Cadastradas/${clienteId}`);
+  confere(t('renomear troca o nome no cadastro'), ren.ok && regRen.fields.Nome === novoNome && /trocado/.test(ren.mensagem), { ren, f: regRen.fields });
+  confere(t('renomear troca o nome no cliente'), cliRen.fields[campoCliente] === novoNome, cliRen.fields);
+  if (vinculo === 'contatos') {
+    const conRen = await local('GET', `/v0/${CAD}/Contatos_Solicitantes/${ligadoId}`);
+    confere(t('renomear troca o nome no contato e mantém a outra empresa'), conRen.fields.Empresas === novoNome + '\nZZ Teste Outra Empresa', conRen.fields);
+  }
+  const lst3 = await chamar(webhook, { acao: 'listar' });
+  const renomeada = (lst3[webhook] || []).find((s) => s.id === nova[item].id);
+  confere(t('depois de renomear, quem usava continua ligado'), renomeada && renomeada[vinculo].some((p) => p.id === ligadoId), renomeada);
+
+  const exc = await chamar(webhook, { acao: 'excluir', id: nova[item].id });
+  await esperar(500);
+  const regExc = await local('GET', `/v0/${CAD}/${tabela}/${nova[item].id}`);
+  const cliExc = await local('GET', `/v0/${CAD}/Entidades_Cadastradas/${clienteId}`);
+  confere(t('excluir apaga o cadastro'), exc.ok && regExc.error !== undefined && /excluída/.test(exc.mensagem), { exc, regExc });
+  confere(t('excluir tira o nome do cliente'), !cliExc.fields[campoCliente] && cliExc.fields.Razao_Social_Nome, cliExc.fields);
+  if (vinculo === 'contatos') {
+    const conExc = await local('GET', `/v0/${CAD}/Contatos_Solicitantes/${ligadoId}`);
+    confere(t('excluir tira o nome do contato e mantém a outra empresa'), conExc.fields.Empresas === 'ZZ Teste Outra Empresa', conExc.fields);
+  }
+  const outraDepois = await local('GET', `/v0/${CAD}/${tabela}/${(outra[item] || {}).id}`);
+  confere(t('excluir não mexe nos outros cadastros'), outraDepois.fields && outraDepois.fields.Nome === 'ZZ Teste outra ' + item, outraDepois);
+  const excDeNovo = await chamar(webhook, { acao: 'excluir', id: nova[item].id });
+  confere(t('excluir de novo é recusado'), excDeNovo.ok === false && /não existe/.test(excDeNovo.mensagem), excDeNovo);
 }
 
 (async () => {

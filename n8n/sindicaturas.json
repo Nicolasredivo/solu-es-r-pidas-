@@ -105,7 +105,7 @@
         -100
       ],
       "parameters": {
-        "jsCode": "// Tudo chega como texto (o app manda formulário simples).\nconst corpo = $('Recebe pedido do app').first().json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst ACOES = ['listar', 'salvar'];\nconst acao = ACOES.includes(texto(corpo.acao)) ? texto(corpo.acao) : '';\nconst nome = texto(corpo.nome).replace(/\\s+/g, ' ').slice(0, 120);\nlet erro = '';\nif (!acao) erro = 'Ação inválida.';\nelse if (acao === 'salvar' && !nome) erro = 'Escreva o nome da sindicatura.';\nreturn [{ json: { acao, nome, erro } }];"
+        "jsCode": "// Tudo chega como texto (o app manda formulário simples).\nconst corpo = $('Recebe pedido do app').first().json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst ACOES = ['listar', 'salvar', 'renomear', 'excluir'];\nconst acao = ACOES.includes(texto(corpo.acao)) ? texto(corpo.acao) : '';\nconst nome = texto(corpo.nome).replace(/\\s+/g, ' ').slice(0, 120);\n// renomear / excluir: a sindicatura (id).\nconst id = /^rec[A-Za-z0-9]{14}$/.test(texto(corpo.id)) ? texto(corpo.id) : '';\nlet erro = '';\nif (!acao) erro = 'Ação inválida.';\nelse if (acao === 'salvar' && !nome) erro = 'Escreva o nome da sindicatura.';\nelse if ((acao === 'renomear' || acao === 'excluir') && !id) erro = 'Sindicatura inválida.';\nreturn [{ json: { acao, id, nome, erro } }];"
       }
     },
     {
@@ -222,7 +222,7 @@
         -200
       ],
       "parameters": {
-        "jsCode": "const e = $('Le entrada').first().json;\nconst sindicaturasBrutas = $('Busca sindicaturas').all().map((i) => i.json);\nconst contatosBrutos = $('Busca contatos').all().map((i) => i.json);\nconst recusa = (mensagem) => [{ json: { gravar: false, resposta: { ok: false, mensagem } } }];\n\n// Banco fora do ar não pode parecer \"nenhuma sindicatura\".\nif (sindicaturasBrutas.some((j) => j && j.error) || contatosBrutos.some((j) => j && j.error)) {\n  return recusa('Não foi possível falar com o banco agora. Tente de novo em instantes.');\n}\n\n// \"Síndicos Exemplo\" e \"SINDICOS EXEMPLO.\" são a mesma: igual ao normalizarTexto do app.\nconst chave = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();\nconst QUEBRA = String.fromCharCode(10);\nconst porLinha = (t) => String(t || '').split(QUEBRA).map((v) => v.trim()).filter(Boolean);\nconst sindicaturas = sindicaturasBrutas.filter((j) => j && j.id)\n  .map((j) => ({ id: j.id, nome: (j.fields && j.fields.Nome) || '' }));\n\nif (e.acao === 'listar') {\n  // Quem trabalha nela: os contatos com o mesmo nome no campo Empresas.\n  const contatos = contatosBrutos.filter((j) => j && j.id).map((j) => {\n    const f = j.fields || {};\n    return { id: j.id, nome: f.Nome_Contato || '', funcao: f.Cargo_Funcao || '', chaves: porLinha(f.Empresas).map(chave) };\n  });\n  const lista = sindicaturas.map((s) => ({\n    ...s,\n    contatos: contatos.filter((c) => c.chaves.includes(chave(s.nome)))\n      .map((c) => ({ id: c.id, nome: c.nome, funcao: c.funcao }))\n      .sort((a, b) => (a.nome || '~').localeCompare(b.nome || '~', 'pt-BR')),\n  })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));\n  return [{ json: { gravar: false, resposta: { ok: true, sindicaturas: lista } } }];\n}\n\n// salvar: só o nome, e nunca duas com o mesmo nome.\nif (!chave(e.nome)) return recusa('Escreva o nome da sindicatura.');\nconst igual = sindicaturas.find((s) => chave(s.nome) === chave(e.nome));\nif (igual) return [{ json: { gravar: false, resposta: { ok: false, jaExiste: true, mensagem: 'Já existe a sindicatura \"' + igual.nome + '\".', sindicatura: igual } } }];\nreturn [{ json: { gravar: true, acao: 'salvar', metodo: 'POST', url: 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblSindicatura001', corpo: { records: [{ fields: { Nome: e.nome } }] } } }];"
+        "jsCode": "const e = $('Le entrada').first().json;\nconst sindicaturasBrutas = $('Busca sindicaturas').all().map((i) => i.json);\nconst contatosBrutos = $('Busca contatos').all().map((i) => i.json);\nconst clientesBrutos = $('Busca clientes').all().map((i) => i.json);\nconst recusa = (mensagem) => [{ json: { gravar: false, resposta: { ok: false, mensagem } } }];\n\n// Banco fora do ar não pode parecer \"nenhuma sindicatura\".\nif (sindicaturasBrutas.some((j) => j && j.error) || contatosBrutos.some((j) => j && j.error) || clientesBrutos.some((j) => j && j.error)) {\n  return recusa('Não foi possível falar com o banco agora. Tente de novo em instantes.');\n}\n\n// \"Síndicos Exemplo\" e \"SINDICOS EXEMPLO.\" são a mesma: igual ao normalizarTexto do app.\nconst chave = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();\nconst QUEBRA = String.fromCharCode(10);\nconst porLinha = (t) => String(t || '').split(QUEBRA).map((v) => v.trim()).filter(Boolean);\nconst sindicaturas = sindicaturasBrutas.filter((j) => j && j.id)\n  .map((j) => ({ id: j.id, nome: (j.fields && j.fields.Nome) || '' }));\n\nif (e.acao === 'listar') {\n  // Quem trabalha nela: os contatos com o mesmo nome no campo Empresas.\n  const contatos = contatosBrutos.filter((j) => j && j.id).map((j) => {\n    const f = j.fields || {};\n    return { id: j.id, nome: f.Nome_Contato || '', funcao: f.Cargo_Funcao || '', chaves: porLinha(f.Empresas).map(chave) };\n  });\n  const lista = sindicaturas.map((s) => ({\n    ...s,\n    contatos: contatos.filter((c) => c.chaves.includes(chave(s.nome)))\n      .map((c) => ({ id: c.id, nome: c.nome, funcao: c.funcao }))\n      .sort((a, b) => (a.nome || '~').localeCompare(b.nome || '~', 'pt-BR')),\n  })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));\n  return [{ json: { gravar: false, resposta: { ok: true, sindicaturas: lista } } }];\n}\n\n// renomear / excluir: o nome muda (ou sai) também em todo lugar que o usa.\nif (e.acao === 'renomear' || e.acao === 'excluir') {\n  const atual = sindicaturas.find((a) => a.id === e.id);\n  if (!atual) return recusa('Essa sindicatura não existe mais. Toque em Atualizar.');\n  const velho = chave(atual.nome);\n  const novo = e.acao === 'renomear' ? e.nome : '';\n  if (e.acao === 'renomear') {\n    if (!chave(novo)) return recusa('Escreva o novo nome.');\n    const outra = sindicaturas.find((a) => a.id !== atual.id && chave(a.nome) === chave(novo));\n    if (outra) return [{ json: { gravar: false, resposta: { ok: false, jaExiste: true, mensagem: 'Já existe a sindicatura \"' + outra.nome + '\".' } } }];\n    if (novo === atual.nome) return [{ json: { gravar: false, resposta: { ok: true, mensagem: 'O nome já era esse.' } } }];\n  }\n  const lotes = (arr) => { const l = []; for (let i = 0; i < arr.length; i += 10) l.push(arr.slice(i, i + 10)); return l; };\n  const chamadas = [];\n  const patch = (tabela, regs) => lotes(regs).forEach((lote) => chamadas.push({ metodo: 'PATCH', url: 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/' + tabela, corpo: { records: lote } }));\n  if (e.acao === 'renomear') patch('tblSindicatura001', [{ id: atual.id, fields: { Nome: novo } }]);\n  // Contatos: troca (ou tira) a linha com o nome no campo Empresas, sem repetir.\n  const contatosMudar = contatosBrutos.filter((j) => j && j.id).map((j) => {\n    const linhas = porLinha(j.fields && j.fields.Empresas);\n    if (!linhas.some((l) => chave(l) === velho)) return null;\n    const novas = [];\n    for (const l of linhas) {\n      const v = chave(l) === velho ? novo : l;\n      if (v && !novas.some((x) => chave(x) === chave(v))) novas.push(v);\n    }\n    return { id: j.id, fields: { Empresas: novas.join(QUEBRA) } };\n  }).filter(Boolean);\n  patch('Contatos_Solicitantes', contatosMudar);\n  // Clientes: o campo Empresa_Sindicos com o nome.\n  const clientesMudar = clientesBrutos.filter((j) => j && j.id && chave(j.fields && j.fields.Empresa_Sindicos) === velho)\n    .map((j) => ({ id: j.id, fields: { Empresa_Sindicos: novo } }));\n  patch('Entidades_Cadastradas', clientesMudar);\n  if (e.acao === 'excluir') chamadas.push({ metodo: 'DELETE', url: 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblSindicatura001/' + atual.id, corpo: {} });\n  const onde = [];\n  if (contatosMudar.length) onde.push(contatosMudar.length + (contatosMudar.length === 1 ? ' contato' : ' contatos'));\n  if (clientesMudar.length) onde.push(clientesMudar.length + (clientesMudar.length === 1 ? ' cliente' : ' clientes'));\n  const mensagemOk = e.acao === 'renomear'\n    ? 'Nome trocado para \"' + novo + '\"' + (onde.length ? ', também em ' + onde.join(' e ') : '') + '.'\n    : '\"' + atual.nome + '\" excluída' + (onde.length ? '; o nome saiu de ' + onde.join(' e ') : '') + '.';\n  return chamadas.map((ch, i) => ({ json: { gravar: true, acao: e.acao, ...ch, mensagemOk: i === 0 ? mensagemOk : '' } }));\n}\n\n// salvar: só o nome, e nunca duas com o mesmo nome.\nif (!chave(e.nome)) return recusa('Escreva o nome da sindicatura.');\nconst igual = sindicaturas.find((s) => chave(s.nome) === chave(e.nome));\nif (igual) return [{ json: { gravar: false, resposta: { ok: false, jaExiste: true, mensagem: 'Já existe a sindicatura \"' + igual.nome + '\".', sindicatura: igual } } }];\nreturn [{ json: { gravar: true, acao: 'salvar', metodo: 'POST', url: 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblSindicatura001', corpo: { records: [{ fields: { Nome: e.nome } }] } } }];"
       }
     },
     {
@@ -312,7 +312,7 @@
         -400
       ],
       "parameters": {
-        "jsCode": "const reg = (($input.first().json.records) || [])[0];\nif (!reg || !reg.id) return [{ json: { ok: false, mensagem: 'Não foi possível salvar agora. Tente de novo em instantes.' } }];\nreturn [{ json: { ok: true, sindicatura: { id: reg.id, nome: (reg.fields && reg.fields.Nome) || '', contatos: [] } } }];"
+        "jsCode": "// renomear / excluir: a mensagem já veio pronta do \"Decide\".\nconst pedido = $('Decide').first().json;\nif (pedido.acao === 'renomear' || pedido.acao === 'excluir') return [{ json: { ok: true, mensagem: pedido.mensagemOk } }];\nconst reg = (($input.first().json.records) || [])[0];\nif (!reg || !reg.id) return [{ json: { ok: false, mensagem: 'Não foi possível salvar agora. Tente de novo em instantes.' } }];\nreturn [{ json: { ok: true, sindicatura: { id: reg.id, nome: (reg.fields && reg.fields.Nome) || '', contatos: [] } } }];"
       }
     },
     {
@@ -385,6 +385,34 @@
         "responseBody": "={{ JSON.stringify($json) }}",
         "options": {}
       }
+    },
+    {
+      "id": "45dc1d2b-6f12-47e9-b25b-fd7518b822a0",
+      "name": "Busca clientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1420,
+        -40
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh?_itens=1&fields%5B%5D=Empresa_Sindicos",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "executeOnce": true
     }
   ],
   "connections": {
@@ -494,7 +522,7 @@
       "main": [
         [
           {
-            "node": "Decide",
+            "node": "Busca clientes",
             "type": "main",
             "index": 0
           }
@@ -586,6 +614,17 @@
         [
           {
             "node": "Atualiza backup dos cadastros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca clientes": {
+      "main": [
+        [
+          {
+            "node": "Decide",
             "type": "main",
             "index": 0
           }
