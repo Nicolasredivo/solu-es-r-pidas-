@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.31a";
+const APP_VERSION = "2026.10.31b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -1475,17 +1475,23 @@ function separarEmails(texto) {
   return vistos;
 }
 
-// Todos os e-mails conhecidos, cada um com de onde veio (para a sugestão).
+// Todos os e-mails conhecidos, para a sugestão. Embaixo de cada um, só a quem
+// pertence (do Cadastro de e-mails), quando preenchido -- o cliente ou contato de
+// onde o e-mail veio não aparece (pedido do dono, 31/10/2026: só poluía a lista).
 function emailsDoSistema() {
   const mapa = new Map();
-  const guardar = (email, origem) => {
+  const guardar = (email) => {
     const chave = email.toLowerCase();
-    if (EMAIL_VALIDO.test(email) && !mapa.has(chave)) mapa.set(chave, { email, origem });
+    if (EMAIL_VALIDO.test(email) && !mapa.has(chave)) mapa.set(chave, { email, origem: "" });
   };
-  cadastros.forEach((c) => separarEmails(c.emails).forEach((e) => guardar(e, `Cliente ${c.nomeFantasia || c.razaoSocial || ""}`.trim())));
-  if (contatosCarregados) contatosCadastrados.forEach((c) => c.emails.forEach((e) => guardar(e, `Contato ${c.nome || ""}`.trim())));
-  cadastroAdministradoras.lista().forEach((a) => (a.emails || []).forEach((e) => guardar(e, `Administradora ${a.nome}`)));
-  cadastroEmails.lista().forEach((x) => guardar(x.email, x.pertence ? `E-mail de ${x.pertence}` : "Cadastro de e-mails"));
+  cadastros.forEach((c) => separarEmails(c.emails).forEach(guardar));
+  if (contatosCarregados) contatosCadastrados.forEach((c) => c.emails.forEach(guardar));
+  cadastroAdministradoras.lista().forEach((a) => (a.emails || []).forEach(guardar));
+  cadastroEmails.lista().forEach((x) => {
+    guardar(x.email);
+    const item = mapa.get(x.email.toLowerCase());
+    if (item && x.pertence) item.origem = x.pertence;
+  });
   return [...mapa.values()].sort((a, b) => a.email.localeCompare(b.email));
 }
 
