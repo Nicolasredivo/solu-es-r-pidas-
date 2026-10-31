@@ -85,6 +85,17 @@ create table "Administradoras" (
   "Criado_Em" timestamptz not null default now()
 );
 
+-- Cadastro de e-mails, 31/10/2026: todo e-mail do sistema (financeiro dos clientes, contatos,
+-- administradoras, chamados), com "a quem pertence" opcional. Serve de sugestão em todo campo
+-- de e-mail. O fluxo "App - E-mails" acrescenta sozinho os que aparecem nos outros cadastros.
+create table "Emails" (
+  id text primary key default novo_id(),
+  "Email" text not null,
+  "Pertence" text,
+  "Criado_Em" timestamptz not null default now()
+);
+create unique index on "Emails" (lower("Email"));
+
 create table "Chamados" (
   id text primary key default novo_id(),
   "Numero_Chamado" integer unique,

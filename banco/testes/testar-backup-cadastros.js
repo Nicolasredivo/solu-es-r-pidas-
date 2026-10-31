@@ -47,6 +47,8 @@ const refazerBackup = async () => (await fetch('http://127.0.0.1:5690/backup-cad
     const locId = b.tabelas.Locais_Atendimento.find((r) => (r.fields.Cliente_Vinculado || [])[0] === entId).id;
     const conId = b.tabelas.Contatos_Solicitantes.find((r) => (r.fields.Entidades_Vinculadas || []).includes(entId)).id;
     const ex = await chamar('excluir-cadastro', { id: entId, locaisIds: locId, contatosIds: conId });
+    // Excluir o cliente não apaga mais os contatos (desde 28/10/2026): o de teste sai à mão.
+    await local('DELETE', `/v0/${CAD}/Contatos_Solicitantes/${conId}`);
     await t.esperar(800);
     confere('apagar cliente não refaz o backup (só cliente novo refaz)', ex.ok === true && lerBackup().feito_em === b.feito_em);
 
@@ -69,6 +71,7 @@ const refazerBackup = async () => (await fetch('http://127.0.0.1:5690/backup-cad
     const erros = await t.errosDesde(inicio);
     if (copia) await copia.apagar().catch((e) => console.log('não apagou a cópia', e.message));
     for (const c of await lista(CAD, 'Entidades_Cadastradas', "{CPF_CNPJ}='00000000000434'")) await local('DELETE', `/v0/${CAD}/Entidades_Cadastradas/${c.id}`);
+    for (const c of await lista(CAD, 'Contatos_Solicitantes', "{Nome_Contato}='Fulana Teste'")) await local('DELETE', `/v0/${CAD}/Contatos_Solicitantes/${c.id}`);
     fs.writeFileSync(ARQ, original); // o arquivo volta exatamente ao que era antes do teste
     await t.sairEApagarUsuarioDeTeste();
     await t.esperar(800);

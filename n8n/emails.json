@@ -1,0 +1,718 @@
+{
+  "name": "App - E-mails",
+  "nodes": [
+    {
+      "id": "235726d8-d556-492f-852d-6c73f51419d5",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "emails",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      },
+      "webhookId": "5ecd764f-158e-445b-b0e9-4dfd18287635"
+    },
+    {
+      "id": "9c7c9ad9-7c52-44b6-89eb-a71d7f08d5f6",
+      "name": "Confere acesso",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "acesso",
+            "senha": "={{ $json.body.senha }}",
+            "tokenAcesso": "={{ $json.body.tokenAcesso }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f41971ef-b9e0-45c6-9249-c1eed5773c97",
+      "name": "Acesso permitido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7000000-0000-4000-8000-100000000002",
+              "leftValue": "={{ $json.permitido }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "3c9963f5-78e5-4464-8bba-bf941a04d95b",
+      "name": "Monta acesso negado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        200
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, acessoNegado: true, mensagem: 'Acesso não autorizado. Entre de novo.' } }];"
+      }
+    },
+    {
+      "id": "358cce48-1001-4b83-8946-287af99e8426",
+      "name": "Le entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "// Tudo chega como texto (o app manda formulário simples).\nconst corpo = $('Recebe pedido do app').first().json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst ACOES = ['listar', 'salvar', 'editar', 'excluir'];\nconst acao = ACOES.includes(texto(corpo.acao)) ? texto(corpo.acao) : '';\n// editar / excluir: o e-mail do cadastro (id).\nconst id = /^rec[A-Za-z0-9]{14}$/.test(texto(corpo.id)) ? texto(corpo.id) : '';\nconst email = texto(corpo.email).replace(/\\s+/g, '');\n// A quem pertence: opcional, texto livre.\nconst pertence = texto(corpo.pertence).replace(/\\s+/g, ' ').slice(0, 120);\nconst VALIDO = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nlet erro = '';\nif (!acao) erro = 'Ação inválida.';\nelse if ((acao === 'editar' || acao === 'excluir') && !id) erro = 'E-mail inválido.';\nelse if ((acao === 'salvar' || acao === 'editar') && (!VALIDO.test(email) || email.length > 254)) erro = 'Esse e-mail não parece certo. Confira e tente de novo.';\nreturn [{ json: { acao, id, email, pertence, erro } }];\n"
+      }
+    },
+    {
+      "id": "6a20dab5-bf4f-40c8-9c1b-5217bee75400",
+      "name": "Entrada ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        -100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7000000-0000-4000-8000-100000000005",
+              "leftValue": "={{ !$json.erro }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "01ee8e44-4b07-4cd0-acf5-5ed1574ca9b5",
+      "name": "Monta erro de entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        100
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, mensagem: $('Le entrada').first().json.erro } }];"
+      }
+    },
+    {
+      "id": "e10686e6-8f10-4f81-9140-1c0f63e84778",
+      "name": "Decide",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2140,
+        -200
+      ],
+      "parameters": {
+        "jsCode": "const e = $('Le entrada').first().json;\nconst ler = (no) => $(no).all().map((i) => i.json);\nconst brutos = {\n  emails: ler('Busca e-mails'), clientes: ler('Busca clientes'), contatos: ler('Busca contatos'),\n  administradoras: ler('Busca administradoras'), chamados: ler('Busca chamados'),\n};\nconst recusa = (mensagem) => [{ json: { gravar: false, resposta: { ok: false, mensagem } } }];\n\n// Banco fora do ar não pode parecer \"nenhum e-mail\".\nif (Object.values(brutos).some((lista) => lista.some((j) => j && j.error))) {\n  return recusa('Não foi possível falar com o banco agora. Tente de novo em instantes.');\n}\n\nconst BASE = 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/';\nconst T = { emails: 'tblEmailsCadast01', clientes: 'tbl5Joji6gAir3mNh', contatos: 'tblXXOEOCwQnC2qFX', administradoras: 'tblAdministrad001' };\nconst QUEBRA = String.fromCharCode(10);\nconst VALIDO = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n// Fulano@ e fulano@ são o mesmo e-mail.\nconst chave = (t) => String(t || '').trim().toLowerCase();\n// O financeiro do cliente aceita vírgula e ponto e vírgula também; os outros, um por linha.\nconst separar = (t) => String(t || '').split(/[\\n,;]+/).map((v) => v.trim()).filter(Boolean);\nconst registros = (lista) => lista.filter((j) => j && j.id);\n\nconst cadastro = registros(brutos.emails).map((j) => ({\n  id: j.id, email: String((j.fields && j.fields.Email) || '').trim(), pertence: (j.fields && j.fields.Pertence) || '',\n}));\n\n// Onde cada e-mail é usado (e de onde sai ou muda ao editar/excluir). Chamados guardam uma\n// cópia do contato na hora: entram no cadastro, mas não mudam (são histórico).\nconst lugares = [];\nregistros(brutos.clientes).forEach((j) => {\n  const f = j.fields || {};\n  lugares.push({ tabela: T.clientes, campo: 'Emails_Financeiro_NFE', id: j.id, tipo: 'Cliente',\n    nome: f.Nome_Fantasia_Identificador || f.Razao_Social_Nome || 'Cliente sem nome', emails: separar(f.Emails_Financeiro_NFE) });\n});\nregistros(brutos.contatos).forEach((j) => {\n  const f = j.fields || {};\n  lugares.push({ tabela: T.contatos, campo: 'Emails', id: j.id, tipo: 'Contato', nome: f.Nome_Contato || 'Contato sem nome', emails: separar(f.Emails) });\n});\nregistros(brutos.administradoras).forEach((j) => {\n  const f = j.fields || {};\n  lugares.push({ tabela: T.administradoras, campo: 'Emails', id: j.id, tipo: 'Administradora', nome: f.Nome || 'Administradora sem nome', emails: separar(f.Emails) });\n});\nconst deChamados = registros(brutos.chamados).flatMap((j) => separar(j.fields && j.fields.Contato_Email));\n\nconst usadoEm = (email) => {\n  const vistos = new Set();\n  return lugares.filter((l) => l.emails.some((m) => chave(m) === chave(email)))\n    .map((l) => ({ tipo: l.tipo, nome: l.nome }))\n    .filter((u) => !vistos.has(u.tipo + '|' + u.nome) && vistos.add(u.tipo + '|' + u.nome));\n};\nconst ordenar = (lista) => lista.sort((a, b) => a.email.localeCompare(b.email, 'pt-BR', { sensitivity: 'base' }));\nconst emLotes = (lista) => {\n  const lotes = [];\n  for (let i = 0; i < lista.length; i += 10) lotes.push(lista.slice(i, i + 10));\n  return lotes;\n};\n\nif (e.acao === 'listar') {\n  // Todo e-mail que aparece nos outros cadastros entra aqui sozinho (sem dono escrito ainda).\n  const conhecidos = new Set(cadastro.map((c) => chave(c.email)));\n  const novos = [];\n  for (const m of [...lugares.flatMap((l) => l.emails), ...deChamados]) {\n    if (!VALIDO.test(m) || m.length > 254 || conhecidos.has(chave(m))) continue;\n    conhecidos.add(chave(m));\n    novos.push(m);\n  }\n  const lista = ordenar([...cadastro, ...novos.map((m) => ({ id: '', email: m, pertence: '' }))])\n    .map((c) => ({ ...c, usadoEm: usadoEm(c.email) }));\n  if (!novos.length) return [{ json: { gravar: false, resposta: { ok: true, emails: lista } } }];\n  return emLotes(novos).map((lote) => ({ json: {\n    gravar: true, acao: 'listar', lista, metodo: 'POST', url: BASE + T.emails,\n    corpo: { records: lote.map((m) => ({ fields: { Email: m } })) },\n  } }));\n}\n\nif (e.acao === 'salvar') {\n  const igual = cadastro.find((c) => chave(c.email) === chave(e.email));\n  if (igual) {\n    return [{ json: { gravar: false, resposta: { ok: false, jaExiste: true, mensagem: 'O e-mail \"' + igual.email + '\" já está cadastrado.',\n      email: { ...igual, usadoEm: usadoEm(igual.email) } } } }];\n  }\n  return [{ json: { gravar: true, acao: 'salvar', resultado: { id: '', email: e.email, pertence: e.pertence, usadoEm: usadoEm(e.email) },\n    metodo: 'POST', url: BASE + T.emails, corpo: { records: [{ fields: { Email: e.email, Pertence: e.pertence } }] } } }];\n}\n\n// editar / excluir\nconst atual = cadastro.find((c) => c.id === e.id);\nif (!atual) return recusa('Esse e-mail não está mais no cadastro. Toque em Atualizar.');\n\n// Trocar (editar) ou tirar (excluir) o e-mail em todo lugar onde ele está, sem repetir.\nconst mexer = (trocarPor) => {\n  const porTabela = {};\n  for (const l of lugares) {\n    if (!l.emails.some((m) => chave(m) === chave(atual.email))) continue;\n    const novos = [];\n    for (const m of l.emails.map((m) => (chave(m) === chave(atual.email) ? trocarPor : m))) {\n      if (m && !novos.some((x) => chave(x) === chave(m))) novos.push(m);\n    }\n    (porTabela[l.tabela] = porTabela[l.tabela] || []).push({ id: l.id, fields: { [l.campo]: novos.join(QUEBRA) } });\n  }\n  const itens = [];\n  for (const [tabela, lista] of Object.entries(porTabela)) {\n    for (const lote of emLotes(lista)) itens.push({ metodo: 'PATCH', url: BASE + tabela, corpo: { records: lote } });\n  }\n  return itens;\n};\nconst quantos = (n) => (n === 1 ? '1 cadastro' : n + ' cadastros');\n\nif (e.acao === 'editar') {\n  const outro = cadastro.find((c) => c.id !== e.id && chave(c.email) === chave(e.email));\n  if (outro) return recusa('O e-mail \"' + outro.email + '\" já está cadastrado.');\n  const mudouEmail = atual.email !== e.email;\n  const nosLugares = mudouEmail ? mexer(e.email) : [];\n  const usos = usadoEm(atual.email).length;\n  const resultado = { id: atual.id, email: e.email, pertence: e.pertence, usadoEm: mudouEmail ? usadoEm(atual.email) : usadoEm(e.email) };\n  const mensagemOk = mudouEmail && usos ? 'E-mail trocado aqui e em ' + quantos(usos) + '.' : 'Salvo.';\n  return [\n    { json: { gravar: true, acao: 'editar', resultado, mensagemOk, metodo: 'PATCH', url: BASE + T.emails,\n      corpo: { records: [{ id: atual.id, fields: { Email: e.email, Pertence: e.pertence } }] } } },\n    ...nosLugares.map((x) => ({ json: { gravar: true, acao: 'editar', ...x } })),\n  ];\n}\n\n// excluir: sai do cadastro e de todo lugar onde estava.\nconst usos = usadoEm(atual.email).length;\nreturn [\n  { json: { gravar: true, acao: 'excluir', mensagemOk: usos ? 'E-mail excluído e tirado de ' + quantos(usos) + '.' : 'E-mail excluído.',\n    metodo: 'DELETE', url: BASE + T.emails + '/' + atual.id, corpo: {} } },\n  ...mexer('').map((x) => ({ json: { gravar: true, acao: 'excluir', ...x } })),\n];\n"
+      }
+    },
+    {
+      "id": "683f94a4-9cd9-4b05-9531-a5708786fcbb",
+      "name": "Precisa gravar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2360,
+        -200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7000000-0000-4000-8000-100000000010",
+              "leftValue": "={{ $json.gravar }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "b9f8a33a-75c2-45bd-a9af-b827d434e6d8",
+      "name": "Monta resposta direta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2580,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: $input.first().json.resposta }];"
+      }
+    },
+    {
+      "id": "175f8c05-75bc-444d-8e77-305f49ba7eaa",
+      "name": "Grava no banco",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2580,
+        -300
+      ],
+      "parameters": {
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo || {}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "8393d89c-e22d-4338-ba52-a0875369e702",
+      "name": "Monta resposta gravada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        -400
+      ],
+      "parameters": {
+        "jsCode": "const d = $('Decide').first().json;\nconst falha = [{ json: { ok: false, mensagem: 'Não foi possível salvar agora. Tente de novo em instantes.' } }];\nconst gravados = $input.all().map((i) => i.json);\n\n// listar: os que entraram agora ganham o código que o banco deu.\nif (d.acao === 'listar') {\n  const ids = new Map();\n  gravados.forEach((g) => (g.records || []).forEach((r) => {\n    if (r && r.id) ids.set(String((r.fields && r.fields.Email) || '').trim().toLowerCase(), r.id);\n  }));\n  return [{ json: { ok: true, emails: d.lista.map((c) => (c.id ? c : { ...c, id: ids.get(c.email.trim().toLowerCase()) || '' })) } }];\n}\nif (d.acao === 'excluir') return [{ json: { ok: true, mensagem: d.mensagemOk } }];\nif (d.acao === 'editar') return [{ json: { ok: true, mensagem: d.mensagemOk, email: d.resultado } }];\n\n// salvar\nconst reg = ((gravados[0] && gravados[0].records) || [])[0];\nif (!reg || !reg.id) return falha;\nreturn [{ json: { ok: true, mensagem: 'E-mail cadastrado.', email: { ...d.resultado, id: reg.id } } }];\n"
+      }
+    },
+    {
+      "id": "c233c5e9-f742-456f-aed6-5a5376837530",
+      "name": "Monta falha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        -200
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, mensagem: 'Não foi possível salvar agora. Tente de novo em instantes.' } }];"
+      }
+    },
+    {
+      "id": "8d7ca5da-85d1-4b3d-a215-1bb5e6c9451d",
+      "name": "Responde gravado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3020,
+        -400
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "8895c5b8-b2a0-453f-9b06-3bcbeff1666c",
+      "name": "Atualiza backup dos cadastros",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3240,
+        -400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:5690/backup-cadastros",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "notes": "Contato salvo ou excluído: refaz o arquivo único de backup dos cadastros (banco-solucoes/backup-cadastros.json). Falhar aqui não atrapalha, a resposta já foi dada."
+    },
+    {
+      "id": "305ee888-8929-4f5f-befc-c9da8bb8be8f",
+      "name": "Responde",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3020,
+        100
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "a2aa5950-2d82-4f94-b19b-f860aa9ca3ef",
+      "name": "Busca e-mails",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -200
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblEmailsCadast01?_itens=1",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "id": "98cffce0-ccae-4f2a-b84e-c822171b8813",
+      "name": "Busca clientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        -200
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh?_itens=1&fields%5B%5D=Razao_Social_Nome&fields%5B%5D=Nome_Fantasia_Identificador&fields%5B%5D=Emails_Financeiro_NFE",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "id": "42cc6b93-d67d-429c-84b6-0572a2543680",
+      "name": "Busca contatos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1500,
+        -200
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblXXOEOCwQnC2qFX?_itens=1&fields%5B%5D=Nome_Contato&fields%5B%5D=Emails",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "id": "f0383a16-6bc7-4a5c-9bef-de6f99819284",
+      "name": "Busca administradoras",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1700,
+        -200
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblAdministrad001?_itens=1&fields%5B%5D=Nome&fields%5B%5D=Emails",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "id": "8bc69fe6-a2ff-4254-8fcb-0ef55409c9a5",
+      "name": "Busca chamados",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1900,
+        -200
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbltipxOIw8F96QHO?_itens=1&fields%5B%5D=Contato_Email",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Confere acesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere acesso": {
+      "main": [
+        [
+          {
+            "node": "Acesso permitido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acesso permitido?": {
+      "main": [
+        [
+          {
+            "node": "Le entrada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta acesso negado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta acesso negado": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le entrada": {
+      "main": [
+        [
+          {
+            "node": "Entrada ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada ok?": {
+      "main": [
+        [
+          {
+            "node": "Busca e-mails",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta erro de entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta erro de entrada": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide": {
+      "main": [
+        [
+          {
+            "node": "Precisa gravar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Precisa gravar?": {
+      "main": [
+        [
+          {
+            "node": "Grava no banco",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta resposta direta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta direta": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava no banco": {
+      "main": [
+        [
+          {
+            "node": "Monta resposta gravada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta gravada": {
+      "main": [
+        [
+          {
+            "node": "Responde gravado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta falha": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responde gravado": {
+      "main": [
+        [
+          {
+            "node": "Atualiza backup dos cadastros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca e-mails": {
+      "main": [
+        [
+          {
+            "node": "Busca clientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca clientes": {
+      "main": [
+        [
+          {
+            "node": "Busca contatos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca contatos": {
+      "main": [
+        [
+          {
+            "node": "Busca administradoras",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca administradoras": {
+      "main": [
+        [
+          {
+            "node": "Busca chamados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca chamados": {
+      "main": [
+        [
+          {
+            "node": "Decide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  }
+}
