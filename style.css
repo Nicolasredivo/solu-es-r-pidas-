@@ -543,6 +543,24 @@ input[type="number"]:focus {
   color: var(--aviso);
 }
 
+/* "Não sei o CPF agora": era só texto e não parecia botão (o dono apontou,
+   31/10/2026). Agora é um botão contornado em azul, a largura toda, logo embaixo
+   do campo; quebra a linha no celular em vez de cortar. */
+.botao-sem-documento {
+  color: var(--accent);
+  border-color: rgba(91, 141, 239, 0.5);
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: normal;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .botao-sem-documento:not(:disabled):hover {
+    background: rgba(91, 141, 239, 0.1);
+    color: var(--accent);
+  }
+}
+
 /* Aparece colado no aviso, então não herda o espaço de cima do .link-button */
 #tentar-receita {
   margin-top: 0;
