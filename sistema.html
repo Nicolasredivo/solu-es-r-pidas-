@@ -89,6 +89,7 @@
           <button type="button" class="sidebar-item sidebar-subitem" data-page="contatos">Cadastro de contatos</button>
           <button type="button" class="sidebar-item sidebar-subitem" data-page="administradoras">Cadastro de administradoras</button>
           <button type="button" class="sidebar-item sidebar-subitem" data-page="sindicatura">Cadastro de sindicatura</button>
+          <button type="button" class="sidebar-item sidebar-subitem" data-page="emails">Cadastro de e-mails</button>
         </div>
       </div>
       <button type="button" class="sidebar-item" data-page="financeiro">
@@ -315,7 +316,7 @@
             <!-- Endereços e contatos lado a lado no computador (um embaixo do outro no celular). -->
             <div class="lado-a-lado">
             <div class="grupo">
-              <label>Locais de atendimento</label>
+              <h3 class="secao-titulo">Locais de atendimento</h3>
               <p class="placeholder-text locais-ajuda">
                 Opcional. Dá para acrescentar quantos endereços precisar.
               </p>
@@ -326,7 +327,7 @@
             </div>
 
             <div class="grupo">
-              <label>Contatos / solicitantes</label>
+              <h3 class="secao-titulo">Contatos / solicitantes</h3>
               <p class="placeholder-text locais-ajuda">
                 Opcional. Quem abre chamado por este cliente. Cada contato aceita
                 quantos WhatsApps e e-mails precisar.
@@ -496,12 +497,13 @@
             </div>
           </template>
 
-          <!-- Molde do cadastro aberto. Os campos nascem travados; o lápis
-               destrava, e só então o botão Salvar aparece. -->
+          <!-- Molde do cadastro aberto. Os campos nascem travados; tocar em qualquer
+               um destrava a edição (sem lápis, pedido do dono 31/10/2026), e só então
+               o botão Salvar aparece. -->
           <template id="modelo-detalhe">
             <div class="detalhe">
               <div class="detalhe-acoes">
-                <button type="button" class="acao-editar" title="Editar cadastro" aria-label="Editar cadastro">✏️</button>
+                <span class="detalhe-dica">Toque em qualquer campo para editar.</span>
                 <button type="button" class="acao-salvar botao-secundario hidden">Salvar</button>
                 <button type="button" class="acao-cancelar botao-secundario hidden">Cancelar</button>
                 <button type="button" class="acao-excluir botao-secundario botao-perigo" title="Apaga este cadastro de vez.">Excluir</button>
@@ -591,7 +593,7 @@
               <!-- Endereços e contatos lado a lado no computador (um embaixo do outro no celular). -->
               <div class="lado-a-lado">
               <div class="lado-a-lado-coluna">
-              <label class="rotulo-espacado">Endereços</label>
+              <h3 class="secao-titulo">Endereços</h3>
               <div class="d-locais grade-responsiva"></div>
               <button type="button" class="d-adicionar-local botao-secundario hidden">
                 + Adicionar endereço
@@ -601,7 +603,7 @@
               <div class="lado-a-lado-coluna">
               <!-- "Contatos" é um botão: abre a busca nos contatos salvos (Cadastro de
                    contatos) para ligar um a este cliente ou tirar um que já é dele. -->
-              <button type="button" class="d-contatos-botao rotulo-espacado" aria-expanded="false"
+              <button type="button" class="d-contatos-botao" aria-expanded="false"
                       title="Escolher entre os contatos salvos">Contatos <span aria-hidden="true">▾</span></button>
               <div class="d-contatos-escolha hidden">
                 <input type="text" class="d-contatos-busca" autocomplete="off" aria-label="Buscar contato salvo"
@@ -695,6 +697,48 @@
           <ul id="sind-lista" class="contatos-lista" aria-live="polite"></ul>
         </div>
       </div>
+
+      <!-- Cadastro de e-mails (31/10/2026): todo e-mail do sistema, com "a quem pertence"
+           opcional. O fluxo "App - E-mails" puxa sozinho os que aparecem nos outros cadastros;
+           editar ou excluir aqui troca/tira também onde ele é usado. Os e-mails daqui viram
+           sugestão em todo campo de e-mail (datalist #lista-emails-cadastrados). -->
+      <div id="page-emails" class="card page hidden">
+        <h1>Cadastro de e-mails</h1>
+
+        <div class="subtabs">
+          <button type="button" class="subtab active" data-subpage="em-adicionar">Adicionar e-mail</button>
+          <button type="button" class="subtab" data-subpage="em-consultar">Consultar e-mails</button>
+        </div>
+
+        <div id="subpage-em-adicionar" class="subpage">
+          <form id="em-form" novalidate autocomplete="off">
+            <label for="em-email">E-mail</label>
+            <input type="text" id="em-email" inputmode="email" autocapitalize="off" spellcheck="false" maxlength="254" placeholder="nome@empresa.com.br" />
+            <p id="em-aviso" class="doc-hint" role="status"></p>
+
+            <label for="em-pertence">A quem pertence (opcional)</label>
+            <input type="text" id="em-pertence" maxlength="120" list="lista-nomes-pertence" placeholder="Ex: Maria, financeiro da administradora" />
+
+            <button type="submit" id="em-salvar">Salvar e-mail</button>
+            <div id="em-status" class="status" role="status"></div>
+          </form>
+        </div>
+
+        <div id="subpage-em-consultar" class="subpage hidden">
+          <div class="contatos-lista-topo">
+            <h2 class="contatos-secao-titulo">E-mails <span id="em-total" class="contatos-total"></span></h2>
+            <button type="button" id="em-atualizar" class="botao-secundario" title="Busca a lista de novo no servidor.">Atualizar</button>
+          </div>
+          <input type="text" id="em-busca" autocomplete="off" aria-label="Buscar e-mail"
+                 placeholder="Buscar pelo e-mail, por quem é dono ou onde é usado" />
+          <p id="em-lista-status" class="doc-hint"></p>
+          <ul id="em-lista" class="contatos-lista" aria-live="polite"></ul>
+        </div>
+      </div>
+
+      <!-- Sugestões de todo campo de e-mail (Cadastro de e-mails) e dos nomes para "a quem pertence". -->
+      <datalist id="lista-emails-cadastrados"></datalist>
+      <datalist id="lista-nomes-pertence"></datalist>
 
       <div id="page-financeiro" class="card page hidden">
         <h1>Financeiro</h1>
@@ -926,6 +970,8 @@
           <button type="button" id="nova-despesa" class="botao-secundario">+ Nova despesa</button>
 
           <form id="form-despesa" class="hidden">
+            <!-- Atalhos da conta aberta aqui (pagar, excluir...): o app.js os traz da lista. -->
+            <div class="form-acoes-conta hidden"></div>
             <label for="despesa-descricao">Descrição</label>
             <input type="text" id="despesa-descricao" list="lista-descricoes"
                    autocomplete="off" placeholder="Ex: Cimento, aluguel de agosto" />
@@ -1042,7 +1088,6 @@
               </button>
               <div class="despesa-acoes hidden">
                 <button type="button" class="despesa-pagar botao-secundario" title="Registra o pagamento com a data de hoje.">Marcar como paga</button>
-                <button type="button" class="despesa-editar botao-secundario">✏️ Editar</button>
                 <button type="button" class="despesa-excluir botao-secundario botao-perigo" title="Apaga só esta conta.">Excluir</button>
                 <button type="button" class="despesa-excluir-grupo botao-secundario botao-perigo hidden">
                   Excluir todas as parcelas
@@ -1062,6 +1107,8 @@
           <button type="button" id="nova-recorrente" class="botao-secundario">+ Nova conta fixa</button>
 
           <form id="form-recorrente" class="hidden">
+            <!-- Atalhos da conta aberta aqui (pagar, excluir...): o app.js os traz da lista. -->
+            <div class="form-acoes-conta hidden"></div>
             <label for="recorrente-descricao">Descrição</label>
             <input type="text" id="recorrente-descricao" list="lista-descricoes"
                    autocomplete="off" placeholder="Ex: Aluguel do galpão, internet" />
@@ -1139,7 +1186,6 @@
                 <span class="despesa-extra"></span>
               </button>
               <div class="despesa-acoes hidden">
-                <button type="button" class="recorrente-editar botao-secundario">✏️ Editar</button>
                 <button type="button" class="recorrente-encerrar botao-secundario" title="Para de gerar contas novas e mantém as que já saíram.">Encerrar</button>
                 <button type="button" class="recorrente-excluir botao-secundario botao-perigo" title="Apaga a regra de vez. Use quando foi cadastro errado.">Excluir</button>
               </div>
@@ -1170,6 +1216,8 @@
           <button type="button" id="nova-receita" class="botao-secundario">+ Nova conta a receber</button>
 
           <form id="form-receita" class="hidden">
+            <!-- Atalhos da conta aberta aqui (pagar, excluir...): o app.js os traz da lista. -->
+            <div class="form-acoes-conta hidden"></div>
             <label for="receita-descricao">Descrição</label>
             <input type="text" id="receita-descricao" list="lista-descricoes-receita"
                    autocomplete="off" placeholder="Ex: Manutenção do elevador - agosto" />
@@ -1257,7 +1305,6 @@
               </button>
               <div class="despesa-acoes hidden">
                 <button type="button" class="receita-receber botao-secundario" title="Registra o recebimento com a data de hoje.">Marcar como recebida</button>
-                <button type="button" class="receita-editar botao-secundario">✏️ Editar</button>
                 <button type="button" class="receita-excluir botao-secundario botao-perigo" title="Apaga esta conta a receber.">Excluir</button>
               </div>
             </div>
@@ -1480,6 +1527,8 @@
             <button type="button" id="novo-cartao" class="botao-secundario">+ Adicionar cartão</button>
 
             <div id="form-cartao" class="hidden bloco-cartao">
+              <!-- Atalhos da conta aberta aqui (pagar, excluir...): o app.js os traz da lista. -->
+              <div class="form-acoes-conta hidden"></div>
               <label for="cartao-nome">Nome do cartão</label>
               <input type="text" id="cartao-nome" autocomplete="off" placeholder="Ex: Nubank PJ" />
 
@@ -1545,7 +1594,6 @@
                   <span class="despesa-extra"></span>
                 </button>
                 <div class="despesa-acoes hidden">
-                  <button type="button" class="cartao-editar botao-secundario">✏️ Editar</button>
                   <button type="button" class="cartao-excluir botao-secundario botao-perigo" title="Apaga este cartão do cadastro.">Excluir</button>
                 </div>
               </div>
@@ -1967,7 +2015,7 @@
           <input type="text" id="convite-nome" autocomplete="off" maxlength="80" placeholder="Nome da pessoa" />
 
           <label for="convite-email">E-mail</label>
-          <input type="text" id="convite-email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="pessoa@exemplo.com.br" />
+          <input type="text" id="convite-email" list="lista-emails-cadastrados" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="pessoa@exemplo.com.br" />
 
           <label for="convite-papel">Nível de acesso</label>
           <select id="convite-papel">
@@ -2021,6 +2069,18 @@
 
   <!-- Confirmação com a própria senha: convidar, mudar nível, desativar e
        cancelar convite passam por aqui (o n8n confere, nunca a tela). -->
+  <!-- Sair de algo mexido e não salvo (outra tela, outra aba, fechar ou trocar de cadastro):
+       pergunta se quer salvar (pedido do dono, 31/10/2026). Ver antesDeSair no app.js. -->
+  <dialog id="dialogo-salvar" class="dialogo" aria-labelledby="dialogo-salvar-titulo">
+    <h2 id="dialogo-salvar-titulo" class="dialogo-titulo">Salvar as alterações?</h2>
+    <p class="dialogo-texto">Você mexeu aqui e ainda não salvou.</p>
+    <div class="dialogo-salvar-botoes">
+      <button type="button" data-escolha="salvar">Salvar</button>
+      <button type="button" class="botao-secundario botao-perigo" data-escolha="descartar">Não salvar</button>
+      <button type="button" class="botao-secundario" data-escolha="voltar">Continuar editando</button>
+    </div>
+  </dialog>
+
   <dialog id="confirmar-senha" class="dialogo" aria-labelledby="confirmar-senha-titulo">
     <form id="confirmar-senha-form" novalidate>
       <h2 id="confirmar-senha-titulo" class="dialogo-titulo">Confirme com a sua senha</h2>

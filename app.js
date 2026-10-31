@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.30b";
+const APP_VERSION = "2026.10.31a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -189,7 +189,21 @@ document.getElementById("sessao-expirada-entrar").addEventListener("click", () =
 // as chamadas que o app já faz, sem ficar cutucando o servidor de tempos em
 // tempos só para saber se ele está vivo. É aqui também que a credencial entra
 // em cada pedido -- quem chama não precisa saber qual é.
+// Pedidos ao n8n ainda em andamento. Cada um conta até um pouco depois da
+// resposta, para quem esperava por ela ter tempo de tratá-la (o "Salvar" da
+// pergunta "Salvar as alterações?" usa isto para saber se o salvamento acabou).
+let pedidosEmCurso = 0;
+
 async function fetchN8n(caminho, dados, jaRenovou) {
+  pedidosEmCurso += 1;
+  try {
+    return await fetchN8nDeFato(caminho, dados, jaRenovou);
+  } finally {
+    setTimeout(() => { pedidosEmCurso -= 1; }, 400);
+  }
+}
+
+async function fetchN8nDeFato(caminho, dados, jaRenovou) {
   let resposta;
   try {
     // Enviado como formulário simples de propósito: assim o navegador não
@@ -251,23 +265,21 @@ sidebarOverlay.addEventListener("click", closeSidebar);
 
 document.querySelectorAll(".sidebar-item[data-page]").forEach((item) => {
   item.addEventListener("click", () => {
-    if (!podeSair(`pagina:${item.dataset.page}`)) {
+    // Algo mexido e não salvo nesta tela: pergunta antes se quer salvar.
+    if (pendenteDeSalvar()) closeSidebar();
+    antesDeSair(() => {
+      document.querySelectorAll(".sidebar-item[data-page]").forEach((i) =>
+        i.classList.remove("active")
+      );
+      item.classList.add("active");
+
+      const targetId = `page-${item.dataset.page}`;
+      document.querySelectorAll(".page").forEach((page) => {
+        page.classList.toggle("hidden", page.id !== targetId);
+      });
+
       closeSidebar();
-      avisarPerda("Você tem alterações não salvas. Toque de novo para sair desta tela.");
-      return;
-    }
-
-    document.querySelectorAll(".sidebar-item[data-page]").forEach((i) =>
-      i.classList.remove("active")
-    );
-    item.classList.add("active");
-
-    const targetId = `page-${item.dataset.page}`;
-    document.querySelectorAll(".page").forEach((page) => {
-      page.classList.toggle("hidden", page.id !== targetId);
     });
-
-    closeSidebar();
   });
 });
 
@@ -290,12 +302,8 @@ document.querySelectorAll(".sidebar-grupo-cabecalho").forEach((botao) => {
 // que ficava em branco quando aberto depois.
 function ligarAbasInternas(classeAba, atributo, prefixoId, classeBloco) {
   document.querySelectorAll(`.${classeAba}`).forEach((aba) => {
-    aba.addEventListener("click", () => {
+    aba.addEventListener("click", () => antesDeSair(() => {
       const alvo = aba.dataset[atributo];
-      if (!podeSair(`aba:${alvo}`)) {
-        avisarPerda("Você tem alterações não salvas. Toque de novo para sair desta tela.");
-        return;
-      }
 
       const pagina = aba.closest(".page");
       pagina.querySelectorAll(`.${classeAba}`).forEach((t) => t.classList.remove("active"));
@@ -309,7 +317,7 @@ function ligarAbasInternas(classeAba, atributo, prefixoId, classeBloco) {
       // A aba que acabou de aparecer pode ter campos montados enquanto
       // estava escondida, e altura medida escondido sai zerada.
       ajustarAlturasAuto(pagina);
-    });
+    }));
   });
 }
 
@@ -547,6 +555,8 @@ semDocumentoBotao.addEventListener("click", () => {
   mostrarDica("neutral", "Sem CPF por enquanto — dá para completar depois, editando o cadastro.");
   formEntidade.classList.remove("hidden");
   semDocumentoBotao.classList.add("hidden");
+  // O bloco de endereço foi montado com o formulário escondido (altura zero).
+  ajustarAlturasAuto(locaisBox);
   razaoSocialInput.focus();
 });
 
@@ -677,6 +687,8 @@ function adicionarCanal(lista, tipo, comFoco, valor) {
   } else {
     campo.placeholder = "nome@empresa.com.br";
     campo.inputMode = "email";
+    // Sugere os e-mails do Cadastro de e-mails.
+    campo.setAttribute("list", "lista-emails-cadastrados");
   }
 
   // O que vem do Airtable já tem o 55; na tela mostro formatado.
@@ -1033,9 +1045,85 @@ function travarBlocos(caixa, travado) {
   caixa.querySelectorAll("input, select, textarea").forEach((campo) => {
     campo.disabled = travado;
   });
+  marcarVaziosNaLeitura(caixa.querySelectorAll("input, select, textarea"), travado);
   // Campo travado perde o espaçamento lateral (o CSS o zera para parecer
   // texto), então a linha passa a quebrar em outro ponto e a altura muda.
   ajustarAlturasAuto(caixa);
+}
+
+// Campo travado e vazio mostra "—": a dica de exemplo ("Ex: Torre A") lida
+// assim parecia dado, e a lista sem escolha mostrava "Escolha...". Destravado,
+// volta o texto original.
+function marcarVaziosNaLeitura(campos, travado) {
+  campos.forEach((campo) => {
+    const alvo = campo.tagName === "SELECT"
+      ? [...campo.options].find((opcao) => opcao.value === "")
+      : (campo.type === "hidden" ? null : campo);
+    if (!alvo) return;
+    const atributo = campo.tagName === "SELECT" ? "textContent" : "placeholder";
+    if (travado) {
+      if (alvo.dataset.original === undefined) alvo.dataset.original = alvo[atributo];
+      alvo[atributo] = "—";
+    } else if (alvo.dataset.original !== undefined) {
+      alvo[atributo] = alvo.dataset.original;
+      delete alvo.dataset.original;
+    }
+  });
+}
+
+// Qual campo a pessoa tocou num bloco travado. Campo travado não recebe clique
+// (o CSS deixa o toque passar para o bloco), então vale o nome do campo tocado
+// ou, fora dele, o campo mais perto do toque (a distância na vertical pesa mais).
+function campoNoPonto(zona, alvo, x, y) {
+  const ehCampo = (el) => el.matches("input:not([type='hidden']), select, textarea");
+  if (alvo.tagName === "LABEL") {
+    for (let el = alvo.nextElementSibling; el; el = el.nextElementSibling) {
+      if (ehCampo(el)) return el;
+      const dentro = el.querySelector("input:not([type='hidden']), select, textarea");
+      if (dentro) return dentro;
+    }
+  }
+  let melhor = null;
+  let menor = Infinity;
+  zona.querySelectorAll("input:not([type='hidden']), select, textarea").forEach((campo) => {
+    const r = campo.getBoundingClientRect();
+    if (!r.width && !r.height) return; // escondido
+    const distancia = 3 * Math.max(r.top - y, 0, y - r.bottom) + Math.max(r.left - x, 0, x - r.right);
+    if (distancia < menor) {
+      menor = distancia;
+      melhor = campo;
+    }
+  });
+  return melhor;
+}
+
+// Põe o cursor no campo: no fim do texto, ou já com a lista aberta.
+function focarCampo(campo) {
+  campo.focus();
+  if (campo.tagName === "SELECT") {
+    try { campo.showPicker(); } catch (erro) { /* navegador sem showPicker: fica só o foco */ }
+  } else if (campo.tagName === "TEXTAREA" || /^(text|search|tel|email|url)$/.test(campo.type)) {
+    const fim = campo.value.length;
+    campo.setSelectionRange(fim, fim);
+  }
+}
+
+// Altura da barra do topo: o que fica preso no alto ao rolar (a barra
+// Salvar/Cancelar do cadastro em edição) para logo abaixo dela.
+function medirTopo() {
+  const topo = document.querySelector(".topbar");
+  if (topo && topo.offsetHeight) document.documentElement.style.setProperty("--altura-topo", `${topo.offsetHeight}px`);
+}
+window.addEventListener("resize", medirTopo);
+
+// Retrato dos campos do cadastro aberto. Comparado com o de quando a edição
+// começou, diz se há mesmo o que perder: tocar num campo só para olhar já
+// destrava a edição, e isso sozinho não deve virar aviso ao sair da tela.
+function fotoDoDetalhe(bloco) {
+  return [...bloco.querySelectorAll("input, select, textarea")]
+    .filter((campo) => !campo.closest(".d-contatos-escolha"))
+    .map((campo) => campo.value).join("␞")
+    + `|${bloco.querySelectorAll(".local").length}|${bloco.querySelectorAll(".contato").length}`;
 }
 
 // ----- Consulta ao n8n: já existe? e dados da Receita -----
@@ -1137,6 +1225,12 @@ cancelarCadastroBotao.addEventListener("click", () => {
     return;
   }
 
+  descartarCadastroNovo();
+});
+
+// Joga fora o cliente novo que estava sendo preenchido (Cancelar, ou "Não
+// salvar" na pergunta ao sair).
+function descartarCadastroNovo() {
   limparFormulario();
   esconderFormulario();
   documentoInput.value = "";
@@ -1144,7 +1238,7 @@ cancelarCadastroBotao.addEventListener("click", () => {
   semDocumento = false;
   tipoCnpjBox.classList.add("hidden");
   mostrarDica("neutral", "");
-});
+}
 
 formEntidade.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -1391,6 +1485,7 @@ function emailsDoSistema() {
   cadastros.forEach((c) => separarEmails(c.emails).forEach((e) => guardar(e, `Cliente ${c.nomeFantasia || c.razaoSocial || ""}`.trim())));
   if (contatosCarregados) contatosCadastrados.forEach((c) => c.emails.forEach((e) => guardar(e, `Contato ${c.nome || ""}`.trim())));
   cadastroAdministradoras.lista().forEach((a) => (a.emails || []).forEach((e) => guardar(e, `Administradora ${a.nome}`)));
+  cadastroEmails.lista().forEach((x) => guardar(x.email, x.pertence ? `E-mail de ${x.pertence}` : "Cadastro de e-mails"));
   return [...mapa.values()].sort((a, b) => a.email.localeCompare(b.email));
 }
 
@@ -1490,7 +1585,8 @@ function ligarEmailsFinanceiro(campo, caixa) {
 
   // As listas de onde vêm as sugestões chegam na primeira vez que a busca é usada.
   busca.addEventListener("focus", () => {
-    Promise.all([garantirCadastrosCarregados(), buscarContatosSalvos(), cadastroAdministradoras.buscar().catch(() => {})])
+    Promise.all([garantirCadastrosCarregados(), buscarContatosSalvos(), cadastroAdministradoras.buscar().catch(() => {}),
+      cadastroEmails.buscar().catch(() => {})])
       .then(() => { if (document.activeElement === busca) busca.dispatchEvent(new Event("input")); })
       .catch(() => {});
   });
@@ -1584,10 +1680,11 @@ function montarLinha(cadastro) {
   atualizarResumo(linha, cadastro);
 
   const caixa = linha.querySelector(".cadastro-detalhe");
-  linha.querySelector(".cadastro-resumo").addEventListener("click", () => {
+  // Com outro cadastro aberto e mexido, pergunta antes se quer salvar.
+  linha.querySelector(".cadastro-resumo").addEventListener("click", () => antesDeSair(() => {
     if (linha.classList.contains("aberto")) fecharLinha(linha);
     else abrirLinha(linha, caixa, cadastro);
-  });
+  }));
 
   return linha;
 }
@@ -1757,7 +1854,6 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
   const escolhaContatos = ligarEscolhaDeContatos(bloco, cadastro.id, (mensagem) =>
     abrirLinha(linha, linha.querySelector(".cadastro-detalhe"), resumo, mensagem));
 
-  const botaoEditar = bloco.querySelector(".acao-editar");
   const botaoSalvar = bloco.querySelector(".acao-salvar");
   const botaoCancelar = bloco.querySelector(".acao-cancelar");
   const botaoExcluir = bloco.querySelector(".acao-excluir");
@@ -1784,11 +1880,15 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
     botaoExcluir.textContent = "Excluir";
   }
 
-  function modoEdicao(ligado) {
+  // `focar`: o campo (ou uma função que o devolve, para campo que só aparece
+  // editando) onde o cursor vai; sem ele, a razão social.
+  function modoEdicao(ligado, focar) {
     editaveis.forEach((campo) => (campo.disabled = !ligado));
+    marcarVaziosNaLeitura(editaveis, !ligado);
+    bloco.classList.toggle("editando", ligado);
+    bloco.classList.toggle("leitura", !ligado);
     // A pergunta de administradora/sindicatura nova só aparece editando.
     camposDeCadastro.forEach((campo) => campo.atualizar());
-    botaoEditar.classList.toggle("hidden", ligado);
     botaoSalvar.classList.toggle("hidden", !ligado);
     botaoCancelar.classList.toggle("hidden", !ligado);
     botaoNovoLocal.classList.toggle("hidden", !ligado);
@@ -1812,12 +1912,33 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
     }
 
     desarmarExclusao();
-    if (ligado) campos.razaoSocial.focus();
+    ajustarAlturasAuto(bloco);
+    if (ligado) {
+      medirTopo();
+      bloco.fotoEdicao = fotoDoDetalhe(bloco);
+      focarCampo((typeof focar === "function" ? focar() : focar) || campos.razaoSocial);
+    }
   }
 
-  botaoEditar.addEventListener("click", () => {
+  // Sem lápis (pedido do dono, 31/10/2026): tocar em qualquer campo, ou no
+  // bloco dele, destrava o cadastro e já põe o cursor ali.
+  bloco.addEventListener("click", (evento) => {
+    if (bloco.classList.contains("editando")) return;
+    const alvo = evento.target;
+    if (alvo.closest("button, a, .detalhe-acoes, .d-contatos-escolha, .sugestao-lista, .contato-novo-pergunta")) return;
+    const vazio = alvo.closest(".vazio-leitura");
+    const zona = vazio ? null : alvo.closest(".moldura, .local, .contato");
+    if (!vazio && !zona) return;
+    const tocado = zona ? campoNoPonto(zona, alvo, evento.clientX, evento.clientY) : null;
+    const caixaVazia = vazio && vazio.parentElement;
     limparStatus();
-    modoEdicao(true);
+    modoEdicao(true, () => {
+      // Seção sem nada: o bloco em branco que a edição abre ali.
+      if (caixaVazia) return caixaVazia.querySelector("input, textarea");
+      // E-mails do financeiro: a busca, que só aparece editando.
+      if (zona.classList.contains("moldura-emails")) return zona.querySelector(".emails-fin input[type='text']");
+      return tocado;
+    });
   });
 
   botaoCancelar.addEventListener("click", () => {
@@ -1827,7 +1948,7 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
     limparStatus();
   });
 
-  botaoFechar.addEventListener("click", () => fecharLinha(linha));
+  botaoFechar.addEventListener("click", () => antesDeSair(() => fecharLinha(linha)));
 
   botaoSalvar.addEventListener("click", async () => {
     const digitos = campos.documento.value.replace(/\D/g, "");
@@ -1939,7 +2060,7 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
     }
   });
 
-  // Nasce travado: o lápis é quem destrava.
+  // Nasce travado: tocar num campo é que destrava.
   modoEdicao(false);
   if (avisoDepois) mostrarStatus("ok", avisoDepois);
 
@@ -2435,7 +2556,56 @@ despesaCampos.parcelas.addEventListener("input", mostrarContaDasParcelas);
 despesaCampos.valor.addEventListener("input", mostrarContaDasParcelas);
 despesaCampos.vencimento.addEventListener("change", mostrarContaDasParcelas);
 
+// ----- Tocar na conta é editar -----
+//
+// Sem botão "Editar" (pedido do dono, 31/10/2026): tocar numa conta, conta fixa,
+// conta a receber ou cartão abre o formulário dela direto. Os atalhos da conta
+// (marcar como paga, encerrar, excluir) vão para o alto do formulário enquanto
+// ela está aberta ali; o formulário fechando, saem junto.
+function abrirContaNoForm(form, linha, acoes, abrir) {
+  // Tocar de novo na conta que já está aberta só leva até o formulário: abrir
+  // outra vez jogaria fora o que já foi mexido nele.
+  if (!form.classList.contains("hidden") && linha.classList.contains("aberta")) {
+    form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    return;
+  }
+  // Outra conta aberta ali e mexida: pergunta antes se quer salvar. Salvando, a
+  // lista é refeita e esta linha some; aí a pessoa toca de novo na conta.
+  if (naTela(form) && fotoDoForm(form) !== form.fotoAbertura) {
+    antesDeSair(() => {
+      if (linha.isConnected) abrirContaNoForm(form, linha, acoes, abrir);
+    });
+    return;
+  }
+  abrir();
+  // Ninguém pediu para digitar ainda: sem foco, o teclado do celular não pula.
+  if (form.contains(document.activeElement)) document.activeElement.blur();
+  linha.parentElement.querySelectorAll(".despesa.aberta").forEach((outra) => outra.classList.remove("aberta"));
+  linha.classList.add("aberta");
+  const vaga = form.querySelector(".form-acoes-conta");
+  acoes.classList.remove("hidden");
+  vaga.replaceChildren(acoes);
+  vaga.classList.remove("hidden");
+  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// O formulário fechou ou abriu outra conta: os atalhos da anterior saem dele.
+function tirarContaDoForm(form, listaBox) {
+  const vaga = form.querySelector(".form-acoes-conta");
+  vaga.replaceChildren();
+  vaga.classList.add("hidden");
+  listaBox.querySelectorAll(".despesa.aberta").forEach((linha) => linha.classList.remove("aberta"));
+}
+
+// Retrato dos campos de um formulário do Financeiro ao abrir: só há o que perder
+// ao sair da tela se algo mudou desde então (abrir uma conta para olhar não conta).
+function fotoDoForm(form) {
+  return [...form.querySelectorAll("input, select, textarea")]
+    .map((campo) => (campo.type === "checkbox" ? String(campo.checked) : campo.value)).join("␞");
+}
+
 function limparFormDespesa() {
+  tirarContaDoForm(despesaForm, listaDespesasBox);
   despesaEditando = "";
   Object.values(despesaCampos).forEach((campo) => {
     if (campo.type !== "checkbox") campo.value = "";
@@ -2492,6 +2662,7 @@ function abrirFormDespesa(despesa) {
   despesaForm.classList.remove("hidden");
   novaDespesaBotao.classList.add("hidden");
   despesaCampos.descricao.focus();
+  despesaForm.fotoAbertura = fotoDoForm(despesaForm);
 }
 
 function fecharFormDespesa() {
@@ -2684,7 +2855,6 @@ function montarLinhaDespesa(despesa) {
 
   const acoes = linha.querySelector(".despesa-acoes");
   const botaoPagar = linha.querySelector(".despesa-pagar");
-  const botaoEditar = linha.querySelector(".despesa-editar");
   const botaoExcluir = linha.querySelector(".despesa-excluir");
   const botaoExcluirGrupo = linha.querySelector(".despesa-excluir-grupo");
 
@@ -2699,20 +2869,8 @@ function montarLinhaDespesa(despesa) {
   }
 
   linha.querySelector(".despesa-resumo").addEventListener("click", () => {
-    const abrindo = acoes.classList.contains("hidden");
-    // Uma aberta por vez: a lista fica curta e sem confusão no celular.
-    listaDespesasBox.querySelectorAll(".despesa").forEach((outra) => {
-      outra.classList.remove("aberta");
-      outra.querySelector(".despesa-acoes").classList.add("hidden");
-      desarmarConfirmacao(outra.querySelector(".despesa-excluir"), "Excluir");
-    });
-    acoes.classList.toggle("hidden", !abrindo);
-    linha.classList.toggle("aberta", abrindo);
-  });
-
-  botaoEditar.addEventListener("click", () => {
-    abrirFormDespesa(despesa);
-    despesaForm.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    desarmarConfirmacao(botaoExcluir, "Excluir");
+    abrirContaNoForm(despesaForm, linha, acoes, () => abrirFormDespesa(despesa));
   });
 
   botaoPagar.addEventListener("click", async () => {
@@ -2736,6 +2894,8 @@ function montarLinhaDespesa(despesa) {
         mostrarListaDespesasStatus("error", (resposta && resposta.mensagem) || "Não consegui salvar.");
         return;
       }
+      // Paga pelo atalho no alto do formulário: o formulário mostrava ela ainda em aberto.
+      if (despesaEditando === despesa.id) fecharFormDespesa();
       await recarregarDespesas();
       mostrarListaDespesasStatus("ok", "Marcada como paga.");
     } catch (err) {
@@ -2792,6 +2952,8 @@ async function excluirDespesas(ids, mensagemOk) {
       mostrarListaDespesasStatus("error", (resposta && resposta.mensagem) || "Não consegui excluir.");
       return;
     }
+    // Excluída pelo atalho no alto do formulário: não sobra formulário de uma conta que sumiu.
+    if (ids.includes(despesaEditando)) fecharFormDespesa();
     despesas = despesas.filter((d) => !ids.includes(d.id));
     atualizarFiltroDeMeses();
     atualizarListasDeApoio();
@@ -2819,6 +2981,7 @@ recorrenteCampos.categoria.addEventListener("change", () =>
 );
 
 function limparFormRecorrente() {
+  tirarContaDoForm(recorrenteForm, listaRecorrentesBox);
   recorrenteEditando = "";
   recorrenteCampos.descricao.value = "";
   recorrenteCampos.valor.value = "";
@@ -2874,6 +3037,7 @@ function abrirFormRecorrente(recorrente) {
   recorrenteForm.classList.remove("hidden");
   novaRecorrenteBotao.classList.add("hidden");
   recorrenteCampos.descricao.focus();
+  recorrenteForm.fotoAbertura = fotoDoForm(recorrenteForm);
 }
 
 function fecharFormRecorrente() {
@@ -2972,7 +3136,6 @@ function montarLinhaRecorrente(recorrente) {
   linha.querySelector(".despesa-extra").textContent = partes.join(" · ");
 
   const acoes = linha.querySelector(".despesa-acoes");
-  const botaoEditar = linha.querySelector(".recorrente-editar");
   const botaoEncerrar = linha.querySelector(".recorrente-encerrar");
   const botaoExcluir = linha.querySelector(".recorrente-excluir");
 
@@ -2980,20 +3143,9 @@ function montarLinhaRecorrente(recorrente) {
   botaoEncerrar.classList.toggle("hidden", !recorrente.ativo);
 
   linha.querySelector(".despesa-resumo").addEventListener("click", () => {
-    const abrindo = acoes.classList.contains("hidden");
-    listaRecorrentesBox.querySelectorAll(".despesa").forEach((outra) => {
-      outra.classList.remove("aberta");
-      outra.querySelector(".despesa-acoes").classList.add("hidden");
-      desarmarConfirmacao(outra.querySelector(".recorrente-excluir"), "Excluir");
-      desarmarConfirmacao(outra.querySelector(".recorrente-encerrar"), "Encerrar");
-    });
-    acoes.classList.toggle("hidden", !abrindo);
-    linha.classList.toggle("aberta", abrindo);
-  });
-
-  botaoEditar.addEventListener("click", () => {
-    abrirFormRecorrente(recorrente);
-    recorrenteForm.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    desarmarConfirmacao(botaoExcluir, "Excluir");
+    desarmarConfirmacao(botaoEncerrar, "Encerrar");
+    abrirContaNoForm(recorrenteForm, linha, acoes, () => abrirFormRecorrente(recorrente));
   });
 
   // Encerrar guarda o histórico das contas que já saíram; excluir apaga a
@@ -3015,6 +3167,8 @@ async function mexerNaRecorrente(id, apagarDeVez) {
       mostrarListaRecorrentesStatus("error", (resposta && resposta.mensagem) || "Não consegui alterar.");
       return;
     }
+    // Encerrada/excluída pelo atalho no alto do formulário: ele mostrava a regra como era.
+    if (recorrenteEditando === id) fecharFormRecorrente();
     await recarregarFinanceiro();
     mostrarListaRecorrentesStatus("ok", resposta.mensagem);
   } catch (err) {
@@ -3190,6 +3344,7 @@ function ajustarLinhaDataRecebimento() {
 receitaCampos.status.addEventListener("change", ajustarLinhaDataRecebimento);
 
 function limparFormReceita() {
+  tirarContaDoForm(receitaForm, listaReceitasBox);
   receitaEditando = "";
   documentoDoClienteEscolhido = "";
   Object.values(receitaCampos).forEach((campo) => (campo.value = ""));
@@ -3223,6 +3378,7 @@ function abrirFormReceita(receita) {
   receitaForm.classList.remove("hidden");
   novaReceitaBotao.classList.add("hidden");
   receitaCampos.descricao.focus();
+  receitaForm.fotoAbertura = fotoDoForm(receitaForm);
 }
 
 function fecharFormReceita() {
@@ -3377,25 +3533,13 @@ function montarLinhaReceita(receita) {
 
   const acoes = linha.querySelector(".despesa-acoes");
   const botaoReceber = linha.querySelector(".receita-receber");
-  const botaoEditar = linha.querySelector(".receita-editar");
   const botaoExcluir = linha.querySelector(".receita-excluir");
 
   botaoReceber.classList.toggle("hidden", recebida);
 
   linha.querySelector(".despesa-resumo").addEventListener("click", () => {
-    const abrindo = acoes.classList.contains("hidden");
-    listaReceitasBox.querySelectorAll(".despesa").forEach((outra) => {
-      outra.classList.remove("aberta");
-      outra.querySelector(".despesa-acoes").classList.add("hidden");
-      desarmarConfirmacao(outra.querySelector(".receita-excluir"), "Excluir");
-    });
-    acoes.classList.toggle("hidden", !abrindo);
-    linha.classList.toggle("aberta", abrindo);
-  });
-
-  botaoEditar.addEventListener("click", () => {
-    abrirFormReceita(receita);
-    receitaForm.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    desarmarConfirmacao(botaoExcluir, "Excluir");
+    abrirContaNoForm(receitaForm, linha, acoes, () => abrirFormReceita(receita));
   });
 
   botaoReceber.addEventListener("click", async () => {
@@ -3419,6 +3563,8 @@ function montarLinhaReceita(receita) {
         mostrarListaReceitasStatus("error", (resposta && resposta.mensagem) || "Não consegui salvar.");
         return;
       }
+      // Recebida pelo atalho no alto do formulário: ele mostrava ela ainda em aberto.
+      if (receitaEditando === receita.id) fecharFormReceita();
       await recarregarReceitas();
       mostrarListaReceitasStatus("ok", "Marcada como recebida.");
     } catch (err) {
@@ -3435,6 +3581,7 @@ function montarLinhaReceita(receita) {
         mostrarListaReceitasStatus("error", (resposta && resposta.mensagem) || "Não consegui excluir.");
         return;
       }
+      if (receitaEditando === receita.id) fecharFormReceita();
       recebimentos = recebimentos.filter((r) => r.id !== receita.id);
       atualizarFiltroDeMesesReceita();
       atualizarListaDeClientes();
@@ -4474,6 +4621,7 @@ function mostrarCicloDoCartao() {
 );
 
 function limparFormCartao() {
+  tirarContaDoForm(cartaoForm, listaCartoesBox);
   cartaoEditando = "";
   Object.values(cartaoCampos).forEach((campo) => (campo.value = ""));
   cartaoCampos.fechamento.value = "1";
@@ -4595,19 +4743,8 @@ function montarLinhaCartao(cartao) {
 
   const acoes = linha.querySelector(".despesa-acoes");
   linha.querySelector(".despesa-resumo").addEventListener("click", () => {
-    const abrindo = acoes.classList.contains("hidden");
-    listaCartoesBox.querySelectorAll(".despesa").forEach((outra) => {
-      outra.classList.remove("aberta");
-      outra.querySelector(".despesa-acoes").classList.add("hidden");
-      desarmarConfirmacao(outra.querySelector(".cartao-excluir"), "Excluir");
-    });
-    acoes.classList.toggle("hidden", !abrindo);
-    linha.classList.toggle("aberta", abrindo);
-  });
-
-  linha.querySelector(".cartao-editar").addEventListener("click", () => {
-    abrirFormCartao(cartao);
-    cartaoForm.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    desarmarConfirmacao(acoes.querySelector(".cartao-excluir"), "Excluir");
+    abrirContaNoForm(cartaoForm, linha, acoes, () => abrirFormCartao(cartao));
   });
 
   ligarExclusao(linha.querySelector(".cartao-excluir"), "Excluir", "Confirmar exclusão", async () => {
@@ -4618,6 +4755,7 @@ function montarLinhaCartao(cartao) {
         listaCartoesStatus.textContent = (resposta && resposta.mensagem) || "Não consegui excluir.";
         return;
       }
+      if (cartaoEditando === cartao.id) fecharFormCartao();
       cartoes = cartoes.filter((c) => c.id !== cartao.id);
       desenharCartoes();
       atualizarListaDeCartoesNaDespesa();
@@ -5385,24 +5523,20 @@ function cadastroEmAndamento() {
 }
 
 // A mesma proteção vale para um cadastro existente que está sendo editado na
-// Consulta: o lápis já foi tocado, o Salvar ainda não. Basta um bloco aberto
-// em edição — comparar campo a campo não traz benefício aqui, porque quem
-// tocou no lápis já assumiu o risco de mexer em algo.
+// Consulta. Como tocar num campo já destrava a edição (sem lápis), só conta se
+// algo mudou desde então -- quem tocou só para olhar sai sem aviso.
 function edicaoDaConsultaAbertaEmEdicao() {
-  const salvar = listaBox.querySelector(".cadastro.aberto .acao-salvar");
-  return Boolean(salvar) && !salvar.classList.contains("hidden");
+  const detalhe = listaBox.querySelector(".cadastro.aberto .detalhe.editando");
+  return Boolean(detalhe) && fotoDoDetalhe(detalhe) !== detalhe.fotoEdicao;
 }
 
-// Mesma ideia do cadastro: formulário do Financeiro aberto e com algo digitado
-// é trabalho que se perde ao sair da tela. Os campos numéricos já nascem com
-// valor (dia do mês, quantas faltam), então eles não contam como "digitado" —
-// senão abrir o formulário e não escrever nada já travaria a saída.
+// Mesma ideia do cadastro: formulário do Financeiro aberto e mexido é trabalho
+// que se perde ao sair da tela. Conta só o que mudou desde que ele abriu (o
+// retrato de fotoDoForm): abrir uma conta só para olhar, ou um formulário novo
+// com os números que já nascem preenchidos, não trava a saída.
 function formularioFinanceiroEmAndamento() {
-  return [despesaForm, recorrenteForm, receitaForm].some((form) => {
-    if (form.classList.contains("hidden")) return false;
-    return Array.from(form.querySelectorAll('input[type="text"], input[type="date"], textarea'))
-      .some((campo) => campo.value.trim());
-  });
+  return [despesaForm, recorrenteForm, receitaForm].some((form) =>
+    !form.classList.contains("hidden") && fotoDoForm(form) !== form.fotoAbertura);
 }
 
 function haAlgoParaPerder() {
@@ -5418,66 +5552,102 @@ function descartarEdicaoDaConsulta() {
   if (cancelar && !cancelar.classList.contains("hidden")) cancelar.click();
 }
 
-// Mesma ideia do Cancelar e do Excluir: o primeiro toque avisa, o segundo
-// confirma. Uso o padrão daqui em vez do confirm() do navegador, que destoa
-// do resto e no celular aparece como alerta de site.
-let saidaPendente = null;
+// ----- "Salvar as alterações?" -----
+//
+// Pedido do dono (31/10/2026): sair de algo mexido e não salvo (outra tela, outra
+// aba, fechar ou trocar de cadastro, abrir outra conta) pergunta se quer salvar.
+// Antes era um aviso de "toque de novo para sair", que descartava no 2º toque.
 
-// O aviso precisa aparecer onde o usuário está olhando: se o risco é um
-// cadastro sendo editado na Consulta, escrever em salvarStatus (que vive na
-// aba Adicionar, hoje fora da tela) passaria batido.
-function avisarPerda(mensagem) {
-  // Cadastro de contatos só conta com a tela à vista: se ele está em
-  // andamento, é onde o usuário está olhando agora.
+const dialogoSalvar = document.getElementById("dialogo-salvar");
+
+// Só conta o que está à vista: um formulário numa tela que ficou para trás não
+// é o que a pessoa está largando agora.
+const naTela = (el) => !el.closest(".hidden");
+
+// O que está mexido e não salvo, como salvar (o mesmo botão Salvar dele) e
+// como desistir (o mesmo Cancelar).
+function pendenteDeSalvar() {
   if (contatoEmAndamento()) {
-    mostrarCtStatus("error", mensagem);
-    return;
+    return { pendente: contatoEmAndamento, salvar: () => formContato.requestSubmit(), descartar: () => ctCancelar.click() };
   }
-
-  // Formulário do Financeiro em andamento tem prioridade: se ele está aberto,
-  // é onde o usuário está olhando agora.
-  if (formularioFinanceiroEmAndamento()) {
-    const alvo = !receitaForm.classList.contains("hidden")
-      ? mostrarReceitaStatus
-      : recorrenteForm.classList.contains("hidden")
-        ? mostrarDespesaStatus
-        : mostrarRecorrenteStatus;
-    alvo("error", mensagem);
-    return;
+  const financeiro = [
+    [despesaForm, fecharFormDespesa], [recorrenteForm, fecharFormRecorrente], [receitaForm, fecharFormReceita],
+  ].find(([form]) => naTela(form) && fotoDoForm(form) !== form.fotoAbertura);
+  if (financeiro) {
+    const [form, fechar] = financeiro;
+    return { pendente: () => naTela(form) && fotoDoForm(form) !== form.fotoAbertura, salvar: () => form.requestSubmit(), descartar: fechar };
   }
-
-  const statusDaConsulta = listaBox.querySelector(".cadastro.aberto .detalhe-status");
-  if (statusDaConsulta && edicaoDaConsultaAbertaEmEdicao()) {
-    statusDaConsulta.textContent = mensagem;
-    statusDaConsulta.className = "detalhe-status status show error";
-    return;
+  if (naTela(listaBox) && edicaoDaConsultaAbertaEmEdicao()) {
+    return {
+      pendente: edicaoDaConsultaAbertaEmEdicao,
+      salvar: () => listaBox.querySelector(".cadastro.aberto .acao-salvar").click(),
+      descartar: descartarEdicaoDaConsulta,
+    };
   }
-
-  salvarStatus.textContent = mensagem;
-  salvarStatus.className = "status show error";
+  if (cadastroEmAndamento()) {
+    return { pendente: cadastroEmAndamento, salvar: () => formEntidade.requestSubmit(), descartar: descartarCadastroNovo };
+  }
+  return null;
 }
 
-function podeSair(acao) {
-  if (!haAlgoParaPerder()) {
-    saidaPendente = null;
-    descartarEdicaoDaConsulta();
-    return true;
-  }
+function perguntarSalvar() {
+  return new Promise((resolver) => {
+    const botoes = [...dialogoSalvar.querySelectorAll("[data-escolha]")];
+    const aoClicar = (evento) => terminar(evento.currentTarget.dataset.escolha);
+    // Esc = continuar editando.
+    const aoCancelar = (evento) => {
+      evento.preventDefault();
+      terminar("voltar");
+    };
+    function terminar(escolha) {
+      botoes.forEach((b) => b.removeEventListener("click", aoClicar));
+      dialogoSalvar.removeEventListener("cancel", aoCancelar);
+      if (dialogoSalvar.open) dialogoSalvar.close();
+      resolver(escolha);
+    }
+    botoes.forEach((b) => b.addEventListener("click", aoClicar));
+    dialogoSalvar.addEventListener("cancel", aoCancelar);
+    dialogoSalvar.showModal();
+  });
+}
 
-  if (saidaPendente === acao) {
-    saidaPendente = null;
-    descartarEdicaoDaConsulta();
-    return true;
+// Aperta o Salvar de quem está pendente e espera: true se salvou (não há mais o
+// que perder ali); false se não deu -- o aviso de erro fica na tela e a pessoa
+// continua onde estava.
+async function salvarPendente(p) {
+  p.salvar();
+  const inicio = Date.now();
+  while (Date.now() - inicio < 30000) {
+    await new Promise((resolver) => setTimeout(resolver, 150));
+    if (!p.pendente()) return true;
+    if (!pedidosEmCurso && Date.now() - inicio > 300) return false;
   }
-
-  saidaPendente = acao;
   return false;
+}
+
+// Antes de sair de algo: sem nada mexido, segue na hora (uma edição aberta sem
+// mudança só volta a ficar travada). Com algo mexido, pergunta; `seguir` roda se
+// salvou (e deu certo) ou se a pessoa escolheu não salvar.
+async function antesDeSair(seguir) {
+  const p = pendenteDeSalvar();
+  if (!p) {
+    descartarEdicaoDaConsulta();
+    seguir();
+    return;
+  }
+  const escolha = await perguntarSalvar();
+  if (escolha === "voltar") return;
+  if (escolha === "salvar") {
+    if (!(await salvarPendente(p))) return;
+  } else {
+    p.descartar();
+  }
+  seguir();
 }
 
 // Digitar de novo (no cadastro novo ou numa edição aberta na Consulta)
 // significa que a pessoa desistiu de sair.
 function esquecerSaidaPendente() {
-  saidaPendente = null;
   desarmarSaida();
 }
 
@@ -6089,7 +6259,6 @@ function montarCardChamado(c, comData, termos = []) {
     <div class="chamado-card-acoes">
       ${emAndamento ? `<button type="button" class="botao-abrir-atendimento">▶ Abrir atendimento</button>` : ""}
       ${podeIniciar ? `<button type="button" class="botao-iniciar-atendimento">${escapeHtml(rotuloIniciarAtendimento(c))}</button>` : ""}
-      <button type="button" class="botao-secundario botao-editar-chamado">Editar</button>
       ${ehOrcamento && podeAgir ? `<button type="button" class="botao-secundario botao-finalizar-orcamento">${orcamentoPronto ? "Editar orçamento" : "Finalizar orçamento"}</button>` : ""}
       ${ehOrcamento && podeAgir && orcamentoPronto ? `<button type="button" class="botao-secundario botao-transformar-atendimento">Transformar em atendimento</button>` : ""}
       ${!ehOrcamento && podeAgir ? `<button type="button" class="botao-secundario botao-concluir-chamado">Marcar concluído</button>` : ""}
@@ -6097,7 +6266,15 @@ function montarCardChamado(c, comData, termos = []) {
     </div>
   `;
 
-  card.querySelector(".botao-editar-chamado").addEventListener("click", () => abrirEdicaoChamado(c));
+  // Tocar no cartão edita o chamado (sem botão "Editar", pedido do dono 31/10/2026).
+  // Os botões do cartão continuam fazendo só o que dizem; selecionar texto não abre.
+  card.classList.add("chamado-card-editavel");
+  card.title = "Toque para editar o chamado";
+  card.addEventListener("click", (evento) => {
+    if (evento.target.closest("button, a, input, select, textarea")) return;
+    if (String(window.getSelection && window.getSelection()).trim()) return;
+    abrirEdicaoChamado(c);
+  });
 
   const abrirAtendimentoBotao = card.querySelector(".botao-abrir-atendimento");
   if (abrirAtendimentoBotao) abrirAtendimentoBotao.addEventListener("click", () => abrirAtendimentoDoChamado(c.id));
@@ -8320,18 +8497,19 @@ function desarmarSaida() {
   sairTexto.textContent = "Sair";
 }
 
-// Um único ciclo de dois toques, não dois empilhados: o primeiro toque já
-// mostra "Confirmar saída" e, se houver algo em risco, o aviso específico
-// junto. O segundo toque sai — o próprio aviso do primeiro já foi a
-// confirmação de que descartar está tudo bem.
+// Dois toques: o primeiro mostra "Confirmar saída", o segundo sai. Com algo
+// mexido e não salvo, o primeiro toque antes pergunta "Salvar as alterações?".
 sairBotao.addEventListener("click", () => {
   if (!sairBotao.classList.contains("confirmando")) {
-    sairBotao.classList.add("confirmando");
-    sairTexto.textContent = "Confirmar saída";
-
-    if (haAlgoParaPerder()) {
+    const armar = () => {
+      sairBotao.classList.add("confirmando");
+      sairTexto.textContent = "Confirmar saída";
+    };
+    if (pendenteDeSalvar()) {
       closeSidebar();
-      avisarPerda("Você tem alterações não salvas. Toque em Sair de novo para descartar e sair.");
+      antesDeSair(armar);
+    } else {
+      armar();
     }
     return;
   }
@@ -9380,6 +9558,8 @@ function adicionarLinhaContato(lista, tipo, valor, comFoco) {
     campo.inputMode = "email";
     campo.maxLength = 254;
     campo.autocapitalize = "off";
+    // Sugere os e-mails do Cadastro de e-mails.
+    campo.setAttribute("list", "lista-emails-cadastrados");
     campo.spellcheck = false;
   }
   if (valor) campo.value = tipo === "telefone" ? formatarTelefone(valor) : valor;
@@ -10201,20 +10381,29 @@ function ligarCadastroDeEmpresas(c) {
       else if (c.comEmails) {
         const linha = document.createElement("div");
         linha.className = "adm-emails-linha";
-        const emails = document.createElement("span");
-        emails.className = "sind-item-vazio";
-        emails.textContent = s.emails && s.emails.length ? `E-mails: ${s.emails.join(", ")}` : "Nenhum e-mail cadastrado.";
-        const editar = document.createElement("button");
-        editar.type = "button";
-        editar.className = "link-button";
-        editar.textContent = s.emails && s.emails.length ? "Editar e-mails" : "+ Adicionar e-mail";
-        editar.addEventListener("click", () => {
+        const abrirEmails = () => {
           editandoId = s.id;
           desenhar();
           const primeiro = listaEl.querySelector(".adm-editor .canal-valor");
           if (primeiro) primeiro.focus();
-        });
-        linha.append(emails, editar);
+        };
+        // Tocar nos e-mails edita (sem botão "Editar e-mails", pedido do dono 31/10/2026).
+        const emails = document.createElement("button");
+        emails.type = "button";
+        emails.className = "sind-item-vazio editavel";
+        emails.title = "Toque para editar os e-mails";
+        emails.textContent = s.emails && s.emails.length ? `E-mails: ${s.emails.join(", ")}` : "Nenhum e-mail cadastrado.";
+        emails.addEventListener("click", abrirEmails);
+        linha.appendChild(emails);
+        // Sem nenhum ainda, o convite para acrescentar continua à vista.
+        if (!s.emails || !s.emails.length) {
+          const mais = document.createElement("button");
+          mais.type = "button";
+          mais.className = "link-button";
+          mais.textContent = "+ Adicionar e-mail";
+          mais.addEventListener("click", abrirEmails);
+          linha.appendChild(mais);
+        }
         item.appendChild(linha);
       }
       const pessoas = vinculados(s);
@@ -10274,26 +10463,25 @@ function ligarCadastroDeEmpresas(c) {
     }
   }
 
-  // Nome + "Editar nome" e "Excluir" (dois toques).
+  // Nome (tocar nele troca o nome; sem botão "Editar nome", pedido do dono
+  // 31/10/2026) e "Excluir" (dois toques).
   function topoDoItem(s) {
     const topo = document.createElement("div");
     topo.className = "sind-item-topo";
-    const nome = document.createElement("span");
-    nome.className = "sind-item-nome";
+    const nome = document.createElement("button");
+    nome.type = "button";
+    nome.className = "sind-item-nome editavel";
+    nome.title = "Toque para editar o nome";
     nome.textContent = s.nome;
-    const acoes = document.createElement("span");
-    acoes.className = "sind-item-acoes";
-    const renomear = document.createElement("button");
-    renomear.type = "button";
-    renomear.className = "link-button";
-    renomear.textContent = "Editar nome";
-    renomear.addEventListener("click", () => {
+    nome.addEventListener("click", () => {
       renomeandoId = s.id;
       excluindoId = "";
       desenhar();
       const campo = listaEl.querySelector(".sind-renomear input");
       if (campo) { campo.focus(); campo.select(); }
     });
+    const acoes = document.createElement("span");
+    acoes.className = "sind-item-acoes";
     const excluir = document.createElement("button");
     excluir.type = "button";
     excluir.className = `link-button sind-excluir${s.id === excluindoId ? " confirmando" : ""}`;
@@ -10309,12 +10497,12 @@ function ligarCadastroDeEmpresas(c) {
       }
       mudarNoServidor({ acao: "excluir", id: s.id }, excluir, aviso);
     });
-    acoes.append(renomear, excluir);
+    acoes.append(excluir);
     topo.append(nome, acoes);
     if (s.id !== excluindoId) return topo;
     // Armado: diz o que vai acontecer antes do segundo toque.
     const caixa = document.createElement("div");
-    aviso.className = "doc-hint error";
+    aviso.className = "doc-hint error sind-item-aviso";
     aviso.textContent = `Excluir "${s.nome}"? O nome sai também ${c.excluiDe}. Toque em "Confirmar exclusão" para apagar.`;
     caixa.append(topo, aviso);
     return caixa;
@@ -10564,6 +10752,337 @@ const cadastroAdministradoras = ligarCadastroDeEmpresas({
 // O campo Empresas do contato usa só as sindicaturas: as administradoras são
 // dos clientes (campo Administradora do cliente).
 const cadastrosDeEmpresas = [cadastroSindicaturas];
+
+// ----- Cadastro de e-mails (31/10/2026) -----
+//
+// Todo e-mail do sistema, com "a quem pertence" opcional. O fluxo "App - E-mails"
+// (webhook "emails") acrescenta sozinho, ao listar, os que aparecem nos clientes,
+// contatos, administradoras e chamados. Editar ou excluir aqui troca / tira o e-mail
+// também onde ele é usado. A lista vira sugestão em todo campo de e-mail do sistema
+// (datalist #lista-emails-cadastrados).
+const cadastroEmails = (() => {
+  const el = (sufixo) => document.getElementById(`em-${sufixo}`);
+  const form = el("form");
+  const campoEmail = el("email");
+  const campoPertence = el("pertence");
+  const aviso = el("aviso");
+  const salvar = el("salvar");
+  const status = el("status");
+  const busca = el("busca");
+  const listaEl = el("lista");
+  const listaStatus = el("lista-status");
+  const total = el("total");
+  const sugestoes = document.getElementById("lista-emails-cadastrados");
+  const nomesPertence = document.getElementById("lista-nomes-pertence");
+
+  let itens = [];
+  let carregadoEm = 0;
+  let buscando = null;
+  // Aberto para editar, e com o "Excluir" armado (o segundo toque apaga).
+  let editandoId = "";
+  let excluindoId = "";
+
+  const chave = (t) => String(t || "").trim().toLowerCase();
+  const comEmail = (email) => (chave(email) ? itens.find((x) => chave(x.email) === chave(email)) : null);
+  const ondeUsado = (x) => (x.usadoEm || []).map((u) => `${u.tipo} ${u.nome}`).join(", ");
+
+  // As sugestões de todo campo de e-mail do sistema.
+  function atualizarSugestoes() {
+    sugestoes.replaceChildren(...itens.map((x) => {
+      const opcao = document.createElement("option");
+      opcao.value = x.email;
+      if (x.pertence) opcao.label = x.pertence;
+      return opcao;
+    }));
+  }
+
+  // Dois pedidos juntos viram um. Lista com mais de 2 minutos é buscada de novo:
+  // um e-mail novo salvo num cliente ou contato entra no cadastro nessa busca.
+  function buscar(forcar) {
+    if (!forcar && carregadoEm && Date.now() - carregadoEm < 120000) return Promise.resolve();
+    if (!buscando) {
+      buscando = pedirAoN8n("emails", { acao: "listar" })
+        .then((dados) => {
+          if (!dados || !dados.ok) throw new Error((dados && dados.mensagem) || "Não consegui carregar os e-mails.");
+          itens = dados.emails || [];
+          carregadoEm = Date.now();
+          atualizarSugestoes();
+        })
+        .finally(() => { buscando = null; });
+    }
+    return buscando;
+  }
+
+  // Nomes para "a quem pertence": contatos, clientes, administradoras e sindicaturas.
+  function preencherNomes() {
+    const nomes = new Set();
+    const guardar = (nome) => { if (String(nome || "").trim()) nomes.add(String(nome).trim()); };
+    contatosCadastrados.forEach((c) => guardar(c.nome));
+    cadastros.forEach((c) => guardar(c.nomeFantasia || c.razaoSocial));
+    cadastroAdministradoras.lista().forEach((a) => guardar(a.nome));
+    cadastroSindicaturas.lista().forEach((s) => guardar(s.nome));
+    nomesPertence.replaceChildren(...[...nomes].sort((a, b) => a.localeCompare(b, "pt-BR")).map((nome) => new Option(nome)));
+  }
+  function carregarNomes() {
+    preencherNomes();
+    Promise.all([buscarContatosSalvos(), garantirCadastrosCarregados(), cadastroAdministradoras.buscar(), cadastroSindicaturas.buscar()]
+      .map((p) => Promise.resolve(p).catch(() => {}))).then(preencherNomes);
+  }
+
+  function mostrarStatus(tipo, mensagem) {
+    status.textContent = mensagem;
+    status.className = mensagem ? `status show ${tipo}` : "status";
+  }
+
+  // Aviso enquanto digita: esse e-mail já está no cadastro.
+  function avisarRepetido() {
+    const igual = comEmail(campoEmail.value);
+    aviso.textContent = igual ? `Esse e-mail já está cadastrado${igual.pertence ? ` (${igual.pertence})` : ""}.` : "";
+    aviso.className = igual ? "doc-hint error" : "doc-hint";
+    return igual;
+  }
+
+  async function carregar() {
+    listaStatus.textContent = "Carregando...";
+    listaStatus.className = "doc-hint neutral";
+    listaEl.setAttribute("aria-busy", "true");
+    try {
+      await buscar(true);
+      desenhar();
+    } catch (err) {
+      listaEl.setAttribute("aria-busy", "false");
+      listaStatus.textContent = err.message && !/fetch/i.test(err.message)
+        ? err.message : "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?";
+      listaStatus.className = "doc-hint error";
+    }
+  }
+
+  function desenhar() {
+    listaEl.setAttribute("aria-busy", "false");
+    const termo = normalizarTexto(busca.value);
+    const visiveis = itens.filter((x) => !termo
+      || normalizarTexto([x.email, x.pertence, ondeUsado(x)].join(" ")).includes(termo));
+
+    total.textContent = itens.length ? `(${itens.length})` : "";
+    if (!itens.length) {
+      listaStatus.textContent = "Nenhum e-mail ainda. Cadastre em Adicionar e-mail.";
+      listaStatus.className = "doc-hint neutral";
+    } else if (!visiveis.length) {
+      listaStatus.textContent = "Nenhum e-mail encontrado com essa busca.";
+      listaStatus.className = "doc-hint neutral";
+    } else {
+      listaStatus.textContent = "";
+      listaStatus.className = "doc-hint";
+    }
+
+    listaEl.innerHTML = "";
+    visiveis.forEach((x) => {
+      const item = document.createElement("li");
+      item.className = "sind-item";
+      if (x.id && x.id === editandoId) item.appendChild(editor(x));
+      else item.append(...linhasDoItem(x));
+      listaEl.appendChild(item);
+    });
+  }
+
+  // E-mail (tocar edita) + "Excluir"; a quem pertence (tocar edita); onde é usado.
+  function linhasDoItem(x) {
+    const abrirEditor = (foco) => {
+      editandoId = x.id;
+      excluindoId = "";
+      desenhar();
+      const campo = listaEl.querySelector(`.em-editor .${foco}`);
+      if (campo) campo.focus();
+    };
+    const editavel = (classe, texto, foco) => {
+      const botao = document.createElement("button");
+      botao.type = "button";
+      botao.className = `${classe} editavel`;
+      botao.title = "Toque para editar";
+      botao.textContent = texto;
+      botao.disabled = !x.id;
+      botao.addEventListener("click", () => abrirEditor(foco));
+      return botao;
+    };
+
+    const topo = document.createElement("div");
+    topo.className = "sind-item-topo";
+    const acoes = document.createElement("span");
+    acoes.className = "sind-item-acoes";
+    const excluir = document.createElement("button");
+    excluir.type = "button";
+    excluir.className = `link-button sind-excluir${x.id === excluindoId ? " confirmando" : ""}`;
+    excluir.textContent = x.id === excluindoId ? "Confirmar exclusão" : "Excluir";
+    excluir.disabled = !x.id;
+    const avisoItem = document.createElement("p");
+    avisoItem.className = "doc-hint";
+    excluir.addEventListener("click", () => {
+      if (x.id !== excluindoId) {
+        excluindoId = x.id;
+        editandoId = "";
+        desenhar();
+        return;
+      }
+      mudar({ acao: "excluir", id: x.id }, excluir, avisoItem);
+    });
+    acoes.appendChild(excluir);
+    topo.append(editavel("sind-item-nome", x.email, "em-editor-email"), acoes);
+
+    const dono = editavel("sind-item-vazio", x.pertence ? `Pertence a: ${x.pertence}` : "A quem pertence: —", "em-editor-pertence");
+    const usos = document.createElement("span");
+    usos.className = "sind-item-vazio";
+    usos.textContent = x.usadoEm && x.usadoEm.length ? `Usado em: ${ondeUsado(x)}` : "Não está em nenhum cadastro.";
+
+    // Armado: diz o que vai acontecer antes do segundo toque (vazio, o aviso não aparece).
+    if (x.id === excluindoId) {
+      avisoItem.className = "doc-hint error sind-item-aviso";
+      avisoItem.textContent = `Excluir "${x.email}"?${x.usadoEm && x.usadoEm.length ? ` Ele sai também de: ${ondeUsado(x)}.` : ""} Toque em "Confirmar exclusão" para apagar.`;
+    }
+    return [topo, avisoItem, dono, usos];
+  }
+
+  // Editar ali mesmo na lista: o e-mail e a quem pertence.
+  function editor(x) {
+    const caixa = document.createElement("form");
+    caixa.className = "adm-editor em-editor";
+    caixa.noValidate = true;
+    caixa.autocomplete = "off";
+    const rotulo = (texto, campo) => {
+      const r = document.createElement("label");
+      r.textContent = texto;
+      r.htmlFor = campo.id;
+      return r;
+    };
+    const email = document.createElement("input");
+    email.type = "text";
+    email.id = `em-editor-email-${x.id}`;
+    email.className = "em-editor-email";
+    email.inputMode = "email";
+    email.maxLength = 254;
+    email.value = x.email;
+    const pertence = document.createElement("input");
+    pertence.type = "text";
+    pertence.id = `em-editor-pertence-${x.id}`;
+    pertence.className = "em-editor-pertence";
+    pertence.maxLength = 120;
+    pertence.value = x.pertence || "";
+    pertence.setAttribute("list", "lista-nomes-pertence");
+    pertence.placeholder = "Opcional";
+    pertence.addEventListener("focus", carregarNomes);
+    const avisoEditor = document.createElement("p");
+    avisoEditor.className = "doc-hint";
+    if (x.usadoEm && x.usadoEm.length) avisoEditor.textContent = `Trocar o e-mail troca também em: ${ondeUsado(x)}.`;
+    const botoes = document.createElement("div");
+    botoes.className = "adm-editor-botoes";
+    const cancelar = document.createElement("button");
+    cancelar.type = "button";
+    cancelar.className = "botao-secundario";
+    cancelar.textContent = "Cancelar";
+    cancelar.addEventListener("click", () => {
+      editandoId = "";
+      desenhar();
+    });
+    const salvarEditor = document.createElement("button");
+    salvarEditor.type = "submit";
+    salvarEditor.textContent = "Salvar";
+    botoes.append(cancelar, salvarEditor);
+    caixa.append(rotulo("E-mail", email), email, avisoEditor, rotulo("A quem pertence", pertence), pertence, botoes);
+    caixa.addEventListener("submit", (evento) => {
+      evento.preventDefault();
+      const novo = email.value.trim();
+      if (!EMAIL_VALIDO.test(novo)) {
+        avisoEditor.textContent = `"${novo}" não parece um e-mail. Confira e tente de novo.`;
+        avisoEditor.className = "doc-hint error";
+        return;
+      }
+      mudar({ acao: "editar", id: x.id, email: novo, pertence: pertence.value.trim() }, salvarEditor, avisoEditor);
+    });
+    return caixa;
+  }
+
+  // Editar e excluir mexem nos outros cadastros também (o e-mail muda ou sai de
+  // onde é usado): o servidor faz tudo, e a lista vem de novo.
+  async function mudar(dados, botao, avisoEl) {
+    botao.disabled = true;
+    avisoEl.textContent = dados.acao === "excluir" ? "Excluindo..." : "Salvando...";
+    avisoEl.className = "doc-hint neutral";
+    try {
+      const resposta = await pedirAoN8n("emails", dados);
+      if (!resposta || !resposta.ok) {
+        avisoEl.textContent = (resposta && resposta.mensagem) || "Não consegui salvar.";
+        avisoEl.className = "doc-hint error";
+        return;
+      }
+      editandoId = "";
+      excluindoId = "";
+      // Clientes, contatos e administradoras podem ter mudado: as outras telas buscam de novo.
+      contatosCarregados = false;
+      listaCarregada = false;
+      mostrarToast(resposta.mensagem || "Pronto.");
+      await carregar();
+    } catch (err) {
+      avisoEl.textContent = "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?";
+      avisoEl.className = "doc-hint error";
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+  campoEmail.addEventListener("focus", () => buscar().then(avisarRepetido).catch(() => {}));
+  campoEmail.addEventListener("input", () => {
+    avisarRepetido();
+    mostrarStatus("", "");
+  });
+  campoPertence.addEventListener("focus", carregarNomes);
+
+  form.addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    const email = campoEmail.value.trim();
+    if (!EMAIL_VALIDO.test(email)) {
+      mostrarStatus("error", "Esse e-mail não parece certo. Confira e tente de novo.");
+      return;
+    }
+    if (avisarRepetido()) {
+      mostrarStatus("error", "Esse e-mail já está cadastrado.");
+      return;
+    }
+    salvar.disabled = true;
+    mostrarStatus("loading", "Salvando...");
+    try {
+      const resposta = await pedirAoN8n("emails", { acao: "salvar", email, pertence: campoPertence.value.trim() });
+      if (!resposta || !resposta.ok) {
+        mostrarStatus("error", (resposta && resposta.mensagem) || "Não consegui salvar.");
+        return;
+      }
+      if (resposta.email && !comEmail(resposta.email.email)) {
+        itens.push(resposta.email);
+        itens.sort((a, b) => a.email.localeCompare(b.email, "pt-BR", { sensitivity: "base" }));
+        atualizarSugestoes();
+      }
+      campoEmail.value = "";
+      campoPertence.value = "";
+      avisarRepetido();
+      mostrarStatus("ok", resposta.mensagem || "E-mail cadastrado.");
+    } catch (err) {
+      mostrarStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+    } finally {
+      salvar.disabled = false;
+    }
+  });
+
+  busca.addEventListener("input", () => {
+    if (carregadoEm) desenhar();
+  });
+  el("atualizar").addEventListener("click", carregar);
+  document.querySelector('.subtab[data-subpage="em-consultar"]').addEventListener("click", carregar);
+
+  // Todo campo de e-mail do sistema com a lista: ela chega no primeiro toque num deles.
+  document.addEventListener("focusin", (evento) => {
+    if (evento.target.matches && evento.target.matches('input[list="lista-emails-cadastrados"]')) buscar().catch(() => {});
+  });
+
+  return { buscar, lista: () => itens };
+})();
 
 // Campos do cliente ligados a um cadastro (Administradora e Empresa de
 // síndicos, no cadastro novo e na edição): sugerem os nomes cadastrados e,

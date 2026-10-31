@@ -23,6 +23,15 @@
   box-sizing: border-box;
 }
 
+/* Campos e botões com a mesma letra do resto da tela (o navegador punha
+   outra, e o valor digitado destoava do nome do campo). */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -316,9 +325,15 @@ body {
   }
 }
 
+/* Título da tela com respiro antes do conteúdo (antes o primeiro campo ou as
+   abas encostavam nele); o subtítulo, quando há, continua colado ao título. */
 .card h1 {
   font-size: 1.3rem;
-  margin: 0 0 6px;
+  margin: 0 0 16px;
+}
+
+.card h1 + p.subtitle {
+  margin-top: -10px;
 }
 
 .card p.subtitle {
@@ -333,27 +348,44 @@ body {
   margin: 0;
 }
 
+/* Ritmo dos formulários (pedido do dono, 31/10/2026): o nome do campo fica
+   colado no campo (4px) e longe do campo de cima (16px, a margem de baixo de
+   cada campo). Assim o olho junta cada nome com o seu valor sem esforço. */
 label {
   display: block;
   font-size: 0.85rem;
   color: var(--muted);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
+/* Data, hora e número com a mesma caixa dos campos de texto (antes ficavam
+   pequenos, claros e sem espaço embaixo, colados no campo seguinte). */
 input[type="password"],
-input[type="text"] {
+input[type="text"],
+input[type="date"],
+input[type="time"],
+input[type="number"] {
   width: 100%;
   padding: 12px 14px;
   border-radius: 10px;
   border: 1px solid #2c3153;
   background: #12162a;
   color: var(--text);
+  font-family: inherit;
   font-size: 1rem;
   margin-bottom: 16px;
 }
 
+input[type="date"],
+input[type="time"] {
+  color-scheme: dark;
+}
+
 input[type="password"]:focus,
-input[type="text"]:focus {
+input[type="text"]:focus,
+input[type="date"]:focus,
+input[type="time"]:focus,
+input[type="number"]:focus {
   outline: none;
   border-color: var(--accent);
 }
@@ -470,11 +502,29 @@ input[type="text"]:focus {
   color: white;
 }
 
-/* Campo de CPF/CNPJ */
+/* Dica / aviso de um campo. Logo embaixo de um campo, é dele: fica colada nele
+   (4px) e longe do próximo campo (14px). Antes ficava mais perto do campo de
+   baixo e parecia ser dele (ex.: "Empresas: …" grudado em "Cargo / função").
+   Vazia, não ocupa espaço. Cinza: é informação de apoio, não o dado em si. */
 .doc-hint {
   font-size: 0.85rem;
-  margin: -8px 0 4px;
-  min-height: 1.2em;
+  color: var(--muted);
+  margin: 4px 0 14px;
+}
+
+:is(input, select, textarea, .sugestao-lista) + .doc-hint {
+  margin-top: -12px;
+}
+
+/* Onde o campo já tem pouco espaço embaixo, puxar a dica para cima a faria
+   encostar no campo. */
+.emails-fin .doc-hint,
+.sind-renomear .doc-hint {
+  margin-top: 0;
+}
+
+.doc-hint:empty {
+  display: none;
 }
 
 .doc-hint.ok {
@@ -670,6 +720,13 @@ input[type="text"]:focus {
   margin-bottom: 0;
 }
 
+/* O mesmo para o último item que aparece de fato: depois dele às vezes vêm
+   avisos escondidos (pergunta, sugestões), e a margem dele sobrava como um
+   vão no pé da moldura. */
+:is(.moldura, .moldura-parte, .local, .contato, .campo-destaque) > :not(.hidden):not(:has(~ :not(.hidden, .doc-hint:empty))) {
+  margin-bottom: 0;
+}
+
 /* E-mails do financeiro: a moldura que mais importa, bem destacada. */
 .moldura-emails {
   border: 2px solid var(--accent);
@@ -769,19 +826,29 @@ input[type="text"]:focus {
   display: none;
 }
 
+/* Título "Endereço" / "Contato" de cada bloco: escondido (pedido do dono,
+   31/10/2026) -- repetia o título da seção logo acima, e a borda do bloco já
+   separa um do outro. Fica só o "Remover" (com 2 ou mais blocos), no canto. */
+.local,
+.contato {
+  position: relative;
+}
+
 .local-topo,
 .contato-topo {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
+  position: absolute;
+  top: 12px;
+  right: 14px;
+}
+
+.local-topo:has(.remover-local.hidden),
+.contato-topo:has(.remover-contato.hidden) {
+  display: none;
 }
 
 .local-titulo,
 .contato-titulo {
-  font-size: 0.9rem;
-  font-weight: 600;
+  display: none;
 }
 
 .remover-local,
@@ -836,37 +903,106 @@ select:focus {
   border-color: var(--accent);
 }
 
-/* Campo travado: some a borda de digitação para parecer texto, não formulário */
+/* Campo travado (só leitura): parece texto, não formulário. Sem a caixa de
+   digitação, o espaço de dentro do campo só afastava o valor do nome dele;
+   agora o valor fica logo embaixo do nome. */
 input:disabled,
 textarea:disabled,
 select:disabled {
   background: transparent;
   border-color: transparent;
   color: var(--text);
-  padding-left: 0;
+  padding: 0;
+  min-height: 0;
   opacity: 1;
   -webkit-text-fill-color: var(--text);
 }
 
-/* Rótulo que vem logo depois de um botão "+ Adicionar" precisa respirar */
+/* Travada, a lista não abre: sem a setinha, que fazia o valor parecer um menu. */
+select:disabled {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: none;
+}
+
+/* Travado, o texto longo ocupa só o que tem (e sem a alça de arrastar). */
+textarea:disabled {
+  resize: none;
+  field-sizing: content;
+}
+
+/* Campo travado e vazio mostra "—" em cinza (o app.js troca a dica de
+   exemplo, tipo "Ex: Torre A", que lida assim parecia dado). */
+input:disabled::placeholder,
+textarea:disabled::placeholder {
+  color: var(--muted);
+  -webkit-text-fill-color: var(--muted);
+  opacity: 1;
+}
+
+/* Rótulo que vem logo depois de um botão "+ Adicionar": o botão fica colado
+   na lista dele, e o rótulo seguinte começa um grupo novo. */
 .rotulo-espacado {
+  margin-top: 0;
+}
+
+.link-button + .rotulo-espacado {
+  margin-top: 14px;
+}
+
+/* "+ Adicionar WhatsApp / e-mail" logo embaixo da lista que ele aumenta. */
+.adicionar-whatsapp,
+.adicionar-email,
+#adm-mais-email {
+  margin-top: 0;
+}
+
+/* ...e o botão de salvar que vem depois dele começa um grupo novo. */
+.link-button + button[type="submit"] {
   margin-top: 18px;
 }
 
-/* "Contatos" no detalhe do cliente: parece o rótulo, mas é botão. */
+/* Só leitura: o botão some, então o grupo seguinte só precisa do espaço normal
+   entre campos (16px; os 8px de baixo da última linha da lista se juntam a ele). */
+.somente-leitura .link-button + .rotulo-espacado {
+  margin-top: 16px;
+}
+
+/* Só leitura: o título "Endereço" / "Contato" de cada bloco repetia o título
+   da seção, e o "Remover" nem aparece. O próprio bloco (com a borda) já separa. */
+.somente-leitura .local-topo,
+.somente-leitura .contato-topo {
+  display: none;
+}
+
+/* Título de uma seção do cadastro aberto (Endereços / Contatos): mais forte
+   que o nome de um campo, e os dois da mesma altura, lado a lado. */
+.secao-titulo {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  margin: 4px 0 8px;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+/* "Contatos" no detalhe do cliente: título da seção (igual a "Endereços", ao
+   lado), mas é botão -- a borda e a setinha mostram que abre algo. */
 .d-contatos-botao {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   width: auto;
-  margin-bottom: 6px;
-  padding: 4px 10px;
+  min-height: 30px;
+  margin: 4px 0 8px;
+  padding: 2px 12px;
   border: 1px solid #2c3153;
   border-radius: 999px;
   background: transparent;
   color: var(--accent);
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .d-contatos-botao[aria-expanded="true"] {
@@ -969,7 +1105,10 @@ select:disabled {
   border: 1px solid #2c3153;
   border-radius: 10px;
   margin-bottom: 8px;
+  /* clip (e não hidden): corta os cantos do mesmo jeito, mas deixa a barra
+     Salvar/Cancelar do cadastro aberto ficar presa no alto ao rolar. */
   overflow: hidden;
+  overflow: clip;
 }
 
 .cadastro-resumo {
@@ -1024,17 +1163,80 @@ select:disabled {
 
 .detalhe-acoes button {
   width: auto;
-}
-
-/* O lápis fica na esquerda, como um botão só de ícone */
-.acao-editar {
   padding: 8px 12px;
-  font-size: 1rem;
-  line-height: 1;
 }
 
-.acao-fechar {
+/* Salvar é a ação principal da edição: azul cheio, o resto só contornado. */
+.detalhe-acoes .acao-salvar {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+/* Celular: os quatro botões numa linha só, para a barra presa no alto não
+   comer metade da tela. */
+@media (max-width: 480px) {
+  .detalhe.editando .detalhe-acoes {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .detalhe.editando .detalhe-acoes button {
+    padding: 7px 8px;
+    font-size: 0.8rem;
+  }
+}
+
+/* Excluir e Fechar à direita; à esquerda, a dica (lendo) ou Salvar/Cancelar
+   (editando). */
+.detalhe-acoes .acao-excluir {
   margin-left: auto;
+}
+
+/* Sem o lápis (pedido do dono, 31/10/2026): tocar em qualquer campo do
+   cadastro aberto já destrava a edição. A frase diz isso a quem chega. */
+.detalhe-dica {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.detalhe.editando .detalhe-dica {
+  display: none;
+}
+
+/* Só leitura: cada moldura/bloco reage ao mouse, mostrando que dá para mexer.
+   Os campos travados deixam o toque passar para o bloco (campo travado não
+   recebe clique), e o app.js descobre qual campo foi tocado. */
+.detalhe.leitura :is(.moldura, .local, .contato, .vazio-leitura) {
+  cursor: pointer;
+  transition: border-color var(--transicao), background var(--transicao);
+}
+
+.detalhe.leitura :is(input, select, textarea):disabled {
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .detalhe.leitura :is(.moldura, .local, .contato):hover {
+    border-color: rgba(91, 141, 239, 0.55);
+  }
+
+  .detalhe.leitura .vazio-leitura:hover {
+    color: var(--text);
+  }
+}
+
+/* Editando: Salvar / Cancelar ficam presos no alto da tela ao rolar, para não
+   precisar voltar lá em cima depois de mexer num contato no fim do cadastro. */
+.detalhe.editando .detalhe-acoes {
+  position: sticky;
+  top: var(--altura-topo, 52px);
+  z-index: 5;
+  margin: -14px -14px 14px;
+  padding: 10px 14px;
+  background: var(--card);
+  border-bottom: 1px solid #2c3153;
 }
 
 /* Botão armado: o segundo clique é o que confirma de verdade */
@@ -1087,6 +1289,8 @@ select:disabled {
 }
 
 textarea {
+  /* block: em linha, sobrava um vão de "pé de letra" embaixo do campo. */
+  display: block;
   width: 100%;
   padding: 12px 14px;
   border-radius: 10px;
@@ -1732,6 +1936,17 @@ button.lembrete-item:hover {
   background: var(--error);
 }
 
+/* "Salvar as alterações?": Salvar em destaque em cima; as outras duas embaixo. */
+.dialogo-salvar-botoes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.dialogo-salvar-botoes [data-escolha="salvar"] {
+  grid-column: 1 / -1;
+}
+
 /* ----- Aviso suave de campo (e-mail / telefone com jeito de errado) ----- */
 .campo-aviso {
   margin: -12px 0 14px;
@@ -1866,6 +2081,18 @@ button.lembrete-item:hover {
   width: auto;
 }
 
+/* Atalhos da conta aberta no formulário (pagar, encerrar, excluir), no alto
+   dele, separados dos campos por uma linha. */
+.form-acoes-conta {
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #2c3153;
+}
+
+.form-acoes-conta .despesa-acoes {
+  padding: 0;
+}
+
 /* Filtros de situação e mês, lado a lado acima da lista */
 .filtros-linha {
   display: flex;
@@ -1892,10 +2119,16 @@ button.lembrete-item:hover {
   margin: 0;
 }
 
+/* Título de um bloco: o primeiro campo começa com respiro embaixo dele; a
+   explicação do bloco, quando há, fica colada no título. */
 .titulo-bloco {
   font-size: 0.95rem;
   font-weight: 600;
-  margin: 22px 0 4px;
+  margin: 22px 0 10px;
+}
+
+.titulo-bloco + .doc-hint {
+  margin-top: -6px;
 }
 
 .titulo-bloco:first-child {
@@ -2514,6 +2747,18 @@ input[type="text"].campo-busca-entrada {
   border-radius: 10px;
   padding: 12px 14px;
   margin-bottom: 12px;
+}
+
+/* Tocar no cartão abre a edição do chamado: o mouse por cima mostra isso. */
+.chamado-card-editavel {
+  cursor: pointer;
+  transition: border-color var(--transicao);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chamado-card-editavel:hover {
+    border-color: rgba(91, 141, 239, 0.55);
+  }
 }
 
 .chamado-card-topo {
@@ -3714,6 +3959,35 @@ div.lembrete-item:hover {
   overflow-wrap: anywhere;
 }
 
+/* Texto que se edita tocando nele (nome, e-mails), sem botão "Editar": parece
+   texto, e o mouse por cima sublinha, mostrando que dá para mexer. */
+.sind-item .editavel {
+  width: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  line-height: inherit;
+  text-align: left;
+}
+
+.sind-item button.sind-item-nome {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.sind-item button.sind-item-vazio {
+  font-weight: 400;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sind-item .editavel:not(:disabled):hover {
+    filter: none;
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+  }
+}
+
 .sind-item-contatos {
   list-style: none;
   margin: 0;
@@ -3765,8 +4039,19 @@ div.lembrete-item:hover {
   color: var(--error);
 }
 
+/* Armado: vira um botão vermelho com texto branco (o .confirmando geral perdia para a cor do
+   texto acima e ficava vermelho em cima de vermelho). */
 .sind-item-acoes .sind-excluir.confirmando {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--error);
+  color: white;
   font-weight: 700;
+}
+
+/* Aviso do "Excluir": linha própria embaixo do nome, sem a margem negativa do .doc-hint. */
+.sind-item-aviso {
+  margin: 6px 0 0;
 }
 
 .sind-renomear input[type="text"] {

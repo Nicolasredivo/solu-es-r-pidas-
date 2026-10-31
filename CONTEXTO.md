@@ -5072,6 +5072,118 @@ técnica visual para separar melhor.
 - **Sair:** o texto agora fica em `#sair-texto` (o JS troca só ele, e o ícone fica). Continua
   vermelho ao passar o mouse.
 
+#### Layout pensado para quem lê + tocar no campo para editar (31/10/2026)
+
+**Pedido do dono:** nas molduras do cliente, o nome de cada campo ficava longe do valor e
+às vezes mais perto do campo de baixo. Por exemplo, "Empresas: …" parecia ser de "Cargo /
+função", e "Contatos" (botão) e "Contato" (título do bloco) se repetiam. Pediu para enxergar
+a tela como uma pessoa, corrigir o que já existe e **criar daqui em diante** com um layout
+intuitivo e familiar. Pediu também para tirar o lápis e deixar **tudo editável tocando em
+cima**, no sistema inteiro, sem mudar as funções nem as palavras: cliente, contatos,
+administradoras e sindicatura são cadastros diferentes.
+
+**Regras de layout, valem para tela nova também:**
+- **Proximidade.** O nome do campo fica a 4px do campo (`label` margin-bottom), e cada
+  campo fica a 16px do seguinte. A dica de um campo (`.doc-hint` logo depois dele) fica
+  colada nele (-12px) e a 14px do próximo. Dica vazia não ocupa espaço. Dica é cinza, porque
+  é apoio e não o dado.
+- **Leitura = texto.** Campo travado (`:disabled`) não tem caixa nem espaço interno. A lista
+  não mostra setinha, o texto longo encolhe ao conteúdo e o vazio mostra "—"
+  (`marcarVaziosNaLeitura` troca a dica de exemplo e o "Escolha..." por "—" e devolve o
+  original ao destravar).
+- **Sem título repetido.** Os blocos de endereço e contato não mostram mais "Endereço" /
+  "Contato" (o título da seção já diz). Fica só o "Remover", no canto, quando há 2 ou mais
+  blocos. As seções (Endereços, Contatos, Locais de atendimento, Contatos / solicitantes)
+  são `.secao-titulo`: mais fortes que um campo e da mesma altura, lado a lado.
+- **Ritmo geral.** O título da tela (`.card h1`) tem 16px antes do conteúdo; o subtítulo
+  continua colado nele. `.titulo-bloco` tem 10px antes do primeiro campo. "+ Adicionar
+  WhatsApp / e-mail" fica colado na lista que aumenta, e o grupo seguinte começa 14px
+  abaixo.
+- **Campos iguais.** Data, hora e número usam a mesma caixa dos campos de texto (antes eram
+  pequenos e claros e não tinham espaço embaixo). Campos e botões usam a letra da tela.
+
+**Tocar para editar (sem lápis e sem botão "Editar"):**
+- **Cliente (Consultar):** sumiu o ✏️. Tocar em qualquer campo ou bloco destrava o cadastro e
+  põe o cursor no campo tocado (`campoNoPonto`: o nome tocado leva ao campo dele; fora
+  disso, vale o campo mais perto, com a vertical pesando mais). Uma lista já abre as opções
+  (`showPicker`). Os campos travados têm `pointer-events: none` para o toque chegar ao bloco
+  (campo travado não recebe clique). No topo aparece "Toque em qualquer campo para editar."
+  Editando, a barra Salvar/Cancelar fica **presa no alto** ao rolar (sticky abaixo de
+  `--altura-topo`, medida por `medirTopo`; por isso `.cadastro` usa `overflow: clip`). O
+  Salvar é azul cheio. O aviso de "alterações não salvas" só vale se algo mudou desde o
+  toque (`fotoDoDetalhe`).
+- **Administradoras / sindicaturas:** tocar no nome troca o nome; tocar nos e-mails edita os
+  e-mails. "+ Adicionar e-mail" continua quando não há nenhum.
+- **Financeiro (a pagar, contas fixas, a receber, cartões):** tocar na conta abre o
+  formulário dela direto. Os atalhos dela (Marcar como paga/recebida, Encerrar, Excluir)
+  sobem para o alto do formulário (`.form-acoes-conta`, `abrirContaNoForm` /
+  `tirarContaDoForm`). Usar um atalho fecha o formulário. Tocar de novo na conta aberta não
+  apaga o que foi mexido. O aviso ao sair só vale se algo mudou desde a abertura
+  (`fotoDoForm`).
+- **Chamados (Consultar):** tocar no cartão abre a edição. Os outros botões do cartão
+  continuam iguais, e selecionar texto não abre.
+- Correção junto: no "cadastrar só com o nome", o campo de endereço nascia cortado (altura
+  medida com o formulário escondido).
+
+#### "Salvar as alterações?" ao sair de algo mexido (31/10/2026)
+
+**Pedido do dono:** em vez de salvar sozinho, perguntar se quer salvar. A pergunta substitui
+o antigo aviso de "toque de novo para sair", que descartava no segundo toque.
+- **Quando aparece:** ao trocar de tela no menu, trocar de aba, fechar o cliente aberto,
+  abrir outro cliente, abrir outra conta no Financeiro ou tocar em Sair. Só aparece se algo
+  mudou desde que a edição começou (os retratos `fotoDoDetalhe` / `fotoDoForm`, e
+  `fotografiaContato` no Cadastro de contatos) e se o que mudou está à vista (`naTela`).
+- **Janela** `<dialog id="dialogo-salvar">`: **Salvar** (azul), **Não salvar** e
+  **Continuar editando** (o Esc também continua).
+  - Salvar aperta o próprio Salvar do que está pendente e espera terminar
+    (`salvarPendente`). Se deu certo, segue; se deu erro, fica onde está, com o aviso.
+  - Não salvar usa o próprio Cancelar de cada um, e no cliente novo usa
+    `descartarCadastroNovo`.
+- **Peças:**
+  - `pendenteDeSalvar()` diz o que está mexido e como salvar ou descartar.
+  - `antesDeSair(seguir)` faz a pergunta.
+  - `pedidosEmCurso` (em `fetchN8n`) conta os pedidos ao n8n até 400ms depois da resposta,
+    para saber quando o salvamento acabou.
+  - Saíram `podeSair`, `avisarPerda` e `saidaPendente`.
+
+#### Cadastro de e-mails (31/10/2026)
+
+**Pedido do dono:** um cadastro de e-mails no menu Cadastro, para criar, editar e excluir,
+com um campo opcional dizendo a quem o e-mail pertence. Todos os e-mails que já estavam no
+sistema entram nele (sem dono preenchido por enquanto). Ele serve de opção em todo campo de
+e-mail do sistema.
+- **Banco:** tabela `"Emails"` (id, `Email`, `Pertence`, `Criado_Em`), com índice único em
+  `lower("Email")`. No Airtable local é `tblEmailsCadast01` e entra no backup dos cadastros.
+- **Fluxo "App - E-mails"** (webhook `emails`, id `Fo4bM68iGJwROX07`), feito com cópia da
+  estrutura do de administradoras:
+  - **Ações:** `listar`, `salvar`, `editar` e `excluir`.
+  - **Listar** também acrescenta sozinho os e-mails dos clientes (financeiro), contatos,
+    administradoras e chamados que ainda não estão no cadastro. Assim, e-mail novo salvo em
+    qualquer lugar entra na próxima listagem. Cada e-mail vem com `usadoEm` (Cliente /
+    Contato / Administradora + nome).
+  - **Editar** trocando o e-mail troca também nos clientes, contatos e administradoras que
+    o usam. **Excluir** tira de todos eles. Chamados não mudam: guardam uma cópia de quando
+    foram abertos, como histórico. A comparação ignora maiúscula e minúscula.
+  - O Asaas dos clientes mexidos assim só se atualiza no próximo salvamento do cliente.
+- **Tela** `#page-emails` (`cadastroEmails` no app.js), com as abas Adicionar e Consultar:
+  - **Adicionar:** e-mail e "a quem pertence (opcional)". As sugestões de nome vêm de
+    contatos, clientes, administradoras e sindicaturas (`#lista-nomes-pertence`). Avisa se
+    o e-mail já existe.
+  - **Consultar:** busca, e cada e-mail mostra a quem pertence e onde é usado.
+    - Tocar no e-mail ou no dono abre o editor ali mesmo, avisando onde o e-mail também
+      vai mudar.
+    - Excluir pede dois toques e diz de onde o e-mail sai.
+- **Sugestões em todo campo de e-mail:** `<datalist id="lista-emails-cadastrados">`, que
+  mostra o dono como rótulo.
+  - Está ligado nos e-mails dos contatos do cliente, nos do Cadastro de contatos, nos das
+    administradoras e no convite de usuário.
+  - Os e-mails do financeiro usam a busca própria deles, que ganhou o cadastro como fonte.
+  - A lista chega no primeiro toque num desses campos e é buscada de novo se tiver mais de
+    2 minutos.
+- **Importação:** feita uma vez pelo primeiro `listar`, com backup do banco antes
+  (`solucoes-2026-10-31-antes-cadastro-de-emails.dump`).
+- **Teste:** `testar-fluxo-emails.js`.
+
 **Kaspersky derrubou o "Airtable local" (28/10/2026, 14:14 e 14:35).** O Inspetor do Sistema
 acusou `PDM:Trojan.Win32.Generic` no `node.exe` rodando `banco/airtable-local.js`, encerrou o
 processo e excluiu o arquivo. Foi alarme falso: o MD5 do arquivo excluído era idêntico ao do
