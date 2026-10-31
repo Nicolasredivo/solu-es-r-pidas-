@@ -5029,6 +5029,24 @@ administradoras.
   - **Asaas:** "Monta cliente Asaas" (Salvar entidade e Atualizar cadastro) agora separa o
     campo por linha, vírgula ou ponto e vírgula. O primeiro vai como `email` e os outros como
     `additionalEmails`. Antes, o campo inteiro ia como um e-mail só.
+  - **Regra: e-mail do contato entra sempre no financeiro** (pedido do dono, 30/10/2026). Os
+    e-mails dos contatos do cliente são somados ao `Emails_Financeiro_NFE`, sem repetir
+    (maiúscula/minúscula não conta). A regra **só soma e nunca tira**: tirar o contato do
+    cliente não tira o e-mail dele. Vale em quatro lugares, todos no servidor:
+    - Salvar entidade ("Prepara dados");
+    - Atualizar cadastro ("Monta as alteracoes"), que lê os contatos que vieram da tela;
+    - App - Contatos `vincularCliente` (o botão Contatos do cliente);
+    - App - Contatos `salvar` (editar o contato no Cadastro de contatos soma o e-mail nos
+      clientes dele).
+
+    Em App - Contatos, o "Decide" devolve primeiro o item do contato (é ele que responde ao
+    app) e depois os PATCH dos clientes que ganham e-mail (`acao: 'emailsDosClientes'`). Para
+    isso, "Busca empresas" passou a ler `Emails_Financeiro_NFE`. Na tela, a moldura avisa que
+    os e-mails dos contatos entram sozinhos ao salvar.
+  - Aplicado uma vez nos clientes já salvos (25 de 44 ganharam e-mail), com backup antes
+    (`solucoes-2026-10-30-antes-emails-contato-no-financeiro.dump`). O Asaas desses clientes
+    já recebia os e-mails do primeiro contato e se acerta no próximo salvamento.
+  - Teste: `testar-emails-contato-no-financeiro.js` (14).
 - **Janelas por cima (contato e administradora):** fechar e devolver o formulário agora é feito
   direto (`terminarSobreposto…`), e não só pelo evento `close` do `<dialog>`, que no painel de
   testes às vezes não chegava. O evento continua cobrindo o Esc.
