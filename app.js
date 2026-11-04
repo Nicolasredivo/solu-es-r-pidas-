@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.10.31c";
+const APP_VERSION = "2026.11.04a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -1545,8 +1545,19 @@ function ligarEmailsFinanceiro(campo, caixa) {
     emails.forEach((email) => {
       const item = document.createElement("li");
       item.className = "emails-fin-item";
+      // Copiar não destrava o cadastro: o toque para editar ignora botões.
+      const copiar = document.createElement("button");
+      copiar.type = "button";
+      copiar.className = "emails-fin-copiar";
+      copiar.title = "Copiar";
+      copiar.setAttribute("aria-label", `Copiar ${email}`);
+      copiar.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>';
+      copiar.addEventListener("click", () => copiarTexto(email, "E-mail copiado."));
       if (!editando) {
-        item.textContent = email;
+        const texto = document.createElement("span");
+        texto.className = "emails-fin-leitura";
+        texto.textContent = email;
+        item.append(texto, copiar);
       } else {
         // Toque no e-mail: volta para a busca, para corrigir.
         const texto = document.createElement("button");
@@ -1566,7 +1577,7 @@ function ligarEmailsFinanceiro(campo, caixa) {
         tirar.textContent = "×";
         tirar.setAttribute("aria-label", `Tirar ${email}`);
         tirar.addEventListener("click", () => gravar(atuais().filter((e) => e !== email)));
-        item.append(texto, tirar);
+        item.append(texto, copiar, tirar);
       }
       lista.appendChild(item);
     });
@@ -9238,10 +9249,10 @@ function mensagemDeConvite(nome, email) {
     + `Para criar sua conta, abra ${link} e use o e-mail ${email}.`;
 }
 
-async function copiarTexto(texto) {
+async function copiarTexto(texto, aviso = "Mensagem copiada.") {
   try {
     await navigator.clipboard.writeText(texto);
-    mostrarToast("Mensagem copiada.");
+    mostrarToast(aviso);
   } catch (err) {
     mostrarToast("Não consegui copiar sozinho — selecione o texto e copie.");
   }

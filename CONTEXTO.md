@@ -5226,3 +5226,10 @@ pelo servidor: funciona no celular, sem internet, e não depende do PC ligado.
   contato, eles viram sugestão no campo.
 - **Entrega:** no celular abre o compartilhar (WhatsApp, e-mail, salvar). No computador baixa
   o arquivo. O nome do arquivo segue a regra da skill ("orcamento <cliente>.pdf").
+
+
+## E-mails do financeiro: botão de copiar (04/11/2026, versão 2026.11.04a)
+
+Cada e-mail do financeiro no cadastro de clientes ganhou um ícone pequeno de copiar, na leitura e
+na edição (também no cliente novo, que usa a mesma lista, `ligarEmailsFinanceiro`). Copiar não
+destrava o cadastro: o toque para editar ignora botões. `copiarTexto` aceita o texto do aviso.

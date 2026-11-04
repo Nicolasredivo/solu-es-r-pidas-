@@ -820,6 +820,36 @@ input[type="number"]:focus {
   overflow-wrap: anywhere;
 }
 
+.emails-fin-leitura {
+  padding: 6px 4px 6px 12px;
+}
+
+.emails-fin-copiar {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--muted);
+}
+
+.emails-fin-copiar:hover {
+  color: var(--text);
+}
+
+.emails-fin-copiar svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .emails-fin-tirar {
   width: 28px;
   height: 28px;
