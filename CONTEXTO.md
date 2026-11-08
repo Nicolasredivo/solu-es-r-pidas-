@@ -5313,3 +5313,27 @@ concluído, porque hoje não há chamados no sistema. O botão no chamado fica p
 - Testado na tela, com usuário e clientes fictícios, no ambiente de testes do governo: emitir com
   material separado e outra obra, fora de Joinville barrado, conferência some ao editar, nota igual
   pedindo confirmação, conferir uma "Sem resposta", celular (375 px) sem rolagem lateral.
+
+## Dois CNPJs (dois MEIs): fase 1, "Atendido por" no cliente (08/11/2026)
+
+O dono abriu um segundo MEI para a mesma empresa. A carteira de clientes vai ser dividida entre os
+dois CNPJs, cada um com sua conta no Asaas. O plano tem 5 fases, feitas uma por vez:
+1. base (esta);
+2. documentos em PDF com o CNPJ, o titular e o banco/PIX do cliente (mesmo nome e logo);
+3. Asaas escolhendo a conta pelo cliente;
+4. NFS-e com o A1 do CNPJ novo e numeração própria;
+5. faturamento e limite do MEI separados.
+
+- **Tabela `Empresas_Emissoras`** (`tblEmpresasEmiss1`): Codigo ("CNPJ 1" | "CNPJ 2"), CNPJ,
+  Titular, Banco, Agencia, Conta, Chave_PIX e Credencial_Asaas (id da credencial no n8n). Os dados
+  reais ficam só no banco, não no repositório.
+- **Coluna `Entidades_Cadastradas.Atendido_Por`**: "CNPJ 1" (padrão do banco; os 44 clientes de
+  08/11 ficaram nele) ou "CNPJ 2". Vazio também vale como CNPJ 1.
+- **Fluxos:** "App - Detalhe do cadastro" devolve `atendidoPor`. "App - Atualizar cadastro" grava
+  só se vier "CNPJ 1" ou "CNPJ 2"; app antigo, que não manda o campo, não mexe.
+- **Tela:** campo "Atendido por" logo abaixo de "Exigência fiscal", no cadastro do cliente.
+- **Nesta fase nada muda em nota, boleto ou documento:** tudo continua saindo pelo CNPJ 1.
+- **Credencial no n8n:** a da conta Asaas do CNPJ 2 já existe ("Asaas API (CNPJ 2 - producao)"),
+  mas nenhum fluxo usa ainda.
+- **Teste:** `banco/testes/testar-atendido-por.js`, 11 ok. Usa só um cliente de teste e precisa do
+  Airtable local reiniciado depois de coluna nova.

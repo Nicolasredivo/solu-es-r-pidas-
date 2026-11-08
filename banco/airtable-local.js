@@ -47,6 +47,8 @@ const BASES = {
     Emails: 'tblEmailsCadast01',
     // Notas fiscais emitidas pelo sistema (04/11/2026).
     Notas_Fiscais: 'tblNotasFiscais1',
+    // Os dois CNPJs (MEIs) que atendem os clientes (08/11/2026).
+    Empresas_Emissoras: 'tblEmpresasEmiss1',
   },
   appjAmWXV7Zr33UqE: {
     Despesas: 'tblNduEKl2jY280V0', Fornecedores: 'tblhsabIIg8SLqMMj', Recorrentes: 'tblb8QplhcGRP6SZ7',

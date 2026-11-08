@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.08b";
+const APP_VERSION = "2026.11.08i";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -1782,6 +1782,7 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
     nomeFantasia: bloco.querySelector(".d-fantasia"),
     tipo: bloco.querySelector(".d-tipo"),
     exigenciaFiscal: bloco.querySelector(".d-exigencia"),
+    atendidoPor: bloco.querySelector(".d-atendido-por"),
     emails: bloco.querySelector(".d-emails"),
     whatsappCnpj: bloco.querySelector(".d-whatsapp-cnpj"),
     administradora: bloco.querySelector(".d-administradora"),
@@ -1797,6 +1798,7 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
     campos.nomeFantasia.value = cadastro.nomeFantasia;
     campos.tipo.value = cadastro.tipo;
     campos.exigenciaFiscal.value = cadastro.exigenciaFiscal;
+    campos.atendidoPor.value = cadastro.atendidoPor === "CNPJ 2" ? "CNPJ 2" : "CNPJ 1";
     campos.emails.value = cadastro.emails;
     campos.whatsappCnpj.value = formatarTelefone(cadastro.whatsappCnpj);
     campos.administradora.value = cadastro.administradora;
@@ -1996,6 +1998,7 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
         nomeFantasia: campos.nomeFantasia.value.trim(),
         tipo: campos.tipo.value,
         exigenciaFiscal: campos.exigenciaFiscal.value,
+        atendidoPor: campos.atendidoPor.value,
         emails: campos.emails.value.trim(),
         whatsappCnpj: normalizarTelefone(campos.whatsappCnpj.value),
         administradora: campos.administradora.value.trim(),

@@ -35,6 +35,7 @@ create table "Entidades_Cadastradas" (
   "Status" text,                    -- Ativo | Inativo
   "Observacoes" text,
   "Asaas_Customer_Id" text,
+  "Atendido_Por" text default 'CNPJ 1' check ("Atendido_Por" in ('CNPJ 1', 'CNPJ 2')),  -- 08/11/2026
   "Criado_Em" timestamptz not null default now()
 );
 create index on "Entidades_Cadastradas" ("CPF_CNPJ");
@@ -338,6 +339,22 @@ create table "Notas_Fiscais" (
 );
 create unique index on "Notas_Fiscais" ("Ambiente", "Serie", "Numero_DPS");
 create index on "Notas_Fiscais" ("Cliente_Ref");
+
+-- Os dois CNPJs (MEIs) da mesma empresa, 08/11/2026. Cada cliente diz por qual é atendido
+-- (Entidades_Cadastradas."Atendido_Por"). Os dados reais ficam só no banco, não neste arquivo.
+create table "Empresas_Emissoras" (
+  id text primary key default novo_id(),
+  "Codigo" text not null unique check ("Codigo" in ('CNPJ 1', 'CNPJ 2')),
+  "CNPJ" text,
+  "Titular" text,
+  "Banco" text,
+  "Agencia" text,
+  "Conta" text,
+  "Chave_PIX" text,
+  "Credencial_Asaas" text,         -- id da credencial do Asaas no n8n
+  "Observacoes" text,
+  "Criado_Em" timestamptz not null default now()
+);
 
 -- Usuário que o n8n usa: lê e grava dados, mas não muda a estrutura.
 -- (a senha é definida fora deste arquivo; ver C:\Users\rediv\senha-banco.txt)
