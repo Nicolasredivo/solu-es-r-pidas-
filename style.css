@@ -4650,3 +4650,98 @@ div.lembrete-item:hover {
   background: rgba(245, 166, 35, 0.15);
   color: var(--aviso);
 }
+
+/* ----- Veículo (08/11/2026): o PDF do documento e os dados dele ----- */
+#page-veiculo {
+  max-width: 960px;
+}
+
+.veiculo-doc-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.veiculo-doc-linha button {
+  width: auto;
+  padding: 8px 12px;
+}
+
+.veiculo-doc-link {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.veiculo-doc-link:hover {
+  text-decoration: underline;
+}
+
+.veiculo-doc-status {
+  margin-top: 8px;
+}
+
+.veiculo-doc-status.ok { color: var(--ok); }
+.veiculo-doc-status.error,
+#veiculo-status.error { color: var(--error); }
+.veiculo-doc-status.aviso { color: var(--aviso); }
+#veiculo-status.ok { color: var(--ok); }
+
+#veiculo-status:empty {
+  display: none;
+}
+
+#veiculo-status {
+  margin-bottom: 10px;
+}
+
+/* A barra Salvar/Cancelar do cliente aberto supõe 14px de espaço em volta;
+   aqui ela fica direto no card. */
+.veiculo-detalhe .detalhe-acoes {
+  margin-bottom: 10px;
+}
+
+.veiculo-detalhe.editando .detalhe-acoes {
+  margin: 0 0 10px;
+  padding: 10px 0;
+}
+
+/* Campos lado a lado dentro de cada bloco; no celular, um embaixo do outro. */
+.veiculo-campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  column-gap: 18px;
+}
+
+.veiculo-campo {
+  min-width: 0;
+}
+
+.veiculo-campo-largo {
+  grid-column: span 2;
+}
+
+.veiculo-campo :is(input, textarea) {
+  margin-bottom: 14px;
+}
+
+.veiculo-campo :is(input, textarea):disabled {
+  margin-bottom: 14px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .veiculo-campo-largo {
+    grid-column: auto;
+  }
+}
+
+/* A última linha de campos já tem o espaço de baixo do campo; a moldura não
+   precisa somar mais. */
+.veiculo-grupo > .veiculo-campos {
+  margin-bottom: -14px;
+}

@@ -49,6 +49,8 @@ const BASES = {
     Notas_Fiscais: 'tblNotasFiscais1',
     // Os dois CNPJs (MEIs) que atendem os clientes (08/11/2026).
     Empresas_Emissoras: 'tblEmpresasEmiss1',
+    // Veículo e o documento dele (08/11/2026).
+    Veiculos: 'tblVeiculosFrota1',
   },
   appjAmWXV7Zr33UqE: {
     Despesas: 'tblNduEKl2jY280V0', Fornecedores: 'tblhsabIIg8SLqMMj', Recorrentes: 'tblb8QplhcGRP6SZ7',

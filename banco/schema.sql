@@ -357,6 +357,41 @@ create table "Empresas_Emissoras" (
   "Criado_Em" timestamptz not null default now()
 );
 
+-- Veículo da empresa e o documento dele (CRLV), 08/11/2026. Os dados reais ficam só no banco.
+create table "Veiculos" (
+  id text primary key default novo_id(),
+  "Documento" jsonb not null default '[]',
+  "Placa" text,
+  "Marca_Modelo" text,
+  "Especie_Tipo" text,
+  "Carroceria" text,
+  "Categoria" text,
+  "Cor" text,
+  "Combustivel" text,
+  "Ano_Fabricacao" text,
+  "Ano_Modelo" text,
+  "Renavam" text,
+  "Chassi" text,
+  "Motor" text,
+  "Numero_CRV" text,
+  "Codigo_Seguranca_CLA" text,
+  "CAT" text,
+  "Placa_Anterior" text,
+  "Potencia_Cilindrada" text,
+  "Capacidade" text,
+  "Lotacao" text,
+  "Peso_Bruto_Total" text,
+  "CMT" text,
+  "Eixos" text,
+  "Proprietario_Nome" text,
+  "Proprietario_Documento" text,
+  "Local" text,
+  "Data_Documento" text,
+  "Exercicio" text,
+  "Observacoes" text,
+  "Criado_Em" timestamptz not null default now()
+);
+
 -- Usuário que o n8n usa: lê e grava dados, mas não muda a estrutura.
 -- (a senha é definida fora deste arquivo; ver C:\Users\rediv\senha-banco.txt)
 do $$ begin

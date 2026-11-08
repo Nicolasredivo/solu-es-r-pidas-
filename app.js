@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.08r";
+const APP_VERSION = "2026.11.08s";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -5616,7 +5616,7 @@ function formularioFinanceiroEmAndamento() {
 
 function haAlgoParaPerder() {
   return cadastroEmAndamento() || edicaoDaConsultaAbertaEmEdicao() || formularioFinanceiroEmAndamento()
-    || contatoEmAndamento();
+    || contatoEmAndamento() || veiculoEmAndamento();
 }
 
 // Usado quando o usuário confirma que quer sair mesmo assim: devolve o bloco
@@ -5658,6 +5658,9 @@ function pendenteDeSalvar() {
       salvar: () => listaBox.querySelector(".cadastro.aberto .acao-salvar").click(),
       descartar: descartarEdicaoDaConsulta,
     };
+  }
+  if (veiculoEmAndamento()) {
+    return { pendente: veiculoEmAndamento, salvar: () => veiculoSalvar.click(), descartar: () => veiculoCancelar.click() };
   }
   if (cadastroEmAndamento()) {
     return { pendente: cadastroEmAndamento, salvar: () => formEntidade.requestSubmit(), descartar: descartarCadastroNovo };
@@ -11679,6 +11682,310 @@ document.querySelector('.sidebar-item[data-page="documentos"]').addEventListener
   requestAnimationFrame(() => ajustarAlturasAuto(formDocumento));
 });
 limparDocumento();
+
+// ----- Veículo (08/11/2026) -----
+//
+// O PDF do documento do carro (CRLV-e) e os dados dele, num registro só
+// (fluxo "App - Veículo", webhook "veiculo"). Anexar o PDF lê o texto dele aqui
+// no aparelho (pdf.js + ler-crlv.js, carregados só nessa hora) e manda junto o
+// que achou; o fluxo grava os dados e guarda o PDF no PC. Tocar num campo edita
+// (mesmo jeito do cliente aberto na Consulta).
+
+const VEICULO_GRUPOS = [
+  { titulo: "Veículo", campos: [
+    ["Placa", "Placa"], ["Marca_Modelo", "Marca / modelo / versão", "largo"],
+    ["Ano_Fabricacao", "Ano de fabricação"], ["Ano_Modelo", "Ano do modelo"],
+    ["Cor", "Cor predominante"], ["Combustivel", "Combustível"],
+    ["Especie_Tipo", "Espécie / tipo"], ["Carroceria", "Carroceria"], ["Categoria", "Categoria"],
+  ] },
+  { titulo: "Identificação", campos: [
+    ["Renavam", "Código RENAVAM"], ["Chassi", "Chassi"], ["Motor", "Motor"],
+    ["Numero_CRV", "Número do CRV"], ["Codigo_Seguranca_CLA", "Código de segurança do CLA"],
+    ["CAT", "CAT"], ["Placa_Anterior", "Placa anterior / UF"],
+  ] },
+  { titulo: "Capacidade e potência", campos: [
+    ["Potencia_Cilindrada", "Potência / cilindrada"], ["Capacidade", "Capacidade"],
+    ["Lotacao", "Lotação"], ["Peso_Bruto_Total", "Peso bruto total"], ["CMT", "CMT"], ["Eixos", "Eixos"],
+  ] },
+  { titulo: "Proprietário", campos: [
+    ["Proprietario_Nome", "Nome", "largo"], ["Proprietario_Documento", "CPF / CNPJ"], ["Local", "Local"],
+  ] },
+  { titulo: "Licenciamento", campos: [
+    ["Exercicio", "Exercício"], ["Data_Documento", "Data do documento"],
+  ] },
+  { titulo: "Observações", campos: [
+    ["Observacoes", "Observações do veículo", "texto"],
+  ] },
+];
+
+const veiculoDetalhe = document.getElementById("veiculo-detalhe");
+const veiculoGrupos = document.getElementById("veiculo-grupos");
+const veiculoStatus = document.getElementById("veiculo-status");
+const veiculoSalvar = veiculoDetalhe.querySelector(".acao-salvar");
+const veiculoCancelar = veiculoDetalhe.querySelector(".acao-cancelar");
+const veiculoDocVazio = document.getElementById("veiculo-doc-vazio");
+const veiculoDocAtual = document.getElementById("veiculo-doc-atual");
+const veiculoDocLink = document.getElementById("veiculo-doc-link");
+const veiculoDocInput = document.getElementById("veiculo-doc-input");
+const veiculoDocStatus = document.getElementById("veiculo-doc-status");
+const veiculoDocRemover = document.getElementById("veiculo-doc-remover");
+const VEICULO_DICA_DOC = "Ao anexar, o sistema lê o documento e preenche os dados abaixo.";
+const VEICULO_DICA_SUBSTITUIR = "Substituir lê o documento novo e atualiza os dados abaixo.";
+const dicaDoDocumento = () => (veiculoAtual && veiculoAtual.documento ? VEICULO_DICA_SUBSTITUIR : VEICULO_DICA_DOC);
+const VEICULO_LIMITE_PDF = 8 * 1024 * 1024;
+let veiculoAtual = null;
+let veiculoCarregado = false;
+let veiculoOcupado = false;
+
+veiculoGrupos.innerHTML = VEICULO_GRUPOS.map((g) => `
+  <div class="moldura veiculo-grupo">
+    <div class="secao-titulo">${escapeHtml(g.titulo)}</div>
+    <div class="veiculo-campos">
+      ${g.campos.map(([chave, rotulo, tipo]) => `
+        <div class="veiculo-campo${tipo === "largo" || tipo === "texto" ? " veiculo-campo-largo" : ""}">
+          <label for="veiculo-${chave}">${escapeHtml(rotulo)}</label>
+          ${tipo === "texto"
+            ? `<textarea id="veiculo-${chave}" data-campo="${chave}" rows="2" disabled></textarea>`
+            : `<input type="text" id="veiculo-${chave}" data-campo="${chave}" autocomplete="off" disabled />`}
+        </div>`).join("")}
+    </div>
+  </div>`).join("");
+const veiculoCampos = [...veiculoGrupos.querySelectorAll("[data-campo]")];
+
+function mostrarVeiculoStatus(el, tipo, mensagem) {
+  el.textContent = mensagem;
+  el.classList.remove("ok", "error", "neutral", "aviso");
+  if (tipo) el.classList.add(tipo);
+}
+
+function fotoDoVeiculo() {
+  return JSON.stringify(veiculoCampos.map((c) => c.value));
+}
+
+function veiculoEditando() {
+  return veiculoDetalhe.classList.contains("editando");
+}
+
+function veiculoEmAndamento() {
+  return naTela(veiculoDetalhe) && veiculoEditando() && fotoDoVeiculo() !== veiculoDetalhe.fotoEdicao;
+}
+
+function travarVeiculo(travar) {
+  veiculoCampos.forEach((c) => (c.disabled = travar));
+  marcarVaziosNaLeitura(veiculoCampos, travar);
+  veiculoDetalhe.classList.toggle("leitura", travar);
+  veiculoDetalhe.classList.toggle("editando", !travar);
+  veiculoSalvar.classList.toggle("hidden", travar);
+  veiculoCancelar.classList.toggle("hidden", travar);
+}
+
+function desenharVeiculo() {
+  const campos = (veiculoAtual && veiculoAtual.campos) || {};
+  veiculoCampos.forEach((c) => (c.value = campos[c.dataset.campo] || ""));
+  travarVeiculo(true);
+  const doc = veiculoAtual && veiculoAtual.documento;
+  veiculoDocVazio.classList.toggle("hidden", Boolean(doc));
+  veiculoDocAtual.classList.toggle("hidden", !doc);
+  if (doc) {
+    veiculoDocLink.textContent = `📄 ${doc.nome}`;
+    veiculoDocLink.href = doc.url;
+  }
+  desarmarRemoverDoc();
+}
+
+async function carregarVeiculo() {
+  if (veiculoOcupado) return;
+  if (!veiculoCarregado) mostrarVeiculoStatus(veiculoStatus, "neutral", "Carregando...");
+  try {
+    const dados = await pedirAoN8n("veiculo", { acao: "carregar" });
+    if (!dados || !dados.ok) {
+      mostrarVeiculoStatus(veiculoStatus, "error", (dados && dados.mensagem) || "Não foi possível carregar o veículo.");
+      return;
+    }
+    // Quem já está editando não perde o que digitou.
+    if (veiculoEditando()) return;
+    veiculoAtual = dados.veiculo;
+    veiculoCarregado = true;
+    mostrarVeiculoStatus(veiculoStatus, null, "");
+    desenharVeiculo();
+    if (!veiculoDocStatus.classList.contains("ok")) mostrarVeiculoStatus(veiculoDocStatus, null, dicaDoDocumento());
+  } catch (err) {
+    mostrarVeiculoStatus(veiculoStatus, "error", "Não foi possível falar com o n8n.");
+  }
+}
+
+// Tocar em qualquer campo destrava a edição e põe o cursor no campo tocado.
+veiculoDetalhe.addEventListener("click", (evento) => {
+  if (!veiculoDetalhe.classList.contains("leitura") || veiculoOcupado || !veiculoCarregado) return;
+  const alvo = evento.target;
+  if (alvo.closest("button, a, .detalhe-acoes")) return;
+  const grupo = alvo.closest(".veiculo-grupo");
+  if (!grupo) return;
+  if (String(window.getSelection ? window.getSelection() : "").trim()) return; // selecionando texto
+  const campo = campoNoPonto(grupo, alvo, evento.clientX, evento.clientY);
+  travarVeiculo(false);
+  veiculoDetalhe.fotoEdicao = fotoDoVeiculo();
+  medirTopo();
+  if (campo) focarCampo(campo);
+});
+
+veiculoCancelar.addEventListener("click", () => {
+  desenharVeiculo();
+  mostrarVeiculoStatus(veiculoStatus, null, "");
+});
+
+veiculoSalvar.addEventListener("click", async () => {
+  if (veiculoOcupado) return;
+  const campos = {};
+  veiculoCampos.forEach((c) => (campos[c.dataset.campo] = c.value.trim()));
+  veiculoOcupado = true;
+  veiculoSalvar.disabled = true;
+  mostrarVeiculoStatus(veiculoStatus, "neutral", "Salvando...");
+  try {
+    const dados = await pedirAoN8n("veiculo", { acao: "salvar", campos: JSON.stringify(campos) });
+    if (!dados || !dados.ok) {
+      mostrarVeiculoStatus(veiculoStatus, "error", (dados && dados.mensagem) || "Não foi possível salvar.");
+      return;
+    }
+    veiculoAtual = dados.veiculo;
+    desenharVeiculo();
+    mostrarVeiculoStatus(veiculoStatus, "ok", "Salvo.");
+  } catch (err) {
+    mostrarVeiculoStatus(veiculoStatus, "error", "Não foi possível falar com o n8n.");
+  } finally {
+    veiculoOcupado = false;
+    veiculoSalvar.disabled = false;
+  }
+});
+
+veiculoDetalhe.addEventListener("input", esquecerSaidaPendente);
+
+// ----- O PDF do documento -----
+
+let pdfjsCarregado = null;
+async function carregarLeitorPdf() {
+  if (!pdfjsCarregado) {
+    pdfjsCarregado = (async () => {
+      const [pdfjs] = await Promise.all([
+        import(new URL("vendor/pdf.min.mjs", location.href).href),
+        window.LerCRLV ? null : carregarScript("ler-crlv.js"),
+      ]);
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL("vendor/pdf.worker.min.mjs", location.href).href;
+      return pdfjs;
+    })();
+    pdfjsCarregado.catch(() => { pdfjsCarregado = null; });
+  }
+  return pdfjsCarregado;
+}
+
+// Lê os dados do documento. Se não der (PDF de foto, sem texto), segue sem eles.
+async function lerDadosDoPdf(arquivo) {
+  try {
+    const pdfjs = await carregarLeitorPdf();
+    const bytes = new Uint8Array(await arquivo.arrayBuffer());
+    const paginas = await window.LerCRLV.paginasDoPdf(pdfjs, bytes);
+    return window.LerCRLV.lerCRLV(paginas);
+  } catch (err) {
+    return { campos: {}, achados: 0, temTexto: false, falhou: true };
+  }
+}
+
+function escolherPdfDoVeiculo() {
+  if (veiculoOcupado) return;
+  antesDeSair(() => veiculoDocInput.click());
+}
+
+document.getElementById("veiculo-doc-anexar").addEventListener("click", escolherPdfDoVeiculo);
+document.getElementById("veiculo-doc-substituir").addEventListener("click", escolherPdfDoVeiculo);
+
+veiculoDocInput.addEventListener("change", async () => {
+  const arquivo = veiculoDocInput.files && veiculoDocInput.files[0];
+  veiculoDocInput.value = "";
+  if (!arquivo || veiculoOcupado) return;
+  if (!/pdf$/i.test(arquivo.type) && !/\.pdf$/i.test(arquivo.name)) {
+    mostrarVeiculoStatus(veiculoDocStatus, "error", "Escolha o arquivo em PDF do documento.");
+    return;
+  }
+  if (arquivo.size > VEICULO_LIMITE_PDF) {
+    mostrarVeiculoStatus(veiculoDocStatus, "error", "O PDF passa de 8 MB. Tente um arquivo menor.");
+    return;
+  }
+  veiculoOcupado = true;
+  if (veiculoEditando()) desenharVeiculo();
+  mostrarVeiculoStatus(veiculoDocStatus, "neutral", "Lendo o documento...");
+  try {
+    const lido = await lerDadosDoPdf(arquivo);
+    mostrarVeiculoStatus(veiculoDocStatus, "neutral", "Enviando o PDF...");
+    const dados = await pedirAoN8n("veiculo", {
+      acao: "documento",
+      arquivo: await arquivoParaBase64(arquivo),
+      nomeArquivo: arquivo.name,
+      campos: JSON.stringify(lido.campos || {}),
+    });
+    if (!dados || !dados.ok) {
+      mostrarVeiculoStatus(veiculoDocStatus, "error", (dados && dados.mensagem) || "Não foi possível anexar o documento.");
+      return;
+    }
+    veiculoAtual = dados.veiculo;
+    veiculoCarregado = true;
+    desenharVeiculo();
+    mostrarVeiculoStatus(veiculoStatus, null, "");
+    mostrarVeiculoStatus(veiculoDocStatus, lido.achados ? "ok" : "aviso", lido.achados
+      ? `Documento anexado. Li ${lido.achados} dado${lido.achados > 1 ? "s" : ""} do PDF: confira abaixo e toque num campo para corrigir.`
+      : "Documento anexado, mas não deu para ler os dados dele (parece uma foto). Toque nos campos para preencher.");
+  } catch (err) {
+    mostrarVeiculoStatus(veiculoDocStatus, "error", "Não foi possível falar com o n8n.");
+  } finally {
+    veiculoOcupado = false;
+  }
+});
+
+function desarmarRemoverDoc() {
+  veiculoDocRemover.classList.remove("confirmando");
+  veiculoDocRemover.textContent = "Remover";
+}
+
+veiculoDocRemover.addEventListener("click", async () => {
+  if (veiculoOcupado) return;
+  if (!veiculoDocRemover.classList.contains("confirmando")) {
+    veiculoDocRemover.classList.add("confirmando");
+    veiculoDocRemover.textContent = "Confirmar remoção";
+    mostrarVeiculoStatus(veiculoDocStatus, "error", "Tira o PDF do sistema. Os dados abaixo continuam. Clique de novo para confirmar.");
+    return;
+  }
+  veiculoOcupado = true;
+  veiculoDocRemover.disabled = true;
+  mostrarVeiculoStatus(veiculoDocStatus, "neutral", "Removendo...");
+  try {
+    const dados = await pedirAoN8n("veiculo", { acao: "remover-documento" });
+    if (!dados || !dados.ok) {
+      mostrarVeiculoStatus(veiculoDocStatus, "error", (dados && dados.mensagem) || "Não foi possível remover.");
+      return;
+    }
+    veiculoAtual = dados.veiculo;
+    desenharVeiculo();
+    mostrarVeiculoStatus(veiculoDocStatus, "ok", "Documento removido.");
+  } catch (err) {
+    mostrarVeiculoStatus(veiculoDocStatus, "error", "Não foi possível falar com o n8n.");
+  } finally {
+    veiculoOcupado = false;
+    veiculoDocRemover.disabled = false;
+  }
+});
+
+// Clicar fora do "Confirmar remoção" desarma.
+document.addEventListener("click", (evento) => {
+  if (veiculoDocRemover.classList.contains("confirmando") && evento.target !== veiculoDocRemover) {
+    desarmarRemoverDoc();
+    mostrarVeiculoStatus(veiculoDocStatus, null, dicaDoDocumento());
+  }
+});
+
+document.querySelector('.sidebar-item[data-page="veiculo"]').addEventListener("click", () => {
+  carregarVeiculo();
+  carregarLeitorPdf().catch(() => {});
+});
+desenharVeiculo();
 
 // ----- Notas fiscais (NFS-e pela API, fluxo "App - Notas fiscais") -----
 // Regras do dono para toda nota: descrição curta, valores no fim e o bloco de pagamento fixo por

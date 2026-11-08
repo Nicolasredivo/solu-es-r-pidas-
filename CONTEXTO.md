@@ -5433,11 +5433,24 @@ Pedido do dono: "Consultar" antes de "Adicionar".
   `.contatos-secao-form`. Ao tocar num contato, a tela rola até o formulário também quando ele
   está abaixo.
 
-## Aba "Veículo", vazia (08/11/2026)
-Pedido do dono: criar a aba "Veículo" no menu (depois de Documentos) sem nada dentro ainda.
-`#page-veiculo` só tem o título; o menu genérico do app.js já cuida de abrir a página.
-Objetivo futuro: calcular o gasto de combustível por chamado. Carro: Saveiro Robust 1.6 8V 2020,
-ficha 10,8 km/l na cidade; carregada (2 pessoas + ~150 kg de ferramentas) estimamos ~9,5 km/l na
-gasolina e ~6,7 no etanol. Ideia proposta: rota do dia (base → clientes → base) × custo por km
-vindo dos abastecimentos lançados (valor, litros, km do painel). Falta o dono decidir combustível
-e se chamados de orçamento entram.
+## Aba "Veículo": documento do carro (08/11/2026)
+Pedido do dono: na aba Veículo, um campo para anexar o PDF do documento do carro (com remover e
+substituir) e, embaixo, todos os dados do documento organizados.
+- **Banco:** tabela `Veiculos` (tblVeiculosFrota1), um registro só por enquanto. `Documento` (anexo)
+  e um campo de texto por dado do CRLV-e (Placa, Renavam, Chassi, Motor, ..., Observacoes). Os dados
+  reais ficam só no banco.
+- **Fluxo "App - Veículo"** (webhook `veiculo`, id PYsZNBI1i5To85Er): carregar | salvar | documento
+  | remover-documento. Documento novo substitui o antigo (o arquivo antigo fica na pasta de anexos do
+  PC). Só aceita PDF (começa com %PDF), até 8 MB. Montado por um script (scratchpad/fluxo-veiculo.js).
+- **Leitura do PDF no aparelho:** `ler-crlv.js` acha cada nome do documento ("PLACA", "CHASSI"...) e
+  pega o texto logo abaixo, na mesma coluna. Usa o pdf.js 5.4.296 (vendor/pdf.min.mjs e
+  pdf.worker.min.mjs, licença Apache em vendor/pdfjs-LICENSE.txt), carregado só ao abrir a aba. PDF de
+  foto (sem texto) é guardado mesmo assim e os campos ficam para preencher à mão.
+- **Tela:** moldura do PDF (Anexar, ou o nome + Substituir/Remover com confirmação) e blocos Veículo,
+  Identificação, Capacidade e potência, Proprietário, Licenciamento, Observações (VEICULO_GRUPOS no
+  app.js). Tocar num campo edita; entra no "Salvar as alterações?".
+- **Teste:** `banco/testes/testar-veiculo.js` (só roda com a tabela vazia; apaga o que criou).
+- **Próximo:** calcular o combustível por chamado. Carro: Saveiro Robust 1.6 8V 2020, ficha 10,8 km/l
+  na cidade; carregada (2 pessoas + ~150 kg) estimamos ~9,5 km/l na gasolina e ~6,7 no etanol. Ideia:
+  rota do dia (base → clientes → base) × custo por km vindo dos abastecimentos. Falta o dono decidir
+  o combustível e se chamados de orçamento entram.

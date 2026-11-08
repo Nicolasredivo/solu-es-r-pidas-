@@ -2104,9 +2104,36 @@
         <ul id="nf-lista" class="nf-lista"></ul>
       </div>
 
-      <!-- Veículo: só o título por enquanto (pedido do dono, 08/11/2026). -->
+      <!-- Veículo (08/11/2026): o PDF do documento do carro (CRLV) e os dados dele.
+           Anexar o PDF lê o documento (ler-crlv.js + pdf.js) e preenche os campos;
+           tocar num campo edita. Os blocos de campos são montados pelo app.js (VEICULO_GRUPOS). -->
       <div id="page-veiculo" class="card page hidden">
         <h1>Veículo</h1>
+        <p class="subtitle">O documento do carro e os dados dele.</p>
+
+        <div class="moldura veiculo-documento">
+          <div class="secao-titulo">Documento do veículo (PDF)</div>
+          <div id="veiculo-doc-vazio" class="veiculo-doc-linha">
+            <button type="button" id="veiculo-doc-anexar" class="botao-secundario">Anexar PDF do documento</button>
+          </div>
+          <div id="veiculo-doc-atual" class="veiculo-doc-linha hidden">
+            <a id="veiculo-doc-link" class="veiculo-doc-link" href="#" target="_blank" rel="noopener"></a>
+            <button type="button" id="veiculo-doc-substituir" class="botao-secundario">Substituir</button>
+            <button type="button" id="veiculo-doc-remover" class="botao-secundario">Remover</button>
+          </div>
+          <input type="file" id="veiculo-doc-input" accept="application/pdf,.pdf" hidden />
+          <p id="veiculo-doc-status" class="placeholder-text veiculo-doc-status">Ao anexar, o sistema lê o documento e preenche os dados abaixo.</p>
+        </div>
+
+        <div id="veiculo-detalhe" class="detalhe leitura veiculo-detalhe">
+          <div class="detalhe-acoes">
+            <span class="detalhe-dica">Toque em qualquer campo para editar.</span>
+            <button type="button" class="acao-salvar hidden">Salvar</button>
+            <button type="button" class="acao-cancelar hidden">Cancelar</button>
+          </div>
+          <p id="veiculo-status" class="placeholder-text"></p>
+          <div id="veiculo-grupos"></div>
+        </div>
       </div>
 
       <!-- Usuários: só aparece no menu pra quem entrou por e-mail com acesso
