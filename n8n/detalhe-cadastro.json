@@ -112,14 +112,14 @@
     },
     {
       "parameters": {
-        "jsCode": "const achado = $input.all().filter((i) => i.json && i.json.id && !i.json.error)[0];\nif (!achado) return [{ json: { ok: false, mensagem: \"Cadastro nao encontrado.\" } }];\n\nconst f = achado.json.fields || {};\nreturn [{\n  json: {\n    ok: true,\n    cadastro: {\n      id: achado.json.id,\n      documento: f.CPF_CNPJ || \"\",\n      razaoSocial: f.Razao_Social_Nome || \"\",\n      nomeFantasia: f.Nome_Fantasia_Identificador || \"\",\n      tipo: f.Tipo_Documento || \"\",\n      exigenciaFiscal: f.Exigencia_Fiscal || \"\",\n      atendidoPor: f.Atendido_Por || \"CNPJ 1\",\n      emails: f.Emails_Financeiro_NFE || \"\",\n      whatsappCnpj: f.WhatsApp_CNPJ || \"\",\n      empresaSindicos: f.Empresa_Sindicos || \"\",\n      administradora: f.Administradora || \"\",\n      status: f.Status || \"\",\n      observacoes: f.Observacoes || \"\",\n    },\n  },\n}];"
+        "jsCode": "const achado = $('Busca').all().filter((i) => i.json && i.json.id && !i.json.error)[0];\nif (!achado) return [{ json: { ok: false, mensagem: \"Cadastro nao encontrado.\" } }];\n\nconst f = achado.json.fields || {};\nreturn [{\n  json: {\n    ok: true,\n    cadastro: {\n      id: achado.json.id,\n      documento: f.CPF_CNPJ || \"\",\n      razaoSocial: f.Razao_Social_Nome || \"\",\n      nomeFantasia: f.Nome_Fantasia_Identificador || \"\",\n      tipo: f.Tipo_Documento || \"\",\n      exigenciaFiscal: f.Exigencia_Fiscal || \"\",\n      atendidoPor: f.Atendido_Por || \"CNPJ 1\",\n      emails: f.Emails_Financeiro_NFE || \"\",\n      whatsappCnpj: f.WhatsApp_CNPJ || \"\",\n      empresaSindicos: f.Empresa_Sindicos || \"\",\n      administradora: f.Administradora || \"\",\n      status: f.Status || \"\",\n      observacoes: f.Observacoes || \"\",\n    },\n    // Os dois CNPJs, para a tela mostrar o número ao lado de \"CNPJ 1\" / \"CNPJ 2\" (08/11/2026).\n    empresas: $input.all().map((i) => (i.json && i.json.fields) || null).filter((e) => e && e.Codigo)\n      .map((e) => ({ codigo: e.Codigo, cnpj: String(e.CNPJ || \"\").replace(/\\D/g, \"\") })),\n  },\n}];"
       },
       "id": "c0000000-0000-4000-8000-000000000007",
       "name": "Monta resposta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1100,
+        1320,
         -60
       ]
     },
@@ -134,7 +134,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1320,
+        1540,
         -60
       ]
     },
@@ -177,6 +177,43 @@
         660,
         -60
       ]
+    },
+    {
+      "id": "5db191f7-2fe6-48cf-902a-4d943d74ce21",
+      "name": "Busca empresas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblEmpresasEmiss1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      }
     }
   ],
   "connections": {
@@ -213,7 +250,7 @@
       "main": [
         [
           {
-            "node": "Monta resposta",
+            "node": "Busca empresas",
             "type": "main",
             "index": 0
           }
@@ -247,6 +284,17 @@
         [
           {
             "node": "Busca",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca empresas": {
+      "main": [
+        [
+          {
+            "node": "Monta resposta",
             "type": "main",
             "index": 0
           }

@@ -5337,3 +5337,7 @@ dois CNPJs, cada um com sua conta no Asaas. O plano tem 5 fases, feitas uma por 
   mas nenhum fluxo usa ainda.
 - **Teste:** `banco/testes/testar-atendido-por.js`, 11 ok. Usa só um cliente de teste e precisa do
   Airtable local reiniciado depois de coluna nova.
+- **Número do CNPJ no campo (08/11/2026, versão 2026.11.08j):** o "App - Detalhe do cadastro"
+  ganhou o nó "Busca empresas" (Empresas_Emissoras, roda uma vez) e devolve
+  `empresas: [{codigo, cnpj}]`. A tela troca o texto das opções para "CNPJ 1 — 00.000.000/0000-00".
+  O valor gravado continua sendo "CNPJ 1" ou "CNPJ 2". Teste: 12 ok.

@@ -42,6 +42,9 @@ const DOC = '00000000000616';
     copias.push(atualizar);
     const lerDetalhe = async () => ((await chamar(detalhe.caminho, { id: ent.id, documento: DOC })).cadastro || {}).atendidoPor;
     confere('detalhe devolve CNPJ 1', (await lerDetalhe()) === 'CNPJ 1', await lerDetalhe());
+    const empresas = (await chamar(detalhe.caminho, { id: ent.id, documento: DOC })).empresas || [];
+    confere('detalhe traz os dois CNPJs com o número (14 dígitos)', empresas.length === 2
+      && empresas.every((e) => /^CNPJ [12]$/.test(e.codigo) && /^\d{14}$/.test(e.cnpj)), empresas.map((e) => e.codigo));
 
     const salvar = (extra) => chamar(atualizar.caminho, {
       id: ent.id, documento: DOC, razaoSocial: 'TESTE ATENDIDO POR', nomeFantasia: '', tipo: 'CNPJ - Empresa',

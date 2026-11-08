@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.08i";
+const APP_VERSION = "2026.11.08j";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -1790,6 +1790,13 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
     status: bloco.querySelector(".d-status"),
     observacoes: bloco.querySelector(".d-observacoes"),
   };
+
+  // "Atendido por": o número de cada CNPJ ao lado do nome (vem do banco, não fica no código).
+  (dados.empresas || []).forEach((empresa) => {
+    const opcao = [...campos.atendidoPor.options].find((o) => o.value === empresa.codigo);
+    const digitos = String(empresa.cnpj || "").replace(/\D/g, "");
+    if (opcao && digitos.length === 14) opcao.textContent = `${empresa.codigo} — ${formatarCNPJ(digitos)}`;
+  });
 
   // Repõe o que está salvo — serve para abrir e para desistir da edição.
   function preencher() {
