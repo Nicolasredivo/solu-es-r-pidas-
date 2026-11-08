@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.08j";
+const APP_VERSION = "2026.11.08k";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -484,9 +484,11 @@ function escolhaDoGrupo(container) {
 const grupoTipo = document.getElementById("grupo-tipo");
 const grupoExigencia = document.getElementById("grupo-exigencia");
 const grupoStatus = document.getElementById("grupo-status");
+const grupoAtendidoPor = document.getElementById("grupo-atendido-por");
 
 configurarGrupo(grupoTipo, (botao) => mostrarDica("ok", `CNPJ válido · ${botao.textContent}`));
 configurarGrupo(grupoExigencia);
+configurarGrupo(grupoAtendidoPor);
 configurarGrupo(grupoStatus);
 
 function esconderFormulario() {
@@ -1134,6 +1136,8 @@ function limparFormulario() {
   [razaoSocialInput, nomeFantasiaInput, emailsInput, whatsappCnpjInput, administradoraInput,
    empresaSindicosInput, observacoesInput].forEach((campo) => (campo.value = ""));
   grupoExigencia.querySelectorAll(".opcao").forEach((b) => b.classList.remove("active"));
+  // Cliente novo começa no CNPJ 1 (o de sempre); trocar é um toque.
+  grupoAtendidoPor.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === "CNPJ 1"));
   reiniciarLocais(locaisBox);
   reiniciarContatos(contatosBox);
   desarmarCancelamento();
@@ -1264,6 +1268,7 @@ formEntidade.addEventListener("submit", async (event) => {
       razaoSocial: razaoSocialInput.value.trim(),
       nomeFantasia: nomeFantasiaInput.value.trim(),
       exigenciaFiscal: escolhaDoGrupo(grupoExigencia),
+      atendidoPor: escolhaDoGrupo(grupoAtendidoPor) || "CNPJ 1",
       emails: emailsInput.value.trim(),
       whatsappCnpj: normalizarTelefone(whatsappCnpjInput.value),
       administradora: administradoraInput.value.trim(),
@@ -1280,7 +1285,7 @@ formEntidade.addEventListener("submit", async (event) => {
 
     if (dados && dados.ok) {
       salvarStatus.textContent = dados.mensagem || "Cadastro salvo!";
-      salvarStatus.className = "status show ok";
+      salvarStatus.className = /Atenção:/.test(dados.mensagem || "") ? "status show error" : "status show ok";
       // Contatos novos ou ligados agora: as sugestões e a tela de contatos buscam de novo.
       contatosCarregados = false;
       formEntidade.classList.add("hidden");
@@ -2089,7 +2094,8 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
 
   // Nasce travado: tocar num campo é que destrava.
   modoEdicao(false);
-  if (avisoDepois) mostrarStatus("ok", avisoDepois);
+  // "Atenção:" vem do Asaas (cliente que não pôde ser movido de conta, por exemplo): fica em destaque.
+  if (avisoDepois) mostrarStatus(/Atenção:/.test(avisoDepois) ? "error" : "ok", avisoDepois);
 
   return bloco;
 }

@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Limpa o que veio do app antes de gravar.\n// As listas do Airtable (Tipo, Exigencia, Status) recusam texto vazio,\n// entao mando null nesses casos, que o Airtable entende como 'em branco'.\nconst b = $json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => texto(v) || null;\n// Junta listas de e-mails sem repetir (Fulano@ e fulano@ são o mesmo), na ordem em que vieram.\nconst juntarEmails = (...grupos) => {\n  const saida = [];\n  for (const g of grupos) for (const bruto of g) {\n    const v = String(bruto ?? '').trim();\n    if (v && !saida.some((x) => x.toLowerCase() === v.toLowerCase())) saida.push(v);\n  }\n  return saida;\n};\nconst separarEmails = (t) => String(t || '').split(/[\\n,;]+/);\n\n// Regra do dono (30/10/2026): os e-mails dos contatos do cliente entram sempre também no\n// campo do financeiro.\nlet contatosDoPedido = [];\ntry { contatosDoPedido = JSON.parse(b.contatos || '[]'); } catch (erro) { contatosDoPedido = []; }\nif (!Array.isArray(contatosDoPedido)) contatosDoPedido = [];\nconst emailsDosContatos = contatosDoPedido.flatMap((c) => (c && Array.isArray(c.emails) ? c.emails : []));\n\nreturn [{\n  json: {\n    documento: texto(b.documento).replace(/\\D/g, ''),\n    razaoSocial: texto(b.razaoSocial),\n    nomeFantasia: texto(b.nomeFantasia),\n    tipo: lista(b.tipo),\n    exigenciaFiscal: lista(b.exigenciaFiscal),\n    emails: juntarEmails(separarEmails(b.emails), emailsDosContatos).join('\\n'),\n    // Telefone que consta no CNPJ, nao o do financeiro.\n    whatsappCnpj: texto(b.whatsappCnpj),\n    administradora: texto(b.administradora),\n    empresaSindicos: texto(b.empresaSindicos),\n    status: lista(b.status) || 'Ativo',\n    observacoes: texto(b.observacoes),\n  },\n}];"
+        "jsCode": "// Limpa o que veio do app antes de gravar.\n// As listas do Airtable (Tipo, Exigencia, Status) recusam texto vazio,\n// entao mando null nesses casos, que o Airtable entende como 'em branco'.\nconst b = $json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst lista = (v) => texto(v) || null;\n// Junta listas de e-mails sem repetir (Fulano@ e fulano@ são o mesmo), na ordem em que vieram.\nconst juntarEmails = (...grupos) => {\n  const saida = [];\n  for (const g of grupos) for (const bruto of g) {\n    const v = String(bruto ?? '').trim();\n    if (v && !saida.some((x) => x.toLowerCase() === v.toLowerCase())) saida.push(v);\n  }\n  return saida;\n};\nconst separarEmails = (t) => String(t || '').split(/[\\n,;]+/);\n\n// Regra do dono (30/10/2026): os e-mails dos contatos do cliente entram sempre também no\n// campo do financeiro.\nlet contatosDoPedido = [];\ntry { contatosDoPedido = JSON.parse(b.contatos || '[]'); } catch (erro) { contatosDoPedido = []; }\nif (!Array.isArray(contatosDoPedido)) contatosDoPedido = [];\nconst emailsDosContatos = contatosDoPedido.flatMap((c) => (c && Array.isArray(c.emails) ? c.emails : []));\n\nreturn [{\n  json: {\n    documento: texto(b.documento).replace(/\\D/g, ''),\n    razaoSocial: texto(b.razaoSocial),\n    nomeFantasia: texto(b.nomeFantasia),\n    tipo: lista(b.tipo),\n    exigenciaFiscal: lista(b.exigenciaFiscal),\n    emails: juntarEmails(separarEmails(b.emails), emailsDosContatos).join('\\n'),\n    // Telefone que consta no CNPJ, nao o do financeiro.\n    whatsappCnpj: texto(b.whatsappCnpj),\n    administradora: texto(b.administradora),\n    empresaSindicos: texto(b.empresaSindicos),\n    status: lista(b.status) || 'Ativo',\n    observacoes: texto(b.observacoes),\n    // Qual dos dois CNPJs atende o cliente (08/11/2026); sem escolha, CNPJ 1.\n    atendidoPor: ['CNPJ 1', 'CNPJ 2'].includes(texto(b.atendidoPor)) ? texto(b.atendidoPor) : 'CNPJ 1',\n  },\n}];"
       },
       "id": "50000000-0000-4000-8000-000000000007",
       "name": "Prepara dados",
@@ -91,7 +91,7 @@
         "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ typecast: true, fields: { \"CPF_CNPJ\": ($json.documento), \"Razao_Social_Nome\": ($json.razaoSocial), \"Nome_Fantasia_Identificador\": ($json.nomeFantasia), \"Tipo_Documento\": ($json.tipo), \"Exigencia_Fiscal\": ($json.exigenciaFiscal), \"Emails_Financeiro_NFE\": ($json.emails), \"Administradora\": ($json.administradora), \"Status\": ($json.status), \"Observacoes\": ($json.observacoes), \"WhatsApp_CNPJ\": ($json.whatsappCnpj), \"Empresa_Sindicos\": ($json.empresaSindicos) } }) }}",
+        "jsonBody": "={{ JSON.stringify({ typecast: true, fields: { \"CPF_CNPJ\": ($json.documento), \"Razao_Social_Nome\": ($json.razaoSocial), \"Nome_Fantasia_Identificador\": ($json.nomeFantasia), \"Tipo_Documento\": ($json.tipo), \"Exigencia_Fiscal\": ($json.exigenciaFiscal), \"Emails_Financeiro_NFE\": ($json.emails), \"Administradora\": ($json.administradora), \"Status\": ($json.status), \"Observacoes\": ($json.observacoes), \"WhatsApp_CNPJ\": ($json.whatsappCnpj), \"Empresa_Sindicos\": ($json.empresaSindicos), \"Atendido_Por\": ($json.atendidoPor) } }) }}",
         "options": {
           "timeout": 20000
         }
@@ -115,7 +115,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Cadastro salvo!\"\n}",
+        "responseBody": "={{ JSON.stringify({ ok: true, mensagem: [\"Cadastro salvo!\", $('Resultado do Asaas').first().json.info, $('Resultado do Asaas').first().json.aviso ? 'Atenção: ' + $('Resultado do Asaas').first().json.aviso : ''].filter(Boolean).join(' ') }) }}",
         "options": {}
       },
       "id": "50000000-0000-4000-8000-000000000005",
@@ -328,7 +328,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const texto = (v) => String(v ?? \"\").trim();\nconst soDigitos = (v) => texto(v).replace(/[^0-9]/g, \"\");\n\n// Endereco guardado como um texto so: \"RUA X, 100, CEP 00000-000\", as vezes\n// com complemento no meio. Enquanto seguir esse padrao (e ele sempre seguiu\n// ate hoje, vindo da consulta a Receita), da para separar de volta. Se um dia\n// alguem digitar diferente, o CEP/numero saem vazios -- nao trava, so manda\n// incompleto para a Asaas.\nfunction separaEndereco(enderecoCompleto) {\n  const bruto = texto(enderecoCompleto);\n  const mCep = bruto.match(/CEP\\s*([0-9]{5}-?[0-9]{3})/i);\n  const postalCode = mCep ? mCep[1].replace(\"-\", \"\") : \"\";\n  const semCep = bruto.replace(/,?\\s*CEP\\s*[0-9-]+/i, \"\").trim();\n  const partes = semCep.split(\",\").map((p) => p.trim()).filter(Boolean);\n  return {\n    address: partes[0] || \"\",\n    addressNumber: partes[1] || \"\",\n    complement: partes.slice(2).join(\", \") || \"\",\n    postalCode,\n  };\n}\n\nfunction separaBairro(bairroCidade) {\n  return texto(String(bairroCidade || \"\").split(\"/\")[0]);\n}\n\n// Numero brasileiro sem o 55 na frente: e o formato que a Asaas espera em\n// mobilePhone. Sobra o DDD + numero.\nfunction celularAsaas(v) {\n  let d = soDigitos(v);\n  if (d.length > 11 && d.startsWith(\"55\")) d = d.slice(2);\n  return d;\n}\n\n// Monta o corpo da Asaas so com o que realmente tem valor: mandar chave com\n// string vazia e diferente de nao mandar a chave (a Asaas trataria como\n// \"apagar o que tinha\").\nfunction montaPayload({ razaoSocial, documento, emailNfe, emailsContato, whatsappContato, enderecoCompleto, bairroCidade }) {\n  const end = separaEndereco(enderecoCompleto);\n  const provincia = separaBairro(bairroCidade);\n  const celular = celularAsaas(whatsappContato);\n\n  // TODOS os e-mails (Financeiro/NF-e + todos os do contato), sem repetir.\n  // O primeiro vira o principal; o resto vai em additionalEmails, separados\n  // por virgula -- e assim que a Asaas aceita mais de um endereco extra.\n  // O campo do financeiro pode ter vários e-mails (um por linha; vírgula também vale).\n  const brutos = String(emailNfe || '').split(/[\\n,;]+/).map(texto).concat(Array.isArray(emailsContato) ? emailsContato.map(texto) : []);\n  const semRepetir = [];\n  brutos.filter(Boolean).forEach((e) => {\n    if (!semRepetir.some((x) => x.toLowerCase() === e.toLowerCase())) semRepetir.push(e);\n  });\n  const principal = semRepetir[0] || \"\";\n  const adicionais = semRepetir.slice(1).join(\",\");\n\n  const p = { name: texto(razaoSocial), cpfCnpj: soDigitos(documento) };\n  if (principal) p.email = principal;\n  if (adicionais) p.additionalEmails = adicionais;\n  if (celular) p.mobilePhone = celular;\n  if (end.address) p.address = end.address;\n  if (end.addressNumber) p.addressNumber = end.addressNumber;\n  if (end.complement) p.complement = end.complement;\n  if (end.postalCode) p.postalCode = end.postalCode;\n  if (provincia) p.province = provincia;\n  return p;\n}\n\nconst corpo = $(\"Recebe pedido do app\").first().json.body || {};\nconst dados = $(\"Prepara dados\").first().json;\nconst entidadeId = $(\"Cria no Airtable\").first().json.id;\n\nlet locais = [];\ntry { locais = JSON.parse(corpo.locais || \"[]\"); } catch (e) { locais = []; }\nif (!Array.isArray(locais)) locais = [];\nconst local0 = locais[0] || {};\n\nlet contatos = [];\ntry { contatos = JSON.parse(corpo.contatos || \"[]\"); } catch (e) { contatos = []; }\nif (!Array.isArray(contatos)) contatos = [];\nconst contato0 = contatos[0] || {};\nconst emailsContato = Array.isArray(contato0.emails) ? contato0.emails : [];\nconst whatsappContato = Array.isArray(contato0.whatsapps) ? (contato0.whatsapps[0] || \"\") : \"\";\n\nconst payload = montaPayload({\n  razaoSocial: dados.razaoSocial, documento: dados.documento, emailNfe: dados.emails,\n  emailsContato, whatsappContato,\n  enderecoCompleto: local0.endereco, bairroCidade: local0.bairroCidade,\n});\n// So na criacao a notificacao comeca desligada. Depois disso o sync nunca\n// mais manda essa chave, entao se o dono ligar direto na Asaas, fica ligada.\npayload.notificationDisabled = true;\npayload.externalReference = entidadeId;\n\nreturn [{ json: { payload, entidadeId } }];"
+        "jsCode": "const texto = (v) => String(v ?? \"\").trim();\nconst soDigitos = (v) => texto(v).replace(/[^0-9]/g, \"\");\n\n// Endereco guardado como um texto so: \"RUA X, 100, CEP 00000-000\", as vezes\n// com complemento no meio. Enquanto seguir esse padrao (e ele sempre seguiu\n// ate hoje, vindo da consulta a Receita), da para separar de volta. Se um dia\n// alguem digitar diferente, o CEP/numero saem vazios -- nao trava, so manda\n// incompleto para a Asaas.\nfunction separaEndereco(enderecoCompleto) {\n  const bruto = texto(enderecoCompleto);\n  const mCep = bruto.match(/CEP\\s*([0-9]{5}-?[0-9]{3})/i);\n  const postalCode = mCep ? mCep[1].replace(\"-\", \"\") : \"\";\n  const semCep = bruto.replace(/,?\\s*CEP\\s*[0-9-]+/i, \"\").trim();\n  const partes = semCep.split(\",\").map((p) => p.trim()).filter(Boolean);\n  return {\n    address: partes[0] || \"\",\n    addressNumber: partes[1] || \"\",\n    complement: partes.slice(2).join(\", \") || \"\",\n    postalCode,\n  };\n}\n\nfunction separaBairro(bairroCidade) {\n  return texto(String(bairroCidade || \"\").split(\"/\")[0]);\n}\n\n// Numero brasileiro sem o 55 na frente: e o formato que a Asaas espera em\n// mobilePhone. Sobra o DDD + numero.\nfunction celularAsaas(v) {\n  let d = soDigitos(v);\n  if (d.length > 11 && d.startsWith(\"55\")) d = d.slice(2);\n  return d;\n}\n\n// Monta o corpo da Asaas so com o que realmente tem valor: mandar chave com\n// string vazia e diferente de nao mandar a chave (a Asaas trataria como\n// \"apagar o que tinha\").\nfunction montaPayload({ razaoSocial, documento, emailNfe, emailsContato, whatsappContato, enderecoCompleto, bairroCidade }) {\n  const end = separaEndereco(enderecoCompleto);\n  const provincia = separaBairro(bairroCidade);\n  const celular = celularAsaas(whatsappContato);\n\n  // TODOS os e-mails (Financeiro/NF-e + todos os do contato), sem repetir.\n  // O primeiro vira o principal; o resto vai em additionalEmails, separados\n  // por virgula -- e assim que a Asaas aceita mais de um endereco extra.\n  // O campo do financeiro pode ter vários e-mails (um por linha; vírgula também vale).\n  const brutos = String(emailNfe || '').split(/[\\n,;]+/).map(texto).concat(Array.isArray(emailsContato) ? emailsContato.map(texto) : []);\n  const semRepetir = [];\n  brutos.filter(Boolean).forEach((e) => {\n    if (!semRepetir.some((x) => x.toLowerCase() === e.toLowerCase())) semRepetir.push(e);\n  });\n  const principal = semRepetir[0] || \"\";\n  const adicionais = semRepetir.slice(1).join(\",\");\n\n  const p = { name: texto(razaoSocial), cpfCnpj: soDigitos(documento) };\n  if (principal) p.email = principal;\n  if (adicionais) p.additionalEmails = adicionais;\n  if (celular) p.mobilePhone = celular;\n  if (end.address) p.address = end.address;\n  if (end.addressNumber) p.addressNumber = end.addressNumber;\n  if (end.complement) p.complement = end.complement;\n  if (end.postalCode) p.postalCode = end.postalCode;\n  if (provincia) p.province = provincia;\n  return p;\n}\n\nconst corpo = $(\"Recebe pedido do app\").first().json.body || {};\nconst dados = $(\"Prepara dados\").first().json;\nconst entidadeId = $(\"Cria no Airtable\").first().json.id;\n\nlet locais = [];\ntry { locais = JSON.parse(corpo.locais || \"[]\"); } catch (e) { locais = []; }\nif (!Array.isArray(locais)) locais = [];\nconst local0 = locais[0] || {};\n\nlet contatos = [];\ntry { contatos = JSON.parse(corpo.contatos || \"[]\"); } catch (e) { contatos = []; }\nif (!Array.isArray(contatos)) contatos = [];\nconst contato0 = contatos[0] || {};\nconst emailsContato = Array.isArray(contato0.emails) ? contato0.emails : [];\nconst whatsappContato = Array.isArray(contato0.whatsapps) ? (contato0.whatsapps[0] || \"\") : \"\";\n\nconst payload = montaPayload({\n  razaoSocial: dados.razaoSocial, documento: dados.documento, emailNfe: dados.emails,\n  emailsContato, whatsappContato,\n  enderecoCompleto: local0.endereco, bairroCidade: local0.bairroCidade,\n});\n// So na criacao a notificacao comeca desligada. Depois disso o sync nunca\n// mais manda essa chave, entao se o dono ligar direto na Asaas, fica ligada.\npayload.externalReference = entidadeId;\n\n// O Asaas é o do CNPJ que atende o cliente (08/11/2026). O sub-fluxo \"Asaas - Sincroniza cliente\"\n// cria lá com as notificações desligadas (ou reaproveita quem já existe com o mesmo CPF/CNPJ).\nreturn [{ json: { payload, entidadeId, destino: dados.atendidoPor || 'CNPJ 1', contaAtual: '', idAtual: '' } }];"
       },
       "id": "c0000000-0000-4000-8000-000000900001",
       "name": "Monta cliente Asaas",
@@ -341,42 +341,13 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.asaas.com/v3/customers",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.payload) }}",
-        "options": {
-          "timeout": 20000
-        }
-      },
-      "id": "c0000000-0000-4000-8000-000000900002",
-      "name": "Cria cliente na Asaas",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        3100,
-        -420
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "99sqJeNJjk6jJRgZ",
-          "name": "Asaas API (producao)"
-        }
-      },
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
         "method": "PATCH",
         "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "airtableTokenApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ typecast: true, records: [{ id: $(\"Monta cliente Asaas\").first().json.entidadeId, fields: { Asaas_Customer_Id: $(\"Cria cliente na Asaas\").first().json.id || \"\" } }] }) }}",
+        "jsonBody": "={{ JSON.stringify({ typecast: true, records: [{ id: $(\"Monta cliente Asaas\").first().json.entidadeId, fields: { Asaas_Customer_Id: $json.id || \"\", Asaas_Conta: $json.conta || null } }] }) }}",
         "options": {
           "timeout": 20000
         }
@@ -393,88 +364,6 @@
         "airtableTokenApi": {
           "id": "yzToTcui3yVtKT5d",
           "name": "Airtable local (banco do PC)"
-        }
-      },
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "return [{ json: { urlNotificacoes: \"https://api.asaas.com/v3/customers/\" + $json.id + \"/notifications\" } }];"
-      },
-      "id": "c0000000-0000-4000-8000-000000950001",
-      "name": "Prepara url notificacoes",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        3340,
-        -560
-      ]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "={{ $json.urlNotificacoes }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": false,
-        "options": {
-          "timeout": 20000
-        }
-      },
-      "id": "c0000000-0000-4000-8000-000000950002",
-      "name": "Le notificacoes padrao",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        3560,
-        -560
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "99sqJeNJjk6jJRgZ",
-          "name": "Asaas API (producao)"
-        }
-      },
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "const DESEJADO = [{\"event\":\"PAYMENT_CREATED\",\"offset\":0,\"email\":true,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_UPDATED\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_DUEDATE_WARNING\",\"offset\":10,\"email\":true,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_DUEDATE_WARNING\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"SEND_LINHA_DIGITAVEL\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_OVERDUE\",\"offset\":0,\"email\":true,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_OVERDUE\",\"offset\":7,\"email\":true,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_RECEIVED\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false}];\nconst lista = ($input.first().json || {}).data || [];\n\nconst itens = [];\nfor (const alvo of DESEJADO) {\n  const atual = lista.find((n) => n.event === alvo.event && n.scheduleOffset === alvo.offset);\n  if (!atual) continue;\n  itens.push({ json: {\n    url: \"https://api.asaas.com/v3/notifications/\" + atual.id,\n    corpo: {\n      emailEnabledForCustomer: alvo.email, smsEnabledForCustomer: alvo.sms,\n      whatsappEnabledForCustomer: alvo.whatsapp, phoneCallEnabledForCustomer: alvo.ligacao,\n    },\n  } });\n}\n// Se a Asaas mudar os nomes dos eventos algum dia e nada bater, ainda\n// precisa sair um item, senao o fluxo morre aqui e o app fica esperando.\nif (!itens.length) return [{ json: { semNotificacao: true } }];\nreturn itens;"
-      },
-      "id": "c0000000-0000-4000-8000-000000950003",
-      "name": "Monta ajustes de notificacao",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        3780,
-        -560
-      ]
-    },
-    {
-      "parameters": {
-        "method": "PUT",
-        "url": "={{ $json.url }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.corpo) }}",
-        "options": {
-          "timeout": 20000
-        }
-      },
-      "id": "c0000000-0000-4000-8000-000000950004",
-      "name": "Ajusta notificacoes",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        4000,
-        -560
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "99sqJeNJjk6jJRgZ",
-          "name": "Asaas API (producao)"
         }
       },
       "onError": "continueRegularOutput"
@@ -575,6 +464,39 @@
       "alwaysOutputData": true,
       "executeOnce": true,
       "notes": "Lê os contatos já salvos que foram escolhidos na tela: eles são ligados ao cliente novo, não criados de novo."
+    },
+    {
+      "id": "245c6cdf-2b78-487d-afc9-808b6aeb0e69",
+      "name": "Sincroniza no Asaas",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3100,
+        -420
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "rEvmpX8l5uCa0VJn",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "aef63180-09a9-4291-b074-9e824cea14d3",
+      "name": "Resultado do Asaas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3320,
+        -560
+      ],
+      "parameters": {
+        "jsCode": "// Resposta do sub-fluxo \"Asaas - Sincroniza cliente\". Se ele nem respondeu, nada muda no\n// que estava gravado (id e conta de antes) e o app avisa.\nconst r = $input.first().json || {};\nconst base = $('Monta cliente Asaas').first().json;\nif (r.error || typeof r.ok !== 'boolean') {\n  return [{ json: { id: base.idAtual || '', conta: base.idAtual ? (base.contaAtual || 'CNPJ 1') : null, info: '',\n    aviso: 'Não consegui falar com o Asaas agora; o cadastro foi salvo no sistema. Salve de novo mais tarde.' } }];\n}\nreturn [{ json: { id: r.id || '', conta: r.id ? (r.conta || null) : null, info: r.info || '', aviso: r.aviso || '' } }];"
+      }
     }
   ],
   "connections": {
@@ -734,18 +656,7 @@
       "main": [
         [
           {
-            "node": "Cria cliente na Asaas",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Cria cliente na Asaas": {
-      "main": [
-        [
-          {
-            "node": "Prepara url notificacoes",
+            "node": "Sincroniza no Asaas",
             "type": "main",
             "index": 0
           }
@@ -757,50 +668,6 @@
         [
           {
             "node": "Responde salvo",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepara url notificacoes": {
-      "main": [
-        [
-          {
-            "node": "Le notificacoes padrao",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Le notificacoes padrao": {
-      "main": [
-        [
-          {
-            "node": "Monta ajustes de notificacao",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Monta ajustes de notificacao": {
-      "main": [
-        [
-          {
-            "node": "Ajusta notificacoes",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Ajusta notificacoes": {
-      "main": [
-        [
-          {
-            "node": "Salva o Asaas_Customer_Id",
             "type": "main",
             "index": 0
           }
@@ -845,6 +712,28 @@
         [
           {
             "node": "Prepara contatos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sincroniza no Asaas": {
+      "main": [
+        [
+          {
+            "node": "Resultado do Asaas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado do Asaas": {
+      "main": [
+        [
+          {
+            "node": "Salva o Asaas_Customer_Id",
             "type": "main",
             "index": 0
           }

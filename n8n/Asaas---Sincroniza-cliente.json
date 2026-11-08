@@ -1,0 +1,726 @@
+{
+  "name": "Asaas - Sincroniza cliente",
+  "nodes": [
+    {
+      "id": "4cdb9659-ad29-4a57-ac65-cd904b9f9857",
+      "name": "Recebe cliente",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "ef0413f7-eab4-4574-aa4a-a7ea9ede9eac",
+      "name": "Decide",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\nconst e = $input.first().json || {};\nconst valida = (c) => c === 'CNPJ 1' || c === 'CNPJ 2';\nconst destino = valida(e.destino) ? e.destino : 'CNPJ 1';\nconst idAtual = String(e.idAtual || '').trim();\n// Cliente com Asaas mas sem a conta anotada: é do tempo de uma conta só (CNPJ 1).\nconst de = idAtual ? (valida(e.contaAtual) ? e.contaAtual : 'CNPJ 1') : '';\nlet acao = 'criar';\nif (!e.entidadeId || !e.payload || typeof e.payload !== 'object') acao = 'nada';\nelse if (idAtual && de === destino) acao = 'atualizar';\nelse if (idAtual) acao = 'mover';\nreturn [{ json: { entidadeId: e.entidadeId || '', payload: e.payload || {}, destino, de, idAtual, acao } }];"
+      }
+    },
+    {
+      "id": "6999dfd9-fb2a-416c-a308-de7ea9dd9fc4",
+      "name": "Tem o que fazer?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "10cc47de-d57d-4b37-896e-253945cc782f",
+              "leftValue": "={{ ($json.acao !== 'nada') ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "339b0da5-692a-43f8-b8f4-f483e876a684",
+      "name": "Fim sem nada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const d = $('Decide').first().json;\nreturn [{ json: { ok: true, acao: 'nada', id: d.idAtual, conta: d.de || null, info: '', aviso: '' } }];"
+      }
+    },
+    {
+      "id": "0246297f-bda7-4e64-85da-24d81bfd2ad6",
+      "name": "So atualizar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        -40
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d603c678-e6d6-4a92-bf15-2e3ffcdc6311",
+              "leftValue": "={{ ($json.acao === 'atualizar') ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "7a345667-928b-4cec-8cb3-3b458b0ccd4e",
+      "name": "Pede atualizacao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -260
+      ],
+      "parameters": {
+        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\nconst d = $('Decide').first().json;\nreturn [{ json: { conta: d.de, metodo: 'PUT', url: A + '/customers/' + encodeURIComponent(d.idAtual), corpo: d.payload } }];"
+      }
+    },
+    {
+      "id": "9ed4d633-e931-452f-ac51-0c816c7b126e",
+      "name": "Atualiza no Asaas",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        -260
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1cc56ba-b752-4d82-8fc1-14c8f911bf7f",
+      "name": "Fim atualizado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -260
+      ],
+      "parameters": {
+        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\nconst d = $('Decide').first().json;\nconst r = $input.first().json || {};\nconst erro = r.error ? motivo(r) : '';\nreturn [{ json: { ok: !erro, acao: 'atualizar', id: d.idAtual, conta: d.de, info: '',\n  aviso: erro ? 'O Asaas do ' + d.de + ' não aceitou a atualização (' + erro + ').' : '' } }];"
+      }
+    },
+    {
+      "id": "a0606461-9d62-46a6-956f-5f9c2729d597",
+      "name": "E mover?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        60
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fdb1cef0-75ba-4fcf-af65-3bb599986e6f",
+              "leftValue": "={{ ($json.acao === 'mover') ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "536f59b5-8e2a-4667-9ba5-09b505df5d69",
+      "name": "Pede cobrancas abertas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -60
+      ],
+      "parameters": {
+        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\n// Tirar o cliente de um Asaas apaga junto as cobranças pendentes/vencidas e as assinaturas:\n// antes de mover, confere que não há nenhuma.\nconst d = $('Decide').first().json;\nconst c = encodeURIComponent(d.idAtual);\nreturn [\n  { json: { conta: d.de, metodo: 'GET', url: A + '/payments?customer=' + c + '&status=PENDING&limit=1' } },\n  { json: { conta: d.de, metodo: 'GET', url: A + '/payments?customer=' + c + '&status=OVERDUE&limit=1' } },\n  { json: { conta: d.de, metodo: 'GET', url: A + '/subscriptions?customer=' + c + '&status=ACTIVE&limit=1' } },\n];"
+      }
+    },
+    {
+      "id": "1af0f911-fd72-43c7-ad34-e19e703e9ec3",
+      "name": "Consulta cobrancas",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        -60
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "718cda93-de58-423b-a165-1ca904266eeb",
+      "name": "Pode mover?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        -60
+      ],
+      "parameters": {
+        "jsCode": "const rs = $input.all().map((i) => i.json || {});\nconst falhou = rs.length !== 3 || rs.some((r) => r.error || r.pulado);\nconst abertas = rs.some((r) => !r.error && ((Number(r.totalCount) || 0) > 0 || (Array.isArray(r.data) && r.data.length > 0)));\nreturn [{ json: { livre: !falhou && !abertas, abertas, falhou } }];"
+      }
+    },
+    {
+      "id": "f5910ed7-afa6-4d25-b3b4-e66d291bad78",
+      "name": "Livre para mover?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1760,
+        -60
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "53ec25ee-5e9e-4fd6-99da-109b2d9aba1f",
+              "leftValue": "={{ ($json.livre) ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "067bb692-a0a7-449b-8407-63681b51ff36",
+      "name": "Fim bloqueado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        80
+      ],
+      "parameters": {
+        "jsCode": "const d = $('Decide').first().json;\nconst p = $input.first().json || {};\nconst aviso = p.abertas\n  ? 'Este cliente tem cobrança em aberto no Asaas do ' + d.de + ', por isso continua lá por enquanto (tirar de lá apagaria a cobrança). Depois que ela for paga ou cancelada, é só salvar o cliente de novo.'\n  : 'Não consegui conferir as cobranças no Asaas do ' + d.de + '; o cliente continua lá. Tente salvar de novo daqui a pouco.';\nreturn [{ json: { ok: false, acao: 'mover', id: d.idAtual, conta: d.de, info: '', aviso } }];"
+      }
+    },
+    {
+      "id": "4a7f97d5-7e5b-4a23-9a60-741757ccf1b4",
+      "name": "Pede busca no destino",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const A = 'https://api.asaas.com/v3';\nconst d = $('Decide').first().json;\nconst doc = String(d.payload.cpfCnpj || '').replace(/\\D/g, '');\nconst url = doc ? A + '/customers?cpfCnpj=' + doc + '&limit=20' : A + '/customers?externalReference=' + encodeURIComponent(d.entidadeId) + '&limit=20';\nreturn [{ json: { conta: d.destino, metodo: 'GET', url } }];"
+      }
+    },
+    {
+      "id": "475dfbb2-3adc-4f36-98d2-473cf9d4394b",
+      "name": "Busca no destino",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2200,
+        300
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c9fcdfb9-3f25-4209-a436-2a7db91bc1d4",
+      "name": "Pede criacao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\n// Se o cliente já existe no Asaas de destino (mesmo CPF/CNPJ), reaproveita em vez de duplicar.\nconst d = $('Decide').first().json;\nconst r = $input.first().json || {};\nif (r.error) return [{ json: { pular: true, motivoBusca: motivo(r) } }];\nconst lista = Array.isArray(r.data) ? r.data.filter((c) => c && c.id && !c.deleted) : [];\nconst achado = lista.find((c) => c.externalReference === d.entidadeId) || lista[0] || null;\n// Mesmas regras de sempre ao entrar no Asaas: notificações desligadas para o cliente.\nconst corpo = { ...d.payload, notificationDisabled: true, externalReference: d.entidadeId };\nreturn [{ json: achado\n  ? { conta: d.destino, metodo: 'PUT', url: A + '/customers/' + encodeURIComponent(achado.id), corpo, reaproveitado: true }\n  : { conta: d.destino, metodo: 'POST', url: A + '/customers', corpo } }];"
+      }
+    },
+    {
+      "id": "6c463043-fa79-4484-8cbd-d3b26903f7b9",
+      "name": "Cria no destino",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2640,
+        300
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "11e6ceb0-5f0a-4e45-a562-b0132e0fa679",
+      "name": "Pede notificacoes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\nconst d = $('Decide').first().json;\nconst p = $('Pede criacao').first().json;\nconst r = $input.first().json || {};\nconst novoId = p.pular ? '' : String(r.id || '');\nconst erro = p.pular ? p.motivoBusca : (novoId ? '' : motivo(r));\nreturn [{ json: { conta: d.destino, metodo: 'GET', url: A + '/customers/' + encodeURIComponent(novoId) + '/notifications', pular: !novoId, novoId, erro } }];"
+      }
+    },
+    {
+      "id": "a299a485-98c5-4776-bfd4-b428f52975d3",
+      "name": "Le notificacoes",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3080,
+        300
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b9f81db7-95e4-4028-b64c-a9a993d7308b",
+      "name": "Monta ajustes de notificacao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Mesmo padrão de notificações de sempre (só e-mail nos eventos de cobrança; o cliente\n// fica com notificationDisabled, então nada sai enquanto o dono não ligar no Asaas).\nconst DESEJADO = [{\"event\":\"PAYMENT_CREATED\",\"offset\":0,\"email\":true,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_UPDATED\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_DUEDATE_WARNING\",\"offset\":10,\"email\":true,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_DUEDATE_WARNING\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"SEND_LINHA_DIGITAVEL\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_OVERDUE\",\"offset\":0,\"email\":true,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_OVERDUE\",\"offset\":7,\"email\":true,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_RECEIVED\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false}];\nconst n = $('Pede notificacoes').first().json;\nif (!n.novoId) return [{ json: { pular: true } }];\nconst lista = ($input.first().json || {}).data || [];\nconst itens = [];\nfor (const alvo of DESEJADO) {\n  const atual = lista.find((x) => x.event === alvo.event && x.scheduleOffset === alvo.offset);\n  if (!atual) continue;\n  itens.push({ json: { conta: n.conta, metodo: 'PUT', url: 'https://api.asaas.com/v3/notifications/' + encodeURIComponent(atual.id), corpo: {\n    emailEnabledForCustomer: alvo.email, smsEnabledForCustomer: alvo.sms,\n    whatsappEnabledForCustomer: alvo.whatsapp, phoneCallEnabledForCustomer: alvo.ligacao,\n  } } });\n}\nreturn itens.length ? itens : [{ json: { pular: true } }];"
+      }
+    },
+    {
+      "id": "a6fbdaf3-fe23-4db5-8557-2706f45fd68e",
+      "name": "Ajusta notificacoes",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3520,
+        300
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "31a5f609-e4a9-48b0-89de-1de836c5b877",
+      "name": "Pede remocao do antigo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3740,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\nconst d = $('Decide').first().json;\nconst n = $('Pede notificacoes').first().json;\nconst remover = d.acao === 'mover' && Boolean(n.novoId);\nreturn [{ json: { conta: d.de || 'CNPJ 1', metodo: 'DELETE', url: A + '/customers/' + encodeURIComponent(d.idAtual), pular: !remover } }];"
+      }
+    },
+    {
+      "id": "6dd9fd09-6c27-4857-8286-67afdf838fd4",
+      "name": "Remove do antigo",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3960,
+        300
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "0d54e9b9-c07b-436c-bc7a-75c8e4b50ab1",
+      "name": "Fim",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4180,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\nconst d = $('Decide').first().json;\nconst n = $('Pede notificacoes').first().json;\nconst r = $input.first().json || {};\nif (!n.novoId) {\n  const aviso = 'O Asaas do ' + d.destino + ' não aceitou o cliente (' + n.erro + ').'\n    + (d.acao === 'mover' ? ' Ele continua no Asaas do ' + d.de + '; salve o cliente de novo mais tarde.' : ' Salve o cliente de novo mais tarde para tentar outra vez.');\n  return [{ json: { ok: false, acao: d.acao, id: d.idAtual, conta: d.de || null, info: '', aviso } }];\n}\nif (d.acao === 'mover') {\n  const erro = r.error ? motivo(r) : '';\n  return [{ json: { ok: !erro, acao: 'mover', id: n.novoId, conta: d.destino,\n    info: 'Cliente passou do Asaas do ' + d.de + ' para o do ' + d.destino + '.',\n    aviso: erro ? 'Não consegui tirar o cliente do Asaas do ' + d.de + ' (' + erro + '); tire de lá à mão.' : '' } }];\n}\nreturn [{ json: { ok: true, acao: 'criar', id: n.novoId, conta: d.destino, info: '', aviso: '' } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Recebe cliente": {
+      "main": [
+        [
+          {
+            "node": "Decide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide": {
+      "main": [
+        [
+          {
+            "node": "Tem o que fazer?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem o que fazer?": {
+      "main": [
+        [
+          {
+            "node": "So atualizar?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fim sem nada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "So atualizar?": {
+      "main": [
+        [
+          {
+            "node": "Pede atualizacao",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "E mover?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pede atualizacao": {
+      "main": [
+        [
+          {
+            "node": "Atualiza no Asaas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualiza no Asaas": {
+      "main": [
+        [
+          {
+            "node": "Fim atualizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E mover?": {
+      "main": [
+        [
+          {
+            "node": "Pede cobrancas abertas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pede busca no destino",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pede cobrancas abertas": {
+      "main": [
+        [
+          {
+            "node": "Consulta cobrancas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consulta cobrancas": {
+      "main": [
+        [
+          {
+            "node": "Pode mover?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pode mover?": {
+      "main": [
+        [
+          {
+            "node": "Livre para mover?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Livre para mover?": {
+      "main": [
+        [
+          {
+            "node": "Pede busca no destino",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fim bloqueado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pede busca no destino": {
+      "main": [
+        [
+          {
+            "node": "Busca no destino",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca no destino": {
+      "main": [
+        [
+          {
+            "node": "Pede criacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pede criacao": {
+      "main": [
+        [
+          {
+            "node": "Cria no destino",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cria no destino": {
+      "main": [
+        [
+          {
+            "node": "Pede notificacoes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pede notificacoes": {
+      "main": [
+        [
+          {
+            "node": "Le notificacoes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le notificacoes": {
+      "main": [
+        [
+          {
+            "node": "Monta ajustes de notificacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta ajustes de notificacao": {
+      "main": [
+        [
+          {
+            "node": "Ajusta notificacoes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ajusta notificacoes": {
+      "main": [
+        [
+          {
+            "node": "Pede remocao do antigo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pede remocao do antigo": {
+      "main": [
+        [
+          {
+            "node": "Remove do antigo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove do antigo": {
+      "main": [
+        [
+          {
+            "node": "Fim",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  }
+}

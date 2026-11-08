@@ -5341,3 +5341,39 @@ dois CNPJs, cada um com sua conta no Asaas. O plano tem 5 fases, feitas uma por 
   ganhou o nó "Busca empresas" (Empresas_Emissoras, roda uma vez) e devolve
   `empresas: [{codigo, cnpj}]`. A tela troca o texto das opções para "CNPJ 1 — 00.000.000/0000-00".
   O valor gravado continua sendo "CNPJ 1" ou "CNPJ 2". Teste: 12 ok.
+
+## Cliente no Asaas do CNPJ certo (08/11/2026)
+
+Regra do dono: cliente do CNPJ 1 fica no Asaas do CNPJ 1 e cliente do CNPJ 2 no Asaas do CNPJ 2.
+Trocar o "Atendido por" tira o cliente de um Asaas e põe no outro, com as mesmas regras de sempre:
+e-mails do financeiro e notificações desligadas.
+
+- **`Entidades_Cadastradas.Asaas_Conta`:** em qual Asaas está o `Asaas_Customer_Id` ("CNPJ 1" ou
+  "CNPJ 2"). Os 44 clientes antigos ficaram CNPJ 1, e vazio com id preenchido também vale CNPJ 1.
+  É essa coluna que deixa o sistema tentar de novo quando uma troca não pôde ser feita.
+- **"Asaas - Chamada pela conta"** (sub-fluxo, `n8n/Asaas---Chamada-pela-conta.json`): faz uma
+  chamada ao Asaas com a credencial da conta pedida. Os itens chegam como
+  `{conta, metodo, url, corpo?, pular?}`.
+  - Há um nó por conta e por "com corpo / sem corpo", porque GET e DELETE vão sem corpo.
+  - Só aceita endereço `https://api.asaas.com/v3/` e manda `User-Agent`.
+- **"Asaas - Sincroniza cliente"** (sub-fluxo): recebe `{entidadeId, payload, destino, contaAtual,
+  idAtual}` e devolve `{ok, acao, id, conta, info, aviso}`.
+  - **atualizar:** mesma conta, um PUT, sem `notificationDisabled`. O que o dono mudou à mão no
+    Asaas não volta atrás.
+  - **criar:** busca pelo CPF/CNPJ no Asaas de destino. Se já existe, reaproveita com PUT; se não,
+    faz POST. Nos dois casos vai com `notificationDisabled: true`, e depois as notificações são
+    ajustadas no mesmo padrão de antes.
+  - **mover:** antes, confere cobranças PENDING e OVERDUE e assinaturas ACTIVE no Asaas antigo.
+    Tirar o cliente de lá apagaria essas cobranças, então se houver alguma ele **não move** e o
+    app avisa. Livre, cria no novo e depois faz DELETE no antigo. Se o novo recusar, não apaga
+    nada no antigo.
+- **"App - Atualizar cadastro" e "App - Salvar entidade":** a parte do Asaas virou "Sincroniza no
+  Asaas" + "Resultado do Asaas", que gravam `Asaas_Customer_Id` e `Asaas_Conta`. A resposta junta
+  `info` e `aviso`, este último como "Atenção: ...", e o app mostra o aviso em destaque.
+  - O cliente novo tem "Atendido por" no formulário, começando em CNPJ 1.
+  - A skill `cadastrar-cliente` manda `atendidoPor`.
+- **Testes:** `banco/testes/testar-asaas-por-cnpj.js`, 27 ok, com um Asaas **simulado** (fluxo
+  temporário). Com `AJUSTE_PREVIO=<arquivo>`, testa a troca dos fluxos antes de aplicar.
+  - `comum.copiaDeTeste` troca qualquer chamada aos dois sub-fluxos do Asaas por simulação, ou
+    pela cópia passada em `sincroniza`, e recusa montar a cópia se sobrar alguma.
+- Cópias dos fluxos de antes ficaram no scratchpad da sessão, em `fluxos-antes-asaas-por-cnpj`.

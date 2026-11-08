@@ -80,10 +80,27 @@ async function errosDesde(inicioIso) {
 // Cópia temporária de um fluxo, com outro endereço de webhook e com os nós que falam com
 // o mundo de fora (Asaas, e-mail) trocados por simulações. Recusa montar a cópia se
 // sobrar qualquer chamada ao Asaas ou envio de e-mail. Devolve { caminho, apagar() }.
-async function copiaDeTeste(workflowId, { simulacoes = {}, ajustar } = {}) {
+// Sub-fluxos que falam com o Asaas de verdade (08/11/2026): uma cópia de teste nunca pode chamá-los.
+// "Asaas - Sincroniza cliente" vira uma simulação (cliente "criado" com id cus_teste_migracao na conta
+// pedida), a não ser que o teste passe { sincroniza: <id de uma cópia com Asaas simulado> }.
+const SUBS_DO_ASAAS = ['Asaas - Sincroniza cliente', 'Asaas - Chamada pela conta'];
+const SIMULA_SINCRONIZA = "return [{ json: { ok: true, acao: 'criar', id: 'cus_teste_migracao', conta: ($json.destino === 'CNPJ 2' ? 'CNPJ 2' : 'CNPJ 1'), info: '', aviso: '' } }];";
+async function idsDosSubsDoAsaas() {
+  const lista = (await n8n('GET', '/workflows?limit=250')).data;
+  return lista.filter((w) => SUBS_DO_ASAAS.includes(w.name)).map((w) => w.id);
+}
+const alvoDoSub = (n) => n.type === 'n8n-nodes-base.executeWorkflow' && n.parameters && n.parameters.workflowId
+  ? String(n.parameters.workflowId.value || n.parameters.workflowId) : '';
+
+async function copiaDeTeste(workflowId, { simulacoes = {}, ajustar, sincroniza } = {}) {
   const wf = await n8n('GET', '/workflows/' + workflowId);
   const caminho = 'teste-migracao-' + crypto.randomBytes(4).toString('hex');
+  const subsDoAsaas = await idsDosSubsDoAsaas();
   let nodes = wf.nodes.map((n) => {
+    if (simulacoes[n.name] === undefined && subsDoAsaas.includes(alvoDoSub(n))) {
+      if (sincroniza) return { ...n, parameters: { ...n.parameters, workflowId: { __rl: true, value: sincroniza, mode: 'id' } } };
+      return { id: n.id, name: n.name, type: 'n8n-nodes-base.code', typeVersion: 2, position: n.position, parameters: { jsCode: SIMULA_SINCRONIZA } };
+    }
     if (simulacoes[n.name] !== undefined) {
       return {
         id: n.id, name: n.name, type: 'n8n-nodes-base.code', typeVersion: 2, position: n.position,
@@ -93,15 +110,21 @@ async function copiaDeTeste(workflowId, { simulacoes = {}, ajustar } = {}) {
     if (n.type === 'n8n-nodes-base.webhook') return { ...n, parameters: { ...n.parameters, path: caminho }, webhookId: crypto.randomUUID() };
     return n;
   });
-  if (ajustar) nodes = ajustar(nodes);
+  let connections = wf.connections;
+  // ajustar pode devolver só os nós ou { nodes, connections } (quando muda ligações).
+  if (ajustar) {
+    const r = ajustar(nodes, connections);
+    if (Array.isArray(r)) nodes = r; else ({ nodes, connections } = r);
+  }
   for (const n of nodes) {
     const p = JSON.stringify(n.parameters || {});
     if (n.type === 'n8n-nodes-base.httpRequest' && /asaas\.com/i.test(p)) throw new Error('a cópia ainda chamaria o Asaas: ' + n.name);
     if (n.credentials && n.credentials.httpHeaderAuth) throw new Error('a cópia ainda tem a credencial do Asaas: ' + n.name);
     if (/emailSend|gmail|smtp/i.test(n.type)) throw new Error('a cópia ainda mandaria e-mail: ' + n.name);
+    if (subsDoAsaas.includes(alvoDoSub(n))) throw new Error('a cópia ainda chamaria o sub-fluxo do Asaas: ' + n.name);
   }
   const novo = await n8n('POST', '/workflows', {
-    name: 'TMP teste migracao - ' + wf.name, nodes, connections: wf.connections,
+    name: 'TMP teste migracao - ' + wf.name, nodes, connections,
     settings: { executionOrder: 'v1', saveDataErrorExecution: 'all', saveDataSuccessExecution: 'all' },
   });
   await n8n('POST', '/workflows/' + novo.id + '/activate');

@@ -1,0 +1,433 @@
+{
+  "name": "Asaas - Chamada pela conta",
+  "nodes": [
+    {
+      "id": "fcdc74fa-9b63-4924-82db-c7e9acbb744d",
+      "name": "Recebe pedido",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "0dd2e2c7-1bd4-44fc-866b-5a6faa264856",
+      "name": "Confere pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Só deixa passar chamada para o endereço do Asaas e para uma das duas contas.\nconst BASE = \"https://api.asaas.com/v3/\";\nconst METODOS = ['GET', 'POST', 'PUT', 'DELETE'];\nreturn $input.all().map((i) => {\n  const p = i.json || {};\n  const metodo = String(p.metodo || '').toUpperCase();\n  let rota = 'erro', erro = '';\n  if (p.pular) rota = 'pular';\n  else if (!['CNPJ 1', 'CNPJ 2'].includes(p.conta)) erro = 'conta desconhecida: ' + p.conta;\n  else if (!String(p.url || '').startsWith(BASE)) erro = 'endereço fora do Asaas';\n  else if (!METODOS.includes(metodo)) erro = 'método inválido';\n  else rota = p.conta + ((metodo === 'POST' || metodo === 'PUT') && p.corpo ? ' corpo' : '');\n  return { json: { ...p, metodo, rota, erroPedido: erro } };\n});"
+      }
+    },
+    {
+      "id": "babaaaaa-2075-4851-b3ec-6cfe726e2887",
+      "name": "Sem chamada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1480,
+        300
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().map((i) => ({ json: i.json.rota === 'pular' ? { pulado: true } : { error: { message: i.json.erroPedido || 'pedido inválido' } } }));"
+      }
+    },
+    {
+      "id": "d603ab3f-d518-4c81-b724-c769a3109d7e",
+      "name": "Rota CNPJ 2 com corpo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "88d841e5-8859-40c5-ab6b-7e7283993c67",
+              "leftValue": "={{ ($json.rota === 'CNPJ 2 corpo') ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "05dd1f99-4865-4791-a619-f0a15ddbc3cc",
+      "name": "Asaas do CNPJ 2 (com corpo)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        -200
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zu74V1t3VpbrGzBO",
+          "name": "Asaas API (CNPJ 2 - producao)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "solucoes-rapidas-sistema"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+        "options": {
+          "timeout": 20000
+        }
+      }
+    },
+    {
+      "id": "a1a111e3-b831-4e36-8d0c-4b762fd263bc",
+      "name": "Rota CNPJ 2?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        700,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b1006235-960d-4132-bfc3-212db61387d2",
+              "leftValue": "={{ ($json.rota === 'CNPJ 2') ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "5e64ac8c-ded8-42b5-9fa6-d582f571764b",
+      "name": "Asaas do CNPJ 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        -200
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zu74V1t3VpbrGzBO",
+          "name": "Asaas API (CNPJ 2 - producao)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "solucoes-rapidas-sistema"
+            }
+          ]
+        },
+        "sendBody": false,
+        "options": {
+          "timeout": 20000
+        }
+      }
+    },
+    {
+      "id": "6f64f6a6-8196-4a3b-bb19-2bdcda7a2b86",
+      "name": "Rota CNPJ 1 com corpo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5109b78c-e81b-46b1-bf31-9b685927eb0f",
+              "leftValue": "={{ ($json.rota === 'CNPJ 1 corpo') ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "ae417c58-64d4-4321-a482-6f0d8c631d86",
+      "name": "Asaas do CNPJ 1 (com corpo)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        -200
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "99sqJeNJjk6jJRgZ",
+          "name": "Asaas API (producao)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "solucoes-rapidas-sistema"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+        "options": {
+          "timeout": 20000
+        }
+      }
+    },
+    {
+      "id": "dcdf526b-8bb9-4542-af18-9076c757c614",
+      "name": "Rota CNPJ 1?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1220,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3d72f9aa-af8f-4490-84e5-7bb5b6094469",
+              "leftValue": "={{ ($json.rota === 'CNPJ 1') ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "294e9179-c686-4bd6-a520-d7fc67943b26",
+      "name": "Asaas do CNPJ 1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        -200
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "99sqJeNJjk6jJRgZ",
+          "name": "Asaas API (producao)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "solucoes-rapidas-sistema"
+            }
+          ]
+        },
+        "sendBody": false,
+        "options": {
+          "timeout": 20000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Recebe pedido": {
+      "main": [
+        [
+          {
+            "node": "Confere pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere pedido": {
+      "main": [
+        [
+          {
+            "node": "Rota CNPJ 2 com corpo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rota CNPJ 2 com corpo?": {
+      "main": [
+        [
+          {
+            "node": "Asaas do CNPJ 2 (com corpo)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rota CNPJ 2?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rota CNPJ 2?": {
+      "main": [
+        [
+          {
+            "node": "Asaas do CNPJ 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rota CNPJ 1 com corpo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rota CNPJ 1 com corpo?": {
+      "main": [
+        [
+          {
+            "node": "Asaas do CNPJ 1 (com corpo)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rota CNPJ 1?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rota CNPJ 1?": {
+      "main": [
+        [
+          {
+            "node": "Asaas do CNPJ 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sem chamada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  }
+}
