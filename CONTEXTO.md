@@ -5377,7 +5377,7 @@ e-mails do financeiro e notificações desligadas.
   - `comum.copiaDeTeste` troca qualquer chamada aos dois sub-fluxos do Asaas por simulação, ou
     pela cópia passada em `sincroniza`, e recusa montar a cópia se sobrar alguma.
 - Cópias dos fluxos de antes ficaram no scratchpad da sessão, em `fluxos-antes-asaas-por-cnpj`.
-- **Filtro "Atendido por" em Consultar clientes (08/11/2026, versão 2026.11.08l):** botões Todos /
+- **Filtro "Atendido por" em Consultar clientes (08/11/2026, versão 2026.11.08m):** botões Todos /
   CNPJ 1 / CNPJ 2 ao lado de "Documento". "App - Listar cadastros" devolve `atendidoPor` (vazio
   vale CNPJ 1). Ao salvar, o resumo da linha recebe o novo `atendidoPor`, e o filtro vale sem
   recarregar.
