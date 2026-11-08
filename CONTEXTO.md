@@ -5227,6 +5227,29 @@ pelo servidor: funciona no celular, sem internet, e não depende do PC ligado.
 - **Entrega:** no celular abre o compartilhar (WhatsApp, e-mail, salvar). No computador baixa
   o arquivo. O nome do arquivo segue a regra da skill ("orcamento <cliente>.pdf").
 
+### Emissão de NFS-e com certificado A1: etapas 0 e 1 (04/11/2026)
+
+Plano: emitir pelo sistema, direto na API da Sefin Nacional, sem portal e sem Asaas. O Asaas não manda o
+endereço da obra, que é obrigatório no 070501. **Só o ambiente de testes do governo está ligado; nenhuma
+nota real sai por aqui.** Etapas: 0 teste, 1 assinador, 2 fluxo n8n + tabela, 3 botão, 4 PDF, 5 cancelar/substituir,
+6 primeira nota real.
+
+- `banco/nfse-local.js`: serviço em 127.0.0.1:5691 (mesmo token do Airtable local). `POST /emitir`, `GET /dps/<id>`,
+  `GET /saude`. Monta a DPS e confere os dados antes de ir ao governo. **Ainda não está no atalho "Servidor n8n".**
+- `banco/nfse-assinar.ps1`: assina com o certificado instalado no Windows (a senha do .pfx não é usada) e envia.
+  A lista de endereços só tem a produção restrita, e ele recusa POST sem `tpAmb` 2.
+- `C:\Users\rediv\nfse-config.json`: CNPJ, município e série, fora do repositório (o CNPJ não está no código publicado).
+- `banco/testes/testar-nfse-local.js`: 22 testes, com cliente fictício, sem validade.
+
+Assinatura aceita: rsa-sha256, digest sha256, enveloped + exc-c14n#WithComments. Série 1 (faixa 00001-49999 = aplicativo
+próprio). Depois de um envio sem resposta, consultar `/dps/<id>` antes de repetir, porque a nota pode ter saído.
+
+**O layout de produção é diferente do de testes:** a produção restrita (esquemas de 20/10/2026) exige `finNFSe` e põe
+`cNBS` antes de `xDescServ`; as notas reais de outubro não têm `finNFSe` e têm `cNBS` depois. Conferir o esquema vigente
+na etapa 6. O aceite no ambiente de testes não garante o de produção; se produção recusar MEI, o plano B é o botão que
+preenche o portal. Falta também: tomador com CPF e fora de Joinville, numeração no banco e os demais campos do cadastro.
+Kaspersky: os seis endereços da NFS-e estão em Endereços confiáveis; sem isso ele derruba a conexão.
+
 ## E-mail do financeiro: o X agora vale (04/11/2026)
 
 **Problema do dono:** tirar no X um e-mail do financeiro e salvar não adiantava, ele voltava. Não
@@ -5244,3 +5267,28 @@ Cada e-mail do financeiro no cadastro de clientes ganhou um ícone pequeno de co
 na edição (também no cliente novo, que usa a mesma lista, `ligarEmailsFinanceiro`). Copiar não
 destrava o cadastro: o toque para editar ignora botões. `copiarTexto` aceita o texto do aviso.
 
+## Emissão de NFS-e: etapa 2, tabela e fluxo (04–08/11/2026)
+
+- **Notas reais pela API (04/11):** a produção aceitou as notas nº 440 e 441 (série 1, nDPS 1 e 2),
+  enviadas à parte, com "sim" do dono em cada uma. O layout real é o das notas do portal: sem
+  `finNFSe`, `cNBS` depois de `xDescServ`, prestador com fone e e-mail. O PDF sai do portal
+  ("Download DANFS-e"), inclusive para nota emitida pela API.
+- **Banco:** tabela `"Notas_Fiscais"` (Airtable local `tblNotasFiscais1`), com índice único
+  (Ambiente, Serie, Numero_DPS). A linha nasce "Enviando" e reserva o número. Status: Enviando,
+  Emitida, Recusada, Sem resposta. As 440 e 441 já estão nela; a próxima real é a nDPS 3. Backup
+  antes: `solucoes-2026-11-04_1858-antes-tabela-notas-fiscais.dump`.
+- **Serviço `banco/nfse-local.js` (porta 5691):** CPF no tomador; dois ambientes pelo `"ambiente"`
+  de `C:\Users\rediv\nfse-config.json` (`restrita`, o padrão, ou `producao`); `/saude` diz
+  ambiente e série; `/dps-numero/<n>` consulta pelo número. O assinador só envia se o `tpAmb` do
+  XML for o do ambiente pedido. O atalho "Servidor n8n" (`ligar-banco.ps1`) liga e reinicia o serviço.
+- **Fluxo `App - Notas fiscais`** (webhook `notas-fiscais`, id `5mzezwjoh0sxzgD7`), só para o Dono:
+  `listar`; `preparar` (mostra tomador, obra, problemas e nota igual do dia, sem gravar); `emitir`
+  (exige `confirmar=1`; nota igual no mesmo dia só com `confirmarRepetida=1`); `conferir` (nota "Sem
+  resposta": pergunta ao governo e vira Emitida ou Recusada). Fora de Joinville, sem documento ou
+  com endereço incompleto é barrado. Resposta que não seja 201/400/422 vira "Sem resposta": nunca
+  reenviar sem conferir.
+- **Testes:** `testar-nfse-local.js` (32) e `testar-fluxo-notas.js` (50), só no ambiente de testes
+  do governo e com clientes fictícios. O CPF fictício é recusado pelo governo (E0207, consulta a
+  Receita): a prova com CPF de verdade fica para a primeira nota real de pessoa física.
+- **Falta:** etapa 3 (botão no atendimento concluído, com tela de conferência) e trocar o serviço
+  para `producao` junto com ela.

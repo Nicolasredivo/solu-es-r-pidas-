@@ -1,0 +1,900 @@
+{
+  "name": "App - Notas fiscais",
+  "nodes": [
+    {
+      "id": "1ed517ed-898a-42ed-a4f2-f5c68d57fe38",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notas-fiscais",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      },
+      "webhookId": "49b3950b-2c5c-49e3-a8b8-d55c3a8b6ffc"
+    },
+    {
+      "id": "4453eeae-fbde-4221-b463-c52993117987",
+      "name": "Confere acesso",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        400,
+        0
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "acesso",
+            "senha": "={{ $json.body.senha }}",
+            "tokenAcesso": "={{ $json.body.tokenAcesso }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "aba248c4-6653-4e24-afc3-c5dc793a3c75",
+      "name": "Acesso permitido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        600,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d4a2c1a4-3139-4375-ab28-0afabf62ee9a",
+              "leftValue": "={{ $json.permitido }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "ce3d7866-acf8-4ee0-9c3e-a339d6738c80",
+      "name": "Monta acesso negado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        300
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, acessoNegado: true, mensagem: 'Acesso não autorizado. Entre de novo.' } }];"
+      }
+    },
+    {
+      "id": "adfa5a7a-7326-4d45-8fd1-4c837786a989",
+      "name": "Le entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Tudo chega como texto (o app manda formulário simples).\nconst corpo = $('Recebe pedido do app').first().json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst ACOES = ['listar', 'preparar', 'emitir', 'conferir'];\nconst acao = ACOES.includes(texto(corpo.acao)) ? texto(corpo.acao) : '';\nconst REC = /^rec[A-Za-z0-9]{14}$/;\nconst clienteId = REC.test(texto(corpo.clienteId)) ? texto(corpo.clienteId) : '';\nconst localId = REC.test(texto(corpo.localId)) ? texto(corpo.localId) : '';\nconst notaId = REC.test(texto(corpo.notaId)) ? texto(corpo.notaId) : '';\nconst descricao = texto(corpo.descricao);\n// Aceita 290 / 290,5 / 290,50 / 290.50 / 1.290,50.\nlet bruto = texto(corpo.valor);\nif (bruto.includes(',')) bruto = bruto.replace(/\\./g, '').replace(',', '.');\nconst valor = /^\\d{1,9}(\\.\\d{1,2})?$/.test(bruto) && Number(bruto) > 0 ? Number(bruto).toFixed(2) : '';\nconst confirmar = texto(corpo.confirmar) === '1';\nconst confirmarRepetida = texto(corpo.confirmarRepetida) === '1';\nlet erro = '';\nif (!acao) erro = 'Ação inválida.';\nelse if (acao === 'preparar' || acao === 'emitir') {\n  if (!clienteId) erro = 'Escolha o cliente.';\n  else if (!descricao) erro = 'Falta a descrição do serviço.';\n  else if (descricao.length > 1100) erro = 'A descrição passou de 1100 caracteres.';\n  else if (!valor) erro = 'Confira o valor.';\n  else if (acao === 'emitir' && !confirmar) erro = 'Falta confirmar a emissão.';\n} else if (acao === 'conferir' && !notaId) erro = 'Nota inválida.';\nreturn [{ json: { acao, clienteId, localId, notaId, descricao, valor, confirmarRepetida, erro } }];\n"
+      }
+    },
+    {
+      "id": "82e8c3d6-bba0-4163-9474-06c8a8c75c9b",
+      "name": "Entrada ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "58057e6e-c67d-417e-8759-d7d71b3fccb7",
+              "leftValue": "={{ !$json.erro }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "39648508-8522-4bbd-af37-3884c8e07547",
+      "name": "Monta erro de entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        300
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, mensagem: $('Le entrada').first().json.erro } }];"
+      }
+    },
+    {
+      "id": "1ed63f55-047c-4b27-9082-11d262286cea",
+      "name": "Status do servico",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1600,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "http://127.0.0.1:5691/saude",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "0c5611ee-d4bb-4b8d-a038-0ba328c96377",
+      "name": "Busca notas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        0
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblNotasFiscais1?_itens=1&fields%5B%5D=Ambiente&fields%5B%5D=Serie&fields%5B%5D=Numero_DPS&fields%5B%5D=Status&fields%5B%5D=Chave_Acesso&fields%5B%5D=Numero_NFSe&fields%5B%5D=Situacao&fields%5B%5D=Cliente_Ref&fields%5B%5D=Tomador_Documento&fields%5B%5D=Tomador_Nome&fields%5B%5D=Obra&fields%5B%5D=Descricao&fields%5B%5D=Valor&fields%5B%5D=Competencia&fields%5B%5D=Erro&fields%5B%5D=Emitida_Em",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "7e6fa161-829d-4ca2-8213-61cba40739d1",
+      "name": "Busca clientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        0
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tbl5Joji6gAir3mNh?_itens=1&fields%5B%5D=Razao_Social_Nome&fields%5B%5D=Nome_Fantasia_Identificador&fields%5B%5D=CPF_CNPJ&fields%5B%5D=Exigencia_Fiscal&fields%5B%5D=Status",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "243e7322-2079-4c74-b197-91bf6e37f0ea",
+      "name": "Busca locais",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        0
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblffVczCf1VeNxs7?_itens=1&fields%5B%5D=Nome_do_Local&fields%5B%5D=Endereco_Completo&fields%5B%5D=Bairro_Cidade&fields%5B%5D=Cliente_Vinculado&fields%5B%5D=Status",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "171be80b-06ef-44ad-904f-fb418cff840b",
+      "name": "Decide",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const e = $('Le entrada').first().json;\nconst ler = (no) => $(no).all().map((i) => i.json);\nconst brutos = { notas: ler('Busca notas'), clientes: ler('Busca clientes'), locais: ler('Busca locais') };\nconst responder = (resposta) => [{ json: { proximo: 'responder', resposta } }];\n// Banco fora do ar não pode parecer \"nenhuma nota\".\nif (Object.values(brutos).some((l) => l.some((j) => j && j.error))) return responder({ ok: false, mensagem: 'Não foi possível falar com o banco agora. Tente de novo em instantes.' });\nconst so = (l) => l.filter((j) => j && j.id);\nconst notas = so(brutos.notas), clientes = so(brutos.clientes), locais = so(brutos.locais);\n\nconst saude = $('Status do servico').first().json || {};\nconst AMBIENTES = { restrita: 'Testes', producao: 'Producao' };\nconst ambiente = saude.ok === true ? AMBIENTES[saude.ambiente] : undefined;\n\nconst nota = (r) => {\n  const f = r.fields;\n  return { id: r.id, ambiente: f.Ambiente, serie: f.Serie, numeroDps: f.Numero_DPS, status: f.Status, chave: f.Chave_Acesso || '', numeroNota: f.Numero_NFSe || '',\n    situacao: f.Situacao || '', clienteId: f.Cliente_Ref || '', tomadorNome: f.Tomador_Nome || '', tomadorDocumento: f.Tomador_Documento || '', obra: f.Obra || '',\n    descricao: f.Descricao || '', valor: f.Valor, competencia: f.Competencia || '', erro: f.Erro || '', emitidaEm: f.Emitida_Em || '' };\n};\n\nif (e.acao === 'listar') {\n  const lista = notas.filter((r) => !e.clienteId || r.fields.Cliente_Ref === e.clienteId).map(nota).sort((a, b) => b.numeroDps - a.numeroDps);\n  return responder({ ok: true, ambiente: ambiente || '', notas: lista });\n}\n\nif (!ambiente) return responder({ ok: false, servicoFora: true, mensagem: 'O serviço de notas não está ligado. Reabra o atalho \"Servidor n8n\". Nada foi enviado.' });\n\nif (e.acao === 'conferir') {\n  const r = notas.find((n) => n.id === e.notaId);\n  if (!r) return responder({ ok: false, mensagem: 'Nota não encontrada.' });\n  if (r.fields.Status !== 'Sem resposta' && r.fields.Status !== 'Enviando') return responder({ ok: false, mensagem: 'Esta nota não está aguardando conferência.' });\n  if (r.fields.Ambiente !== ambiente) return responder({ ok: false, mensagem: 'Esta nota é de outro ambiente.' });\n  return [{ json: { proximo: 'conferir', notaId: r.id, numero: r.fields.Numero_DPS } }];\n}\n\n// ---- preparar / emitir ----\nconst semAcento = (s) => String(s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toUpperCase();\nconst cliente = clientes.find((c) => c.id === e.clienteId);\nif (!cliente) return responder({ ok: false, mensagem: 'Cliente não encontrado.' });\nconst f = cliente.fields;\nconst problemas = [], avisos = [];\nconst documento = String(f.CPF_CNPJ || '').replace(/\\D/g, '');\nif (documento.length !== 11 && documento.length !== 14) problemas.push('O cliente está sem CPF ou CNPJ válido no cadastro.');\nconst nome = String(f.Razao_Social_Nome || f.Nome_Fantasia_Identificador || '').trim();\nif (!nome) problemas.push('O cliente está sem nome no cadastro.');\nif (f.Status === 'Inativo') avisos.push('Este cliente está inativo no cadastro.');\nif (f.Exigencia_Fiscal === 'Apenas Recibo') avisos.push('No cadastro, este cliente é \"Apenas Recibo\".');\n\nfunction endereco(l, rotulo) {\n  const bruto = String(l.fields.Endereco_Completo || '');\n  const cep = (bruto.match(/CEP\\s*(\\d{5})-?(\\d{3})/i) || []);\n  const partes = bruto.split(',').map((p) => p.trim()).filter((p) => p && !/^CEP\\b/i.test(p));\n  const bc = String(l.fields.Bairro_Cidade || '').match(/^(.*?)\\s*\\/\\s*(.*?)\\s*-\\s*([A-Za-z]{2})\\s*$/) || [];\n  const r = { cep: cep[1] ? cep[1] + cep[2] : '', logradouro: partes[0] || '', numero: partes[1] || '', complemento: partes.slice(2).join(', '), bairro: (bc[1] || '').trim(), cidade: (bc[2] || '').trim(), uf: (bc[3] || '').toUpperCase() };\n  const faltam = [!r.cep && 'CEP', !r.logradouro && 'rua', !r.numero && 'número', !r.bairro && 'bairro', !r.cidade && 'cidade'].filter(Boolean);\n  if (faltam.length) problemas.push(rotulo + ': falta ' + faltam.join(', ') + ' no cadastro.');\n  // Nota com outro município muda onde o ISS incide: por enquanto essa fica no portal.\n  else if (semAcento(r.cidade) !== 'JOINVILLE' || r.uf !== 'SC') problemas.push(rotulo + ' fora de Joinville: emita esta pelo portal.');\n  r.municipioIbge = '4209102';\n  r.texto = [r.logradouro, r.numero, r.complemento, r.bairro, r.cidade + ' - ' + r.uf, 'CEP ' + r.cep].filter(Boolean).join(', ');\n  return r;\n}\nconst doCliente = locais.filter((l) => (l.fields.Cliente_Vinculado || [])[0] === cliente.id);\nconst ativos = doCliente.filter((l) => l.fields.Status !== 'Arquivado' && l.fields.Status !== 'Inativo');\nconst localCnpj = ativos.find((l) => l.fields.Nome_do_Local === 'Endereço do CNPJ') || ativos[0];\nlet tomadorEnd = null, obraEnd = null;\nif (!localCnpj) problemas.push('O cliente não tem endereço no cadastro.');\nelse {\n  tomadorEnd = endereco(localCnpj, 'Endereço do cliente');\n  const localObra = e.localId ? doCliente.find((l) => l.id === e.localId) : localCnpj;\n  if (!localObra) problemas.push('Esse endereço de obra não é deste cliente.');\n  else obraEnd = localObra.id === localCnpj.id ? tomadorEnd : endereco(localObra, 'Endereço da obra');\n}\n\nconst hoje = new Date(Date.now() - 3 * 3600 * 1000 - 60 * 1000).toISOString().slice(0, 10);\nconst doMesmoAmbiente = notas.filter((n) => n.fields.Ambiente === ambiente);\nconst repetida = doMesmoAmbiente.find((n) => ['Enviando', 'Emitida', 'Sem resposta'].includes(n.fields.Status)\n  && n.fields.Tomador_Documento === documento && Number(n.fields.Valor) === Number(e.valor)\n  && n.fields.Descricao === e.descricao && n.fields.Competencia === hoje);\n\nif (e.acao === 'preparar') {\n  return responder({ ok: true, ambiente, problemas, avisos, podeEmitir: problemas.length === 0,\n    tomador: { nome, documento, tipo: documento.length === 11 ? 'CPF' : 'CNPJ', endereco: tomadorEnd ? tomadorEnd.texto : '' },\n    obra: obraEnd ? obraEnd.texto : '', descricao: e.descricao, valor: e.valor, competencia: hoje,\n    repetida: repetida ? nota(repetida) : null });\n}\n\nif (problemas.length) return responder({ ok: false, problemas, mensagem: problemas.join(' ') });\nif (repetida && !e.confirmarRepetida) return responder({ ok: false, repetida: nota(repetida), mensagem: 'Já existe uma nota igual hoje para este cliente. Nada foi enviado.' });\n\nconst serie = Number(saude.serie);\nconst usados = notas.filter((n) => n.fields.Ambiente === ambiente && n.fields.Serie === serie).map((n) => Number(n.fields.Numero_DPS) || 0);\nlet numero = Math.max(0, ...usados) + 1;\n// No ambiente de testes do governo os números não voltam: os testes apagam as linhas daqui, não as de lá.\nif (ambiente === 'Testes') numero = Math.max(numero, Math.floor(Date.now() / 1000));\n\nconst limpa = ({ texto, cidade, uf, ...resto }) => resto;\nconst pedido = {\n  numero, descricao: e.descricao, valor: e.valor, obra: limpa(obraEnd),\n  tomador: { [documento.length === 11 ? 'cpf' : 'cnpj']: documento, nome, endereco: limpa(tomadorEnd) },\n};\nconst reserva = { fields: {\n  Ambiente: ambiente, Serie: serie, Numero_DPS: numero, Status: 'Enviando', Cliente_Ref: cliente.id, Tomador_Documento: documento, Tomador_Nome: nome,\n  Obra: obraEnd.texto, Descricao: e.descricao, Valor: Number(e.valor), Competencia: hoje,\n} };\nreturn [{ json: { proximo: 'emitir', pedido, reserva, ambiente } }];\n"
+      }
+    },
+    {
+      "id": "cbeeb7b8-a175-4e04-adf5-51647afc3910",
+      "name": "Vai emitir?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2600,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fc7c3f15-6a6f-495c-9737-3e3f9f7728c9",
+              "leftValue": "={{ $json.proximo === 'emitir' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "25e3bb48-2ccd-4be6-b689-6b4d19cc57d3",
+      "name": "Reserva numero",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2800,
+        -300
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "POST",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblNotasFiscais1",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.reserva) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "04c039ac-23aa-418b-9e06-8a08762daf61",
+      "name": "Monta falha da reserva",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3000,
+        -500
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, mensagem: 'Não foi possível reservar o número da nota. Nada foi enviado. Tente de novo em instantes.' } }];"
+      }
+    },
+    {
+      "id": "e18036b3-ac34-4788-966a-4f357b47cc0d",
+      "name": "Chama servico",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3200,
+        -300
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "POST",
+        "url": "http://127.0.0.1:5691/emitir",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Decide').first().json.pedido) }}",
+        "options": {
+          "timeout": 100000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "cf31c2a1-e757-48bd-8248-119c65cfae4a",
+      "name": "Vai conferir?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3400,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9702f772-4913-46ff-a662-3f8ec962aeda",
+              "leftValue": "={{ $json.proximo === 'conferir' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "c5077596-c1e8-449c-98ec-3d00c719a08f",
+      "name": "Consulta no governo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3600,
+        150
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "={{ 'http://127.0.0.1:5691/dps-numero/' + $json.numero }}",
+        "options": {
+          "timeout": 100000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "ef7e8734-de57-467e-9ab7-049cc73cfbaa",
+      "name": "Monta resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3800,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const d = $('Decide').first().json;\nconst BASE = 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblNotasFiscais1/';\nconst http = $input.first().json || {};\nconst status = Number(http.statusCode) || 0;\nconst r = http.body && typeof http.body === 'object' ? http.body : {};\nconst dadosNota = (x) => ({ Chave_Acesso: x.chaveAcesso, Numero_NFSe: String(x.numeroNota || ''), Situacao: String(x.situacao || ''), Xml_Nota: x.nfseXml || '', Emitida_Em: new Date().toISOString(), Erro: '' });\n\nif (d.proximo === 'conferir') {\n  const url = BASE + d.notaId;\n  if (status === 200 && r.ok === true && r.existe === true && r.chaveAcesso) {\n    return [{ json: { gravar: true, url, corpo: { fields: { Status: 'Emitida', ...dadosNota(r) } },\n      resposta: { ok: true, existe: true, notaId: d.notaId, numeroNota: String(r.numeroNota || ''), chave: r.chaveAcesso, situacao: String(r.situacao || ''), mensagem: 'A nota foi emitida.' } } }];\n  }\n  if (status === 200 && r.ok === true && r.existe === false) {\n    return [{ json: { gravar: true, url, corpo: { fields: { Status: 'Recusada', Erro: 'O governo não tem nota com este número.' } },\n      resposta: { ok: true, existe: false, notaId: d.notaId, mensagem: 'O governo não tem esta nota: ela não foi emitida. Pode emitir de novo.' } } }];\n  }\n  return [{ json: { gravar: false, resposta: { ok: false, notaId: d.notaId, mensagem: 'Não deu para consultar o governo agora. Tente conferir de novo em instantes.' } } }];\n}\n\nconst notaId = $('Reserva numero').first().json.id;\nconst url = BASE + notaId;\nif (status === 201 && r.ok === true && r.chaveAcesso) {\n  return [{ json: { gravar: true, url, corpo: { fields: { Status: 'Emitida', Id_DPS: r.idDps || '', ...dadosNota(r) } },\n    resposta: { ok: true, ambiente: d.ambiente, nota: { id: notaId, numeroDps: d.pedido.numero, numeroNota: String(r.numeroNota || ''), chave: r.chaveAcesso, situacao: String(r.situacao || ''), valor: d.pedido.valor, alertas: r.alertas || [] } } } }];\n}\n// 400 = barrado aqui antes de sair do PC; 422 = o governo respondeu e recusou. Nos dois não existe nota.\nif (status === 400 || status === 422) {\n  const erros = Array.isArray(r.erros) ? r.erros : [];\n  const texto = erros.map((x) => [x.codigo, x.descricao, x.complemento].filter(Boolean).join(': ')).join(' | ') || 'Recusada.';\n  return [{ json: { gravar: true, url, corpo: { fields: { Status: 'Recusada', Id_DPS: r.idDps || '', Erro: texto.slice(0, 2000) } },\n    resposta: { ok: false, recusada: true, notaId, erros, mensagem: 'A nota foi recusada e não foi emitida: ' + texto } } }];\n}\n// Qualquer outra coisa: a nota pode ter saído. Só uma consulta ao governo diz.\nconst motivo = (Array.isArray(r.erros) && r.erros[0] && r.erros[0].descricao) || http.message || (http.error && http.error.message) || 'sem resposta';\nreturn [{ json: { gravar: true, url, corpo: { fields: { Status: 'Sem resposta', Id_DPS: r.idDps || '', Erro: String(motivo).slice(0, 2000) } },\n  resposta: { ok: false, semResposta: true, notaId, mensagem: 'Não sei se a nota saiu. Não emita de novo: use \"conferir\" primeiro.' } } }];\n"
+      }
+    },
+    {
+      "id": "393c658d-bd4e-4aef-bf6e-19376f18bc6c",
+      "name": "Precisa registrar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4000,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a18ee5ef-e170-4444-9f64-8a4d1047bc5b",
+              "leftValue": "={{ $json.gravar }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "99cb3c63-4cbd-4dae-8e7e-06cbed9b5c25",
+      "name": "Atualiza nota",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4200,
+        0
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "PATCH",
+        "url": "={{ $json.url }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "baa3279a-bc62-49af-aae3-3260a99ee9bc",
+      "name": "Monta resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const m = $('Monta resultado').first().json;\nconst resposta = { ...m.resposta };\nconst salvo = $input.first().json || {};\nif (m.gravar && !salvo.id) {\n  // O governo já respondeu; só o registro aqui falhou. A chave não pode se perder.\n  resposta.avisoRegistro = 'A resposta do governo não foi registrada no sistema. Anote: ' + JSON.stringify({ notaId: resposta.notaId || (resposta.nota && resposta.nota.id), chave: resposta.chave || (resposta.nota && resposta.nota.chave) || '' });\n}\nreturn [{ json: resposta }];\n"
+      }
+    },
+    {
+      "id": "cb29d039-95c5-409b-a9ce-1d77d116c380",
+      "name": "Responde gravado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        4600,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "0cfdad63-5f9e-48ca-bb0b-84720e522d6f",
+      "name": "Monta resposta direta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4800,
+        450
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: $input.first().json.resposta }];"
+      }
+    },
+    {
+      "id": "37face1b-088c-4013-95fc-158fe007f33c",
+      "name": "Responde",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        5000,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Confere acesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere acesso": {
+      "main": [
+        [
+          {
+            "node": "Acesso permitido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acesso permitido?": {
+      "main": [
+        [
+          {
+            "node": "Le entrada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta acesso negado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta acesso negado": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le entrada": {
+      "main": [
+        [
+          {
+            "node": "Entrada ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada ok?": {
+      "main": [
+        [
+          {
+            "node": "Status do servico",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta erro de entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta erro de entrada": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status do servico": {
+      "main": [
+        [
+          {
+            "node": "Busca notas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca notas": {
+      "main": [
+        [
+          {
+            "node": "Busca clientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca clientes": {
+      "main": [
+        [
+          {
+            "node": "Busca locais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca locais": {
+      "main": [
+        [
+          {
+            "node": "Decide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide": {
+      "main": [
+        [
+          {
+            "node": "Vai emitir?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vai emitir?": {
+      "main": [
+        [
+          {
+            "node": "Reserva numero",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Vai conferir?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reserva numero": {
+      "main": [
+        [
+          {
+            "node": "Chama servico",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha da reserva",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta falha da reserva": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chama servico": {
+      "main": [
+        [
+          {
+            "node": "Monta resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vai conferir?": {
+      "main": [
+        [
+          {
+            "node": "Consulta no governo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta resposta direta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consulta no governo": {
+      "main": [
+        [
+          {
+            "node": "Monta resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resultado": {
+      "main": [
+        [
+          {
+            "node": "Precisa registrar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Precisa registrar?": {
+      "main": [
+        [
+          {
+            "node": "Atualiza nota",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualiza nota": {
+      "main": [
+        [
+          {
+            "node": "Monta resposta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta": {
+      "main": [
+        [
+          {
+            "node": "Responde gravado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta direta": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  }
+}

@@ -45,6 +45,8 @@ const BASES = {
     Sindicaturas: 'tblSindicatura001', Administradoras: 'tblAdministrad001',
     // Cadastro de e-mails (31/10/2026).
     Emails: 'tblEmailsCadast01',
+    // Notas fiscais emitidas pelo sistema (04/11/2026).
+    Notas_Fiscais: 'tblNotasFiscais1',
   },
   appjAmWXV7Zr33UqE: {
     Despesas: 'tblNduEKl2jY280V0', Fornecedores: 'tblhsabIIg8SLqMMj', Recorrentes: 'tblb8QplhcGRP6SZ7',

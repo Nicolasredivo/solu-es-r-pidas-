@@ -311,6 +311,34 @@ create table "Pagamentos_Fatura" (
 );
 create index on "Pagamentos_Fatura" ("Cartao_Ref");
 
+-- Notas fiscais emitidas pelo sistema (API da Sefin, com o certificado A1), 04/11/2026.
+-- A linha nasce "Enviando" antes do envio: é ela que reserva o número da DPS (o índice único
+-- impede repetir). Tomador e obra ficam copiados aqui porque a nota não muda se o cadastro mudar.
+create table "Notas_Fiscais" (
+  id text primary key default novo_id(),
+  "Ambiente" text not null,          -- Producao | Testes
+  "Serie" integer not null,
+  "Numero_DPS" integer not null,
+  "Id_DPS" text,
+  "Status" text not null,            -- Enviando | Emitida | Recusada | Sem resposta
+  "Chave_Acesso" text,
+  "Numero_NFSe" text,
+  "Situacao" text,                   -- cStat devolvido pelo governo (107 = NFS-e do MEI)
+  "Cliente_Ref" text references "Entidades_Cadastradas"(id) on delete set null,
+  "Tomador_Documento" text,
+  "Tomador_Nome" text,
+  "Obra" text,
+  "Descricao" text,
+  "Valor" numeric(12,2),
+  "Competencia" date,
+  "Erro" text,
+  "Xml_Nota" text,
+  "Emitida_Em" timestamptz,
+  "Criado_Em" timestamptz not null default now()
+);
+create unique index on "Notas_Fiscais" ("Ambiente", "Serie", "Numero_DPS");
+create index on "Notas_Fiscais" ("Cliente_Ref");
+
 -- Usuário que o n8n usa: lê e grava dados, mas não muda a estrutura.
 -- (a senha é definida fora deste arquivo; ver C:\Users\rediv\senha-banco.txt)
 do $$ begin
