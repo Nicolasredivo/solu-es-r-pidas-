@@ -151,23 +151,38 @@
   const arte = document.querySelector(".hero-arte");
   const dicaArte = document.querySelector(".arte-dica");
   const pontos = Array.from(document.querySelectorAll(".ponto"));
+  const redes = Array.from(document.querySelectorAll(".rede"));
+  const janelas = Array.from(document.querySelectorAll(".janela"));
+  const svgPredio = arte ? arte.querySelector(".arte-svg") : null;
   let pontoAberto = null;
+  // Quem abriu o balão: o passeio automático ou a pessoa. O passeio nunca
+  // troca nem fecha um balão que a pessoa abriu.
+  let abertoPeloPasseio = false;
+
+  const temMouse = window.matchMedia("(pointer: fine)").matches;
 
   // O convite muda conforme o aparelho: quem tem mouse não "toca".
-  if (dicaArte && window.matchMedia("(pointer: fine)").matches) {
+  if (dicaArte && temMouse) {
     dicaArte.textContent = "Passe o mouse pelos pontos do prédio";
   }
 
-  function mostrarPonto(ponto) {
+  function mostrarPonto(ponto, peloPasseio) {
     if (!balao || !arte) return;
 
+    abertoPeloPasseio = !!peloPasseio;
     pontos.forEach((p) => p.classList.toggle("aberto", p === ponto));
     pontoAberto = ponto;
+
+    // Acende a rede daquele serviço (cano, fiação, caixa...) no desenho.
+    const servico = ponto.dataset.servico || "";
+    arte.dataset.servico = servico;
+    redes.forEach((r) => r.classList.toggle("ativa", r.dataset.servico === servico));
 
     balao.innerHTML =
       "<strong></strong><span></span>";
     balao.querySelector("strong").textContent = ponto.dataset.titulo || "";
     balao.querySelector("span").textContent = ponto.dataset.texto || "";
+    balao.style.setProperty("--cor-servico", ponto.dataset.cor || "");
     balao.classList.remove("hidden");
 
     // O ponto vive dentro de um SVG que escala: a posição só dá pra saber
@@ -184,8 +199,10 @@
 
     // Em cima do ponto por padrão; se não couber (ponto lá no alto), vai
     // pra baixo dele e o bico vira pro outro lado.
+    // data-balao="abaixo": o ponto tem animação logo acima dele (a caixa
+    // d'água no telhado) e o balão não pode tapar.
     const acima = alvo.top - caixa.top - 14;
-    const cabeAcima = acima - balao.offsetHeight > 0;
+    const cabeAcima = ponto.dataset.balao !== "abaixo" && acima - balao.offsetHeight > 0;
     balao.classList.toggle("abaixo", !cabeAcima);
     balao.style.top = cabeAcima
       ? acima + "px"
@@ -203,13 +220,50 @@
     if (!balao) return;
     pontos.forEach((p) => p.classList.remove("aberto"));
     pontoAberto = null;
+    abertoPeloPasseio = false;
+    if (arte) delete arte.dataset.servico;
+    redes.forEach((r) => r.classList.remove("ativa"));
     balao.classList.remove("aparece");
     setTimeout(() => {
       if (!pontoAberto) balao.classList.add("hidden");
     }, 220);
   }
 
-  const temMouse = window.matchMedia("(pointer: fine)").matches;
+  /* ---------- Passeio automático pelos serviços ---------- */
+  // Sem ninguém mexendo, o prédio mostra sozinho um serviço de cada vez
+  // (no celular é o que dá vida, já que não existe "passar o mouse"). Para
+  // na hora em que a pessoa encosta na arte e volta um tempo depois.
+
+  let pausaAte = 0;
+  let mouseNaArte = false;
+  let arteNaTela = false;
+  let indicePasseio = -1;
+
+  function pausarPasseio(ms) {
+    pausaAte = Math.max(pausaAte, Date.now() + ms);
+  }
+
+  if (arte && pontos.length && !menosMovimento) {
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(
+        (entradas) => { arteNaTela = entradas[0].isIntersecting; },
+        { threshold: 0.35 }
+      ).observe(arte);
+    } else {
+      arteNaTela = true;
+    }
+
+    // Dá tempo de ler o convite antes do primeiro serviço aparecer.
+    pausarPasseio(2600);
+
+    setInterval(() => {
+      if (!arteNaTela || document.hidden || mouseNaArte) return;
+      if (Date.now() < pausaAte) return;
+      if (pontoAberto && !abertoPeloPasseio) return;
+      indicePasseio = (indicePasseio + 1) % pontos.length;
+      mostrarPonto(pontos[indicePasseio], true);
+    }, 3200);
+  }
 
   pontos.forEach((ponto) => {
     if (temMouse) {
@@ -224,7 +278,9 @@
     } else {
       ponto.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (pontoAberto === ponto) esconderPonto();
+        pausarPasseio(9000);
+        // Tocar no ponto que o passeio abriu "segura" ele, não fecha.
+        if (pontoAberto === ponto && !abertoPeloPasseio) esconderPonto();
         else mostrarPonto(ponto);
       });
     }
@@ -235,19 +291,48 @@
     ponto.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" && e.key !== " ") return;
       e.preventDefault();
-      if (pontoAberto === ponto) esconderPonto();
+      if (pontoAberto === ponto && !abertoPeloPasseio) esconderPonto();
       else mostrarPonto(ponto);
     });
   });
 
   // Tocar fora fecha o balão (no celular não existe "tirar o mouse").
   document.addEventListener("click", () => {
-    if (pontoAberto) esconderPonto();
+    if (!pontoAberto) return;
+    pausarPasseio(9000);
+    esconderPonto();
   });
 
-  /* ---------- Arte do hero inclina de leve seguindo o mouse ---------- */
+  if (arte && temMouse) {
+    // Mouse entrou na arte: a pessoa assume e o passeio sai da frente.
+    arte.addEventListener("pointerenter", () => {
+      mouseNaArte = true;
+      if (pontoAberto && abertoPeloPasseio) esconderPonto();
+    });
+    arte.addEventListener("pointerleave", () => {
+      mouseNaArte = false;
+      pausarPasseio(2500);
+    });
+  }
 
-  const pontoFino = window.matchMedia("(pointer: fine)").matches;
+  /* ---------- Arte do hero inclina e acende janelas seguindo o mouse ---------- */
+
+  const pontoFino = temMouse;
+
+  // Janelas perto do mouse acendem, como uma lanterna passando pelo prédio.
+  // A conta é feita nas coordenadas do desenho (o SVG escala com a tela).
+  function acenderJanelas(clienteX, clienteY) {
+    if (!svgPredio || !janelas.length) return;
+    const matriz = svgPredio.getScreenCTM();
+    if (!matriz) return;
+    const p = new DOMPoint(clienteX, clienteY).matrixTransform(matriz.inverse());
+    janelas.forEach((j) => {
+      const cx = Number(j.getAttribute("x")) + 14;
+      const cy = Number(j.getAttribute("y")) + 9;
+      const luz = Math.max(0, 1 - Math.hypot(p.x - cx, p.y - cy) / 90);
+      j.style.setProperty("--luz", luz.toFixed(2));
+    });
+  }
 
   if (arte && pontoFino && !menosMovimento) {
     let inclinacaoAgendada = false;
@@ -260,8 +345,9 @@
       // -0.5 a 0.5 a partir do centro, virando alguns graus só.
       const px = (ultimoEvento.clientX - caixa.left) / caixa.width - 0.5;
       const py = (ultimoEvento.clientY - caixa.top) / caixa.height - 0.5;
-      arte.style.setProperty("--inclina-y", (px * 7).toFixed(2) + "deg");
-      arte.style.setProperty("--inclina-x", (-py * 5).toFixed(2) + "deg");
+      arte.style.setProperty("--inclina-y", (px * 10).toFixed(2) + "deg");
+      arte.style.setProperty("--inclina-x", (-py * 7).toFixed(2) + "deg");
+      acenderJanelas(ultimoEvento.clientX, ultimoEvento.clientY);
     }
 
     arte.addEventListener("pointermove", (e) => {
@@ -274,6 +360,7 @@
     arte.addEventListener("pointerleave", () => {
       arte.style.setProperty("--inclina-y", "0deg");
       arte.style.setProperty("--inclina-x", "0deg");
+      janelas.forEach((j) => j.style.setProperty("--luz", "0"));
     });
   }
 

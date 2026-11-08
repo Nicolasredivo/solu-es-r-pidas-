@@ -127,6 +127,9 @@
                 <stop offset="0%" stop-color="#3E8FD1" />
                 <stop offset="100%" stop-color="#1C4E85" />
               </linearGradient>
+              <clipPath id="caixa-recorte">
+                <rect x="178" y="50" width="44" height="26" rx="6" />
+              </clipPath>
               <linearGradient id="predio-c" x1="1" y1="0" x2="0" y2="1">
                 <stop offset="0%" stop-color="#B9C2C9" />
                 <stop offset="100%" stop-color="#E4E9ED" />
@@ -135,15 +138,83 @@
             <polygon points="60,150 200,80 200,430 60,430" fill="url(#predio-a)" />
             <polygon points="200,80 330,150 330,430 200,430" fill="url(#predio-b)" opacity=".92" />
             <polygon points="330,210 392,246 392,430 330,430" fill="url(#predio-c)" opacity=".75" />
-            <g fill="#FFFFFF" opacity=".16">
-              <rect x="86" y="196" width="28" height="18" /><rect x="128" y="176" width="28" height="18" />
-              <rect x="86" y="246" width="28" height="18" /><rect x="128" y="226" width="28" height="18" />
-              <rect x="86" y="296" width="28" height="18" /><rect x="128" y="276" width="28" height="18" />
-              <rect x="86" y="346" width="28" height="18" /><rect x="128" y="326" width="28" height="18" />
-              <rect x="226" y="176" width="28" height="18" /><rect x="268" y="196" width="28" height="18" />
-              <rect x="226" y="226" width="28" height="18" /><rect x="268" y="246" width="28" height="18" />
-              <rect x="226" y="276" width="28" height="18" /><rect x="268" y="296" width="28" height="18" />
-              <rect x="226" y="326" width="28" height="18" /><rect x="268" y="346" width="28" height="18" />
+            <!-- Janelas: acendem perto do mouse e nos serviços de luz e água.
+                 --ordem é a vez de cada uma acender (a luz sobe, a água desce). -->
+            <g class="janelas">
+              <rect class="janela j-esq" x="86" y="346" width="28" height="18" style="--ordem:0" />
+              <rect class="janela j-esq" x="128" y="326" width="28" height="18" style="--ordem:1" />
+              <rect class="janela j-esq" x="86" y="296" width="28" height="18" style="--ordem:2" />
+              <rect class="janela j-esq" x="128" y="276" width="28" height="18" style="--ordem:3" />
+              <rect class="janela j-esq" x="86" y="246" width="28" height="18" style="--ordem:4" />
+              <rect class="janela j-esq" x="128" y="226" width="28" height="18" style="--ordem:5" />
+              <rect class="janela j-esq" x="86" y="196" width="28" height="18" style="--ordem:6" />
+              <rect class="janela j-esq" x="128" y="176" width="28" height="18" style="--ordem:7" />
+              <rect class="janela j-dir" x="226" y="176" width="28" height="18" style="--ordem:0" />
+              <rect class="janela j-dir" x="268" y="196" width="28" height="18" style="--ordem:1" />
+              <rect class="janela j-dir" x="226" y="226" width="28" height="18" style="--ordem:2" />
+              <rect class="janela j-dir" x="268" y="246" width="28" height="18" style="--ordem:3" />
+              <rect class="janela j-dir" x="226" y="276" width="28" height="18" style="--ordem:4" />
+              <rect class="janela j-dir" x="268" y="296" width="28" height="18" style="--ordem:5" />
+              <rect class="janela j-dir" x="226" y="326" width="28" height="18" style="--ordem:6" />
+              <rect class="janela j-dir" x="268" y="346" width="28" height="18" style="--ordem:7" />
+            </g>
+
+            <!-- Redes de cada serviço. Ficam escondidas e aparecem quando o
+                 ponto daquele serviço está aberto (classe "ativa", posta
+                 pelo landing.js): o cano/fio se desenha e o fluxo corre. -->
+            <g class="redes">
+              <!-- Caixa d'água no telhado: enche e brilha de limpa -->
+              <g class="rede rede-caixa" data-servico="caixa">
+                <path class="rede-trilho" pathLength="1" d="M190 74 V86 M210 74 V84" />
+                <rect class="caixa-corpo" x="178" y="50" width="44" height="26" rx="6" />
+                <g clip-path="url(#caixa-recorte)">
+                  <rect class="caixa-agua" x="178" y="50" width="44" height="26" />
+                </g>
+                <rect class="caixa-borda" x="178" y="50" width="44" height="26" rx="6" />
+                <path class="rede-fluxo" d="M200 76 V98" />
+                <path class="brilho" d="M166 44 l2 5 l5 2 l-5 2 l-2 5 l-2 -5 l-5 -2 l5 -2 z" />
+                <path class="brilho" style="--atraso:.45s" d="M232 36 l1.6 4 l4 1.6 l-4 1.6 l-1.6 4 l-1.6 -4 l-4 -1.6 l4 -1.6 z" />
+                <path class="brilho" style="--atraso:.9s" d="M236 66 l1.2 3 l3 1.2 l-3 1.2 l-1.2 3 l-1.2 -3 l-3 -1.2 l3 -1.2 z" />
+              </g>
+
+              <!-- Elétrica: quadro no térreo, a energia sobe e acende o lado esquerdo -->
+              <g class="rede rede-eletrica" data-servico="eletrica">
+                <path class="rede-trilho" pathLength="1" d="M121 400 V168 M121 355 H100 M121 335 H142 M121 305 H100 M121 285 H142 M121 255 H100 M121 235 H142 M121 205 H100 M121 185 H142" />
+                <path class="rede-fluxo" d="M121 400 V168" />
+                <rect class="quadro" x="110" y="400" width="22" height="26" rx="3" />
+                <path class="raio" d="M123 404 l-6 10 h5 l-3 8 l8 -11 h-5 l3 -7 z" />
+              </g>
+
+              <!-- Hidráulica: água desce da caixa e chega em cada andar -->
+              <g class="rede rede-hidraulica" data-servico="hidraulica">
+                <path class="rede-trilho" pathLength="1" d="M206 96 L261 124 V418 M261 185 H240 M261 205 H282 M261 235 H240 M261 255 H282 M261 285 H240 M261 305 H282 M261 335 H240 M261 355 H282" />
+                <path class="rede-fluxo" d="M206 96 L261 124 V418" />
+                <circle class="gota" cx="240" cy="190" r="2.6" />
+                <circle class="gota" style="--atraso:.4s" cx="282" cy="260" r="2.6" />
+                <circle class="gota" style="--atraso:.8s" cx="240" cy="340" r="2.6" />
+              </g>
+
+              <!-- Aquecedor e pressurizador: o calor sobe, o manômetro trabalha -->
+              <g class="rede rede-aquecedor" data-servico="aquecedor">
+                <path class="rede-trilho" pathLength="1" d="M296 340 H346 M361 362 V383" />
+                <path class="rede-fluxo" d="M296 340 H346" />
+                <rect class="aquecedor" x="346" y="298" width="30" height="64" rx="13" />
+                <path class="aquecedor-chama" d="M361 336 c-5 -6 -2 -12 0 -16 c2 4 5 9 0 16 z" />
+                <path class="calor" d="M352 290 q-4 -6 0 -12 q4 -6 0 -12" />
+                <path class="calor" style="--atraso:.5s" d="M361 286 q-4 -6 0 -12 q4 -6 0 -12" />
+                <path class="calor" style="--atraso:1s" d="M370 290 q-4 -6 0 -12 q4 -6 0 -12" />
+                <circle class="manometro" cx="361" cy="392" r="9" />
+                <path class="ponteiro" d="M361 392 L366 386" />
+              </g>
+
+              <!-- Esgoto: a rede sob o terreno volta a correr -->
+              <g class="rede rede-esgoto" data-servico="esgoto">
+                <path class="solo" d="M30 430 H410" />
+                <path class="rede-trilho" pathLength="1" d="M300 418 V452 H404 M232 430 V452" />
+                <path class="rede-fluxo" d="M232 432 V452 H404" />
+                <path class="rede-fluxo" d="M300 420 V452" />
+                <circle class="tampa" cx="404" cy="452" r="5" />
+              </g>
             </g>
 
             <!-- Pontos que ligam cada parte do prédio a um serviço. Ficam
@@ -156,30 +227,35 @@
                  "23 anos" passa. -->
             <g class="pontos">
               <g class="ponto" tabindex="0" role="button"
+                 data-servico="caixa" data-cor="#5BB8F5" data-balao="abaixo"
                  data-titulo="Limpeza de caixas d'água" data-texto="Caixas d'água e cisternas, com o local entregue limpo.">
                 <circle class="ponto-halo" cx="200" cy="104" r="17" />
                 <circle class="ponto-alvo" cx="200" cy="104" r="7" />
                 <circle class="ponto-area" cx="200" cy="104" r="22" />
               </g>
               <g class="ponto" tabindex="0" role="button"
+                 data-servico="eletrica" data-cor="#F5B83D"
                  data-titulo="Manutenções elétricas" data-texto="Quadros, circuitos, iluminação e pontos de energia.">
                 <circle class="ponto-halo" cx="128" cy="212" r="17" />
                 <circle class="ponto-alvo" cx="128" cy="212" r="7" />
                 <circle class="ponto-area" cx="128" cy="212" r="22" />
               </g>
               <g class="ponto" tabindex="0" role="button"
+                 data-servico="hidraulica" data-cor="#7CC8FF"
                  data-titulo="Manutenções hidráulicas" data-texto="Vazamentos, redes novas, torneiras, chuveiros e pontos de água.">
                 <circle class="ponto-halo" cx="286" cy="248" r="17" />
                 <circle class="ponto-alvo" cx="286" cy="248" r="7" />
                 <circle class="ponto-area" cx="286" cy="248" r="22" />
               </g>
               <g class="ponto" tabindex="0" role="button"
+                 data-servico="aquecedor" data-cor="#FF8A4C"
                  data-titulo="Aquecedores e pressurizadores" data-texto="Instalação e manutenção, incluindo válvulas de transferência.">
                 <circle class="ponto-halo" cx="286" cy="340" r="17" />
                 <circle class="ponto-alvo" cx="286" cy="340" r="7" />
                 <circle class="ponto-area" cx="286" cy="340" r="22" />
               </g>
               <g class="ponto" tabindex="0" role="button"
+                 data-servico="esgoto" data-cor="#7F96AE"
                  data-titulo="Rede de esgoto" data-texto="Desobstrução, reparos e adequação da rede.">
                 <circle class="ponto-halo" cx="300" cy="408" r="17" />
                 <circle class="ponto-alvo" cx="300" cy="408" r="7" />
