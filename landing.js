@@ -366,113 +366,232 @@
 
   /* ---------- História: do susto ao resolvido (rolagem) ---------- */
   // O palco fica parado enquanto a seção passa e a posição da rolagem vira
-  // um número de 0 a 1 (p). Tudo na cena é calculado a partir de p, sempre
-  // com uma suavização (o número "persegue" a rolagem) pra nada andar aos
-  // trancos. Só roda enquanto a seção está na tela. Tela muito baixa
-  // (celular deitado) fica com a versão parada: o palco não caberia.
+  // um número de 0 a 1 (p). A partir de p sai tudo: o enquadramento da
+  // câmera (viewBox do SVG) e as variáveis que ligam cada parte da cena.
+  // O número "persegue" a rolagem com suavização, pra nada andar aos
+  // trancos, e o desenho só roda enquanto a seção está na tela.
 
   const historia = document.getElementById("historia");
   const svgHistoria = document.getElementById("historia-svg");
-  const cameraHistoria = document.getElementById("hist-camera");
+  const telaHistoria = historia ? historia.querySelector(".historia-tela") : null;
+  const painelHistoria = historia ? historia.querySelector(".historia-painel") : null;
 
-  if (historia && svgHistoria && cameraHistoria && !menosMovimento && window.innerHeight >= 560) {
-    historia.classList.add("viva");
+  if (historia && svgHistoria && telaHistoria && painelHistoria) {
+    const viva = !menosMovimento && window.innerHeight >= 560;
+    if (viva) historia.classList.add("viva");
 
+    const porId = (id) => document.getElementById(id);
+    const van = porId("hx-van");
+    const vanLuz = porId("hx-van-luz");
+    const rodas = [porId("hx-roda-1"), porId("hx-roda-2")];
+    const scanner = porId("hx-scanner");
+    const recorteScan = porId("hx-scan-rect");
     const atos = Array.from(historia.querySelectorAll(".ato"));
     const avisos = Array.from(historia.querySelectorAll(".aviso"));
     const passos = Array.from(historia.querySelectorAll(".historia-passo"));
-    // Onde cada botão da linha do tempo leva (meio de cada ato).
-    const meioDosAtos = [0.16, 0.52, 0.95];
 
     const suave = (de, ate, x) => {
       const t = Math.min(1, Math.max(0, (x - de) / (ate - de)));
       return t * t * (3 - 2 * t);
     };
+    const mistura = (a, b, t) => a + (b - a) * t;
 
-    function progressoDaRolagem() {
-      const caixa = historia.getBoundingClientRect();
-      const total = caixa.height - window.innerHeight;
-      return total > 0 ? Math.min(1, Math.max(0, -caixa.top / total)) : 0;
+    // Planos da câmera no desenho: [centro x, centro y, largura, altura,
+    // âncora]. Âncora 1 = o pé do plano cola no pé da área livre (sobra de
+    // espaço vira céu, não chão); 0 = plano centralizado.
+    const PLANOS = {
+      geral: [905, 690, 620, 800, 1],
+      scan: [905, 675, 560, 770, 1],
+      sala: [1005, 646, 196, 100, 0],
+      rua: [800, 950, 520, 300, 1],
+      final: [905, 690, 860, 800, 1],
+    };
+    // Roteiro: em que ponto da rolagem a câmera chega em cada plano.
+    const ROTEIRO = [
+      [0, "geral"], [0.06, "geral"], [0.24, "scan"], [0.3, "scan"],
+      [0.42, "sala"], [0.47, "sala"], [0.55, "rua"], [0.61, "rua"],
+      [0.69, "sala"], [0.8, "sala"], [0.93, "final"], [1, "final"],
+    ];
+    // Meio de cada ato, pra onde a linha do tempo leva.
+    const MEIO_DOS_ATOS = [0.3, 0.66, 0.97];
+
+    function plano(p) {
+      for (let i = 0; i < ROTEIRO.length - 1; i++) {
+        const [p0, nome0] = ROTEIRO[i];
+        const [p1, nome1] = ROTEIRO[i + 1];
+        if (p > p1) continue;
+        const t = suave(p0, p1, p);
+        const a = PLANOS[nome0];
+        const b = PLANOS[nome1];
+        // Tamanho em escala logarítmica: o zoom anda no mesmo ritmo do
+        // começo ao fim, em vez de disparar no final.
+        return [
+          mistura(a[0], b[0], t),
+          mistura(a[1], b[1], t),
+          Math.exp(mistura(Math.log(a[2]), Math.log(b[2]), t)),
+          Math.exp(mistura(Math.log(a[3]), Math.log(b[3]), t)),
+          mistura(a[4], b[4], t),
+        ];
+      }
+      return PLANOS.final;
+    }
+
+    // Área "livre" do palco: o que o painel de texto não cobre. A câmera
+    // enquadra o plano dentro dela; o resto do desenho preenche o entorno.
+    let largura = 0;
+    let altura = 0;
+    let livre = { x: 0, y: 0, w: 1, h: 1 };
+
+    function medir() {
+      largura = telaHistoria.clientWidth;
+      altura = telaHistoria.clientHeight;
+      const tela = telaHistoria.getBoundingClientRect();
+      const painel = painelHistoria.getBoundingClientRect();
+      const painelEmbaixo = painel.top - tela.top > altura * 0.3;
+      if (painelEmbaixo) {
+        livre = { x: 14, y: 64, w: largura - 28, h: painel.top - tela.top - 64 - 12 };
+      } else {
+        const x0 = painel.right - tela.left + 28;
+        livre = { x: x0, y: 28, w: largura - x0 - 32, h: altura - 56 };
+      }
+      if (livre.w < 140 || livre.h < 140) livre = { x: 0, y: 0, w: largura, h: altura };
+    }
+
+    function enquadrar([cx, cy, w, h, ancora]) {
+      const escala = Math.min(livre.w / w, livre.h / h);
+      const x0 = cx - (livre.x + livre.w / 2) / escala;
+      const yCentro = cy - (livre.y + livre.h / 2) / escala;
+      const yPe = cy + h / 2 - (livre.y + livre.h) / escala;
+      const y0 = mistura(yCentro, yPe, ancora);
+      svgHistoria.setAttribute(
+        "viewBox",
+        x0.toFixed(2) + " " + y0.toFixed(2) + " " + (largura / escala).toFixed(2) + " " + (altura / escala).toFixed(2)
+      );
     }
 
     let atoAtual = -1;
+    let avisoAtual = -2;
 
     function desenhar(p) {
-      // Câmera: entra na janela do 3º andar e depois volta pro prédio todo.
-      const zoom = suave(0.04, 0.3, p) * (1 - suave(0.6, 0.84, p));
-      const escala = 1 + 4 * zoom;
-      const fx = 200 + 25 * zoom;   // centro da janela: (225, 187)
-      const fy = 200 - 13 * zoom;
-      cameraHistoria.setAttribute(
-        "transform",
-        "translate(200 200) scale(" + escala.toFixed(4) + ") translate(" + (-fx).toFixed(3) + " " + (-fy).toFixed(3) + ")"
-      );
+      enquadrar(plano(p));
 
-      const estilo = svgHistoria.style;
-      estilo.setProperty("--dia", suave(0.62, 0.9, p).toFixed(3));
-      estilo.setProperty("--vaz", (1 - suave(0.4, 0.54, p)).toFixed(3));
-      estilo.setProperty("--chave", (suave(0.34, 0.42, p) * (1 - suave(0.58, 0.66, p))).toFixed(3));
-      estilo.setProperty("--conserto", suave(0.46, 0.58, p).toFixed(3));
-      estilo.setProperty("--ok", suave(0.8, 0.92, p).toFixed(3));
+      const e = svgHistoria.style;
+      const dia = 0.45 * suave(0.5, 0.8, p) + 0.55 * suave(0.8, 0.95, p);
+      const varredura = suave(0.07, 0.24, p);
+      e.setProperty("--dia", dia.toFixed(3));
+      e.setProperty("--scanner", (suave(0.06, 0.08, p) * (1 - suave(0.23, 0.26, p))).toFixed(3));
+      e.setProperty("--raiox", (suave(0.065, 0.08, p) * (1 - suave(0.31, 0.37, p))).toFixed(3));
+      e.setProperty("--marcador", (suave(0.16, 0.2, p) * (1 - suave(0.39, 0.43, p))).toFixed(3));
+      e.setProperty("--corte", (suave(0.35, 0.41, p) * (1 - suave(0.82, 0.88, p))).toFixed(3));
+      e.setProperty("--vaz", (1 - suave(0.7, 0.74, p)).toFixed(3));
+      e.setProperty("--poca", (mistura(0.25, 1, suave(0.34, 0.44, p)) * (1 - suave(0.72, 0.8, p))).toFixed(3));
+      e.setProperty("--mancha", (suave(0.37, 0.47, p) * (1 - suave(0.74, 0.82, p))).toFixed(3));
+      e.setProperty("--tecnico", suave(0.63, 0.68, p).toFixed(3));
+      e.setProperty("--chave", (suave(0.66, 0.68, p) * (1 - suave(0.75, 0.77, p))).toFixed(3));
+      e.setProperty("--conserto", suave(0.72, 0.78, p).toFixed(3));
+      e.setProperty("--ok", suave(0.75, 0.79, p).toFixed(3));
+      e.setProperty("--okf", suave(0.88, 0.94, p).toFixed(3));
       historia.style.setProperty("--p", p.toFixed(4));
 
-      const ato = p < 0.36 ? 0 : p < 0.7 ? 1 : 2;
-      if (ato === atoAtual) return;
-      atoAtual = ato;
-      atos.forEach((el, i) => {
-        el.classList.toggle("atual", i === ato);
-        el.classList.toggle("saiu", i < ato);
-      });
-      avisos.forEach((el, i) => el.classList.toggle("atual", i === ato));
-      passos.forEach((el, i) => {
-        el.classList.toggle("atual", i === ato);
-        if (i === ato) el.setAttribute("aria-current", "step");
-        else el.removeAttribute("aria-current");
-      });
-      historia.classList.toggle("final", ato === 2);
-    }
+      // Scanner descendo: a faixa e o recorte que revela o raio-x.
+      const yScan = 296 + 706 * varredura;
+      if (scanner) scanner.setAttribute("transform", "translate(0 " + yScan.toFixed(1) + ")");
+      if (recorteScan) recorteScan.setAttribute("height", (706 * varredura).toFixed(1));
 
-    let mostrado = progressoDaRolagem();
-    let rodando = false;
-    let naTela = false;
-    desenhar(mostrado);
+      // Van chegando e freando; as rodas giram conforme a distância.
+      const t = Math.min(1, Math.max(0, (p - 0.47) / 0.11));
+      const xVan = -420 + 1060 * (1 - Math.pow(1 - t, 3));
+      const posVan = "translate(" + xVan.toFixed(1) + " 1062)";
+      if (van) van.setAttribute("transform", posVan);
+      if (vanLuz) vanLuz.setAttribute("transform", posVan);
+      const giro = ((xVan / 12.5) * 180 / Math.PI).toFixed(1);
+      if (rodas[0]) rodas[0].setAttribute("transform", "translate(36 -12) rotate(" + giro + ")");
+      if (rodas[1]) rodas[1].setAttribute("transform", "translate(136 -12) rotate(" + giro + ")");
 
-    function quadro() {
-      const alvo = progressoDaRolagem();
-      let proximo = mostrado + (alvo - mostrado) * 0.12;
-      if (Math.abs(alvo - proximo) < 0.0005) proximo = alvo;
-      if (proximo !== mostrado) {
-        mostrado = proximo;
-        desenhar(mostrado);
+      const ato = p < 0.47 ? 0 : p < 0.82 ? 1 : 2;
+      if (ato !== atoAtual) {
+        atoAtual = ato;
+        atos.forEach((el, i) => {
+          el.classList.toggle("atual", i === ato);
+          el.classList.toggle("saiu", i < ato);
+        });
+        passos.forEach((el, i) => {
+          el.classList.toggle("atual", i === ato);
+          if (i === ato) el.setAttribute("aria-current", "step");
+          else el.removeAttribute("aria-current");
+        });
+        historia.classList.toggle("final", ato === 2);
       }
-      if (naTela || mostrado !== alvo) {
-        window.requestAnimationFrame(quadro);
-      } else {
-        rodando = false;
+
+      const aviso = p >= 0.33 && p < 0.47 ? 0 : p >= 0.5 && p < 0.72 ? 1 : p >= 0.85 ? 2 : -1;
+      if (aviso !== avisoAtual) {
+        avisoAtual = aviso;
+        avisos.forEach((el, i) => el.classList.toggle("atual", i === aviso));
       }
     }
 
-    function ligar() {
-      if (rodando) return;
-      rodando = true;
-      window.requestAnimationFrame(quadro);
-    }
+    medir();
 
-    new IntersectionObserver((entradas) => {
-      naTela = entradas[0].isIntersecting;
-      historia.classList.toggle("parada", !naTela);
-      if (naTela) ligar();
-    }).observe(historia);
-
-    // Linha do tempo: tocar num momento rola suave até ele.
-    passos.forEach((botao) => {
-      botao.addEventListener("click", () => {
+    if (!viva) {
+      // Parado no final feliz: só enquadra (e reenquadra se a tela mudar).
+      desenhar(1);
+      window.addEventListener("resize", () => {
+        medir();
+        desenhar(1);
+      });
+    } else {
+      const progressoDaRolagem = () => {
         const caixa = historia.getBoundingClientRect();
         const total = caixa.height - window.innerHeight;
-        const destino = meioDosAtos[Number(botao.dataset.ir)] || 0;
-        window.scrollTo({ top: window.scrollY + caixa.top + total * destino, behavior: "smooth" });
+        return total > 0 ? Math.min(1, Math.max(0, -caixa.top / total)) : 0;
+      };
+
+      let mostrado = progressoDaRolagem();
+      let rodando = false;
+      let naTela = false;
+      desenhar(mostrado);
+
+      const quadro = () => {
+        const alvo = progressoDaRolagem();
+        let proximo = mostrado + (alvo - mostrado) * 0.1;
+        if (Math.abs(alvo - proximo) < 0.0004) proximo = alvo;
+        if (proximo !== mostrado) {
+          mostrado = proximo;
+          desenhar(mostrado);
+        }
+        if (naTela || mostrado !== alvo) {
+          window.requestAnimationFrame(quadro);
+        } else {
+          rodando = false;
+        }
+      };
+      const ligar = () => {
+        if (rodando) return;
+        rodando = true;
+        window.requestAnimationFrame(quadro);
+      };
+
+      new IntersectionObserver((entradas) => {
+        naTela = entradas[0].isIntersecting;
+        historia.classList.toggle("parada", !naTela);
+        if (naTela) ligar();
+      }).observe(historia);
+
+      window.addEventListener("resize", () => {
+        medir();
+        desenhar(mostrado);
       });
-    });
+
+      // Linha do tempo: tocar num momento rola suave até ele.
+      passos.forEach((botao) => {
+        botao.addEventListener("click", () => {
+          const caixa = historia.getBoundingClientRect();
+          const total = caixa.height - window.innerHeight;
+          const destino = MEIO_DOS_ATOS[Number(botao.dataset.ir)] || 0;
+          window.scrollTo({ top: window.scrollY + caixa.top + total * destino, behavior: "smooth" });
+        });
+      });
+    }
   }
 
   /* ---------- Clarão dos cards seguindo o cursor ---------- */
