@@ -5227,9 +5227,20 @@ pelo servidor: funciona no celular, sem internet, e não depende do PC ligado.
 - **Entrega:** no celular abre o compartilhar (WhatsApp, e-mail, salvar). No computador baixa
   o arquivo. O nome do arquivo segue a regra da skill ("orcamento <cliente>.pdf").
 
+## E-mail do financeiro: o X agora vale (04/11/2026)
+
+**Problema do dono:** tirar no X um e-mail do financeiro e salvar não adiantava, ele voltava. Não
+era falha da tela: a regra de 30/10 somava os e-mails dos contatos a cada salvamento.
+
+**Regra nova:** e-mail de contato entra no financeiro só quando é **novo**: contato novo, contato
+recém-ligado ao cliente ou e-mail acrescentado no contato. O que já estava no contato não volta
+sozinho, e o contato continua com o e-mail dele. Mudou em `App - Atualizar cadastro` ("Monta as
+alteracoes") e `App - Contatos` ("Decide": `vincularCliente` e `salvar`), sem mexer no app.
+Teste: `testar-emails-contato-no-financeiro.js` (19).
 
 ## E-mails do financeiro: botão de copiar (04/11/2026, versão 2026.11.04a)
 
 Cada e-mail do financeiro no cadastro de clientes ganhou um ícone pequeno de copiar, na leitura e
 na edição (também no cliente novo, que usa a mesma lista, `ligarEmailsFinanceiro`). Copiar não
 destrava o cadastro: o toque para editar ignora botões. `copiarTexto` aceita o texto do aviso.
+

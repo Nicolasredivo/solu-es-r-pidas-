@@ -1,6 +1,7 @@
-// Regra de 30/10/2026: os e-mails dos contatos do cliente entram sempre também no campo
-// E-mails (financeiro / NF-e), sem repetir e sem tirar nada. Vale no cliente novo, ao editar o
-// cliente, ao ligar um contato pela tela do cliente e ao editar o contato no Cadastro de contatos.
+// Regra de 30/10/2026, ajustada em 04/11/2026: e-mail NOVO de contato entra também no campo
+// E-mails (financeiro / NF-e), sem repetir. Vale no cliente novo, ao editar o cliente, ao ligar um
+// contato pela tela do cliente e ao editar o contato no Cadastro de contatos. O que já estava no
+// contato não volta sozinho: quem tira um e-mail do financeiro no X decidiu tirar.
 // Só com clientes e contatos de teste (apagados no fim); Asaas simulado nas cópias.
 // Uso: node banco/testes/testar-emails-contato-no-financeiro.js
 const fs = require('fs');
@@ -48,7 +49,7 @@ const emailsDe = async (id) => String((await cliente(id)).Emails_Financeiro_NFE 
     confere('cliente novo: financeiro + e-mails dos contatos, sem repetir', JSON.stringify(await emailsDe(ent.id))
       === JSON.stringify(['fin@exemplo.invalid', 'a@exemplo.invalid', 'b@exemplo.invalid']), await emailsDe(ent.id));
 
-    // ---- editar cliente: tiraram um e-mail do financeiro na tela; o do contato volta; contato com e-mail novo ----
+    // ---- editar cliente: tiraram no X um e-mail que é de contato; ele fica fora; e-mail novo do contato entra ----
     const atualizar = await t.copiaDeTeste('1UbdhChF8Pfse0of', { simulacoes: SIM_CLIENTE });
     copias.push(atualizar);
     const A = contatos.find((c) => c.fields.Nome_Contato === 'TESTE EMAILFIN A').id;
@@ -63,8 +64,34 @@ const emailsDe = async (id) => String((await cliente(id)).Emails_Financeiro_NFE 
     });
     await t.esperar(1500);
     confere('editar: respondeu ok', ac.ok === true, ac);
-    confere('editar: e-mails do contato voltam e o do contato tirado (já na tela) fica', JSON.stringify(await emailsDe(ent.id))
-      === JSON.stringify(['fin@exemplo.invalid', 'b@exemplo.invalid', 'a@exemplo.invalid', 'a2@exemplo.invalid']), await emailsDe(ent.id));
+    confere('editar: o e-mail tirado no X fica fora e o novo do contato entra', JSON.stringify(await emailsDe(ent.id))
+      === JSON.stringify(['fin@exemplo.invalid', 'b@exemplo.invalid', 'a2@exemplo.invalid']), await emailsDe(ent.id));
+    confere('editar: o contato continua com o e-mail dele', String((await local('GET', `/v0/${CAD}/Contatos_Solicitantes/${A}`)).fields.Emails).includes('a@exemplo.invalid'));
+    const ac2 = await chamar(atualizar.caminho, {
+      id: ent.id, documento: '00000000000515', razaoSocial: 'TESTE EMAILFIN condominio', nomeFantasia: '', tipo: 'CNPJ - Condomínio',
+      exigenciaFiscal: '', emails: 'fin@exemplo.invalid\nb@exemplo.invalid\na2@exemplo.invalid', whatsappCnpj: '', administradora: '', empresaSindicos: '', status: 'Ativo', observacoes: '', locais: '[]',
+      contatos: JSON.stringify([
+        { id: A, nome: 'TESTE EMAILFIN A', cargo: '', whatsapps: [], emails: ['a@exemplo.invalid', 'a2@exemplo.invalid'], observacoes: '', status: 'Ativo' },
+      ]),
+      locaisApagar: '', contatosApagar: '',
+    });
+    await t.esperar(1500);
+    confere('salvar o cliente de novo: o e-mail tirado continua fora', ac2.ok === true && JSON.stringify(await emailsDe(ent.id))
+      === JSON.stringify(['fin@exemplo.invalid', 'b@exemplo.invalid', 'a2@exemplo.invalid']), await emailsDe(ent.id));
+    const ac3 = await chamar(atualizar.caminho, {
+      id: ent.id, documento: '00000000000515', razaoSocial: 'TESTE EMAILFIN condominio', nomeFantasia: '', tipo: 'CNPJ - Condomínio',
+      exigenciaFiscal: '', emails: 'fin@exemplo.invalid', whatsappCnpj: '', administradora: '', empresaSindicos: '', status: 'Ativo', observacoes: '', locais: '[]',
+      contatos: JSON.stringify([
+        { id: A, nome: 'TESTE EMAILFIN A', cargo: '', whatsapps: [], emails: ['a@exemplo.invalid', 'a2@exemplo.invalid'], observacoes: '', status: 'Ativo' },
+        { nome: 'TESTE EMAILFIN NOVO', cargo: '', whatsapps: [], emails: ['novo@exemplo.invalid'], observacoes: '', status: 'Ativo' },
+        { id: B, nome: 'TESTE EMAILFIN B', cargo: '', whatsapps: [], emails: ['b@exemplo.invalid'], observacoes: '', status: 'Ativo' },
+      ]),
+      locaisApagar: '', contatosApagar: '',
+    });
+    await t.esperar(1500);
+    (await t.lista(CAD, 'Contatos_Solicitantes')).filter((c) => c.fields.Nome_Contato === 'TESTE EMAILFIN NOVO').forEach((c) => apagar.push(['Contatos_Solicitantes', c.id]));
+    confere('contato novo e contato religado na tela: os e-mails deles entram', ac3.ok === true && JSON.stringify(await emailsDe(ent.id))
+      === JSON.stringify(['fin@exemplo.invalid', 'novo@exemplo.invalid', 'b@exemplo.invalid']), await emailsDe(ent.id));
     confere('editar: os outros campos do cliente continuam', (await cliente(ent.id)).Razao_Social_Nome === 'TESTE EMAILFIN condominio');
 
     // ---- App - Contatos: ligar um contato salvo pela tela do cliente ----
@@ -75,19 +102,27 @@ const emailsDe = async (id) => String((await cliente(id)).Emails_Financeiro_NFE 
     const cLigado = (await local('GET', `/v0/${CAD}/Contatos_Solicitantes/${C}`)).fields || {};
     confere('ligar contato: respondeu o contato', vc.ok === true && vc.contato && vc.contato.id === C, vc);
     confere('ligar contato: ficou ligado', JSON.stringify(cLigado.Entidades_Vinculadas) === JSON.stringify([ent.id]), cLigado);
-    confere('ligar contato: e-mail dele entrou no financeiro, sem repetir', JSON.stringify(await emailsDe(ent.id))
-      === JSON.stringify(['fin@exemplo.invalid', 'b@exemplo.invalid', 'a@exemplo.invalid', 'a2@exemplo.invalid', 'c@exemplo.invalid']), await emailsDe(ent.id));
+    confere('ligar contato: os e-mails dele entraram no financeiro', JSON.stringify(await emailsDe(ent.id))
+      === JSON.stringify(['fin@exemplo.invalid', 'novo@exemplo.invalid', 'b@exemplo.invalid', 'c@exemplo.invalid', 'A@exemplo.invalid']), await emailsDe(ent.id));
+    await local('PATCH', `/v0/${CAD}/Entidades_Cadastradas/${ent.id}`, { fields: { Emails_Financeiro_NFE: 'fin@exemplo.invalid' } });
+    await chamar('contatos', { acao: 'vincularCliente', id: C, clienteId: ent.id });
+    await t.esperar(1000);
+    confere('ligar de novo quem já é do cliente: não traz de volta o que foi tirado', JSON.stringify(await emailsDe(ent.id)) === JSON.stringify(['fin@exemplo.invalid']), await emailsDe(ent.id));
 
     // ---- App - Contatos: editar o contato no Cadastro de contatos com e-mail novo ----
     const ec = await chamar('contatos', { acao: 'salvar', id: C, nome: 'TESTE EMAILFIN C', funcao: '', empresas: '[]', telefones: '[]', emails: JSON.stringify(['c3@exemplo.invalid']), observacoes: '' });
     await t.esperar(1000);
     confere('editar contato: respondeu o contato', ec.ok === true && ec.contato && ec.contato.emails.join() === 'c3@exemplo.invalid', ec);
     confere('editar contato: e-mail novo entrou no financeiro e nada saiu', JSON.stringify(await emailsDe(ent.id))
-      === JSON.stringify(['fin@exemplo.invalid', 'b@exemplo.invalid', 'a@exemplo.invalid', 'a2@exemplo.invalid', 'c@exemplo.invalid', 'c3@exemplo.invalid']), await emailsDe(ent.id));
+      === JSON.stringify(['fin@exemplo.invalid', 'c3@exemplo.invalid']), await emailsDe(ent.id));
+    await local('PATCH', `/v0/${CAD}/Entidades_Cadastradas/${ent.id}`, { fields: { Emails_Financeiro_NFE: 'fin@exemplo.invalid' } });
+    await chamar('contatos', { acao: 'salvar', id: C, nome: 'TESTE EMAILFIN C', funcao: '', empresas: '[]', telefones: '[]', emails: JSON.stringify(['c3@exemplo.invalid', 'C4@exemplo.invalid']), observacoes: '' });
+    await t.esperar(1000);
+    confere('editar contato: só o e-mail novo entra; o tirado do financeiro fica fora', JSON.stringify(await emailsDe(ent.id)) === JSON.stringify(['fin@exemplo.invalid', 'C4@exemplo.invalid']), await emailsDe(ent.id));
 
     // ---- salvar o contato de novo, sem mudança: não grava nada no cliente ----
     const antesDeRepetir = JSON.stringify(await cliente(ent.id));
-    const rc = await chamar('contatos', { acao: 'salvar', id: C, nome: 'TESTE EMAILFIN C', funcao: '', empresas: '[]', telefones: '[]', emails: JSON.stringify(['c3@exemplo.invalid']), observacoes: '' });
+    const rc = await chamar('contatos', { acao: 'salvar', id: C, nome: 'TESTE EMAILFIN C', funcao: '', empresas: '[]', telefones: '[]', emails: JSON.stringify(['c3@exemplo.invalid', 'C4@exemplo.invalid']), observacoes: '' });
     await t.esperar(1000);
     confere('salvar sem mudança: ok e cliente igual', rc.ok === true && JSON.stringify(await cliente(ent.id)) === antesDeRepetir);
   } finally {
