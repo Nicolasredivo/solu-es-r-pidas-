@@ -448,6 +448,182 @@
     </div>
   </section>
 
+  <!-- ===================== História: do susto ao resolvido =====================
+       Uma cena só, contada em 3 atos pela rolagem (a câmera entra na janela
+       com vazamento, o técnico conserta, o prédio amanhece resolvido).
+       Sem JS ou com "menos movimento" no aparelho, vira uma seção comum: a
+       cena no estado final e os 3 atos em lista. O landing.js liga o modo
+       "viva" (palco fixo enquanto a seção passa). -->
+  <section class="historia" id="historia" aria-labelledby="historia-titulo">
+    <div class="historia-palco">
+      <div class="faixa historia-grade">
+
+        <div class="historia-texto">
+          <p class="rotulo"><span>Na prática</span></p>
+          <h2 class="historia-titulo" id="historia-titulo">Do susto ao <em>resolvido</em>.</h2>
+
+          <ol class="historia-atos">
+            <li class="ato atual">
+              <p class="ato-passo">O aviso</p>
+              <h3>Um pingo hoje vira infiltração amanhã.</h3>
+              <p>Você chama no WhatsApp ou abre o chamado no site. Daí pra frente, é com a gente.</p>
+            </li>
+            <li class="ato">
+              <p class="ato-passo">A visita</p>
+              <h3>Hora marcada, material certo.</h3>
+              <p>Sem improviso: o técnico chega no combinado e entrega o local limpo.</p>
+            </li>
+            <li class="ato">
+              <p class="ato-passo">O resolvido</p>
+              <h3>Resolvido. E lembrado.</h3>
+              <p>Relatório e nota fiscal ficam no histórico do prédio, e a IA avisa antes do próximo.</p>
+            </li>
+          </ol>
+
+          <div class="historia-rodape">
+            <div class="historia-passos" role="group" aria-label="Ir para um momento da história">
+              <span class="historia-trilho" aria-hidden="true"><span class="historia-trilho-cheio"></span></span>
+              <button type="button" class="historia-passo atual" data-ir="0">Aviso</button>
+              <button type="button" class="historia-passo" data-ir="1">Visita</button>
+              <button type="button" class="historia-passo" data-ir="2">Resolvido</button>
+            </div>
+            <a class="botao botao-cheio historia-cta" href="https://wa.me/554792081047" target="_blank" rel="noopener">
+              Abrir um chamado <span aria-hidden="true">→</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="historia-cena" aria-hidden="true">
+          <svg viewBox="0 0 400 400" class="historia-svg" id="historia-svg">
+            <defs>
+              <linearGradient id="hist-noite" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#081631" />
+                <stop offset="100%" stop-color="#1c4e85" />
+              </linearGradient>
+              <linearGradient id="hist-dia" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#9fd0f2" />
+                <stop offset="100%" stop-color="#eef6fc" />
+              </linearGradient>
+              <linearGradient id="hist-fachada" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#1c4e85" />
+                <stop offset="100%" stop-color="#0b1e3d" />
+              </linearGradient>
+              <radialGradient id="hist-alerta">
+                <stop offset="0%" stop-color="#ff7a59" stop-opacity=".9" />
+                <stop offset="100%" stop-color="#ff7a59" stop-opacity="0" />
+              </radialGradient>
+            </defs>
+
+            <!-- A câmera: o landing.js aproxima e afasta este grupo -->
+            <g id="hist-camera">
+              <rect width="400" height="400" fill="url(#hist-noite)" />
+              <rect class="h-dia" width="400" height="400" fill="url(#hist-dia)" />
+
+              <g class="h-noite" fill="#ffffff">
+                <circle cx="44" cy="52" r="1.3" /><circle cx="92" cy="30" r="1" /><circle cx="150" cy="64" r="1.2" />
+                <circle cx="318" cy="40" r="1.3" /><circle cx="356" cy="86" r="1" /><circle cx="262" cy="22" r="1" />
+                <circle cx="36" cy="128" r="1" /><circle cx="372" cy="150" r="1.2" />
+              </g>
+              <circle class="h-lua" cx="330" cy="70" r="16" fill="#f4f7fa" />
+              <g class="h-sol">
+                <circle cx="330" cy="78" r="30" fill="#ffe29a" opacity=".35" />
+                <circle cx="330" cy="78" r="19" fill="#ffd46b" />
+              </g>
+              <g class="h-nuvem" fill="#ffffff">
+                <ellipse cx="74" cy="92" rx="34" ry="11" /><ellipse cx="92" cy="84" rx="20" ry="12" />
+              </g>
+
+              <rect class="h-chao-noite" y="360" width="400" height="40" fill="#0a1a33" />
+              <rect class="h-dia" y="360" width="400" height="40" fill="#dfe7ee" />
+
+              <!-- Prédio -->
+              <rect x="104" y="92" width="192" height="12" rx="2" fill="#0b1e3d" />
+              <rect x="110" y="100" width="180" height="260" fill="url(#hist-fachada)" />
+              <rect x="186" y="318" width="28" height="42" rx="3" fill="#081631" />
+              <rect class="h-dia" x="186" y="318" width="28" height="42" rx="3" fill="#3e8fd1" />
+
+              <!-- Janelas: noite (algumas acesas) e dia (vidro claro por cima) -->
+              <g class="h-janelas">
+                <rect x="128" y="124" width="26" height="30" rx="2" fill="#0f2a52" />
+                <rect x="170" y="124" width="26" height="30" rx="2" fill="#ffe29a" opacity=".85" />
+                <rect x="212" y="124" width="26" height="30" rx="2" fill="#0f2a52" />
+                <rect x="254" y="124" width="26" height="30" rx="2" fill="#0f2a52" />
+                <rect x="128" y="172" width="26" height="30" rx="2" fill="#0f2a52" />
+                <rect x="170" y="172" width="26" height="30" rx="2" fill="#0f2a52" />
+                <rect x="254" y="172" width="26" height="30" rx="2" fill="#ffe29a" opacity=".85" />
+                <rect x="128" y="220" width="26" height="30" rx="2" fill="#ffe29a" opacity=".85" />
+                <rect x="170" y="220" width="26" height="30" rx="2" fill="#0f2a52" />
+                <rect x="212" y="220" width="26" height="30" rx="2" fill="#0f2a52" />
+                <rect x="254" y="220" width="26" height="30" rx="2" fill="#0f2a52" />
+                <rect x="128" y="268" width="26" height="30" rx="2" fill="#0f2a52" />
+                <rect x="170" y="268" width="26" height="30" rx="2" fill="#0f2a52" />
+                <rect x="212" y="268" width="26" height="30" rx="2" fill="#ffe29a" opacity=".85" />
+                <rect x="254" y="268" width="26" height="30" rx="2" fill="#0f2a52" />
+              </g>
+              <g class="h-dia" fill="#dcebf7">
+                <rect x="128" y="124" width="26" height="30" rx="2" /><rect x="170" y="124" width="26" height="30" rx="2" />
+                <rect x="212" y="124" width="26" height="30" rx="2" /><rect x="254" y="124" width="26" height="30" rx="2" />
+                <rect x="128" y="172" width="26" height="30" rx="2" /><rect x="170" y="172" width="26" height="30" rx="2" />
+                <rect x="254" y="172" width="26" height="30" rx="2" />
+                <rect x="128" y="220" width="26" height="30" rx="2" /><rect x="170" y="220" width="26" height="30" rx="2" />
+                <rect x="212" y="220" width="26" height="30" rx="2" /><rect x="254" y="220" width="26" height="30" rx="2" />
+                <rect x="128" y="268" width="26" height="30" rx="2" /><rect x="170" y="268" width="26" height="30" rx="2" />
+                <rect x="212" y="268" width="26" height="30" rx="2" /><rect x="254" y="268" width="26" height="30" rx="2" />
+              </g>
+              <g class="h-dia" fill="#ffffff" opacity=".55">
+                <path d="M131 150 l10 -24 h5 l-10 24 z M173 150 l10 -24 h5 l-10 24 z M257 150 l10 -24 h5 l-10 24 z" />
+                <path d="M131 246 l10 -24 h5 l-10 24 z M215 246 l10 -24 h5 l-10 24 z M173 294 l10 -24 h5 l-10 24 z" />
+              </g>
+
+              <!-- A janela do problema (3º andar): o vazamento, o conserto, o ok -->
+              <g class="h-problema">
+                <rect x="212" y="172" width="26" height="30" rx="2" fill="#0f2a52" />
+                <rect class="h-dia" x="212" y="172" width="26" height="30" rx="2" fill="#dcebf7" />
+                <circle class="h-alerta" cx="225" cy="187" r="20" fill="url(#hist-alerta)" />
+                <!-- cano -->
+                <path class="h-cano" d="M212 178 H226 V193" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                <path class="h-fluxo" d="M212 178 H226 V193" fill="none" stroke-width="0.8" stroke-linecap="round" />
+                <circle cx="226" cy="178" r="1.4" fill="#b9c2c9" />
+                <!-- vazamento -->
+                <g class="h-vazamento" fill="#7cc8ff">
+                  <circle class="h-gota" cx="226" cy="195" r="0.9" />
+                  <circle class="h-gota h-gota-2" cx="226" cy="195" r="0.75" />
+                  <ellipse cx="226" cy="200.6" rx="4" ry="0.8" opacity=".75" />
+                </g>
+                <!-- chave de cano -->
+                <g class="h-chave">
+                  <path transform="translate(218.5 179) scale(0.5)" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                </g>
+                <!-- resolvido -->
+                <g class="h-ok">
+                  <circle cx="225" cy="187" r="7" fill="#1fa855" />
+                  <path d="M221.8 187.2 l2.2 2.2 l4.2 -4.4" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                </g>
+              </g>
+            </g>
+          </svg>
+
+          <!-- Notificações, uma por ato, como no celular do cliente -->
+          <div class="historia-avisos">
+            <p class="aviso atual">
+              <span class="aviso-icone aviso-alerta"><svg viewBox="0 0 24 24"><path d="M12 3c3.3 3.8 6 7.4 6 10.6A6 6 0 0 1 6 13.6C6 10.4 8.7 6.8 12 3Z" /></svg></span>
+              <span><strong>Chamado aberto</strong> Vazamento no 3º andar</span>
+            </p>
+            <p class="aviso">
+              <span class="aviso-icone aviso-agenda"><svg viewBox="0 0 24 24"><path d="M7 3v3m10-3v3M4 9h16M5 6h14v14H5zM9 14l2 2 4-4" /></svg></span>
+              <span><strong>Visita agendada</strong> Técnico a caminho</span>
+            </p>
+            <p class="aviso">
+              <span class="aviso-icone aviso-ok"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+              <span><strong>Resolvido</strong> Relatório salvo no histórico</span>
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
   <!-- ===================== Números ===================== -->
   <section class="secao secao-numeros" id="numeros">
     <div class="faixa">

@@ -364,6 +364,117 @@
     });
   }
 
+  /* ---------- História: do susto ao resolvido (rolagem) ---------- */
+  // O palco fica parado enquanto a seção passa e a posição da rolagem vira
+  // um número de 0 a 1 (p). Tudo na cena é calculado a partir de p, sempre
+  // com uma suavização (o número "persegue" a rolagem) pra nada andar aos
+  // trancos. Só roda enquanto a seção está na tela. Tela muito baixa
+  // (celular deitado) fica com a versão parada: o palco não caberia.
+
+  const historia = document.getElementById("historia");
+  const svgHistoria = document.getElementById("historia-svg");
+  const cameraHistoria = document.getElementById("hist-camera");
+
+  if (historia && svgHistoria && cameraHistoria && !menosMovimento && window.innerHeight >= 560) {
+    historia.classList.add("viva");
+
+    const atos = Array.from(historia.querySelectorAll(".ato"));
+    const avisos = Array.from(historia.querySelectorAll(".aviso"));
+    const passos = Array.from(historia.querySelectorAll(".historia-passo"));
+    // Onde cada botão da linha do tempo leva (meio de cada ato).
+    const meioDosAtos = [0.16, 0.52, 0.95];
+
+    const suave = (de, ate, x) => {
+      const t = Math.min(1, Math.max(0, (x - de) / (ate - de)));
+      return t * t * (3 - 2 * t);
+    };
+
+    function progressoDaRolagem() {
+      const caixa = historia.getBoundingClientRect();
+      const total = caixa.height - window.innerHeight;
+      return total > 0 ? Math.min(1, Math.max(0, -caixa.top / total)) : 0;
+    }
+
+    let atoAtual = -1;
+
+    function desenhar(p) {
+      // Câmera: entra na janela do 3º andar e depois volta pro prédio todo.
+      const zoom = suave(0.04, 0.3, p) * (1 - suave(0.6, 0.84, p));
+      const escala = 1 + 4 * zoom;
+      const fx = 200 + 25 * zoom;   // centro da janela: (225, 187)
+      const fy = 200 - 13 * zoom;
+      cameraHistoria.setAttribute(
+        "transform",
+        "translate(200 200) scale(" + escala.toFixed(4) + ") translate(" + (-fx).toFixed(3) + " " + (-fy).toFixed(3) + ")"
+      );
+
+      const estilo = svgHistoria.style;
+      estilo.setProperty("--dia", suave(0.62, 0.9, p).toFixed(3));
+      estilo.setProperty("--vaz", (1 - suave(0.4, 0.54, p)).toFixed(3));
+      estilo.setProperty("--chave", (suave(0.34, 0.42, p) * (1 - suave(0.58, 0.66, p))).toFixed(3));
+      estilo.setProperty("--conserto", suave(0.46, 0.58, p).toFixed(3));
+      estilo.setProperty("--ok", suave(0.8, 0.92, p).toFixed(3));
+      historia.style.setProperty("--p", p.toFixed(4));
+
+      const ato = p < 0.36 ? 0 : p < 0.7 ? 1 : 2;
+      if (ato === atoAtual) return;
+      atoAtual = ato;
+      atos.forEach((el, i) => {
+        el.classList.toggle("atual", i === ato);
+        el.classList.toggle("saiu", i < ato);
+      });
+      avisos.forEach((el, i) => el.classList.toggle("atual", i === ato));
+      passos.forEach((el, i) => {
+        el.classList.toggle("atual", i === ato);
+        if (i === ato) el.setAttribute("aria-current", "step");
+        else el.removeAttribute("aria-current");
+      });
+      historia.classList.toggle("final", ato === 2);
+    }
+
+    let mostrado = progressoDaRolagem();
+    let rodando = false;
+    let naTela = false;
+    desenhar(mostrado);
+
+    function quadro() {
+      const alvo = progressoDaRolagem();
+      let proximo = mostrado + (alvo - mostrado) * 0.12;
+      if (Math.abs(alvo - proximo) < 0.0005) proximo = alvo;
+      if (proximo !== mostrado) {
+        mostrado = proximo;
+        desenhar(mostrado);
+      }
+      if (naTela || mostrado !== alvo) {
+        window.requestAnimationFrame(quadro);
+      } else {
+        rodando = false;
+      }
+    }
+
+    function ligar() {
+      if (rodando) return;
+      rodando = true;
+      window.requestAnimationFrame(quadro);
+    }
+
+    new IntersectionObserver((entradas) => {
+      naTela = entradas[0].isIntersecting;
+      historia.classList.toggle("parada", !naTela);
+      if (naTela) ligar();
+    }).observe(historia);
+
+    // Linha do tempo: tocar num momento rola suave até ele.
+    passos.forEach((botao) => {
+      botao.addEventListener("click", () => {
+        const caixa = historia.getBoundingClientRect();
+        const total = caixa.height - window.innerHeight;
+        const destino = meioDosAtos[Number(botao.dataset.ir)] || 0;
+        window.scrollTo({ top: window.scrollY + caixa.top + total * destino, behavior: "smooth" });
+      });
+    });
+  }
+
   /* ---------- Clarão dos cards seguindo o cursor ---------- */
 
   if (pontoFino) {
