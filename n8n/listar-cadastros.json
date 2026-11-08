@@ -108,14 +108,14 @@
     },
     {
       "parameters": {
-        "jsCode": "// Uma linha por cadastro, so com o que a lista mostra (e com o que os\n// filtros/sugestoes da tela de Cadastro precisam -- ver CONTEXTO.md\n// 'Filtros e sugestoes em Cadastro', 14/09/2026).\nconst achados = $input.all().filter((i) => i.json && i.json.id && !i.json.error);\n\nconst cadastros = achados.map((i) => {\n  const f = i.json.fields || {};\n  // Contatos_Nomes e um campo de busca do Airtable: vem como lista.\n  const contatos = Array.isArray(f.Contatos_Nomes) ? f.Contatos_Nomes.filter(Boolean) : [];\n  return {\n    id: i.json.id,\n    documento: f.CPF_CNPJ || '',\n    razaoSocial: f.Razao_Social_Nome || '',\n    nomeFantasia: f.Nome_Fantasia_Identificador || '',\n    contato: contatos.join(', '),\n    tipo: f.Tipo_Documento || '',\n    status: f.Status || '',\n    administradora: f.Administradora || '',\n    empresaSindicos: f.Empresa_Sindicos || '',\n    emails: f.Emails_Financeiro_NFE || '',\n    // Qual dos dois CNPJs atende (filtro da lista, 08/11/2026).\n    atendidoPor: f.Atendido_Por === 'CNPJ 2' ? 'CNPJ 2' : 'CNPJ 1',\n  };\n});\n\ncadastros.sort((a, b) => (a.razaoSocial || '~').localeCompare(b.razaoSocial || '~', 'pt-BR'));\n\nreturn [{ json: { ok: true, total: cadastros.length, cadastros } }];"
+        "jsCode": "// Uma linha por cadastro, so com o que a lista mostra (e com o que os\n// filtros/sugestoes da tela de Cadastro precisam -- ver CONTEXTO.md\n// 'Filtros e sugestoes em Cadastro', 14/09/2026).\nconst achados = $('Busca cadastros').all().filter((i) => i.json && i.json.id && !i.json.error);\n\nconst cadastros = achados.map((i) => {\n  const f = i.json.fields || {};\n  // Contatos_Nomes e um campo de busca do Airtable: vem como lista.\n  const contatos = Array.isArray(f.Contatos_Nomes) ? f.Contatos_Nomes.filter(Boolean) : [];\n  return {\n    id: i.json.id,\n    documento: f.CPF_CNPJ || '',\n    razaoSocial: f.Razao_Social_Nome || '',\n    nomeFantasia: f.Nome_Fantasia_Identificador || '',\n    contato: contatos.join(', '),\n    tipo: f.Tipo_Documento || '',\n    status: f.Status || '',\n    administradora: f.Administradora || '',\n    empresaSindicos: f.Empresa_Sindicos || '',\n    emails: f.Emails_Financeiro_NFE || '',\n    // Qual dos dois CNPJs atende (filtro da lista, 08/11/2026).\n    atendidoPor: f.Atendido_Por === 'CNPJ 2' ? 'CNPJ 2' : 'CNPJ 1',\n  };\n});\n\ncadastros.sort((a, b) => (a.razaoSocial || '~').localeCompare(b.razaoSocial || '~', 'pt-BR'));\n\n// Os dois CNPJs (08/11/2026): dados que vão nos documentos em PDF (cabeçalho e pagamento do recibo).\nconst empresas = $input.all().map((i) => (i.json && i.json.fields) || null).filter((e) => e && e.Codigo)\n  .map((e) => ({ codigo: e.Codigo, cnpj: String(e.CNPJ || '').replace(/D/g, ''), titular: e.Titular || '', banco: e.Banco || '',\n    agencia: e.Agencia || '', conta: e.Conta || '', pix: e.Chave_PIX || '' }));\n\nreturn [{ json: { ok: true, total: cadastros.length, cadastros, empresas } }];"
       },
       "id": "e0000000-0000-4000-8000-000000000007",
       "name": "Monta lista",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1100,
+        1320,
         -60
       ]
     },
@@ -130,7 +130,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1320,
+        1540,
         -60
       ]
     },
@@ -173,6 +173,43 @@
         660,
         -60
       ]
+    },
+    {
+      "id": "9f52b10f-e984-4220-b8ff-9d087ef16e1e",
+      "name": "Busca empresas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblEmpresasEmiss1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_itens",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      }
     }
   ],
   "connections": {
@@ -209,7 +246,7 @@
       "main": [
         [
           {
-            "node": "Monta lista",
+            "node": "Busca empresas",
             "type": "main",
             "index": 0
           }
@@ -243,6 +280,17 @@
         [
           {
             "node": "Busca cadastros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca empresas": {
+      "main": [
+        [
+          {
+            "node": "Monta lista",
             "type": "main",
             "index": 0
           }

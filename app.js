@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.08m";
+const APP_VERSION = "2026.11.08n";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -1325,6 +1325,8 @@ const limparFiltrosCadastroBotao = document.getElementById("limpar-filtros-cadas
 
 let cadastros = [];
 let listaCarregada = false;
+// Os dois CNPJs (código, CNPJ, titular, banco, agência, conta, PIX): vêm junto com a lista de clientes.
+let empresasEmissoras = [];
 
 function mostrarListaStatus(tipo, mensagem) {
   listaStatus.textContent = mensagem;
@@ -1362,6 +1364,7 @@ async function garantirCadastrosCarregados() {
     const dados = await pedirAoN8n("listar-cadastros", {});
     if (dados && dados.ok) {
       cadastros = dados.cadastros || [];
+      if (Array.isArray(dados.empresas)) empresasEmissoras = dados.empresas;
       listaCarregada = true;
       atualizaFiltrosCadastro();
     }
@@ -1384,6 +1387,7 @@ async function carregarLista() {
     }
 
     cadastros = dados.cadastros || [];
+    if (Array.isArray(dados.empresas)) empresasEmissoras = dados.empresas;
     listaCarregada = true;
     atualizaFiltrosCadastro();
     desenharLista();
@@ -11374,6 +11378,8 @@ async function puxarClienteNoDocumento(id) {
   const nome = nomeComIniciais(cliente.nomeFantasia || cliente.razaoSocial);
   docCampos.cliente.value = nome;
   docCampos.edificio.value = nomeDoEdificio(nome);
+  // O documento sai pelo CNPJ que atende o cliente (dá para trocar à mão depois).
+  escolherEmissorDoDocumento(cliente.atendidoPor);
   docClienteBusca.value = "";
   docClienteStatus.textContent = `Buscando endereço e contatos de ${nome}...`;
   try {
@@ -11427,6 +11433,45 @@ docCampos.endereco.addEventListener("input", () => ajustarAlturaAuto(docCampos.e
 ligarMascaraDinheiro(docCampos.valor);
 
 // ---- gerar ----
+
+// ---- quem emite (CNPJ 1 ou CNPJ 2) ----
+
+const docEmissor = document.getElementById("doc-emissor");
+configurarGrupo(docEmissor);
+
+function escolherEmissorDoDocumento(codigo) {
+  const valor = codigo === "CNPJ 2" ? "CNPJ 2" : "CNPJ 1";
+  docEmissor.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === valor));
+}
+
+// Dados do CNPJ escolhido no formato do PDF. CNPJ 1 = null (o gerador já sabe os dados de sempre).
+// O CNPJ 2 vem do banco (lista de clientes); sem conseguir buscar, dá erro em vez de sair com dado errado.
+async function emissorDoDocumento() {
+  const codigo = escolhaDoGrupo(docEmissor) || "CNPJ 1";
+  if (codigo === "CNPJ 1") return null;
+  if (!empresasEmissoras.some((e) => e.codigo === codigo)) {
+    const dados = await pedirAoN8n("listar-cadastros", {});
+    if (dados && dados.ok && Array.isArray(dados.empresas)) empresasEmissoras = dados.empresas;
+  }
+  const e = empresasEmissoras.find((x) => x.codigo === codigo);
+  const cnpj = String((e && e.cnpj) || "").replace(/\D/g, "");
+  if (cnpj.length !== 14) throw new Error("sem dados do " + codigo);
+  const banco = String(e.banco || "").trim();
+  const mBanco = /^(\d{3})\s*-\s*(.+)$/.exec(banco);
+  const pix = String(e.pix || "").trim();
+  const pixDigitos = pix.replace(/\D/g, "");
+  let pixRotulo = "Chave Pix: ", pixTexto = pix;
+  if (pixDigitos.length === 14 && pixDigitos === pix.replace(/[.\-/\s]/g, "")) { pixRotulo = "Chave Pix (CNPJ): "; pixTexto = formatarCNPJ(pixDigitos); }
+  return {
+    cnpj: formatarCNPJ(cnpj),
+    titular: nomeComIniciais(e.titular || ""),
+    banco: mBanco ? `${mBanco[2]} (${mBanco[1]})` : banco,
+    agencia: e.agencia || "",
+    conta: e.conta || "",
+    pix: pixTexto,
+    pixRotulo,
+  };
+}
 
 function dadosDoDocumento() {
   const [ano, mes, dia] = docCampos.data.value.split("-");
@@ -11544,6 +11589,12 @@ formDocumento.addEventListener("submit", async (evento) => {
 
   docGerar.disabled = true;
   try {
+    try {
+      dados.emissor = await emissorDoDocumento();
+    } catch (err) {
+      mostrarDocStatus("error", "Não consegui buscar os dados do CNPJ 2 (servidor fora?). Tente de novo daqui a pouco.");
+      return;
+    }
     const logos = await carregarGeradorPdf();
     const { doc, nomeArquivo } = DocumentosPdf.gerar(tipo, dados, logos);
     const resultado = await entregarPdf(doc.output("blob"), nomeArquivo);
@@ -11563,6 +11614,7 @@ function limparDocumento() {
   docCampos.data.value = hojeParaCampoData();
   docEnderecosCliente = [];
   docContatosCliente = [];
+  escolherEmissorDoDocumento("CNPJ 1");
   docClienteStatus.textContent = "Preenche cliente, endereço e solicitante. Dá para mudar tudo depois.";
   docItens.innerHTML = "";
   adicionarItemDocumento(false);

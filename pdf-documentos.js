@@ -28,6 +28,22 @@
 
   const RESPONSAVEL_PADRAO = "Cirlei Luis Zomer"; // Luis com S
 
+  // Quem emite o documento (dois CNPJs desde 08/11/2026). Sem "emissor" nos dados, sai o CNPJ 1, o
+  // de sempre. Os dados do CNPJ 2 vêm do banco do sistema (Empresas_Emissoras), não deste arquivo.
+  // O nome, o endereço, os telefones, os e-mails e o responsável são os mesmos nos dois.
+  const EMISSOR_PADRAO = {
+    cnpj: "11.338.567/0001-99", titular: "Cirlei Luis Zomer", banco: "Inter (077)",
+    agencia: "0001", conta: "43090549-1", pix: "11.338.567/0001-99", pixRotulo: "Chave Pix (CNPJ): ",
+  };
+  function emissorDe(dados) {
+    const e = dados && dados.emissor;
+    if (!e || !e.cnpj) return EMISSOR_PADRAO;
+    return {
+      cnpj: e.cnpj, titular: e.titular || "", banco: e.banco || "", agencia: e.agencia || "", conta: e.conta || "",
+      pix: e.pix || "", pixRotulo: e.pixRotulo || "Chave Pix: ",
+    };
+  }
+
   const DIAS_SEMANA = ["domingo", "segunda-feira", "terça-feira", "quarta-feira",
     "quinta-feira", "sexta-feira", "sábado"];
 
@@ -143,7 +159,7 @@
       ["SOLUÇÕES RÁPIDAS", "Helvetica-Bold", 11.5, NAVY, 0.54 * CM],
       ["Rua Canelinha, 68 – Bairro São Marcos", "Helvetica-Bold", 8, GRAY, 0.38 * CM],
       ["CEP: 89.214-155 – Joinville/SC", "Helvetica-Bold", 8, GRAY, 0.38 * CM],
-      ["CNPJ: 11.338.567/0001-99", "Helvetica-Bold", 8, GRAY, 0.42 * CM],
+      ["CNPJ: " + p.emissor.cnpj, "Helvetica-Bold", 8, GRAY, 0.42 * CM],
       ["E-mail: solucoes-rapidas@hotmail.com", "Helvetica-Bold", 8, GRAY, 0.36 * CM],
       ["           adm.solucoes.rapidas@gmail.com", "Helvetica-Bold", 8, GRAY, 0.42 * CM],
       ["Fone: (47) 99667-0900", "Helvetica-Bold", 8, GRAY, 0.36 * CM],
@@ -345,13 +361,15 @@
     p.corTexto(NAVY);
     p.texto("DADOS PARA PAGAMENTO", LEFT_M, ny);
     ny -= 0.65 * CM;
+    const e = p.emissor;
+    // Linha sem valor não sai (ex.: PIX do CNPJ 2 ainda não cadastrado).
     for (const [rotulo, valorFixo] of [
-      ["Chave Pix (CNPJ): ", "11.338.567/0001-99"],
-      ["Banco: ", "Inter (077)"],
-      ["Titular: ", "Cirlei Luis Zomer — CNPJ: 11.338.567/0001-99"],
-      ["Agência: ", "0001"],
-      ["Conta: ", "43090549-1"],
-    ]) {
+      [e.pixRotulo, e.pix],
+      ["Banco: ", e.banco],
+      ["Titular: ", e.titular + " — CNPJ: " + e.cnpj],
+      ["Agência: ", e.agencia],
+      ["Conta: ", e.conta],
+    ].filter(([, valor]) => valor)) {
       p.fonte("Helvetica-Bold", 10.5);
       p.corTexto(BLACK);
       p.texto(rotulo, LEFT_M, ny);
@@ -464,7 +482,7 @@
     p.textoCentro("Soluções Rápidas", W / 2, sigY - 0.5 * CM);
     p.fonte("Helvetica", 9.5);
     p.corTexto(GRAY);
-    p.textoCentro("CNPJ: 11.338.567/0001-99", W / 2, sigY - 0.92 * CM);
+    p.textoCentro("CNPJ: " + p.emissor.cnpj, W / 2, sigY - 0.92 * CM);
     return nomeArquivo("orcamento", a.cliente || a.solicitante);
   }
 
@@ -472,11 +490,12 @@
 
   function gerar(tipo, dados, logos) {
     const p = criarPagina(logos);
+    p.emissor = emissorDe(dados);
     const nome = GERADORES[tipo](p, dados);
     return { doc: p.doc, nomeArquivo: nome };
   }
 
-  const api = { gerar, comDiaSemana, paraNumero, reais, RESPONSAVEL_PADRAO };
+  const api = { gerar, comDiaSemana, paraNumero, reais, RESPONSAVEL_PADRAO, EMISSOR_PADRAO };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else window.DocumentosPdf = api;
 })();

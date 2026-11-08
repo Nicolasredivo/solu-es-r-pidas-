@@ -1947,6 +1947,16 @@
           <div id="doc-cliente-sugestao" class="sugestao-lista hidden"></div>
           <p id="doc-cliente-status" class="placeholder-text ct-ajuda">Preenche cliente, endereço e solicitante. Dá para mudar tudo depois.</p>
 
+          <!-- Qual dos dois CNPJs emite: muda o CNPJ do cabeçalho/assinatura e os dados de pagamento
+               do recibo. Puxar um cliente escolhe o CNPJ dele (08/11/2026). -->
+          <div class="grupo">
+            <label>Emitido pelo</label>
+            <div class="opcoes" id="doc-emissor">
+              <button type="button" class="opcao active" data-valor="CNPJ 1">CNPJ 1</button>
+              <button type="button" class="opcao" data-valor="CNPJ 2">CNPJ 2</button>
+            </div>
+          </div>
+
           <div data-tipos="recibo">
             <label for="doc-referente">Referente a</label>
             <input type="text" id="doc-referente" placeholder="Ex: Limpeza de caixa d'água" />

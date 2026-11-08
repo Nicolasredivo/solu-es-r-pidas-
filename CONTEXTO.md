@@ -5381,3 +5381,21 @@ e-mails do financeiro e notificações desligadas.
   CNPJ 1 / CNPJ 2 ao lado de "Documento". "App - Listar cadastros" devolve `atendidoPor` (vazio
   vale CNPJ 1). Ao salvar, o resumo da linha recebe o novo `atendidoPor`, e o filtro vale sem
   recarregar.
+
+## Dois CNPJs, fase 2: documentos em PDF pelo CNPJ do cliente (08/11/2026)
+
+- **`pdf-documentos.js`:** os dados da empresa viraram parâmetro (`dados.emissor`: cnpj, titular,
+  banco, agencia, conta, pix, pixRotulo). Sem emissor, sai o CNPJ 1 (`EMISSOR_PADRAO`, igual a
+  antes). O CNPJ aparece no cabeçalho de todos os PDFs e na assinatura do orçamento, e o recibo
+  traz os "Dados para pagamento". Linha de pagamento sem valor não sai, como o PIX do CNPJ 2
+  enquanto não estiver cadastrado.
+- **Decisões do dono:** nos dois CNPJs ficam iguais o nome, o logo, o endereço, os telefones, os
+  e-mails e o responsável (Cirlei).
+- **"App - Listar cadastros"** ganhou o nó "Busca empresas" e devolve `empresas` (codigo, cnpj,
+  titular, banco, agencia, conta, pix). O app guarda isso em `empresasEmissoras`.
+- **Aba Documentos:** "Emitido pelo: CNPJ 1 / CNPJ 2". Puxar um cliente escolhe o CNPJ dele, e
+  limpar volta para o CNPJ 1. No CNPJ 2, `emissorDoDocumento()` formata os dados do banco, por
+  exemplo banco "461 - Asaas I.P S.A" vira "Asaas I.P S.A (461)" e o titular vem com iniciais
+  maiúsculas. Sem esses dados, mostra erro em vez de gerar o PDF errado.
+- **Skill `pdf-solucoes-rapidas`:** `gerar_documento.py --cnpj 1|2`, com os dados dos dois CNPJs
+  no próprio script, que é local. O orçamento do CNPJ 2 saiu igual pelos dois caminhos.
