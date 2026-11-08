@@ -1048,6 +1048,10 @@ img, svg { display: block; max-width: 100%; }
 .rodape-lista a { transition: color 0.2s var(--curva); }
 .rodape-lista a:hover { color: var(--aco); }
 .rodape-vazio { color: rgba(255, 255, 255, 0.35); font-style: italic; }
+.rodape-redes a { display: inline-flex; align-items: center; gap: 9px; transition: color 0.2s var(--curva); }
+.rodape-redes a:hover { color: var(--aco); }
+.rodape-redes svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.rodape-redes .rodape-rede-ponto { fill: currentColor; stroke: none; }
 .rodape-base {
   border-top: 1px solid rgba(255, 255, 255, 0.11);
   padding-block: 20px;
