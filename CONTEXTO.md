@@ -5292,3 +5292,24 @@ destrava o cadastro: o toque para editar ignora botões. `copiarTexto` aceita o 
   Receita): a prova com CPF de verdade fica para a primeira nota real de pessoa física.
 - **Falta:** etapa 3 (botão no atendimento concluído, com tela de conferência) e trocar o serviço
   para `producao` junto com ela.
+
+## Emissão de NFS-e: etapa 3, página "Notas fiscais" (08/11/2026, versão 2026.11.08b)
+
+**Decisão do dono:** página própria no menu (logo abaixo de Financeiro), não botão no chamado
+concluído, porque hoje não há chamados no sistema. O botão no chamado fica para quando ele usar.
+- **Formulário:** cliente (busca do cadastro), endereço da obra (endereços do cliente, "Endereço
+  do CNPJ" primeiro), serviço, valores em três jeitos ("Só o total", "Material incluso",
+  "Separar material") e a prévia da descrição exatamente como vai na nota, com contador de 1100. O
+  bloco de pagamento fixo entra sempre por último.
+- **Conferência:** "Conferir antes de emitir" chama `preparar` e mostra cliente, CPF/CNPJ,
+  endereços, competência, valor e descrição, com os problemas (botão Emitir desligado), avisos e
+  nota igual do dia (só emite marcando "Emitir outra mesmo assim"). Mexer em qualquer campo esconde
+  a conferência: o que vai é sempre o que foi conferido.
+- **Resultado:** número, chave, "Copiar chave" e "Abrir no portal (PDF)" (só em produção). Recusa
+  explica o motivo; sem resposta trava o Emitir e manda conferir pela lista.
+- **Lista "Notas emitidas pelo sistema":** as 50 mais novas, com selo (Emitida, Recusada, Sem
+  resposta, Enviando) e "Conferir no governo" nas pendentes. Em produção, as de teste não aparecem.
+- Menu escondido para quem entrou com conta sem acesso total (o servidor também recusa).
+- Testado na tela, com usuário e clientes fictícios, no ambiente de testes do governo: emitir com
+  material separado e outra obra, fora de Joinville barrado, conferência some ao editar, nota igual
+  pedindo confirmação, conferir uma "Sem resposta", celular (375 px) sem rolagem lateral.

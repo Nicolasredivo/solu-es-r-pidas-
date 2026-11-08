@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.04a";
+const APP_VERSION = "2026.11.08b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -5421,6 +5421,8 @@ function mostrarUsuarioConectado() {
   // senha antiga não há conta pra confirmar a senha nas ações de lá.
   const dono = modoAcesso === "login" && Boolean(sessao && sessao.usuario && sessao.usuario.papel === "Dono");
   document.getElementById("menu-usuarios").classList.toggle("hidden", !dono);
+  // Notas fiscais: o servidor só atende o Dono (ou a senha antiga, que é do dono).
+  document.getElementById("menu-notas").classList.toggle("hidden", modoAcesso === "login" && !dono);
 
   const el = document.getElementById("usuario-conectado");
   const nome = sessao && sessao.usuario && String(sessao.usuario.nome || "").trim().split(/\s+/)[0];
@@ -11553,6 +11555,430 @@ document.querySelector('.sidebar-item[data-page="documentos"]').addEventListener
   requestAnimationFrame(() => ajustarAlturasAuto(formDocumento));
 });
 limparDocumento();
+
+// ----- Notas fiscais (NFS-e pela API, fluxo "App - Notas fiscais") -----
+// Regras do dono para toda nota: descrição curta, valores no fim e o bloco de pagamento fixo por
+// último, tudo em até 1100 caracteres; competência = hoje (o servidor calcula); obra = endereço
+// do cliente por padrão. Nada é emitido sem passar pela conferência, e qualquer mudança no
+// formulário esconde a conferência (o que vai é sempre o que foi conferido).
+
+const NF_PAGAMENTO = "Dados para pagamento - INTER - 077 CIRLEI LUIS ZOMER Agência: 0001 Conta: 43090549-1 ou chave PIX CNPJ = 11338567000199";
+const NF_LIMITE = 1100;
+const formNota = document.getElementById("form-nota");
+const nfCampos = {
+  busca: document.getElementById("nf-cliente-busca"),
+  servico: document.getElementById("nf-servico"),
+  material: document.getElementById("nf-material"),
+  valor: document.getElementById("nf-valor"),
+  obra: document.getElementById("nf-obra"),
+};
+const nfTipoValor = document.getElementById("nf-tipo-valor");
+const nfStatus = document.getElementById("nf-status");
+const nfConferencia = document.getElementById("nf-conferencia");
+const nfLista = document.getElementById("nf-lista");
+const nfListaStatus = document.getElementById("nf-lista-status");
+let nfCliente = null; // { id, nome, documento }
+let nfAmbiente = "";
+let nfEnviando = false;
+
+const nfReais = (v) => dinheiro(v).replace(/\s/g, " ");
+const nfData = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(iso || "") ? iso.slice(0, 10).split("-").reverse().join("/") : "");
+const nfPortal = (chave) => `https://www.nfse.gov.br/EmissorNacional/Notas/Visualizar/Index/${encodeURIComponent(chave)}`;
+
+function nfMostrarStatus(tipo, mensagem) {
+  nfStatus.textContent = mensagem;
+  nfStatus.className = mensagem ? `status show ${tipo}` : "status";
+}
+
+function nfDescricao() {
+  const servico = nfCampos.servico.value.trim().replace(/\s+/g, " ");
+  const frase = servico && !/[.!?]$/.test(servico) ? servico + "." : servico;
+  const total = valorDoCampo(nfCampos.valor);
+  const tipo = escolhaDoGrupo(nfTipoValor);
+  let valores = "";
+  if (total > 0) {
+    if (tipo === "incluso") valores = `Materiais incluídos no valor. Valor total = ${nfReais(total)}.`;
+    else if (tipo === "separado") {
+      const material = valorDoCampo(nfCampos.material);
+      valores = `Valor material = ${nfReais(material)}. Valor mão de obra = ${nfReais(total - material)}. Valor total = ${nfReais(total)}.`;
+    } else valores = `Valor total = ${nfReais(total)}.`;
+  }
+  return [frase, valores, NF_PAGAMENTO].filter(Boolean).join(" ");
+}
+
+function nfAtualizarPrevia() {
+  const texto = nfDescricao();
+  document.getElementById("nf-descricao").textContent = texto;
+  const contador = document.getElementById("nf-contador");
+  contador.textContent = `${texto.length} de ${NF_LIMITE} caracteres`;
+  contador.classList.toggle("nf-contador-passou", texto.length > NF_LIMITE);
+}
+
+// Qualquer mudança invalida a conferência.
+function nfDesfazerConferencia() {
+  if (nfEnviando) return;
+  nfConferencia.classList.add("hidden");
+  nfConferencia.innerHTML = "";
+  nfMostrarStatus("", "");
+}
+
+async function nfEscolherCliente(id) {
+  const c = cadastros.find((x) => x.id === id);
+  if (!c) return;
+  nfCliente = { id: c.id, nome: c.nomeFantasia || c.razaoSocial || "Cliente sem nome", documento: String(c.documento || "") };
+  nfCampos.busca.value = "";
+  nfCampos.busca.classList.add("hidden");
+  document.getElementById("nf-cliente-nome").textContent = nfCliente.nome;
+  document.getElementById("nf-cliente-doc").textContent = nfCliente.documento ? formatarDocumento(nfCliente.documento.replace(/\D/g, "")) : "Sem CPF/CNPJ no cadastro";
+  document.getElementById("nf-cliente-escolhido").classList.remove("hidden");
+  nfDesfazerConferencia();
+  const bloco = document.getElementById("nf-obra-bloco");
+  nfCampos.obra.innerHTML = "<option>Buscando endereços...</option>";
+  bloco.classList.remove("hidden");
+  try {
+    const r = await pedirAoN8n("listar-locais", { entidadeId: id });
+    if (!nfCliente || nfCliente.id !== id) return; // trocou de cliente nesse meio-tempo
+    const locais = ((r && r.ok && r.locais) || []).filter((l) => l.status !== "Arquivado" && l.status !== "Inativo");
+    nfCampos.obra.innerHTML = "";
+    locais.sort((a, b) => (b.nome === "Endereço do CNPJ") - (a.nome === "Endereço do CNPJ"));
+    locais.forEach((l) => {
+      const opcao = document.createElement("option");
+      opcao.value = l.id;
+      opcao.textContent = enderecoDoLocal(l) || l.nome || "Endereço sem nome";
+      nfCampos.obra.appendChild(opcao);
+    });
+    if (!locais.length) nfCampos.obra.innerHTML = '<option value="">Cliente sem endereço no cadastro</option>';
+  } catch (err) {
+    nfCampos.obra.innerHTML = '<option value="">Não consegui buscar os endereços</option>';
+  }
+}
+
+function nfTirarCliente() {
+  nfCliente = null;
+  document.getElementById("nf-cliente-escolhido").classList.add("hidden");
+  document.getElementById("nf-obra-bloco").classList.add("hidden");
+  nfCampos.obra.innerHTML = "";
+  nfCampos.busca.classList.remove("hidden");
+  nfDesfazerConferencia();
+}
+
+ligarSugestoesContato(nfCampos.busca, document.getElementById("nf-cliente-sugestao"), (termo) => {
+  if (!termo) return [];
+  return cadastros
+    .filter((c) => normalizarTexto(`${c.razaoSocial} ${c.nomeFantasia} ${c.documento}`).includes(termo))
+    .map((c) => {
+      const nome = c.nomeFantasia || c.razaoSocial || "Cliente sem nome";
+      return { rotulo: nome, detalhe: c.razaoSocial && c.razaoSocial !== nome ? c.razaoSocial : "", valor: c.id };
+    });
+}, nfEscolherCliente);
+nfCampos.busca.addEventListener("focus", () => garantirCadastrosCarregados());
+document.getElementById("nf-cliente-tirar").addEventListener("click", () => {
+  nfTirarCliente();
+  nfCampos.busca.focus();
+});
+ligarMascaraDinheiro(nfCampos.valor);
+ligarMascaraDinheiro(nfCampos.material);
+configurarGrupo(nfTipoValor, () => {
+  document.getElementById("nf-material-bloco").classList.toggle("hidden", escolhaDoGrupo(nfTipoValor) !== "separado");
+  nfAtualizarPrevia();
+  nfDesfazerConferencia();
+});
+formNota.addEventListener("input", () => {
+  if (document.activeElement === nfCampos.busca) return;
+  nfAtualizarPrevia();
+  nfDesfazerConferencia();
+});
+nfCampos.obra.addEventListener("change", nfDesfazerConferencia);
+nfCampos.servico.addEventListener("input", () => ajustarAlturaAuto(nfCampos.servico));
+
+function nfLinha(rotulo, valor, classe) {
+  const bloco = document.createElement("div");
+  bloco.className = "nf-conf-linha";
+  const r = document.createElement("span");
+  r.className = "nf-conf-rotulo";
+  r.textContent = rotulo;
+  const v = document.createElement("span");
+  v.className = "nf-conf-valor" + (classe ? " " + classe : "");
+  v.textContent = valor || "—";
+  bloco.append(r, v);
+  return bloco;
+}
+
+function nfBotao(texto, classe, aoClicar) {
+  const b = document.createElement("button");
+  b.type = "button";
+  if (classe) b.className = classe;
+  b.textContent = texto;
+  b.addEventListener("click", aoClicar);
+  return b;
+}
+
+function nfAviso(titulo, texto) {
+  const a = document.createElement("div");
+  a.className = "aviso-caixa";
+  const s = document.createElement("strong");
+  s.textContent = titulo;
+  a.append(s, document.createTextNode(texto));
+  return a;
+}
+
+// Resultado de uma nota emitida: número, chave e onde baixar o PDF.
+function nfQuadroEmitida(nota, ambiente) {
+  const q = document.createElement("div");
+  q.className = "moldura nf-emitida";
+  const t = document.createElement("div");
+  t.className = "moldura-titulo";
+  t.textContent = `Nota nº ${nota.numeroNota || "?"} emitida` + (ambiente === "Testes" ? " (teste, sem validade)" : "");
+  q.append(t, nfLinha("Chave de acesso", nota.chave, "nf-chave"), nfLinha("Valor", nfReais(nota.valor)));
+  const acoes = document.createElement("div");
+  acoes.className = "nf-acoes";
+  acoes.append(nfBotao("Copiar chave", "botao-secundario", () => copiarTexto(nota.chave, "Chave copiada.")));
+  if (ambiente !== "Testes") {
+    const a = document.createElement("a");
+    a.href = nfPortal(nota.chave);
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.className = "botao-link";
+    a.textContent = "Abrir no portal (PDF)";
+    acoes.append(a);
+  }
+  q.append(acoes);
+  return q;
+}
+
+async function nfConferir(evento) {
+  evento.preventDefault();
+  if (nfEnviando) return;
+  const total = valorDoCampo(nfCampos.valor);
+  const material = valorDoCampo(nfCampos.material);
+  const descricao = nfDescricao();
+  let erro = "";
+  if (!nfCliente) erro = "Escolha o cliente.";
+  else if (!nfCampos.servico.value.trim()) erro = "Escreva o serviço feito.";
+  else if (!(total > 0)) erro = "Falta o valor total.";
+  else if (escolhaDoGrupo(nfTipoValor) === "separado" && !(material > 0 && material < total)) erro = "O material precisa ser maior que zero e menor que o total.";
+  else if (descricao.length > NF_LIMITE) erro = `A descrição passou de ${NF_LIMITE} caracteres: encurte o serviço.`;
+  if (erro) {
+    nfMostrarStatus("error", erro);
+    return;
+  }
+  const pedido = { clienteId: nfCliente.id, localId: nfCampos.obra.value || "", descricao, valor: total.toFixed(2) };
+  nfMostrarStatus("loading", "Conferindo os dados...");
+  let r;
+  try {
+    r = await pedirAoN8n("notas-fiscais", { acao: "preparar", ...pedido });
+  } catch (err) {
+    nfMostrarStatus("error", "Não consegui falar com o servidor. O n8n está ligado?");
+    return;
+  }
+  if (!r || !r.ok) {
+    nfMostrarStatus("error", (r && r.mensagem) || "Não consegui conferir agora.");
+    return;
+  }
+  nfMostrarStatus("", "");
+  nfMostrarConferencia(r, pedido);
+}
+
+function nfMostrarConferencia(r, pedido) {
+  nfAmbiente = r.ambiente || nfAmbiente;
+  document.getElementById("nf-aviso-testes").classList.toggle("hidden", nfAmbiente !== "Testes");
+  nfConferencia.innerHTML = "";
+  const caixa = document.createElement("div");
+  caixa.className = "moldura moldura-emails nf-conf";
+  const titulo = document.createElement("div");
+  titulo.className = "moldura-titulo";
+  titulo.textContent = nfAmbiente === "Testes" ? "Conferência (ambiente de testes)" : "Conferência: confira tudo antes de emitir";
+  caixa.append(titulo,
+    nfLinha("Cliente", r.tomador.nome),
+    nfLinha(r.tomador.tipo || "CPF/CNPJ", formatarDocumento(r.tomador.documento)),
+    nfLinha("Endereço do cliente", r.tomador.endereco),
+    nfLinha("Endereço da obra", r.obra),
+    nfLinha("Competência", nfData(r.competencia)),
+    nfLinha("Valor", nfReais(Number(r.valor))),
+    nfLinha("Descrição", r.descricao, "nf-conf-descricao"));
+  if (r.problemas && r.problemas.length) {
+    const p = document.createElement("div");
+    p.className = "status show error";
+    p.textContent = "Não dá para emitir: " + r.problemas.join(" ");
+    caixa.append(p);
+  }
+  (r.avisos || []).forEach((a) => caixa.append(nfAviso("Atenção", a)));
+  let confirmaRepetida = null;
+  if (r.repetida) {
+    caixa.append(nfAviso("Já existe uma nota igual hoje",
+      `Nota ${r.repetida.numeroNota ? "nº " + r.repetida.numeroNota : "de número " + r.repetida.numeroDps} (${r.repetida.status}), mesmo cliente, valor e descrição.`));
+    const linha = document.createElement("label");
+    linha.className = "checkbox-linha";
+    confirmaRepetida = document.createElement("input");
+    confirmaRepetida.type = "checkbox";
+    const s = document.createElement("span");
+    s.textContent = "Emitir outra mesmo assim";
+    linha.append(confirmaRepetida, s);
+    caixa.append(linha);
+  }
+  const status = document.createElement("div");
+  status.className = "status";
+  status.setAttribute("role", "status");
+  const acoes = document.createElement("div");
+  acoes.className = "nf-acoes";
+  const emitir = nfBotao(nfAmbiente === "Testes" ? "Emitir nota de teste" : "Emitir nota", "", () => nfEmitir(pedido, { emitir, voltar, status, confirmaRepetida, caixa }));
+  emitir.disabled = !r.podeEmitir;
+  const voltar = nfBotao("Voltar e corrigir", "botao-secundario", () => {
+    nfDesfazerConferencia();
+    nfCampos.servico.focus();
+  });
+  acoes.append(emitir, voltar);
+  caixa.append(acoes, status);
+  nfConferencia.append(caixa);
+  nfConferencia.classList.remove("hidden");
+  caixa.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function nfEmitir(pedido, tela) {
+  if (nfEnviando) return;
+  if (tela.confirmaRepetida && !tela.confirmaRepetida.checked) {
+    tela.status.textContent = 'Marque "Emitir outra mesmo assim" ou volte e corrija.';
+    tela.status.className = "status show error";
+    return;
+  }
+  nfEnviando = true;
+  tela.emitir.disabled = true;
+  tela.voltar.disabled = true;
+  tela.status.textContent = "Enviando ao governo... não feche esta tela.";
+  tela.status.className = "status show loading";
+  let r;
+  try {
+    r = await pedirAoN8n("notas-fiscais", { acao: "emitir", confirmar: "1", confirmarRepetida: tela.confirmaRepetida ? "1" : "", ...pedido });
+  } catch (err) {
+    r = { ok: false, semResposta: true, mensagem: "A conexão caiu durante o envio. A nota pode ter saído: veja a lista abaixo antes de tentar de novo." };
+  }
+  nfEnviando = false;
+  carregarNotas();
+  if (r && r.ok && r.nota) {
+    nfConferencia.innerHTML = "";
+    nfConferencia.append(nfQuadroEmitida(r.nota, r.ambiente));
+    const outra = nfBotao("Emitir outra nota", "botao-secundario", () => {
+      nfLimparFormulario();
+      nfConferencia.classList.add("hidden");
+      nfConferencia.innerHTML = "";
+      nfCampos.busca.focus();
+    });
+    nfConferencia.append(outra);
+    if (r.avisoRegistro) nfConferencia.append(nfAviso("Atenção", r.avisoRegistro));
+    mostrarToast(`Nota nº ${r.nota.numeroNota} emitida.`);
+    return;
+  }
+  tela.voltar.disabled = false;
+  tela.status.className = "status show error";
+  if (r && r.semResposta) {
+    tela.status.textContent = r.mensagem || "Não sei se a nota saiu. Confira antes de tentar de novo.";
+    tela.emitir.disabled = true; // só depois de conferir, pela lista
+    return;
+  }
+  tela.status.textContent = (r && r.mensagem) || "A nota não foi emitida.";
+  // Recusada: a mesma conferência pode ser corrigida e emitida de novo (o número muda sozinho).
+  tela.emitir.disabled = !(r && r.recusada);
+}
+
+function nfLimparFormulario() {
+  nfTirarCliente();
+  nfCampos.servico.value = "";
+  nfCampos.valor.value = "";
+  nfCampos.material.value = "";
+  nfTipoValor.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === "total"));
+  document.getElementById("nf-material-bloco").classList.add("hidden");
+  ajustarAlturaAuto(nfCampos.servico);
+  nfAtualizarPrevia();
+}
+
+async function nfConferirNota(id, botao) {
+  botao.disabled = true;
+  botao.textContent = "Consultando o governo...";
+  let r;
+  try {
+    r = await pedirAoN8n("notas-fiscais", { acao: "conferir", notaId: id });
+  } catch (err) {
+    r = { ok: false, mensagem: "Não consegui falar com o servidor." };
+  }
+  mostrarToast((r && r.mensagem) || "Não consegui conferir agora.", null, r && r.ok ? undefined : "erro");
+  carregarNotas();
+}
+
+const NF_ROTULOS = { Emitida: "Emitida", Recusada: "Recusada", "Sem resposta": "Sem resposta", Enviando: "Enviando" };
+
+async function carregarNotas() {
+  nfListaStatus.textContent = "Carregando...";
+  let r;
+  try {
+    r = await pedirAoN8n("notas-fiscais", { acao: "listar" });
+  } catch (err) {
+    nfListaStatus.textContent = "Não consegui carregar as notas. O n8n está ligado?";
+    return;
+  }
+  if (!r || !r.ok) {
+    nfListaStatus.textContent = (r && r.mensagem) || "Não consegui carregar as notas.";
+    return;
+  }
+  nfAmbiente = r.ambiente || "";
+  document.getElementById("nf-aviso-testes").classList.toggle("hidden", nfAmbiente !== "Testes");
+  // Em produção, as notas de teste não aparecem; no ambiente de testes, aparecem marcadas.
+  const notas = (r.notas || []).filter((n) => nfAmbiente === "Testes" || n.ambiente !== "Testes").slice(0, 50);
+  nfLista.innerHTML = "";
+  nfListaStatus.textContent = notas.length ? "" : "Nenhuma nota emitida pelo sistema ainda.";
+  notas.forEach((n) => {
+    const li = document.createElement("li");
+    li.className = "nf-item";
+    const topo = document.createElement("div");
+    topo.className = "nf-item-topo";
+    const numero = document.createElement("strong");
+    numero.textContent = n.numeroNota ? `Nota nº ${n.numeroNota}` : `Pedido nº ${n.numeroDps}`;
+    const selo = document.createElement("span");
+    selo.className = "nf-selo nf-selo-" + String(n.status || "").toLowerCase().replace(/\s+/g, "-");
+    selo.textContent = (NF_ROTULOS[n.status] || n.status) + (n.ambiente === "Testes" ? " · teste" : "");
+    const valor = document.createElement("span");
+    valor.className = "nf-item-valor";
+    valor.textContent = nfReais(Number(n.valor || 0));
+    topo.append(numero, selo, valor);
+    const quem = document.createElement("div");
+    quem.className = "nf-item-quem";
+    quem.textContent = [n.tomadorNome, nfData(n.competencia)].filter(Boolean).join(" · ");
+    li.append(topo, quem);
+    if (n.status === "Recusada" && n.erro) {
+      const e = document.createElement("div");
+      e.className = "placeholder-text nf-item-erro";
+      e.textContent = n.erro;
+      li.append(e);
+    }
+    const acoes = document.createElement("div");
+    acoes.className = "nf-acoes";
+    if (n.status === "Emitida" && n.chave) {
+      acoes.append(nfBotao("Copiar chave", "botao-secundario", () => copiarTexto(n.chave, "Chave copiada.")));
+      if (n.ambiente !== "Testes") {
+        const a = document.createElement("a");
+        a.href = nfPortal(n.chave);
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.className = "botao-link";
+        a.textContent = "Abrir no portal (PDF)";
+        acoes.append(a);
+      }
+    }
+    if (n.status === "Sem resposta" || n.status === "Enviando") {
+      const b = nfBotao("Conferir no governo", "", () => nfConferirNota(n.id, b));
+      acoes.append(b);
+    }
+    if (acoes.children.length) li.append(acoes);
+    nfLista.append(li);
+  });
+}
+
+formNota.addEventListener("submit", nfConferir);
+document.querySelector('.sidebar-item[data-page="notas"]').addEventListener("click", () => {
+  garantirCadastrosCarregados();
+  carregarNotas();
+  requestAnimationFrame(() => ajustarAlturaAuto(nfCampos.servico));
+});
+nfAtualizarPrevia();
 
 // ----- Aviso de e-mail e telefone com jeito de errado -----
 

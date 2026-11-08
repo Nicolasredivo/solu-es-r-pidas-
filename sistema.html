@@ -96,6 +96,10 @@
         <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h14.5a1.5 1.5 0 0 1 1.5 1.5v9.5a1.5 1.5 0 0 1-1.5 1.5H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M4 7.5 15.5 4v3.5"/><path d="M15.5 13.75h1.5"/></svg>
         <span class="sidebar-texto">Financeiro</span>
       </button>
+      <button type="button" class="sidebar-item" data-page="notas" id="menu-notas">
+        <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>
+        <span class="sidebar-texto">Notas fiscais</span>
+      </button>
       <div class="sidebar-grupo">
         <button type="button" class="sidebar-item sidebar-grupo-cabecalho" aria-expanded="false">
           <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3H9z"/><path d="M9 11.5h6M9 15.5h4"/></svg>
@@ -1996,6 +2000,64 @@
             </div>
           </li>
         </template>
+      </div>
+
+      <!-- Notas fiscais (08/11/2026): emite NFS-e pela API do governo, com o
+           certificado A1 do PC (fluxo "App - Notas fiscais"). Nada sai sem a
+           conferência: qualquer mudança no formulário esconde a conferência. -->
+      <div id="page-notas" class="card page hidden">
+        <h1>Notas fiscais</h1>
+        <p class="subtitle">Emite a NFS-e direto no governo, com o certificado digital, sem abrir o portal.</p>
+        <div id="nf-aviso-testes" class="aviso-caixa hidden"><strong>Ambiente de testes</strong>As notas emitidas aqui não têm validade.</div>
+
+        <form id="form-nota" novalidate autocomplete="off">
+          <label for="nf-cliente-busca">Cliente</label>
+          <input type="text" id="nf-cliente-busca" placeholder="Buscar cliente cadastrado" />
+          <div id="nf-cliente-sugestao" class="sugestao-lista hidden"></div>
+          <div id="nf-cliente-escolhido" class="nf-escolhido hidden">
+            <div class="nf-escolhido-texto">
+              <strong id="nf-cliente-nome"></strong>
+              <span id="nf-cliente-doc" class="placeholder-text"></span>
+            </div>
+            <button type="button" id="nf-cliente-tirar" class="remover-canal" aria-label="Trocar o cliente" title="Trocar o cliente">×</button>
+          </div>
+
+          <div id="nf-obra-bloco" class="hidden">
+            <label for="nf-obra">Endereço da obra</label>
+            <select id="nf-obra"></select>
+          </div>
+
+          <label for="nf-servico">Serviço feito</label>
+          <textarea id="nf-servico" class="auto-altura" rows="2" placeholder="Ex: Troca de 2 lâmpadas na garagem."></textarea>
+
+          <label>Valores</label>
+          <div class="opcoes nf-tipo-valor" id="nf-tipo-valor">
+            <button type="button" class="opcao active" data-valor="total">Só o total</button>
+            <button type="button" class="opcao" data-valor="incluso">Material incluso</button>
+            <button type="button" class="opcao" data-valor="separado">Separar material</button>
+          </div>
+          <div id="nf-material-bloco" class="hidden">
+            <label for="nf-material">Valor do material</label>
+            <input type="text" id="nf-material" inputmode="numeric" placeholder="R$ 0,00" />
+          </div>
+          <label for="nf-valor">Valor total</label>
+          <input type="text" id="nf-valor" inputmode="numeric" placeholder="R$ 0,00" />
+
+          <div class="moldura nf-previa">
+            <div class="moldura-titulo">Descrição que vai na nota</div>
+            <p id="nf-descricao" class="nf-descricao"></p>
+            <p id="nf-contador" class="placeholder-text nf-contador"></p>
+          </div>
+
+          <button type="submit" id="nf-conferir">Conferir antes de emitir</button>
+          <div id="nf-status" class="status" role="status"></div>
+        </form>
+
+        <div id="nf-conferencia" class="hidden"></div>
+
+        <h2 class="nf-lista-titulo">Notas emitidas pelo sistema</h2>
+        <p id="nf-lista-status" class="placeholder-text"></p>
+        <ul id="nf-lista" class="nf-lista"></ul>
       </div>
 
       <!-- Usuários: só aparece no menu pra quem entrou por e-mail com acesso
