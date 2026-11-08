@@ -5432,3 +5432,12 @@ Pedido do dono: "Consultar" antes de "Adicionar".
 - **Contatos:** a seção da lista vem antes do formulário. O sticky do computador passou a usar
   `.contatos-secao-form`. Ao tocar num contato, a tela rola até o formulário também quando ele
   está abaixo.
+
+## Aba "Veículo", vazia (08/11/2026)
+Pedido do dono: criar a aba "Veículo" no menu (depois de Documentos) sem nada dentro ainda.
+`#page-veiculo` só tem o título; o menu genérico do app.js já cuida de abrir a página.
+Objetivo futuro: calcular o gasto de combustível por chamado. Carro: Saveiro Robust 1.6 8V 2020,
+ficha 10,8 km/l na cidade; carregada (2 pessoas + ~150 kg de ferramentas) estimamos ~9,5 km/l na
+gasolina e ~6,7 no etanol. Ideia proposta: rota do dia (base → clientes → base) × custo por km
+vindo dos abastecimentos lançados (valor, litros, km do painel). Falta o dono decidir combustível
+e se chamados de orçamento entram.

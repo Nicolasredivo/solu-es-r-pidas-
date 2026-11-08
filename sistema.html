@@ -118,6 +118,11 @@
         <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 17h5"/></svg>
         <span class="sidebar-texto">Documentos</span>
       </button>
+      <!-- Veículo: página vazia por enquanto (pedido do dono, 08/11/2026). -->
+      <button type="button" class="sidebar-item" data-page="veiculo">
+        <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16.5V12l2.5-5h7l2 4H20a1 1 0 0 1 1 1v4.5h-2"/><path d="M8.5 16.5h7"/><path d="M3 16.5h1.5"/><circle cx="6.5" cy="16.5" r="2"/><circle cx="17.5" cy="16.5" r="2"/><path d="M5.5 11h9"/></svg>
+        <span class="sidebar-texto">Veículo</span>
+      </button>
       <button type="button" class="sidebar-item hidden" data-page="usuarios" id="menu-usuarios">
         <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c.8-3.8 3.9-6 7.5-6s6.7 2.2 7.5 6"/></svg>
         <span class="sidebar-texto">Usuários</span>
@@ -2097,6 +2102,11 @@
         <h2 class="nf-lista-titulo">Notas emitidas pelo sistema</h2>
         <p id="nf-lista-status" class="placeholder-text"></p>
         <ul id="nf-lista" class="nf-lista"></ul>
+      </div>
+
+      <!-- Veículo: só o título por enquanto (pedido do dono, 08/11/2026). -->
+      <div id="page-veiculo" class="card page hidden">
+        <h1>Veículo</h1>
       </div>
 
       <!-- Usuários: só aparece no menu pra quem entrou por e-mail com acesso
