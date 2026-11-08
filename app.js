@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.08k";
+const APP_VERSION = "2026.11.08l";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -1316,6 +1316,7 @@ const listaBox = document.getElementById("lista-cadastros");
 const modeloLinha = document.getElementById("modelo-linha");
 const modeloDetalhe = document.getElementById("modelo-detalhe");
 const filtroDocTipo = document.getElementById("filtro-doc-tipo");
+const filtroAtendidoPor = document.getElementById("filtro-atendido-por");
 const filtroStatus = document.getElementById("filtro-status");
 const filtroContato = document.getElementById("filtro-contato");
 const filtroAdministradora = document.getElementById("filtro-administradora");
@@ -1632,6 +1633,7 @@ function desenharLista() {
   const termo = buscaInput.value.trim().toLowerCase();
   const digitos = termo.replace(/\D/g, "");
   const docTipo = escolhaDoGrupo(filtroDocTipo);
+  const atendidoPor = escolhaDoGrupo(filtroAtendidoPor);
   const status = filtroStatus.value;
   const contato = filtroContato.value;
   const administradora = filtroAdministradora.value;
@@ -1645,6 +1647,8 @@ function desenharLista() {
     }
     if (docTipo === "cpf" && c.documento.length !== 11) return false;
     if (docTipo === "cnpj" && c.documento.length !== 14) return false;
+    // Sem a informação (lista antiga no cache), o cliente é do CNPJ 1.
+    if (atendidoPor && (c.atendidoPor || "CNPJ 1") !== atendidoPor) return false;
     if (status && c.status !== status) return false;
     if (contato && !(c.contato || "").split(",").map((v) => v.trim()).includes(contato)) return false;
     if (administradora && (c.administradora || "") !== administradora) return false;
@@ -1677,11 +1681,13 @@ function desenharLista() {
 }
 
 configurarGrupo(filtroDocTipo, () => desenharLista());
+configurarGrupo(filtroAtendidoPor, () => desenharLista());
 [filtroStatus, filtroContato, filtroAdministradora, filtroEmpresaSindicos].forEach((select) =>
   select.addEventListener("change", desenharLista)
 );
 limparFiltrosCadastroBotao.addEventListener("click", () => {
   filtroDocTipo.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === ""));
+  filtroAtendidoPor.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === ""));
   filtroStatus.value = "";
   filtroContato.value = "";
   filtroAdministradora.value = "";
@@ -2033,6 +2039,8 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
         documento: digitos,
         razaoSocial: campos.razaoSocial.value.trim(),
         nomeFantasia: campos.nomeFantasia.value.trim(),
+        // Para o filtro "Atendido por" da lista valer na hora, sem recarregar.
+        atendidoPor: campos.atendidoPor.value,
       });
       atualizarResumo(linha, resumo);
       // Contatos novos, ligados ou tirados agora: sugestões e tela de contatos buscam de novo.
