@@ -81,7 +81,10 @@ defs.append('''<linearGradient id="hx-ceu-noite" gradientUnits="userSpaceOnUse" 
 <pattern id="hx-faixa" width="64" height="3" patternUnits="userSpaceOnUse" x="0" y="1074"><rect width="32" height="3" fill="#e9eef2"/></pattern>
 <pattern id="hx-azulejo" width="10" height="10" patternUnits="userSpaceOnUse" x="926" y="610"><path d="M10 0V10M0 10H10" stroke="#d1e0ec" stroke-width=".6" fill="none"/></pattern>
 <pattern id="hx-grade" width="20" height="20" patternUnits="userSpaceOnUse" x="692" y="296"><path d="M20 0V20M0 20H20" stroke="#7cd3ff" stroke-width=".5" opacity=".2" fill="none"/></pattern>
-<clipPath id="hx-clip-scan"><rect id="hx-scan-rect" x="680" y="296" width="470" height="0"/></clipPath>''')
+<clipPath id="hx-clip-scan"><rect id="hx-scan-rect" x="680" y="296" width="470" height="0"/></clipPath>
+<clipPath id="hx-clip-sala"><rect id="hx-sala-rect" x="908" y="596" width="194" height="101"/></clipPath>
+<clipPath id="hx-clip-digita"><rect id="hx-digita-rect" x="948" y="613" width="0" height="15"/></clipPath>
+<radialGradient id="hx-brilho-elev"><stop offset="0" stop-color="#bfe6ff" stop-opacity=".75"/><stop offset="1" stop-color="#bfe6ff" stop-opacity="0"/></radialGradient>''')
 
 # ------------------------------------------------------------------ céu
 ceu.append('<rect x="-2000" y="-1600" width="6000" height="2700" fill="url(#hx-ceu-noite)"/>')
@@ -240,6 +243,8 @@ for x in POSTES:
 # van da Soluções Rápidas (o landing.js move o grupo e gira as rodas)
 VAN = ('<g id="hx-van" transform="translate(640 1062)">'
        '<ellipse cx="88" cy="0" rx="84" ry="5" fill="#0b1e3d" opacity=".2"/>'
+       '<g id="hx-fumaca" style="opacity:0" fill="#c9d3dc"><circle class="hx-baforada" cx="-4" cy="-15" r="3"/>'
+       '<circle class="hx-baforada" style="animation-delay:.3s" cx="-4" cy="-15" r="3"/><circle class="hx-baforada" style="animation-delay:.6s" cx="-4" cy="-15" r="3"/></g>'
        '<circle cx="36" cy="-12" r="15" fill="#2a3340"/><circle cx="136" cy="-12" r="15" fill="#2a3340"/>'
        '<path d="M2 -16V-58Q2 -68 12 -68H112Q122 -68 128 -61L150 -38Q153 -35 158 -34L166 -32Q172 -30 172 -24V-16Q172 -11 166 -11H8Q2 -11 2 -16Z" fill="#f7f9fb"/>'
        '<rect x="2" y="-16" width="170" height="5" fill="#dfe5eb"/>'
@@ -257,7 +262,43 @@ VAN = ('<g id="hx-van" transform="translate(640 1062)">'
        '<g id="hx-roda-2" transform="translate(136 -12)"><circle r="12.5" fill="#1b2433"/><circle r="6.2" fill="#c9d3dc"/>'
        '<path d="M0 -5.6V5.6M-4.8 -2.8L4.8 2.8M-4.8 2.8L4.8 -2.8" stroke="#7d8a98" stroke-width="1.3"/><circle r="1.8" fill="#5d6b7a"/></g>'
        '</g>')
+
+
+def tecnico_em_pe(id_, x, y, k=1.0, espelho=False):
+    # Técnico de lado, andando para a direita (ou esquerda, com espelho),
+    # com a caixa de ferramentas na mão. O landing.js gira pernas e braço
+    # (ids -p1, -p2, -b2) e move o grupo (data-k / data-esp guardam a escala).
+    sx = -k if espelho else k
+    return (f'<g id="{id_}" data-k="{k}" data-esp="{1 if espelho else 0}" style="opacity:0" transform="translate({x} {y}) scale({sx} {k})">'
+            f'<g id="{id_}-p2"><path d="M1 -26V-2" stroke="#163f6e" stroke-width="5.6" stroke-linecap="round"/><ellipse cx="3" cy="-.6" rx="4.2" ry="1.6" fill="#1b2433"/></g>'
+            f'<g id="{id_}-b2"><path d="M-1 -44L-2 -31L0 -25" fill="none" stroke="#163f6e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="0" cy="-24" r="1.9" fill="#c98b62"/></g>'
+            '<path d="M-7 -44Q-7 -48 -3 -48H3Q7 -48 7 -44L6.4 -24H-6.4Z" fill="#1c4e85"/><path d="M-6.6 -34H6.6" stroke="#7cc8ff" stroke-width="1.8"/>'
+            f'<g id="{id_}-p1"><path d="M-1 -26V-2" stroke="#1c4e85" stroke-width="5.6" stroke-linecap="round"/><ellipse cx="1" cy="-.6" rx="4.2" ry="1.6" fill="#1b2433"/></g>'
+            '<rect x="-1.6" y="-51" width="3.2" height="4" rx="1" fill="#b87d57"/><circle cx=".5" cy="-54" r="5.3" fill="#c98b62"/>'
+            '<path d="M-5 -55Q-5 -61 .6 -61Q6 -61 6 -55.2Z" fill="#0b1e3d"/><path d="M5 -55.6L10.6 -54.8Q11.2 -53.4 9.4 -53.3L4.4 -54Z" fill="#0b1e3d"/>'
+            '<path d="M1 -44L3 -32L4 -26" fill="none" stroke="#1c4e85" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'
+            '<rect x="-2" y="-24" width="14" height="8" rx="1.3" fill="#1c4e85" stroke="#0b1e3d" stroke-width=".8"/>'
+            '<path d="M2 -24V-26H8V-24" fill="none" stroke="#0b1e3d" stroke-width="1"/><rect x="-2" y="-20.6" width="14" height="1.2" fill="#3e8fd1"/>'
+            '<circle cx="4" cy="-25.5" r="1.9" fill="#c98b62"/></g>')
+
+
+# Um carro qualquer passando pela faixa da frente na abertura (vida na rua).
+CARRO = ('<g id="hx-carro" transform="translate(1700 1112)"><g transform="scale(-1 1)">'
+         '<ellipse cx="62" cy="0" rx="62" ry="4" fill="#0b1e3d" opacity=".2"/>'
+         '<path d="M4 -12V-22Q4 -27 10 -28L30 -31L44 -43Q48 -46 54 -46H82Q90 -46 95 -41L106 -31L118 -29Q124 -28 124 -22V-12Q124 -9 120 -9H8Q4 -9 4 -12Z" fill="#8b98a8"/>'
+         '<path d="M48 -41Q50 -43 54 -43H66V-31H38Z" fill="#24456e"/><path d="M70 -43H82Q87 -43 90 -40L98 -31H70Z" fill="#24456e"/>'
+         '<rect x="4" y="-20" width="120" height="2" fill="#6f7d8d"/>'
+         '<circle cx="30" cy="-10" r="9" fill="#1b2433"/><circle cx="30" cy="-10" r="4" fill="#9aa6b3"/>'
+         '<circle cx="100" cy="-10" r="9" fill="#1b2433"/><circle cx="100" cy="-10" r="4" fill="#9aa6b3"/>'
+         '<rect x="118" y="-27" width="6" height="4" rx="1" fill="#ffe9a8"/><rect x="4" y="-26" width="3" height="5" rx="1" fill="#d9534f"/>'
+         '</g></g>')
+CARRO_LUZ = ('<g id="hx-carro-luz" transform="translate(1700 1112)"><g transform="scale(-1 1)">'
+             '<polygon points="124,-26 300,-44 300,10 124,-22" fill="url(#hx-farol)" opacity=".55"/>'
+             '<circle cx="122" cy="-25" r="10" fill="url(#hx-brilho-quente)"/></g></g>')
+
+mundo.append(tecnico_em_pe('hx-tec-rua', 790, 1016, .86))
 mundo.append(VAN)
+mundo.append(CARRO)
 
 # ------------------------------------------------------------------ noite (por cima do "filtro" escuro)
 estrelas, brilhantes = [], []
@@ -284,7 +325,14 @@ noite.append('<path fill="#ffc46b" opacity=".72" d="' + ''.join(f'M{x} {y}h18v24
 for f in ANDARES:
     noite.append(f'<rect x="895" y="{f + 22}" width="10" height="46" rx="1.5" fill="#bfe6ff" opacity=".8"/>')
 
-ACESAS = {(400, 708): 'sofa', (500, 918): 'tv', (600, 708): 'pessoa', (600, 918): 'abajur', (700, 918): 'sofa', (800, 708): 'pessoa'}
+# Luzes dos apartamentos: andar, unidade, tipo, quando acende e quando apaga
+# (posição da rolagem, de 0 a 1). O landing.js liga e desliga cada uma.
+LUZES = [
+    (400, 708, 'sofa', 0, .84), (500, 918, 'tv', 0, .86), (600, 708, 'pessoa', 0, .83),
+    (700, 918, 'sofa', 0, .85), (800, 708, 'pessoa', 0, .87), (500, 708, 'abajur', .02, .82),
+    (700, 708, 'pessoa', .03, .046), (600, 918, 'pessoa', .05, .885),   # a última: apartamento do vazamento
+]
+luzes, extras = [], []
 
 
 def interior(ux, f, tipo):
@@ -324,8 +372,15 @@ def interior(ux, f, tipo):
     return ''.join(s)
 
 
-for (f, ux), tipo in ACESAS.items():
-    noite.append(interior(ux, f, tipo))
+for f, ux, tipo, liga, desliga in LUZES:
+    luzes.append(f'<g class="hx-luz" data-liga="{liga}" data-desliga="{desliga}"'
+                 + (' style="opacity:0"' if liga > 0 else '') + '>' + interior(ux, f, tipo) + '</g>')
+# brilho vermelho na janela do vazamento, logo que a luz acende
+luzes.append('<g id="hx-alerta-janela" style="opacity:0"><circle class="hx-alerta-sala" cx="1005" cy="649" r="72" fill="url(#hx-alerta)"/></g>')
+# elevador subindo pelo núcleo azul e a portaria acendendo quando o técnico entra
+extras.append('<g id="hx-elevador" style="opacity:0"><ellipse cx="900" cy="921" rx="22" ry="30" fill="url(#hx-brilho-elev)"/>'
+              '<rect x="892" y="905" width="16" height="32" rx="2" fill="#e8f7ff"/><rect x="894" y="907" width="12" height="3" rx="1" fill="#ffffff"/></g>')
+extras.append('<rect id="hx-portaria-luz" x="856" y="920" width="88" height="80" fill="#fff6d6" style="opacity:0"/>')
 
 noite.append('<rect x="856" y="920" width="88" height="80" fill="#ffe2a3" opacity=".92"/>'
              '<path d="M900 920V1000" stroke="#2a3f5c" stroke-width="2"/><rect x="856" y="920" width="88" height="80" fill="none" stroke="#2a3f5c" stroke-width="2.6"/>'
@@ -338,7 +393,8 @@ noite.append('<circle cx="1066" cy="309" r="9" fill="#ff5a5a" opacity=".25" clas
 
 VAN_LUZ = ('<g id="hx-van-luz" transform="translate(640 1062)">'
            '<polygon points="172,-33 340,-50 340,8 172,-28" fill="url(#hx-farol)" opacity=".6"/>'
-           '<circle cx="170" cy="-32" r="11" fill="url(#hx-brilho-quente)"/><circle cx="3" cy="-36" r="8" fill="#ff5a5a" opacity=".35"/></g>')
+           '<circle cx="170" cy="-32" r="11" fill="url(#hx-brilho-quente)"/><circle cx="3" cy="-36" r="8" fill="#ff5a5a" opacity=".35"/>'
+           '<circle id="hx-freio" cx="3" cy="-36" r="14" fill="#ff5a5a" style="opacity:0"/></g>')
 
 # ------------------------------------------------------------------ sol e pássaros (dia)
 sol.append('<g class="hx-sol"><circle cx="1185" cy="300" r="150" fill="url(#hx-brilho-sol)"/><circle cx="1185" cy="300" r="30" fill="#ffd56e"/>'
@@ -362,9 +418,13 @@ raiox.append('<g class="hx-raiox" clip-path="url(#hx-clip-scan)">'
              '<rect x="950" y="346" width="80" height="40"/><rect x="856" y="920" width="88" height="80"/></g>'
              f'<path d="{canos}" fill="none" stroke="#7cd3ff" stroke-width="7" opacity=".18" stroke-linecap="round" stroke-linejoin="round"/>'
              f'<path d="{canos}" fill="none" stroke="#a6e3ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
+             f'<path class="hx-fluxo-raiox" d="{canos}" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="2 12"/>'
              f'<path d="{elet}" fill="none" stroke="#ffc861" stroke-width="1.5" stroke-dasharray="5 4"/>'
              '<rect x="872" y="958" width="16" height="26" rx="2" fill="none" stroke="#ffc861" stroke-width="1.5"/>'
-             '<g fill="#a6e3ff">' + ''.join(f'<circle cx="900" cy="{f + 67}" r="2.6"/>' for f in ANDARES) + '</g>'
+             # nós que "acendem" quando o scanner passa por eles (o landing.js marca .aceso)
+             '<g fill="#a6e3ff">' + ''.join(
+                 f'<circle class="hx-no" data-y="{f + 67}" cx="{cx}" cy="{f + 67}" r="2.6"/>'
+                 for f in ANDARES for cx in (732, 900, 1056)) + '</g>'
              '<text x="712" y="420" font-family="Saira, sans-serif" font-size="9" font-weight="700" letter-spacing="2" fill="#a6e3ff">HIDRÁULICA</text>'
              '<text x="712" y="434" font-family="Saira, sans-serif" font-size="9" font-weight="700" letter-spacing="2" fill="#ffc861">ELÉTRICA</text>'
              '</g>')
@@ -377,6 +437,12 @@ raiox.append(f'<g class="hx-marcador"><circle class="hx-onda" cx="{J[0]}" cy="{J
              f'<path d="M{J[0] + 4} {J[1] - 4}L{J[0] + 16} {J[1] - 20}H{J[0] + 22}" fill="none" stroke="#ff6b5a" stroke-width="1.4"/>'
              f'<rect x="{J[0] + 22}" y="{J[1] - 29}" width="66" height="18" rx="9" fill="#ff6b5a"/>'
              f'<text x="{J[0] + 55}" y="{J[1] - 16.6}" text-anchor="middle" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#ffffff">Vazamento</text></g>')
+# mira de câmera fechando sobre o apartamento antes do zoom
+raiox.append('<g id="hx-mira" style="opacity:0"><g id="hx-mira-cantos" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round">'
+             '<path d="M912 612V598H926M1084 598H1098V612M912 686V700H926M1084 700H1098V686"/></g>'
+             '<rect x="953" y="706" width="104" height="17" rx="8.5" fill="#05183a" opacity=".88"/>'
+             '<circle class="hx-pisca" cx="965" cy="714.5" r="2.6" fill="#ff6b5a"/>'
+             '<text x="1011" y="717.6" text-anchor="middle" font-family="Inter, sans-serif" font-size="8" font-weight="600" fill="#ffffff">3º andar · banheiro</text></g>')
 raiox.append('<g class="hx-ok-fachada"><circle class="hx-onda-verde" cx="1005" cy="649" r="13" fill="none" stroke="#1fa855" stroke-width="2"/>'
              '<circle cx="1005" cy="649" r="13" fill="#1fa855" stroke="#ffffff" stroke-width="2.4"/>'
              '<path d="M999 649.5L1003 653.5L1011 645" fill="none" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></g>')
@@ -391,12 +457,14 @@ def planta_sala(x, y):
             f'<ellipse cx="{x + 4}" cy="{y - 18}" rx="3.4" ry="8" transform="rotate(22 {x + 4} {y - 18})"/><ellipse cx="{x}" cy="{y - 21}" rx="3.4" ry="10"/></g>')
 
 
-MORADORA = ('<g transform="translate(1012 690)">'
-            '<path d="M-3.4 -23V-1.5M3.4 -23V-1.5" stroke="#2b3a55" stroke-width="5" stroke-linecap="round"/>'
-            '<ellipse cx="-3.8" cy="-.4" rx="4" ry="1.5" fill="#1b2433"/><ellipse cx="4.6" cy="-.4" rx="4" ry="1.5" fill="#1b2433"/>'
-            '<path d="M-8.5 -41.5Q-8.5 -45 -5 -45H5Q8.5 -45 8.5 -41.5L7.4 -22.5H-7.4Z" fill="#f08a5d"/>'
+# Moradora: entra andando pela esquerda (o landing.js move o grupo e gira as
+# pernas -p1/-p2), para e manda a mensagem.
+MORADORA = ('<g id="hx-moradora" transform="translate(1012 690)">'
+            '<g id="hx-mor-p2"><path d="M2.6 -23V-1.5" stroke="#223049" stroke-width="5" stroke-linecap="round"/><ellipse cx="4.6" cy="-.4" rx="4" ry="1.5" fill="#1b2433"/></g>'
             '<path d="M-7.6 -41L-10 -31.5L-8.6 -24.5" fill="none" stroke="#e37a4d" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>'
             '<circle cx="-8.5" cy="-23.6" r="1.8" fill="#e0a982"/>'
+            '<path d="M-8.5 -41.5Q-8.5 -45 -5 -45H5Q8.5 -45 8.5 -41.5L7.4 -22.5H-7.4Z" fill="#f08a5d"/>'
+            '<g id="hx-mor-p1"><path d="M-2.6 -23V-1.5" stroke="#2b3a55" stroke-width="5" stroke-linecap="round"/><ellipse cx="-.6" cy="-.4" rx="4" ry="1.5" fill="#1b2433"/></g>'
             '<rect x="-1.7" y="-48.5" width="3.4" height="4.5" rx="1" fill="#d99a73"/>'
             '<circle cx="0" cy="-52" r="5.4" fill="#e0a982"/>'
             '<path d="M-5.8 -50.6Q-6.6 -58.8 .3 -58.6Q6.6 -58.4 5.9 -51.8Q4.6 -55.4 .4 -55.2Q-3.4 -55 -4.2 -50Q-4.4 -45.6 -6.6 -44.8Q-6.3 -48 -5.8 -50.6Z" fill="#3b2a20"/>'
@@ -404,9 +472,15 @@ MORADORA = ('<g transform="translate(1012 690)">'
             '<rect x="2" y="-40.2" width="3.8" height="6.4" rx=".9" fill="#0b1e3d"/><rect x="2.5" y="-39.6" width="2.8" height="5" rx=".6" fill="#8fd3ff"/>'
             '<circle cx="5" cy="-35.4" r="1.8" fill="#e0a982"/></g>')
 
-TECNICO = ('<g class="hx-tecnico">'
-           '<rect x="1024" y="682" width="18" height="8.5" rx="1.4" fill="#1c4e85"/><rect x="1024" y="680.6" width="18" height="2.6" rx="1" fill="#0b1e3d"/>'
-           '<path d="M1029 680.6V678.4H1037V680.6" fill="none" stroke="#0b1e3d" stroke-width="1.2"/><rect x="1024" y="685.4" width="18" height="1.4" fill="#3e8fd1"/>'
+# Caixa de ferramentas no chão (a tampa abre) e o técnico ajoelhado no sifão.
+CAIXA = ('<g id="hx-caixa-ferramentas" style="opacity:0">'
+         '<g id="hx-ferramentas"><rect x="1027" y="677.6" width="2" height="5" rx=".6" fill="#ff6b5a"/>'
+         '<rect x="1031" y="676.8" width="1.6" height="6" rx=".6" fill="#ffc861"/><rect x="1034.4" y="678.2" width="3" height="4.4" rx=".6" fill="#9fb0c1"/></g>'
+         '<rect x="1024" y="682" width="18" height="8.5" rx="1.4" fill="#1c4e85"/><rect x="1024" y="685.4" width="18" height="1.4" fill="#3e8fd1"/>'
+         '<g id="hx-tampa"><rect x="1024" y="680.2" width="18" height="2.8" rx="1" fill="#0b1e3d"/>'
+         '<path d="M1029 680.2V678H1037V680.2" fill="none" stroke="#0b1e3d" stroke-width="1.2"/></g></g>')
+
+TECNICO = ('<g id="hx-tec-ajoelhado" style="opacity:0">'
            '<g transform="translate(1073 689)">'
            '<path d="M8 -20L2.5 -2.5L15.5 -1.5" fill="none" stroke="#163f6e" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>'
            '<path d="M8 -20L-5.5 -17L-7.5 -2" fill="none" stroke="#1c4e85" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>'
@@ -421,12 +495,14 @@ TECNICO = ('<g class="hx-tecnico">'
            '<circle cx="-11.5" cy="-18" r="2" fill="#c98b62"/>'
            '</g></g>')
 
-CHAVE = ('<g class="hx-chave"><g class="hx-chave-gira">'
+CHAVE = ('<g id="hx-chave-mao" style="opacity:0"><g id="hx-chave-gira">'
          f'<path transform="translate({J[0]} {J[1]}) scale(-.5 .5) translate(-17.5 -6.5)" '
          'd="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" '
          'fill="#cfd8e1" stroke="#5d6b7a" stroke-width="1.4" stroke-linejoin="round"/></g></g>')
 
-sala.append('<g class="hx-sala">')
+# O banheiro abre como um corte, de cima para baixo (o landing.js muda a
+# altura do recorte hx-sala-rect).
+sala.append('<g class="hx-sala" clip-path="url(#hx-clip-sala)">')
 sala.append('<polygon points="912,600 1098,600 1084,610 926,610" fill="#eef2f5"/>')
 sala.append('<polygon points="912,600 926,610 926,681 912,693" fill="#d3e0eb"/>')
 sala.append('<polygon points="1098,600 1084,610 1084,681 1098,693" fill="#c8d7e5"/>')
@@ -458,6 +534,23 @@ sala.append(f'<g class="hx-vaz"><circle class="hx-alerta-sala" cx="{J[0]}" cy="{
             '<circle class="hx-gota" style="animation-delay:.66s" cx="1056" cy="671" r="1.4" fill="#8fd3ff"/></g>')
 sala.append(planta_sala(919, 692))
 sala.append(MORADORA)
+# conversa no WhatsApp: ela digita, a Soluções Rápidas responde
+sala.append('<g id="hx-bolha-1" style="opacity:0">'
+            '<rect x="944" y="613" width="70" height="15" rx="7.5" fill="#ffffff"/>'
+            '<path d="M998 627L1006 634L1004 627Z" fill="#ffffff"/>'
+            '<text x="949" y="623.2" font-family="Inter, sans-serif" font-size="6" font-weight="600" fill="#0b1e3d" clip-path="url(#hx-clip-digita)">Tá vazando aqui!</text></g>')
+sala.append('<g id="hx-digitando" style="opacity:0"><rect x="939" y="634" width="26" height="13" rx="6.5" fill="#1c4e85"/>'
+            '<circle class="hx-ponto-digita" cx="946" cy="640.5" r="1.4" fill="#ffffff"/>'
+            '<circle class="hx-ponto-digita" style="animation-delay:.15s" cx="952" cy="640.5" r="1.4" fill="#ffffff"/>'
+            '<circle class="hx-ponto-digita" style="animation-delay:.3s" cx="958" cy="640.5" r="1.4" fill="#ffffff"/></g>')
+sala.append('<g id="hx-bolha-2" style="opacity:0">'
+            '<circle cx="930" cy="641.5" r="7" fill="#ffffff" stroke="#d5e0ea" stroke-width=".8"/>'
+            '<image href="imagens/logo.png" x="924.5" y="638" width="11" height="7"/>'
+            '<rect x="939" y="634" width="64" height="15" rx="7.5" fill="#1c4e85"/>'
+            '<text x="971" y="644.2" text-anchor="middle" font-family="Inter, sans-serif" font-size="6" font-weight="600" fill="#ffffff">Visita agendada ✓</text></g>')
+sala.append('<path id="hx-coracao" style="opacity:0" d="M1012 625.4c-1.6-2.6-6.4-2.2-6.4 1.4 0 2.8 3.6 4.8 6.4 7.4 2.8-2.6 6.4-4.6 6.4-7.4 0-3.6-4.8-4-6.4-1.4z" fill="#ff6b5a"/>')
+sala.append(CAIXA)
+sala.append(tecnico_em_pe('hx-tec-sala', 1112, 690, 1.0, espelho=True))
 sala.append(TECNICO)
 sala.append(CHAVE)
 sala.append(f'<g class="hx-ok-sala"><circle cx="{J[0]}" cy="{J[1]}" r="6.5" fill="#1fa855" stroke="#ffffff" stroke-width="1.4"/>'
@@ -469,7 +562,8 @@ svg = ('<svg class="historia-svg" id="historia-svg" viewBox="355 210 1100 900" p
        '<defs>' + ''.join(defs) + '</defs>'
        + ''.join(ceu) + ''.join(mundo)
        + '<rect class="hx-tinta" x="-2000" y="-1600" width="6000" height="4700" fill="#071733"/>'
-       + '<g class="hx-noite">' + ''.join(noite) + VAN_LUZ + '</g>'
+       + '<g class="hx-noite">' + ''.join(noite) + VAN_LUZ + CARRO_LUZ + '</g>'
+       + '<g class="hx-luzes">' + ''.join(luzes) + '</g>' + ''.join(extras)
        + ''.join(sol) + ''.join(raiox) + ''.join(sala) + '</svg>')
 
 ICONE_GOTA = '<svg viewBox="0 0 24 24"><path d="M12 3c3.3 3.8 6 7.4 6 10.6A6 6 0 0 1 6 13.6C6 10.4 8.7 6.8 12 3Z" /></svg>'

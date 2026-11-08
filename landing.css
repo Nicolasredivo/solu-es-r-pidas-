@@ -1103,8 +1103,6 @@ img, svg { display: block; max-width: 100%; }
   --vaz: 0;
   --poca: 0;
   --mancha: 0;
-  --tecnico: 0;
-  --chave: 0;
   --conserto: 0;
   --ok: 0;
   --okf: 1;
@@ -1274,11 +1272,9 @@ img, svg { display: block; max-width: 100%; }
 .hx-nuvens { opacity: calc(var(--dia) * 0.95); transform: translateX(calc((1 - var(--dia)) * -140px)); }
 .hx-sol { opacity: var(--dia); transform: translateY(calc((1 - var(--dia)) * 240px)); }
 .hx-passaros { opacity: var(--dia); }
-.hx-voo { animation: hxVoo 22s linear infinite; }
-@keyframes hxVoo {
-  from { transform: translate(0, 0); }
-  to { transform: translate(560px, -40px); }
-}
+/* Luzes dos apartamentos: o landing.js acende e apaga cada uma; de dia,
+   todas somem junto com a noite. */
+.hx-luzes { opacity: calc(1 - var(--dia)); }
 .hx-brilha { animation: hxBrilha 3s ease-in-out infinite; }
 @keyframes hxBrilha { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 .hx-pisca { animation: hxPisca 1.6s steps(1) infinite; }
@@ -1309,17 +1305,26 @@ img, svg { display: block; max-width: 100%; }
 }
 .hx-poca { transform-box: fill-box; transform-origin: center; transform: scale(var(--poca)); }
 .hx-mancha { transform-box: fill-box; transform-origin: 50% 100%; transform: scale(var(--mancha)); opacity: calc(var(--mancha) * 0.42); }
-.hx-tecnico { opacity: var(--tecnico); transform: translateX(calc((1 - var(--tecnico)) * 26px)); }
-.hx-chave { opacity: var(--chave); }
-.hx-chave-gira { transform-box: view-box; transform-origin: 1056px 667px; animation: hxGira 0.8s ease-in-out infinite alternate; }
-@keyframes hxGira { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
+/* Raio-x: nós acendem quando o scanner passa; água correndo nos canos. */
+.hx-no { transform-box: fill-box; transform-origin: center; transform: scale(0.2); opacity: 0.4; transition: transform 0.35s var(--curva), opacity 0.35s var(--curva); }
+.hx-no.aceso { transform: scale(1.25); opacity: 1; }
+.hx-fluxo-raiox { opacity: 0.85; animation: hxFluxo 1.4s linear infinite; }
+@keyframes hxFluxo { to { stroke-dashoffset: -28; } }
+/* Fumaça da van, pontinhos de "digitando..." */
+.hx-baforada { transform-box: fill-box; transform-origin: center; animation: hxBaforada 0.9s ease-out infinite; }
+@keyframes hxBaforada {
+  from { transform: translate(0, 0) scale(0.6); opacity: 0.8; }
+  to { transform: translate(-16px, -7px) scale(1.9); opacity: 0; }
+}
+.hx-ponto-digita { transform-box: fill-box; transform-origin: center; animation: hxDigita 0.9s ease-in-out infinite; }
+@keyframes hxDigita { 0%, 60%, 100% { transform: translateY(0); opacity: 0.55; } 30% { transform: translateY(-1.6px); opacity: 1; } }
 .hx-brilho-cano { opacity: var(--conserto); stroke-dasharray: 3 4; animation: hxFlui 0.8s linear infinite; }
 @keyframes hxFlui { to { stroke-dashoffset: -7; } }
 .hx-ok-sala { opacity: var(--ok); transform-box: fill-box; transform-origin: center; transform: scale(calc(0.3 + var(--ok) * 0.7)); }
 
 /* ----- Modo "viva": palco parado, a rolagem conta a história ----- */
 
-.historia.viva { height: 400vh; padding: 0; }
+.historia.viva { height: 900vh; padding: 0; }
 .historia.viva .historia-palco {
   position: sticky;
   top: 0;
