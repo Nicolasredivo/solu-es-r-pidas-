@@ -5399,3 +5399,8 @@ e-mails do financeiro e notificações desligadas.
   maiúsculas. Sem esses dados, mostra erro em vez de gerar o PDF errado.
 - **Skill `pdf-solucoes-rapidas`:** `gerar_documento.py --cnpj 1|2`, com os dados dos dois CNPJs
   no próprio script, que é local. O orçamento do CNPJ 2 saiu igual pelos dois caminhos.
+- **Filtros de Consultar clientes em grade (08/11/2026, versão 2026.11.08o):** `.filtros-cadastro`
+  virou grid com colunas iguais (mínimo de 175px) e todos os controles com 38px de altura. As
+  escolhas (Documento, Atendido por) viraram uma barra de segmentos colados, sem quebrar texto, e
+  "Limpar filtros" ficou na última coluna. No celular (até 560px) são 2 colunas, e as barras e o
+  "Limpar" ocupam a linha inteira.

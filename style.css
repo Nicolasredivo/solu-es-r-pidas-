@@ -594,14 +594,18 @@ input[type="number"]:focus {
 /* Filtros da Consulta: painel próprio (fundo levemente destacado do card),
    um rótulo pequeno em maiúsculas acima de cada controle -- mesma ideia de
    dashboard profissional, em vez do texto "Status: todos" dentro do select
-   fazendo dupla função de rótulo e opção. Quebra linha sozinho no celular. */
+   fazendo dupla função de rótulo e opção.
+   Grade (08/11/2026): colunas iguais, todos os controles com a mesma altura,
+   botões de escolha como UMA barra (segmentos colados, sem quebrar o texto) e
+   "Limpar filtros" na última coluna, alinhado com os campos. */
 .filtros-cadastro {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 10px 14px;
+  --altura-filtro: 38px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  align-items: end;
+  gap: 12px 14px;
   margin: 10px 0;
-  padding: 12px 14px;
+  padding: 14px;
   background: #12162a;
   border-radius: 10px;
 }
@@ -609,8 +613,8 @@ input[type="number"]:focus {
 .filtro-item {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  flex: 1 1 140px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .filtro-rotulo {
@@ -619,30 +623,82 @@ input[type="number"]:focus {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .filtros-cadastro select {
   width: 100%;
+  height: var(--altura-filtro);
   margin-bottom: 0;
-  padding: 9px 10px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: var(--bg);
   font-size: 0.85rem;
 }
 
+/* Barra de segmentos: uma moldura só, divisórias finas entre as opções. */
 .filtros-cadastro .opcoes {
-  gap: 6px;
+  gap: 0;
+  height: var(--altura-filtro);
+  border: 1px solid #2c3153;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg);
 }
 
 .filtros-cadastro .opcao {
-  flex: 1;
-  padding: 9px 6px;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 0;
   font-size: 0.8rem;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.filtros-cadastro .opcao + .opcao {
+  border-left: 1px solid #2c3153;
+}
+
+.filtros-cadastro .opcao.active {
+  color: white;
+}
+
+.filtros-cadastro .opcao.active + .opcao,
+.filtros-cadastro .opcao + .opcao.active {
+  border-left-color: var(--accent);
 }
 
 .filtro-limpar {
-  flex: 0 0 auto;
+  grid-column: -2;
+  justify-self: end;
   width: auto;
-  padding: 9px 16px;
+  height: var(--altura-filtro);
+  padding: 0 16px;
+  border-radius: 8px;
   font-size: 0.8rem;
+}
+
+/* Celular: duas colunas; as barras de escolha ocupam a linha inteira para
+   caber o texto sem apertar, e o "Limpar filtros" também. */
+@media (max-width: 560px) {
+  .filtros-cadastro {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 12px;
+  }
+  .filtro-item:has(.opcoes),
+  .filtro-limpar {
+    grid-column: 1 / -1;
+  }
+  .filtro-limpar {
+    justify-self: stretch;
+    width: 100%;
+  }
 }
 
 /* Sugestão de valor já usado noutro cadastro (e-mail, administradora,
