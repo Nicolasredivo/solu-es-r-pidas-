@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.08p";
+const APP_VERSION = "2026.11.08q";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -323,6 +323,28 @@ function ligarAbasInternas(classeAba, atributo, prefixoId, classeBloco) {
 
 ligarAbasInternas("subtab", "subpage", "subpage-", "subpage");
 ligarAbasInternas("subtab-fin", "subfin", "subfin-", "subpage-fin");
+
+// Páginas de cadastro abrem na aba "Consultar" (pedido do dono, 08/11/2026). Vindo de outra tela,
+// volta para ela; tocar no menu já estando na página não troca a aba (não esconde um cadastro
+// sendo preenchido em "Adicionar"). aoMostrar roda quando a página aparece de fato nessa aba
+// (a troca pode esperar a pergunta "salvar antes de sair?").
+function abrirSempreNaAba(nomePagina, aba, aoMostrar) {
+  const pagina = document.getElementById(`page-${nomePagina}`);
+  const menu = document.querySelector(`.sidebar-item[data-page="${nomePagina}"]`);
+  if (!pagina || !menu) return;
+  menu.addEventListener("click", () => {
+    if (!pagina.classList.contains("hidden")) return;
+    pagina.querySelectorAll(".subtab").forEach((t) => t.classList.toggle("active", t.dataset.subpage === aba));
+    pagina.querySelectorAll(".subpage").forEach((b) => b.classList.toggle("hidden", b.id !== `subpage-${aba}`));
+  }, true); // captura: antes do ouvinte geral do menu, que mostra a página
+  if (aoMostrar) {
+    new MutationObserver(() => {
+      if (pagina.classList.contains("hidden")) return;
+      if (pagina.querySelector(`#subpage-${aba}`).classList.contains("hidden")) return;
+      aoMostrar();
+    }).observe(pagina, { attributes: true, attributeFilter: ["class"] });
+  }
+}
 
 // ----- Campo de CPF/CNPJ -----
 
@@ -2121,6 +2143,12 @@ recarregarBotao.addEventListener("click", carregarLista);
 // Carrega sozinho na primeira vez que a aba é aberta.
 document.querySelector('.subtab[data-subpage="consultar"]').addEventListener("click", () => {
   if (!listaCarregada) carregarLista();
+  else desenharLista();
+});
+
+abrirSempreNaAba("cadastro", "consultar", () => {
+  if (!listaCarregada) carregarLista();
+  else desenharLista();
 });
 
 // ----- Financeiro -----
@@ -9949,9 +9977,10 @@ function abrirContatoNoForm(id) {
   }
   prepararFormContato(contato);
   desenharContatos();
-  // No celular o formulário fica em cima da lista: sem isso, tocar num
-  // contato lá embaixo não mostraria nada mudando.
-  if (formContato.getBoundingClientRect().top < 0) ctTitulo.scrollIntoView({ behavior: "smooth", block: "start" });
+  // No celular o formulário fica embaixo da lista (08/11/2026): sem isso, tocar num
+  // contato não mostraria nada mudando.
+  const topoForm = formContato.getBoundingClientRect().top;
+  if (topoForm < 0 || topoForm > window.innerHeight - 80) ctTitulo.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // Sugestões que buscam enquanto digita, sem diferenciar acento nem
@@ -10779,6 +10808,7 @@ function ligarCadastroDeEmpresas(c) {
   // A lista sempre vem de novo ao abrir: quem é de cada uma muda por outras telas.
   document.querySelector(`.sidebar-item[data-page="${c.pagina}"]`).addEventListener("click", carregar);
   document.querySelector(`[data-subpage="${c.prefixo}-consultar"]`).addEventListener("click", carregar);
+  abrirSempreNaAba(c.pagina, `${c.prefixo}-consultar`);
 
   return {
     tipo: c.Singular,
@@ -11139,6 +11169,7 @@ const cadastroEmails = (() => {
   });
   el("atualizar").addEventListener("click", carregar);
   document.querySelector('.subtab[data-subpage="em-consultar"]').addEventListener("click", carregar);
+  abrirSempreNaAba("emails", "em-consultar", carregar);
 
   // Todo campo de e-mail do sistema com a lista: ela chega no primeiro toque num deles.
   document.addEventListener("focusin", (evento) => {

@@ -4329,7 +4329,7 @@ div.lembrete-item:hover {
   }
 
   /* Parado logo abaixo da barra do topo (que também é fixa). */
-  .contatos-layout > .contatos-secao:first-child {
+  .contatos-layout > .contatos-secao-form {
     position: sticky;
     top: 80px;
   }

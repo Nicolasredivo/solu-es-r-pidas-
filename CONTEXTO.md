@@ -5417,3 +5417,18 @@ O dono pediu para juntar "Criar chamado" e "Consultar chamados", e que abrisse e
   aba, para não esconder um chamado sendo criado.
 - **`irParaConsultarChamados()`:** usada pela Agenda ("Editar chamado"), pelo fim do atendimento
   de orçamento e pelo aviso de horário combinado.
+
+## Cadastros abrem em "Consultar" (08/11/2026, versão 2026.11.08q)
+
+Pedido do dono: "Consultar" antes de "Adicionar".
+- **Clientes, Administradoras, Sindicatura e E-mails:** a subtab Consultar vem primeiro e já vem
+  ativa no HTML. `abrirSempreNaAba(pagina, aba, aoMostrar)` volta para ela sempre que a página
+  é aberta vindo de outra tela. Funciona com um ouvinte em captura no item do menu, e não troca
+  a aba se a página já está aberta. O `aoMostrar` roda, por um MutationObserver, quando a página
+  aparece de fato:
+  - Clientes: carrega ou desenha a lista.
+  - E-mails: carrega.
+  - Administradoras e Sindicatura: já carregavam ao tocar no menu.
+- **Contatos:** a seção da lista vem antes do formulário. O sticky do computador passou a usar
+  `.contatos-secao-form`. Ao tocar num contato, a tela rola até o formulário também quando ele
+  está abaixo.
