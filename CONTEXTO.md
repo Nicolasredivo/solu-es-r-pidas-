@@ -5450,6 +5450,11 @@ substituir) e, embaixo, todos os dados do documento organizados.
   Identificação, Capacidade e potência, Proprietário, Licenciamento, Observações (VEICULO_GRUPOS no
   app.js). Tocar num campo edita; entra no "Salvar as alterações?".
 - **Teste:** `banco/testes/testar-veiculo.js` (só roda com a tabela vazia; apaga o que criou).
+- **Ajuste com o documento real (08/11/2026):** no CRLV-e de verdade, o quadro do seguro DPVAT e o
+  "assinado digitalmente" ficam ao lado dos dados e o leitor pegava texto deles. Agora o dado só vale
+  se começar alinhado à esquerda com o nome do campo (±6 pontos), e o próximo nome da mesma coluna
+  encerra o dado. Com o PDF real, os 27 campos vieram certos (o CAT vem "***", vazio). Os 7 campos
+  errados da 1ª leitura foram corrigidos direto no banco (cópia do antes no scratchpad).
 - **Próximo:** calcular o combustível por chamado. Carro: Saveiro Robust 1.6 8V 2020, ficha 10,8 km/l
   na cidade; carregada (2 pessoas + ~150 kg) estimamos ~9,5 km/l na gasolina e ~6,7 no etanol. Ideia:
   rota do dia (base → clientes → base) × custo por km vindo dos abastecimentos. Falta o dono decidir

@@ -100,6 +100,10 @@
       const achado = ehRotulo(r.norm);
       if (achado) { r.rotulo = achado; rotulos.push(r); }
     });
+    // No documento, o dado começa alinhado à esquerda com o nome dele (diferença
+    // de 1 ou 2 pontos). Texto que começa em outro lugar é de outra coluna (o
+    // quadro do seguro DPVAT, o "assinado digitalmente"...), mesmo estando perto.
+    const ALINHADO = 6;
     for (const rot of rotulos) {
       if (!rot.rotulo.campo || campos[rot.rotulo.campo]) continue;
       // Fim da coluna: o próximo nome à direita, na mesma linha.
@@ -107,23 +111,31 @@
         .filter((o) => o !== rot && Math.abs(o.y - rot.y) <= 2 && o.x > rot.x + 1)
         .sort((a, b) => a.x - b.x)[0];
       const limite = vizinho ? vizinho.x - 1 : Infinity;
-      // Linhas de baixo, até o próximo nome que esteja nessa coluna.
-      const abaixo = runs.filter((r) => !r.rotulo && r.y > rot.y + 1 && r.y < rot.y + rot.altura * 4.5
-        && r.x >= rot.x - 3 && r.x < limite);
+      // O próximo nome da MESMA coluna encerra o dado deste.
       const proximoRotulo = rotulos
-        .filter((o) => o.y > rot.y + 1 && o.x < limite && o.fim > rot.x - 3)
+        .filter((o) => o.y > rot.y + 1 && Math.abs(o.x - rot.x) <= ALINHADO)
         .sort((a, b) => a.y - b.y)[0];
-      const corte = proximoRotulo ? proximoRotulo.y - 0.5 : Infinity;
+      const corte = Math.min(proximoRotulo ? proximoRotulo.y - 0.5 : Infinity, rot.y + Math.max(rot.altura, 5) * 5);
+      const abaixo = runs.filter((r) => !r.rotulo && r.y > rot.y + 1 && r.y < corte && r.x < limite);
       const linhas = [];
-      abaixo.filter((r) => r.y < corte).sort((a, b) => a.y - b.y || a.x - b.x).forEach((r) => {
+      abaixo.sort((a, b) => a.y - b.y || a.x - b.x).forEach((r) => {
         const linha = linhas.find((l) => Math.abs(l.y - r.y) <= 1.5);
         if (linha) linha.partes.push(r); else linhas.push({ y: r.y, partes: [r] });
       });
-      if (!linhas.length) continue;
+      // Em cada linha, só o trecho que começa alinhado ao nome e segue encostado.
+      const trechos = [];
+      for (const l of linhas) {
+        const partes = l.partes.sort((a, b) => a.x - b.x);
+        const i = partes.findIndex((p) => Math.abs(p.x - rot.x) <= ALINHADO);
+        if (i < 0) continue;
+        const pegar = [partes[i]];
+        for (let j = i + 1; j < partes.length && partes[j].x - pegar[pegar.length - 1].fim < 15; j += 1) pegar.push(partes[j]);
+        trechos.push(pegar.map((p) => p.str.trim()).join(" "));
+      }
+      if (!trechos.length) continue;
       // Observações podem ter várias linhas; o resto é uma linha só.
-      const usar = rot.rotulo.campo === "Observacoes" ? linhas.slice(0, 4) : linhas.slice(0, 1);
-      const texto = usar.map((l) => l.partes.sort((a, b) => a.x - b.x).map((p) => p.str.trim()).join(" "))
-        .join(" ").replace(/\s+/g, " ").trim();
+      const usar = rot.rotulo.campo === "Observacoes" ? trechos.slice(0, 4) : trechos.slice(0, 1);
+      const texto = usar.join(" ").replace(/\s+/g, " ").trim();
       if (!vazio(texto)) campos[rot.rotulo.campo] = texto;
     }
     return runs;
