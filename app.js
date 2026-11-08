@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.08o";
+const APP_VERSION = "2026.11.08p";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -7721,8 +7721,7 @@ function agendaAbrirMenu(c, x, y) {
   if (c.status === "Em andamento") {
     opcao("▶ Abrir atendimento", () => abrirAtendimentoDoChamado(c.id), "agenda-menu-principal");
     opcao("Editar chamado", () => {
-      const item = document.querySelector('.sidebar-item[data-page="consultar-chamados"]');
-      if (item) item.click();
+      irParaConsultarChamados();
       abrirEdicaoChamado(c);
     });
     const dica = document.createElement("p");
@@ -7735,8 +7734,7 @@ function agendaAbrirMenu(c, x, y) {
   // (arrastando o bloco ou as bordas) e os detalhes.
   if (c.status === "Concluído") {
     opcao("Editar chamado", () => {
-      const item = document.querySelector('.sidebar-item[data-page="consultar-chamados"]');
-      if (item) item.click();
+      irParaConsultarChamados();
       abrirEdicaoChamado(c);
     }, "agenda-menu-principal");
     const dica = document.createElement("p");
@@ -7765,8 +7763,7 @@ function agendaAbrirMenu(c, x, y) {
     });
   }
   opcao("Editar chamado", () => {
-    const item = document.querySelector('.sidebar-item[data-page="consultar-chamados"]');
-    if (item) item.click();
+    irParaConsultarChamados();
     abrirEdicaoChamado(c);
   });
   opcao("Marcar concluído", () => {
@@ -8524,7 +8521,29 @@ function carregarChamadosSeNecessario() {
   }
 }
 
-document.querySelector('.sidebar-item[data-page="consultar-chamados"]').addEventListener("click", carregarChamadosSeNecessario);
+// Chamados: uma página só, com as abas "Consultar" e "Criar chamado" (08/11/2026). Vindo de
+// outra tela, ela abre sempre em "Consultar" (pedido do dono). Tocar no menu já estando nela não
+// troca a aba, para não esconder um chamado sendo criado.
+const paginaChamados = document.getElementById("page-chamados");
+const menuChamados = document.querySelector('.sidebar-item[data-page="chamados"]');
+
+function mostrarAbaChamados(alvo) {
+  paginaChamados.querySelectorAll(".subtab").forEach((aba) => aba.classList.toggle("active", aba.dataset.subpage === alvo));
+  paginaChamados.querySelectorAll(".subpage").forEach((bloco) => bloco.classList.toggle("hidden", bloco.id !== `subpage-${alvo}`));
+  ajustarAlturasAuto(paginaChamados);
+}
+
+// Leva para a lista (Agenda, atendimento, avisos de horário): abre a página e a aba Consultar.
+function irParaConsultarChamados() {
+  menuChamados.click();
+  mostrarAbaChamados("ch-consultar");
+}
+
+// Captura: roda antes do ouvinte geral do menu, que é quem mostra a página.
+menuChamados.addEventListener("click", () => {
+  if (paginaChamados.classList.contains("hidden")) mostrarAbaChamados("ch-consultar");
+}, true);
+menuChamados.addEventListener("click", carregarChamadosSeNecessario);
 document.querySelector('.sidebar-item[data-page="agenda"]').addEventListener("click", () => {
   // A ordem importa: quem troca de página é o ouvinte lá de cima, que roda
   // antes deste. Então aqui a #page-agenda já está visível e tem altura de
@@ -8866,8 +8885,7 @@ function mostrarAlertaHorarioCombinado(movidos) {
     ajustar.addEventListener("click", async () => {
       const x = chamadoPorId(m.id);
       if (!x) return;
-      const item = document.querySelector('.sidebar-item[data-page="consultar-chamados"]');
-      if (item) item.click();
+      irParaConsultarChamados();
       await abrirEdicaoChamado(x);
       if (m.sugestaoHorarioCombinado) editChamadoChegada.value = m.sugestaoHorarioCombinado;
       editChamadoChegada.focus();
@@ -9115,8 +9133,7 @@ async function concluirAtendimento(v, form) {
 
   if (resposta.orcamento && c) {
     mostrarToast(`Visita do #${c.numero} encerrada. Agora os valores do orçamento.`);
-    const consultar = document.querySelector('.sidebar-item[data-page="consultar-chamados"]');
-    if (consultar) consultar.click();
+    irParaConsultarChamados();
     abrirFinalizarOrcamento(c);
   } else {
     mostrarToast(c ? `Chamado #${c.numero} concluído.` : "Atendimento concluído.");

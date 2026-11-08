@@ -5404,3 +5404,16 @@ e-mails do financeiro e notificações desligadas.
   escolhas (Documento, Atendido por) viraram uma barra de segmentos colados, sem quebrar texto, e
   "Limpar filtros" ficou na última coluna. No celular (até 560px) são 2 colunas, e as barras e o
   "Limpar" ocupam a linha inteira.
+
+## Chamados numa página só (08/11/2026, versão 2026.11.08p)
+
+O dono pediu para juntar "Criar chamado" e "Consultar chamados", e que abrisse em Consultar.
+- **Menu:** "Chamados" virou um item só (`data-page="chamados"`). O grupo com setinha saiu.
+- **`#page-chamados`:** subtabs no padrão do Cadastro de clientes, "Consultar" (`ch-consultar`)
+  e "Criar chamado" (`ch-criar`), dentro de `#subpage-ch-consultar` e `#subpage-ch-criar`.
+  O `#page-consultar-chamados` deixou de existir.
+- **Abrir:** vindo de outra tela, a página abre sempre em Consultar. É um ouvinte em captura no
+  item do menu, que roda antes do ouvinte geral. Tocar no menu já estando na página não troca a
+  aba, para não esconder um chamado sendo criado.
+- **`irParaConsultarChamados()`:** usada pela Agenda ("Editar chamado"), pelo fim do atendimento
+  de orçamento e pelo aviso de horário combinado.

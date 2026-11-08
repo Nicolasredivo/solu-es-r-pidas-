@@ -100,17 +100,11 @@
         <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>
         <span class="sidebar-texto">Notas fiscais</span>
       </button>
-      <div class="sidebar-grupo">
-        <button type="button" class="sidebar-item sidebar-grupo-cabecalho" aria-expanded="false">
-          <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3H9z"/><path d="M9 11.5h6M9 15.5h4"/></svg>
-          <span class="sidebar-texto">Chamados</span>
-          <svg class="sidebar-grupo-seta" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
-        </button>
-        <div class="sidebar-grupo-itens hidden">
-          <button type="button" class="sidebar-item sidebar-subitem" data-page="chamados">Criar chamado</button>
-          <button type="button" class="sidebar-item sidebar-subitem" data-page="consultar-chamados">Consultar chamados</button>
-        </div>
-      </div>
+      <!-- Chamados: uma página só, com as abas Consultar e Criar chamado (08/11/2026). -->
+      <button type="button" class="sidebar-item" data-page="chamados">
+        <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3H9z"/><path d="M9 11.5h6M9 15.5h4"/></svg>
+        <span class="sidebar-texto">Chamados</span>
+      </button>
       <button type="button" class="sidebar-item" data-page="agenda">
         <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
         <span class="sidebar-texto">Agenda</span>
@@ -1653,9 +1647,17 @@
         </div>
       </div>
 
-      <!-- ===================== Agenda ===================== -->
-      <div id="page-consultar-chamados" class="card page hidden">
-        <h1>Consultar chamados</h1>
+      <!-- ===================== Chamados ===================== -->
+      <!-- Uma página só (08/11/2026): abre sempre em "Consultar"; "Criar chamado" é a outra aba. -->
+      <div id="page-chamados" class="card page hidden">
+        <h1>Chamados</h1>
+
+        <div class="subtabs">
+          <button type="button" class="subtab active" data-subpage="ch-consultar">Consultar</button>
+          <button type="button" class="subtab" data-subpage="ch-criar">Criar chamado</button>
+        </div>
+
+        <div id="subpage-ch-consultar" class="subpage">
 
         <p id="chamados-status" class="doc-hint"></p>
         <button type="button" id="recarregar-chamados" class="link-button" title="Busca os chamados de novo no servidor.">↻ Atualizar</button>
@@ -1784,11 +1786,10 @@
           <button type="button" id="orcamento-cancelar-form" class="botao-secundario">Fechar</button>
           <div id="orcamento-status" class="status"></div>
         </div>
-      </div>
+        </div>
 
-      <!-- ===================== Chamados (Criar chamado) ===================== -->
-      <div id="page-chamados" class="card page hidden">
-        <h1>Criar chamado</h1>
+        <!-- Aba "Criar chamado" -->
+        <div id="subpage-ch-criar" class="subpage hidden">
 
         <form id="chamado-form">
             <div class="grupo">
@@ -1857,6 +1858,7 @@
               <div id="chamado-status" class="status"></div>
             </div>
           </form>
+        </div>
       </div>
 
       <!-- ===================== Agenda ===================== -->
