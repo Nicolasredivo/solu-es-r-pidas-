@@ -548,7 +548,6 @@ sala.append('<g id="hx-bolha-2" style="opacity:0">'
             '<image href="imagens/logo.png" x="924.5" y="638" width="11" height="7"/>'
             '<rect x="939" y="634" width="64" height="15" rx="7.5" fill="#1c4e85"/>'
             '<text x="971" y="644.2" text-anchor="middle" font-family="Inter, sans-serif" font-size="6" font-weight="600" fill="#ffffff">Visita agendada ✓</text></g>')
-sala.append('<path id="hx-coracao" style="opacity:0" d="M1012 625.4c-1.6-2.6-6.4-2.2-6.4 1.4 0 2.8 3.6 4.8 6.4 7.4 2.8-2.6 6.4-4.6 6.4-7.4 0-3.6-4.8-4-6.4-1.4z" fill="#ff6b5a"/>')
 sala.append(CAIXA)
 sala.append(tecnico_em_pe('hx-tec-sala', 1112, 690, 1.0, espelho=True))
 sala.append(TECNICO)

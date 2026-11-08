@@ -390,7 +390,7 @@
       alertaJanela: el("hx-alerta-janela"), mira: el("hx-mira"), miraCantos: el("hx-mira-cantos"),
       recorteSala: el("hx-sala-rect"), moradora: el("hx-moradora"),
       bolha1: el("hx-bolha-1"), digita: el("hx-digita-rect"), digitando: el("hx-digitando"), bolha2: el("hx-bolha-2"),
-      coracao: el("hx-coracao"), tecRua: el("hx-tec-rua"), tecSala: el("hx-tec-sala"),
+      tecRua: el("hx-tec-rua"), tecSala: el("hx-tec-sala"),
       tecAjoelhado: el("hx-tec-ajoelhado"), caixa: el("hx-caixa-ferramentas"), tampa: el("hx-tampa"),
       chave: el("hx-chave-mao"), chaveGira: el("hx-chave-gira"),
       elevador: el("hx-elevador"), portaria: el("hx-portaria-luz"), voo: historia.querySelector(".hx-voo"),
@@ -570,13 +570,6 @@
       if (cena.digita) cena.digita.setAttribute("width", (66 * linear(0.41, 0.43, p)).toFixed(1));
       opacidade(cena.digitando, suave(0.433, 0.438, p) * (1 - suave(0.445, 0.449, p)));
       opacidade(cena.bolha2, suave(0.447, 0.452, p) * conversa);
-
-      // coração da moradora quando acaba
-      const tCor = suave(0.79, 0.8, p);
-      opacidade(cena.coracao, tCor * (1 - suave(0.815, 0.83, p)));
-      const subida = -10 * suave(0.8, 0.83, p);
-      const escCor = 0.4 + 0.6 * tCor;
-      mover(cena.coracao, "translate(0 " + subida.toFixed(2) + ") translate(1012 629) scale(" + escCor.toFixed(3) + ") translate(-1012 -629)");
 
       // --- a van chega, freia; fumaça enquanto anda ---
       const tVan = linear(0.53, 0.6, p);
