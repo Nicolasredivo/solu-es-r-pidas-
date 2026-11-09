@@ -13,6 +13,7 @@ const { CAD, local, chamar, confere } = t;
 
 const PASTA_ANEXOS = 'C:/Users/rediv/banco-solucoes/anexos';
 const MARCA = '__TESTE_AUTOMATICO_VEICULO__';
+const FILTRO_PNEU = '?filterByFormula=' + encodeURIComponent(`{Modelo}='${MARCA}'`);
 const FILTRO = '?filterByFormula=' + encodeURIComponent(`{Observacoes}='${MARCA}'`);
 // PDF mínimo válido, só para o teste (o conteúdo não importa ao fluxo).
 const PDF = Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n');
@@ -20,6 +21,10 @@ const PDF = Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2
 (async () => {
   const antes = await t.contarTudo();
   const reaisAntes = JSON.stringify(await t.lista(CAD, 'Veiculos'));
+  const pneusAntes = await t.lista(CAD, 'Pneus');
+  // Uma posição que o dono ainda não usa (cada posição só pode ter um pneu).
+  const livre = ['Estepe', 'Traseiro direito', 'Traseiro esquerdo', 'Dianteiro direito', 'Dianteiro esquerdo']
+    .find((p) => !pneusAntes.some((r) => r.fields.Posicao === p));
   let copia = null;
   let testeId = null;
   try {
@@ -34,7 +39,9 @@ const PDF = Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2
     const wf = (await t.n8n('GET', '/workflows?limit=250')).data.find((w) => w.name === 'App - Veículo');
     copia = await t.copiaDeTeste(wf.id, {
       ajustar: (nodes) => nodes.map((n) => (['Busca veículo', 'Busca de novo'].includes(n.name)
-        ? { ...n, parameters: { ...n.parameters, url: n.parameters.url + FILTRO } } : n)),
+        ? { ...n, parameters: { ...n.parameters, url: n.parameters.url + FILTRO } }
+        : ['Busca pneus', 'Busca pneus de novo'].includes(n.name)
+          ? { ...n, parameters: { ...n.parameters, url: n.parameters.url + FILTRO_PNEU } } : n)),
     });
     await t.esperar(1500);
     await t.entrarComUsuarioDeTeste();
@@ -87,8 +94,36 @@ const PDF = Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2
     confere('salvar os dados do documento mantém o consumo', r.ok && r.veiculo.consumo === 10.25, r.veiculo && r.veiculo.consumo);
     r = await app({ acao: 'consumo', consumo: '' });
     confere('consumo: excluir deixa vazio', r.ok && r.veiculo.consumo === null && r.mensagem === 'Consumo excluído.', r);
+    // ---- pneus (numa posição que o dono não usa; o Modelo leva a marca do teste) ----
+    if (!livre) {
+      console.log('(pneus: as 5 posições já estão preenchidas pelo dono; parte dos pneus pulada)');
+    } else {
+      confere('pneus: 5 posições na resposta', Array.isArray(r.pneus) && r.pneus.length === 5, r.pneus);
+      r = await app({ acao: 'pneu', posicao: livre, marca: 'TESTE', modelo: MARCA, valor: '1.234,56', dataTroca: '01/11/2026', desgaste: '0,0247' });
+      let p = r.ok && r.pneus.find((x) => x.posicao === livre);
+      confere('pneu: salva', r.ok && p && p.salvo && r.mensagem === 'Pneu salvo.', r);
+      confere('pneu: valores entendidos', p && p.marca === 'TESTE' && p.valor === 1234.56 && p.dataTroca === '2026-11-01' && p.desgaste === 0.0247, p);
+      r = await app({ acao: 'pneu', posicao: livre, marca: 'TESTE2', modelo: MARCA, valor: '450', dataTroca: '2026-11-02', desgaste: '' });
+      p = r.ok && r.pneus.find((x) => x.posicao === livre);
+      confere('pneu: altera o mesmo pneu', p && p.marca === 'TESTE2' && p.valor === 450 && p.dataTroca === '2026-11-02' && p.desgaste === null, p);
+      confere('pneu: continua um registro só', (await t.lista(CAD, 'Pneus', `{Modelo}='${MARCA}'`)).length === 1);
+      for (const [nome, ruim, msg] of [
+        ['posição', { posicao: 'Teto' }, /Pneu inválido/],
+        ['valor', { posicao: livre, valor: 'abc' }, /Valor pago inválido/],
+        ['desgaste', { posicao: livre, desgaste: '1,23456' }, /Desgaste inválido/],
+        ['data', { posicao: livre, dataTroca: '31/02/2026' }, /Data da troca inválida/],
+      ]) {
+        r = await app({ acao: 'pneu', modelo: MARCA, ...ruim });
+        confere(`pneu: ${nome} inválido recusado`, r.ok === false && msg.test(r.mensagem), r);
+      }
+      r = await app({ acao: 'pneu', posicao: livre });
+      p = r.ok && r.pneus.find((x) => x.posicao === livre);
+      confere('pneu: tudo vazio exclui', r.ok && p && p.salvo === false && r.mensagem === 'Pneu excluído.', r);
+      confere('pneu: registro apagado', (await t.lista(CAD, 'Pneus', `{Modelo}='${MARCA}'`)).length === 0);
+    }
   } finally {
     if (testeId) await local('DELETE', `/v0/${CAD}/Veiculos/${testeId}`);
+    for (const p of await t.lista(CAD, 'Pneus', `{Modelo}='${MARCA}'`)) await local('DELETE', `/v0/${CAD}/Pneus/${p.id}`);
     // Os PDFs do registro de teste (a pasta de anexos guarda o arquivo e um .json ao lado).
     if (testeId && fs.existsSync(PASTA_ANEXOS)) {
       for (const arq of fs.readdirSync(PASTA_ANEXOS).filter((a) => a.endsWith('.json'))) {
@@ -103,6 +138,7 @@ const PDF = Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2
     await t.sairEApagarUsuarioDeTeste();
     if (copia) await copia.apagar();
   }
+  confere('os pneus de verdade ficaram idênticos', JSON.stringify(await t.lista(CAD, 'Pneus')) === JSON.stringify(pneusAntes));
   confere('o veículo de verdade ficou idêntico', JSON.stringify(await t.lista(CAD, 'Veiculos')) === reaisAntes);
   const depois = await t.contarTudo();
   confere('nada sobrou nas tabelas', JSON.stringify(depois) === JSON.stringify(antes), { antes, depois });

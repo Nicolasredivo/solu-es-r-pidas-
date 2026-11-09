@@ -4799,3 +4799,91 @@ div.lembrete-item:hover {
 
 .veiculo-consumo-status.ok { color: var(--ok); }
 .veiculo-consumo-status.error { color: var(--error); }
+
+/* Pneus (09/11/2026): um cartão por posição, lado a lado; no celular, um
+   embaixo do outro. Lendo, o cartão todo reage ao toque. */
+.veiculo-pneus-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.pneu {
+  min-width: 0;
+  border: 1px solid #2c3153;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.pneu.leitura {
+  cursor: pointer;
+  transition: border-color var(--transicao);
+}
+
+.pneu.leitura input:disabled {
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pneu.leitura:hover {
+    border-color: rgba(91, 141, 239, 0.55);
+  }
+}
+
+.pneu.editando {
+  border-color: var(--accent);
+  grid-column: span 2;
+}
+
+@media (max-width: 560px) {
+  .pneu.editando {
+    grid-column: auto;
+  }
+}
+
+.pneu-titulo {
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.pneu input {
+  margin-bottom: 12px;
+}
+
+.pneu-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pneu-acoes button {
+  width: auto;
+  padding: 8px 12px;
+}
+
+.pneu-acoes .acao-salvar {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.pneu-acoes .acao-excluir {
+  margin-left: auto;
+}
+
+.pneu-status {
+  margin-top: 8px;
+}
+
+.pneu-status:empty {
+  display: none;
+}
+
+.pneu-status.ok { color: var(--ok); }
+.pneu-status.error { color: var(--error); }
+
+/* No cartão lendo, a última linha (desgaste) não precisa do espaço de baixo. */
+.pneu.leitura input:last-of-type {
+  margin-bottom: 0;
+}

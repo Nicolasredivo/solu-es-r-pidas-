@@ -393,6 +393,18 @@ create table "Veiculos" (
   "Criado_Em" timestamptz not null default now()
 );
 
+-- Pneus do veículo (09/11/2026): um por posição, preenchidos à mão pelo dono.
+create table "Pneus" (
+  id text primary key default novo_id(),
+  "Posicao" text not null unique check ("Posicao" in ('Dianteiro esquerdo', 'Dianteiro direito', 'Traseiro esquerdo', 'Traseiro direito', 'Estepe')),
+  "Marca" text,
+  "Modelo" text,
+  "Valor_Pago" numeric(10,2) check ("Valor_Pago" >= 0),
+  "Data_Troca" date,
+  "Desgaste_R_Km" numeric(10,4) check ("Desgaste_R_Km" >= 0),
+  "Criado_Em" timestamptz not null default now()
+);
+
 -- Usuário que o n8n usa: lê e grava dados, mas não muda a estrutura.
 -- (a senha é definida fora deste arquivo; ver C:\Users\rediv\senha-banco.txt)
 do $$ begin

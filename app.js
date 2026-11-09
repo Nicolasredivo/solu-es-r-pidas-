@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.08u";
+const APP_VERSION = "2026.11.09a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -5616,7 +5616,7 @@ function formularioFinanceiroEmAndamento() {
 
 function haAlgoParaPerder() {
   return cadastroEmAndamento() || edicaoDaConsultaAbertaEmEdicao() || formularioFinanceiroEmAndamento()
-    || contatoEmAndamento() || veiculoEmAndamento() || consumoEmAndamento();
+    || contatoEmAndamento() || veiculoEmAndamento() || consumoEmAndamento() || pneuEmAndamento();
 }
 
 // Usado quando o usuário confirma que quer sair mesmo assim: devolve o bloco
@@ -5658,6 +5658,10 @@ function pendenteDeSalvar() {
       salvar: () => listaBox.querySelector(".cadastro.aberto .acao-salvar").click(),
       descartar: descartarEdicaoDaConsulta,
     };
+  }
+  if (pneuEmAndamento()) {
+    const cartao = pneuEditando();
+    return { pendente: pneuEmAndamento, salvar: () => cartao.querySelector(".acao-salvar").click(), descartar: () => cartao.querySelector(".acao-cancelar").click() };
   }
   if (consumoEmAndamento()) {
     return { pendente: consumoEmAndamento, salvar: () => consumoSalvar.click(), descartar: () => consumoCancelar.click() };
@@ -11806,12 +11810,14 @@ async function carregarVeiculo() {
       return;
     }
     // Quem já está editando não perde o que digitou.
-    if (veiculoEditando() || consumoEditando()) return;
+    if (veiculoEditando() || consumoEditando() || pneuEditando()) return;
     veiculoAtual = dados.veiculo;
+    pneusAtuais = dados.pneus || [];
     veiculoCarregado = true;
     mostrarVeiculoStatus(veiculoStatus, null, "");
     desenharVeiculo();
     desenharConsumo();
+    desenharPneus();
     if (!veiculoDocStatus.classList.contains("ok")) mostrarVeiculoStatus(veiculoDocStatus, null, dicaDoDocumento());
   } catch (err) {
     mostrarVeiculoStatus(veiculoStatus, "error", "Não foi possível falar com o n8n.");
@@ -12105,6 +12111,203 @@ document.addEventListener("click", (evento) => {
 
 consumoCampo.addEventListener("input", esquecerSaidaPendente);
 desenharConsumo();
+
+// ----- Pneus (09/11/2026) -----
+// Um cartão por posição (as 5 vêm sempre do fluxo, salvas ou não). Tocar no
+// cartão edita; Salvar grava, Excluir (com confirmação) apaga aquele pneu.
+// Ação "pneu" do fluxo "App - Veículo"; tudo vazio = excluir.
+
+const pneusLista = document.getElementById("veiculo-pneus-lista");
+const PNEU_CAMPOS = [
+  ["marca", "Marca", "text", "Ex: Pirelli"],
+  ["modelo", "Modelo", "text", "Ex: Cinturato P1 175/70 R14"],
+  ["valor", "Valor pago (R$)", "text", "Ex: 450,00"],
+  ["dataTroca", "Data da troca", "date", ""],
+  ["desgaste", "Desgaste (R$ por km)", "text", "Ex: 0,009"],
+];
+let pneusAtuais = [];
+
+const formatarReais = (n) => (typeof n === "number" && isFinite(n)
+  ? n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "");
+const formatarDesgaste = (n) => (typeof n === "number" && isFinite(n)
+  ? n.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 4 }) : "");
+const dataBR = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || "") ? iso.split("-").reverse().join("/") : "");
+
+function valoresDoPneu(p) {
+  return {
+    marca: p.marca || "",
+    modelo: p.modelo || "",
+    valor: formatarReais(p.valor),
+    dataTroca: p.dataTroca || "",
+    desgaste: formatarDesgaste(p.desgaste),
+  };
+}
+
+function cartaoDoPneu(posicao) {
+  return pneusLista.querySelector(`.pneu[data-posicao="${CSS.escape(posicao)}"]`);
+}
+
+function camposDoCartao(cartao) {
+  return [...cartao.querySelectorAll("[data-campo-pneu]")];
+}
+
+function fotoDoPneu(cartao) {
+  return JSON.stringify(camposDoCartao(cartao).map((c) => c.value.trim()));
+}
+
+function pneuEditando() {
+  return pneusLista.querySelector(".pneu.editando");
+}
+
+function pneuEmAndamento() {
+  const cartao = pneuEditando();
+  return Boolean(cartao) && naTela(cartao) && fotoDoPneu(cartao) !== cartao.fotoEdicao;
+}
+
+// Lendo: a data vira texto (dd/mm/aaaa ou "—"); o campo de data do navegador
+// mostraria "dd/mm/aaaa" vazio, que parece dado. Editando, volta a ser data.
+function travarPneu(cartao, travar) {
+  const p = pneusAtuais.find((x) => x.posicao === cartao.dataset.posicao) || {};
+  const v = valoresDoPneu(p);
+  camposDoCartao(cartao).forEach((campo) => {
+    const chave = campo.dataset.campoPneu;
+    if (chave === "dataTroca") {
+      campo.type = travar ? "text" : "date";
+      campo.value = travar ? dataBR(v.dataTroca) : v.dataTroca;
+    } else {
+      campo.value = v[chave];
+    }
+    campo.disabled = travar;
+  });
+  marcarVaziosNaLeitura(camposDoCartao(cartao), travar);
+  cartao.classList.toggle("leitura", travar);
+  cartao.classList.toggle("editando", !travar);
+  cartao.querySelector(".pneu-acoes").classList.toggle("hidden", travar);
+  cartao.querySelector(".pneu-dica").classList.toggle("hidden", travar);
+  const excluir = cartao.querySelector(".acao-excluir");
+  excluir.classList.toggle("hidden", !p.salvo);
+  excluir.classList.remove("confirmando");
+  excluir.textContent = "Excluir";
+}
+
+function desenharPneus() {
+  const posicoes = pneusAtuais.length ? pneusAtuais.map((p) => p.posicao)
+    : ["Dianteiro esquerdo", "Dianteiro direito", "Traseiro esquerdo", "Traseiro direito", "Estepe"];
+  pneusLista.innerHTML = posicoes.map((posicao) => `
+    <div class="pneu leitura" data-posicao="${escapeHtml(posicao)}">
+      <div class="pneu-titulo">${escapeHtml(posicao)}</div>
+      ${PNEU_CAMPOS.map(([chave, rotulo, tipo, exemplo]) => {
+        const id = `pneu-${posicao.replace(/\s+/g, "-").toLowerCase()}-${chave}`;
+        const decimal = chave === "valor" || chave === "desgaste" ? ' inputmode="decimal"' : "";
+        return `<label for="${id}">${escapeHtml(rotulo)}</label>
+          <input type="${tipo}" id="${id}" data-campo-pneu="${chave}"${decimal} autocomplete="off" maxlength="80" placeholder="${escapeHtml(exemplo)}" disabled />`;
+      }).join("")}
+      <p class="doc-hint pneu-dica hidden">Desgaste = valor pago ÷ quantos km o pneu dura. Ex: R$ 450 ÷ 50.000 km = 0,009.</p>
+      <div class="pneu-acoes hidden">
+        <button type="button" class="acao-salvar">Salvar</button>
+        <button type="button" class="acao-cancelar botao-secundario">Cancelar</button>
+        <button type="button" class="acao-excluir botao-secundario">Excluir</button>
+      </div>
+      <p class="placeholder-text pneu-status"></p>
+    </div>`).join("");
+  pneusLista.querySelectorAll(".pneu").forEach((cartao) => travarPneu(cartao, true));
+}
+
+function mostrarStatusPneu(cartao, tipo, mensagem) {
+  mostrarVeiculoStatus(cartao.querySelector(".pneu-status"), tipo, mensagem);
+}
+
+// Tocar no cartão (fora dos botões) edita. Um pneu de cada vez: tocar noutro
+// com o primeiro mexido pergunta se quer salvar.
+pneusLista.addEventListener("click", (evento) => {
+  const cartao = evento.target.closest(".pneu");
+  if (!cartao || !cartao.classList.contains("leitura") || veiculoOcupado || !veiculoCarregado) return;
+  if (evento.target.closest("button, a")) return;
+  const alvo = evento.target;
+  const x = evento.clientX;
+  const y = evento.clientY;
+  antesDeSair(() => {
+    const aberto = pneuEditando();
+    if (aberto && aberto !== cartao) travarPneu(aberto, true);
+    travarPneu(cartao, false);
+    cartao.fotoEdicao = fotoDoPneu(cartao);
+    mostrarStatusPneu(cartao, null, "");
+    const campo = campoNoPonto(cartao, alvo, x, y);
+    if (campo) focarCampo(campo);
+  });
+});
+
+async function gravarPneu(cartao, excluir) {
+  if (veiculoOcupado) return;
+  const dados = { acao: "pneu", posicao: cartao.dataset.posicao };
+  camposDoCartao(cartao).forEach((c) => (dados[c.dataset.campoPneu] = excluir ? "" : c.value.trim()));
+  veiculoOcupado = true;
+  cartao.querySelectorAll(".pneu-acoes button").forEach((b) => (b.disabled = true));
+  mostrarStatusPneu(cartao, "neutral", excluir ? "Excluindo..." : "Salvando...");
+  try {
+    const resposta = await pedirAoN8n("veiculo", dados);
+    if (!resposta || !resposta.ok) {
+      mostrarStatusPneu(cartao, "error", (resposta && resposta.mensagem) || "Não foi possível salvar.");
+      return;
+    }
+    pneusAtuais = resposta.pneus || pneusAtuais;
+    if (resposta.veiculo !== undefined) veiculoAtual = resposta.veiculo;
+    travarPneu(cartao, true);
+    mostrarStatusPneu(cartao, "ok", resposta.mensagem || "Salvo.");
+  } catch (err) {
+    mostrarStatusPneu(cartao, "error", "Não foi possível falar com o n8n.");
+  } finally {
+    veiculoOcupado = false;
+    cartao.querySelectorAll(".pneu-acoes button").forEach((b) => (b.disabled = false));
+  }
+}
+
+pneusLista.addEventListener("click", (evento) => {
+  const botao = evento.target.closest(".pneu-acoes button");
+  if (!botao) return;
+  const cartao = botao.closest(".pneu");
+  if (botao.classList.contains("acao-cancelar")) {
+    travarPneu(cartao, true);
+    mostrarStatusPneu(cartao, null, "");
+  } else if (botao.classList.contains("acao-salvar")) {
+    const vals = Object.fromEntries(camposDoCartao(cartao).map((c) => [c.dataset.campoPneu, c.value.trim()]));
+    const tudoVazio = Object.values(vals).every((v) => !v);
+    const p = pneusAtuais.find((x) => x.posicao === cartao.dataset.posicao) || {};
+    if (tudoVazio && !p.salvo) {
+      travarPneu(cartao, true);
+      return;
+    }
+    gravarPneu(cartao, false);
+  } else if (botao.classList.contains("acao-excluir")) {
+    if (!botao.classList.contains("confirmando")) {
+      botao.classList.add("confirmando");
+      botao.textContent = "Confirmar exclusão";
+      mostrarStatusPneu(cartao, "error", "Apaga os dados deste pneu. Clique de novo para confirmar.");
+      return;
+    }
+    gravarPneu(cartao, true);
+  }
+});
+
+pneusLista.addEventListener("keydown", (evento) => {
+  const cartao = evento.target.closest(".pneu.editando");
+  if (!cartao) return;
+  if (evento.key === "Enter") { evento.preventDefault(); cartao.querySelector(".acao-salvar").click(); }
+  if (evento.key === "Escape") { evento.preventDefault(); cartao.querySelector(".acao-cancelar").click(); }
+});
+
+// Clicar fora do "Confirmar exclusão" desarma.
+document.addEventListener("click", (evento) => {
+  pneusLista.querySelectorAll(".acao-excluir.confirmando").forEach((botao) => {
+    if (evento.target === botao) return;
+    botao.classList.remove("confirmando");
+    botao.textContent = "Excluir";
+    mostrarStatusPneu(botao.closest(".pneu"), null, "");
+  });
+});
+
+pneusLista.addEventListener("input", esquecerSaidaPendente);
+desenharPneus();
 
 document.querySelector('.sidebar-item[data-page="veiculo"]').addEventListener("click", () => {
   carregarVeiculo();

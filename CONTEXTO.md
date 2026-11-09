@@ -5452,6 +5452,11 @@ substituir) e, embaixo, todos os dados do documento organizados.
 - **Consumo (km/l), pedido do dono:** bloco "Consumo" acima do documento, separado dos dados do CRLV.
   Coluna `Veiculos.Consumo_Km_L` (numeric 5,2; 0 < valor < 100), ação `consumo` do fluxo (vazio = excluir,
   aceita vírgula ou ponto, até 2 casas). Tocar no valor edita; Salvar / Cancelar / Excluir (confirma).
+- **Pneus (09/11/2026), pedido do dono:** bloco "Pneus" abaixo do Consumo, um cartão por posição
+  (dianteiro esq./dir., traseiro esq./dir., estepe): marca, modelo, valor pago, data da troca e desgaste
+  (R$ por km, digitado; a dica mostra a conta valor ÷ km que o pneu dura). Tabela `Pneus`
+  (tblPneusVeiculo01, Posicao única), ação `pneu` do fluxo (tudo vazio = excluir). O carregar e
+  toda resposta trazem `pneus` com as 5 posições. Tocar no cartão edita (um de cada vez).
 - **Teste:** `banco/testes/testar-veiculo.js`. Roda numa CÓPIA do fluxo presa a um registro de teste
   (marcado em Observacoes) e confere que o veículo de verdade ficou idêntico.
 - **Ajuste com o documento real (08/11/2026):** no CRLV-e de verdade, o quadro do seguro DPVAT e o
@@ -5463,3 +5468,14 @@ substituir) e, embaixo, todos os dados do documento organizados.
   na cidade; carregada (2 pessoas + ~150 kg) estimamos ~9,5 km/l na gasolina e ~6,7 no etanol. Ideia:
   rota do dia (base → clientes → base) × custo por km vindo dos abastecimentos. Falta o dono decidir
   o combustível e se chamados de orçamento entram.
+
+## Asaas: todos os avisos ao cliente desmarcados nas duas contas (09/11/2026)
+O dono viu "e-mail ativo" em clientes do Asaas. O botão geral (`notificationDisabled`) já estava
+desligado nos 44 clientes, mas por baixo o padrão por evento deixava e-mail marcado (cobrança
+criada, aviso 10 dias antes, vencida e 7 dias depois). Pedido dele: desligar WhatsApp, e-mail, SMS e
+ligação em tudo, nas duas contas.
+- Desmarcados os 4 canais "para o cliente" de todos os eventos: 25 clientes no CNPJ 1 e 16 no CNPJ 2.
+  Conferido depois: nenhum canal ligado em nenhum cliente.
+- O sub-fluxo "Asaas - Sincroniza cliente" agora deixa todos os canais desmarcados ao criar ou mover
+  um cliente (lista DESEJADO toda `false`), além do `notificationDisabled: true`.
+- Os avisos para o próprio dono (ForProvider) não foram mexidos.

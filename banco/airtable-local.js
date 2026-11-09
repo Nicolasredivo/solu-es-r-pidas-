@@ -51,6 +51,8 @@ const BASES = {
     Empresas_Emissoras: 'tblEmpresasEmiss1',
     // Veículo e o documento dele (08/11/2026).
     Veiculos: 'tblVeiculosFrota1',
+    // Pneus do veículo (09/11/2026).
+    Pneus: 'tblPneusVeiculo01',
   },
   appjAmWXV7Zr33UqE: {
     Despesas: 'tblNduEKl2jY280V0', Fornecedores: 'tblhsabIIg8SLqMMj', Recorrentes: 'tblb8QplhcGRP6SZ7',
