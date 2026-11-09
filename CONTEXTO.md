@@ -5449,7 +5449,11 @@ substituir) e, embaixo, todos os dados do documento organizados.
 - **Tela:** moldura do PDF (Anexar, ou o nome + Substituir/Remover com confirmação) e blocos Veículo,
   Identificação, Capacidade e potência, Proprietário, Licenciamento, Observações (VEICULO_GRUPOS no
   app.js). Tocar num campo edita; entra no "Salvar as alterações?".
-- **Teste:** `banco/testes/testar-veiculo.js` (só roda com a tabela vazia; apaga o que criou).
+- **Consumo (km/l), pedido do dono:** bloco "Consumo" acima do documento, separado dos dados do CRLV.
+  Coluna `Veiculos.Consumo_Km_L` (numeric 5,2; 0 < valor < 100), ação `consumo` do fluxo (vazio = excluir,
+  aceita vírgula ou ponto, até 2 casas). Tocar no valor edita; Salvar / Cancelar / Excluir (confirma).
+- **Teste:** `banco/testes/testar-veiculo.js`. Roda numa CÓPIA do fluxo presa a um registro de teste
+  (marcado em Observacoes) e confere que o veículo de verdade ficou idêntico.
 - **Ajuste com o documento real (08/11/2026):** no CRLV-e de verdade, o quadro do seguro DPVAT e o
   "assinado digitalmente" ficam ao lado dos dados e o leitor pegava texto deles. Agora o dado só vale
   se começar alinhado à esquerda com o nome do campo (±6 pontos), e o próximo nome da mesma coluna

@@ -2111,6 +2111,21 @@
         <h1>Veículo</h1>
         <p class="subtitle">O documento do carro e os dados dele.</p>
 
+        <!-- Consumo (km/l): digitado pelo dono, fora dos dados do documento (08/11/2026).
+             Tocar no valor edita; Salvar / Cancelar / Excluir aparecem editando. -->
+        <div id="veiculo-consumo" class="moldura veiculo-consumo leitura">
+          <div class="secao-titulo">Consumo</div>
+          <label for="veiculo-consumo-valor">Consumo médio (km/l)</label>
+          <input type="text" id="veiculo-consumo-valor" inputmode="decimal" autocomplete="off" maxlength="6" placeholder="Ex: 9,5" disabled />
+          <p class="doc-hint">Na cidade, com a carga de sempre. Vai ser usado no gasto de combustível por chamado.</p>
+          <div class="veiculo-consumo-acoes hidden">
+            <button type="button" class="acao-salvar">Salvar</button>
+            <button type="button" class="acao-cancelar botao-secundario">Cancelar</button>
+            <button type="button" class="acao-excluir botao-secundario">Excluir</button>
+          </div>
+          <p id="veiculo-consumo-status" class="placeholder-text veiculo-consumo-status"></p>
+        </div>
+
         <div class="moldura veiculo-documento">
           <div class="secao-titulo">Documento do veículo (PDF)</div>
           <div id="veiculo-doc-vazio" class="veiculo-doc-linha">

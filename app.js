@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.08t";
+const APP_VERSION = "2026.11.08u";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -5616,7 +5616,7 @@ function formularioFinanceiroEmAndamento() {
 
 function haAlgoParaPerder() {
   return cadastroEmAndamento() || edicaoDaConsultaAbertaEmEdicao() || formularioFinanceiroEmAndamento()
-    || contatoEmAndamento() || veiculoEmAndamento();
+    || contatoEmAndamento() || veiculoEmAndamento() || consumoEmAndamento();
 }
 
 // Usado quando o usuário confirma que quer sair mesmo assim: devolve o bloco
@@ -5658,6 +5658,9 @@ function pendenteDeSalvar() {
       salvar: () => listaBox.querySelector(".cadastro.aberto .acao-salvar").click(),
       descartar: descartarEdicaoDaConsulta,
     };
+  }
+  if (consumoEmAndamento()) {
+    return { pendente: consumoEmAndamento, salvar: () => consumoSalvar.click(), descartar: () => consumoCancelar.click() };
   }
   if (veiculoEmAndamento()) {
     return { pendente: veiculoEmAndamento, salvar: () => veiculoSalvar.click(), descartar: () => veiculoCancelar.click() };
@@ -11803,11 +11806,12 @@ async function carregarVeiculo() {
       return;
     }
     // Quem já está editando não perde o que digitou.
-    if (veiculoEditando()) return;
+    if (veiculoEditando() || consumoEditando()) return;
     veiculoAtual = dados.veiculo;
     veiculoCarregado = true;
     mostrarVeiculoStatus(veiculoStatus, null, "");
     desenharVeiculo();
+    desenharConsumo();
     if (!veiculoDocStatus.classList.contains("ok")) mostrarVeiculoStatus(veiculoDocStatus, null, dicaDoDocumento());
   } catch (err) {
     mostrarVeiculoStatus(veiculoStatus, "error", "Não foi possível falar com o n8n.");
@@ -11980,6 +11984,127 @@ document.addEventListener("click", (evento) => {
     mostrarVeiculoStatus(veiculoDocStatus, null, dicaDoDocumento());
   }
 });
+
+// ----- Consumo do veículo (km/l), digitado pelo dono (08/11/2026) -----
+// Bloco à parte dos dados do documento. Tocar no valor edita; Salvar grava,
+// Excluir (com confirmação) apaga. Ação "consumo" do fluxo "App - Veículo".
+
+const consumoBloco = document.getElementById("veiculo-consumo");
+const consumoCampo = document.getElementById("veiculo-consumo-valor");
+const consumoAcoes = consumoBloco.querySelector(".veiculo-consumo-acoes");
+const consumoSalvar = consumoBloco.querySelector(".acao-salvar");
+const consumoCancelar = consumoBloco.querySelector(".acao-cancelar");
+const consumoExcluir = consumoBloco.querySelector(".acao-excluir");
+const consumoStatus = document.getElementById("veiculo-consumo-status");
+
+const formatarConsumo = (n) => (typeof n === "number" && isFinite(n) ? String(n).replace(".", ",") : "");
+
+function consumoEditando() {
+  return consumoBloco.classList.contains("editando");
+}
+
+function consumoEmAndamento() {
+  return naTela(consumoBloco) && consumoEditando() && consumoCampo.value.trim() !== consumoBloco.valorEdicao;
+}
+
+function desarmarExcluirConsumo() {
+  consumoExcluir.classList.remove("confirmando");
+  consumoExcluir.textContent = "Excluir";
+}
+
+function desenharConsumo() {
+  consumoCampo.value = formatarConsumo(veiculoAtual && veiculoAtual.consumo);
+  consumoCampo.disabled = true;
+  marcarVaziosNaLeitura([consumoCampo], true);
+  consumoBloco.classList.add("leitura");
+  consumoBloco.classList.remove("editando");
+  consumoAcoes.classList.add("hidden");
+  desarmarExcluirConsumo();
+}
+
+consumoBloco.addEventListener("click", (evento) => {
+  if (!consumoBloco.classList.contains("leitura") || veiculoOcupado || !veiculoCarregado) return;
+  if (evento.target.closest("button, a")) return;
+  consumoCampo.disabled = false;
+  marcarVaziosNaLeitura([consumoCampo], false);
+  consumoBloco.classList.remove("leitura");
+  consumoBloco.classList.add("editando");
+  consumoAcoes.classList.remove("hidden");
+  // Excluir só faz sentido quando já há um consumo salvo.
+  consumoExcluir.classList.toggle("hidden", !(veiculoAtual && typeof veiculoAtual.consumo === "number"));
+  consumoBloco.valorEdicao = consumoCampo.value.trim();
+  mostrarVeiculoStatus(consumoStatus, null, "");
+  focarCampo(consumoCampo);
+});
+
+async function gravarConsumo(valor) {
+  if (veiculoOcupado) return;
+  veiculoOcupado = true;
+  [consumoSalvar, consumoExcluir].forEach((b) => (b.disabled = true));
+  mostrarVeiculoStatus(consumoStatus, "neutral", valor ? "Salvando..." : "Excluindo...");
+  try {
+    const dados = await pedirAoN8n("veiculo", { acao: "consumo", consumo: valor });
+    if (!dados || !dados.ok) {
+      mostrarVeiculoStatus(consumoStatus, "error", (dados && dados.mensagem) || "Não foi possível salvar.");
+      return;
+    }
+    veiculoAtual = dados.veiculo;
+    veiculoCarregado = true;
+    desenharConsumo();
+    mostrarVeiculoStatus(consumoStatus, "ok", dados.mensagem || "Salvo.");
+  } catch (err) {
+    mostrarVeiculoStatus(consumoStatus, "error", "Não foi possível falar com o n8n.");
+  } finally {
+    veiculoOcupado = false;
+    [consumoSalvar, consumoExcluir].forEach((b) => (b.disabled = false));
+  }
+}
+
+consumoSalvar.addEventListener("click", () => {
+  const valor = consumoCampo.value.trim().replace(/\s+/g, "");
+  if (valor && !/^\d{1,2}([.,]\d{1,2})?$/.test(valor)) {
+    mostrarVeiculoStatus(consumoStatus, "error", "Use só o número de km por litro, por exemplo 9,5.");
+    consumoCampo.focus();
+    return;
+  }
+  if (valor && Number(valor.replace(",", ".")) <= 0) {
+    mostrarVeiculoStatus(consumoStatus, "error", "O consumo precisa ser maior que zero.");
+    consumoCampo.focus();
+    return;
+  }
+  gravarConsumo(valor);
+});
+
+consumoCampo.addEventListener("keydown", (evento) => {
+  if (evento.key === "Enter") { evento.preventDefault(); consumoSalvar.click(); }
+  if (evento.key === "Escape") { evento.preventDefault(); consumoCancelar.click(); }
+});
+
+consumoCancelar.addEventListener("click", () => {
+  desenharConsumo();
+  mostrarVeiculoStatus(consumoStatus, null, "");
+});
+
+consumoExcluir.addEventListener("click", () => {
+  if (!consumoExcluir.classList.contains("confirmando")) {
+    consumoExcluir.classList.add("confirmando");
+    consumoExcluir.textContent = "Confirmar exclusão";
+    mostrarVeiculoStatus(consumoStatus, "error", "Apaga o consumo salvo. Clique de novo para confirmar.");
+    return;
+  }
+  gravarConsumo("");
+});
+
+// Clicar fora do "Confirmar exclusão" desarma.
+document.addEventListener("click", (evento) => {
+  if (consumoExcluir.classList.contains("confirmando") && evento.target !== consumoExcluir) {
+    desarmarExcluirConsumo();
+    mostrarVeiculoStatus(consumoStatus, null, "");
+  }
+});
+
+consumoCampo.addEventListener("input", esquecerSaidaPendente);
+desenharConsumo();
 
 document.querySelector('.sidebar-item[data-page="veiculo"]').addEventListener("click", () => {
   carregarVeiculo();

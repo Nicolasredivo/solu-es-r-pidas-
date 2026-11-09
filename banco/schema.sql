@@ -389,6 +389,7 @@ create table "Veiculos" (
   "Data_Documento" text,
   "Exercicio" text,
   "Observacoes" text,
+  "Consumo_Km_L" numeric(5,2) check ("Consumo_Km_L" > 0 and "Consumo_Km_L" < 100), -- digitado pelo dono, fora do documento
   "Criado_Em" timestamptz not null default now()
 );
 

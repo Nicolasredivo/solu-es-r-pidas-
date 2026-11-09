@@ -4745,3 +4745,57 @@ div.lembrete-item:hover {
 .veiculo-grupo > .veiculo-campos {
   margin-bottom: -14px;
 }
+
+/* Consumo (km/l): bloco à parte, acima do documento. Lendo, o bloco todo
+   reage ao toque; editando, os botões ficam logo embaixo do campo. */
+.veiculo-consumo.leitura {
+  cursor: pointer;
+  transition: border-color var(--transicao);
+}
+
+.veiculo-consumo.leitura input:disabled {
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .veiculo-consumo.leitura:hover {
+    border-color: rgba(91, 141, 239, 0.55);
+  }
+}
+
+#veiculo-consumo-valor {
+  max-width: 160px;
+}
+
+.veiculo-consumo-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.veiculo-consumo-acoes button {
+  width: auto;
+  padding: 8px 12px;
+}
+
+.veiculo-consumo-acoes .acao-salvar {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.veiculo-consumo-acoes .acao-excluir {
+  margin-left: auto;
+}
+
+.veiculo-consumo-status {
+  margin-top: 8px;
+}
+
+.veiculo-consumo-status:empty {
+  display: none;
+}
+
+.veiculo-consumo-status.ok { color: var(--ok); }
+.veiculo-consumo-status.error { color: var(--error); }
