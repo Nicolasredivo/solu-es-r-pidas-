@@ -2,7 +2,7 @@
   "name": "App - Veículo",
   "nodes": [
     {
-      "id": "a0ff045f-584b-460f-b715-df370c8f23d0",
+      "id": "a5fbf8a2-f28e-4ce9-95a6-8edf6ca3d7ce",
       "name": "Recebe pedido do app",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -10,7 +10,7 @@
         0,
         300
       ],
-      "webhookId": "309b5ba8-f300-4996-a44e-05ab24f561a4",
+      "webhookId": "a16f9358-a14e-4102-b69b-45d361013eb2",
       "parameters": {
         "httpMethod": "POST",
         "path": "veiculo",
@@ -21,7 +21,7 @@
       }
     },
     {
-      "id": "a77df3f3-c2d6-4c1e-90aa-fea604efd85c",
+      "id": "6bfe6962-9381-4461-b02e-95aaf558f95b",
       "name": "Confere acesso",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
@@ -48,7 +48,7 @@
       }
     },
     {
-      "id": "4a4bb47d-9eb2-4ed8-8687-934da07f6381",
+      "id": "54717c3e-ffb6-4881-bcff-38715d864a27",
       "name": "Acesso permitido?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -66,7 +66,7 @@
           },
           "conditions": [
             {
-              "id": "ba020d30-1a89-4f30-8f90-26cdc1c34520",
+              "id": "12f109ca-6094-4bde-8ef9-889ea2fbc4bf",
               "leftValue": "={{ ($json.permitido === true) ? 'sim' : 'nao' }}",
               "rightValue": "sim",
               "operator": {
@@ -83,7 +83,7 @@
       }
     },
     {
-      "id": "35e5d405-999f-4717-b1df-b862a48f4950",
+      "id": "e630404f-9ca8-41f0-8865-b79eb7c7e250",
       "name": "Monta acesso negado",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -96,7 +96,7 @@
       }
     },
     {
-      "id": "141c8247-57b9-41e1-8e86-0d06bc17198c",
+      "id": "8a167b8b-abe3-4c00-8f92-b03d715b296e",
       "name": "Le entrada",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -105,11 +105,11 @@
         300
       ],
       "parameters": {
-        "jsCode": "// Tudo chega como texto (o app manda formulário simples).\nconst corpo = $('Recebe pedido do app').first().json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst CAMPOS = [\"Placa\",\"Marca_Modelo\",\"Especie_Tipo\",\"Carroceria\",\"Categoria\",\"Cor\",\"Combustivel\",\"Ano_Fabricacao\",\"Ano_Modelo\",\"Renavam\",\"Chassi\",\"Motor\",\"Numero_CRV\",\"Codigo_Seguranca_CLA\",\"CAT\",\"Placa_Anterior\",\"Potencia_Cilindrada\",\"Capacidade\",\"Lotacao\",\"Peso_Bruto_Total\",\"CMT\",\"Eixos\",\"Proprietario_Nome\",\"Proprietario_Documento\",\"Local\",\"Data_Documento\",\"Exercicio\",\"Observacoes\"];\nconst ACOES = ['carregar', 'salvar', 'documento', 'remover-documento', 'consumo', 'pneu'];\nconst acao = ACOES.includes(texto(corpo.acao)) ? texto(corpo.acao) : '';\nlet erro = acao ? '' : 'Ação inválida.';\n\n// Campos: JSON { Campo: \"valor\" }. Só os conhecidos; texto curto.\nlet campos = {};\nif (!erro && (acao === 'salvar' || acao === 'documento')) {\n  let bruto = {};\n  try { bruto = JSON.parse(texto(corpo.campos) || '{}'); } catch (e) { erro = 'Dados do veículo inválidos.'; }\n  if (bruto && typeof bruto === 'object' && !Array.isArray(bruto)) {\n    for (const c of CAMPOS) {\n      if (Object.prototype.hasOwnProperty.call(bruto, c)) {\n        campos[c] = String(bruto[c] ?? '').replace(/\\s+/g, c === 'Observacoes' ? ' ' : ' ').trim().slice(0, c === 'Observacoes' ? 1000 : 200);\n      }\n    }\n  }\n}\n\n// Consumo (km/l), digitado pelo dono. Vazio = excluir.\nlet consumo = null;\nif (!erro && acao === 'consumo') {\n  const bruto = texto(corpo.consumo).replace(/\\s+/g, '').replace(',', '.');\n  if (bruto) {\n    const n = Number(bruto);\n    if (!/^\\d{1,2}(\\.\\d{1,2})?$/.test(bruto) || !(n > 0 && n < 100)) erro = 'Consumo inválido. Use só o número de km por litro, por exemplo 9,5.';\n    else consumo = n;\n  }\n}\n\n// Pneu (09/11/2026): uma das 5 posições. Tudo vazio = excluir o pneu.\nconst POSICOES = [\"Dianteiro esquerdo\",\"Dianteiro direito\",\"Traseiro esquerdo\",\"Traseiro direito\",\"Estepe\"];\nlet pneu = null;\nif (!erro && acao === 'pneu') {\n  // Número em reais/decimal: vazio -> null; inválido -> NaN. \"1.234,56\" e \"450.5\" valem.\n  const num = (v, re) => {\n    let s = texto(v).replace(/\\s+/g, '').replace(/^R\\$/i, '');\n    if (!s) return null;\n    if (s.includes(',')) s = s.replace(/\\./g, '').replace(',', '.');\n    return re.test(s) ? Number(s) : NaN;\n  };\n  const posicao = texto(corpo.posicao);\n  const marca = texto(corpo.marca).replace(/\\s+/g, ' ').slice(0, 80);\n  const modelo = texto(corpo.modelo).replace(/\\s+/g, ' ').slice(0, 80);\n  const valor = num(corpo.valor, /^\\d{1,7}(\\.\\d{1,2})?$/);\n  const desgaste = num(corpo.desgaste, /^\\d{1,3}(\\.\\d{1,4})?$/);\n  let data = texto(corpo.dataTroca);\n  const br = /^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/.exec(data);\n  if (br) data = br[3] + '-' + br[2] + '-' + br[1];\n  const dataOk = !data || (/^\\d{4}-\\d{2}-\\d{2}$/.test(data) && !isNaN(new Date(data + 'T12:00:00Z'))\n    && new Date(data + 'T12:00:00Z').toISOString().slice(0, 10) === data && data >= '2000-01-01' && data <= '2100-12-31');\n  if (!POSICOES.includes(posicao)) erro = 'Pneu inválido.';\n  else if (Number.isNaN(valor)) erro = 'Valor pago inválido. Use só o número, por exemplo 450,00.';\n  else if (Number.isNaN(desgaste)) erro = 'Desgaste inválido. Use só o número de reais por km, por exemplo 0,009.';\n  else if (!dataOk) erro = 'Data da troca inválida.';\n  else pneu = { posicao, marca, modelo, valor, data: data || null, desgaste,\n    vazio: !marca && !modelo && valor === null && !data && desgaste === null };\n}\n\n// Documento: PDF em base64, até uns 8 MB.\nlet arquivo = '';\nlet nomeArquivo = '';\nif (!erro && acao === 'documento') {\n  arquivo = texto(corpo.arquivo).replace(/^data:[^,]*,/, '');\n  nomeArquivo = texto(corpo.nomeArquivo).replace(/[\\\\/:*?\"<>|\\x00-\\x1f]/g, '_').slice(0, 150) || 'documento-do-veiculo.pdf';\n  if (!/\\.pdf$/i.test(nomeArquivo)) nomeArquivo += '.pdf';\n  if (!arquivo || !/^[A-Za-z0-9+/=]+$/.test(arquivo)) erro = 'Arquivo inválido.';\n  else if (!arquivo.startsWith('JVBERi0')) erro = 'O arquivo precisa ser um PDF.';\n  else if (arquivo.length > 11 * 1024 * 1024) erro = 'O PDF passa de 8 MB. Tente um arquivo menor.';\n}\nreturn [{ json: { acao, campos, consumo, pneu, arquivo, nomeArquivo, erro } }];\n"
+        "jsCode": "// Tudo chega como texto (o app manda formulário simples).\nconst corpo = $('Recebe pedido do app').first().json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst CAMPOS = [\"Placa\",\"Marca_Modelo\",\"Especie_Tipo\",\"Carroceria\",\"Categoria\",\"Cor\",\"Combustivel\",\"Ano_Fabricacao\",\"Ano_Modelo\",\"Renavam\",\"Chassi\",\"Motor\",\"Numero_CRV\",\"Codigo_Seguranca_CLA\",\"CAT\",\"Placa_Anterior\",\"Potencia_Cilindrada\",\"Capacidade\",\"Lotacao\",\"Peso_Bruto_Total\",\"CMT\",\"Eixos\",\"Proprietario_Nome\",\"Proprietario_Documento\",\"Local\",\"Data_Documento\",\"Exercicio\",\"Observacoes\"];\nconst ACOES = ['carregar', 'salvar', 'documento', 'remover-documento', 'consumo', 'pneu'];\nconst acao = ACOES.includes(texto(corpo.acao)) ? texto(corpo.acao) : '';\nlet erro = acao ? '' : 'Ação inválida.';\n\n// Campos: JSON { Campo: \"valor\" }. Só os conhecidos; texto curto.\nlet campos = {};\nif (!erro && (acao === 'salvar' || acao === 'documento')) {\n  let bruto = {};\n  try { bruto = JSON.parse(texto(corpo.campos) || '{}'); } catch (e) { erro = 'Dados do veículo inválidos.'; }\n  if (bruto && typeof bruto === 'object' && !Array.isArray(bruto)) {\n    for (const c of CAMPOS) {\n      if (Object.prototype.hasOwnProperty.call(bruto, c)) {\n        campos[c] = String(bruto[c] ?? '').replace(/\\s+/g, c === 'Observacoes' ? ' ' : ' ').trim().slice(0, c === 'Observacoes' ? 1000 : 200);\n      }\n    }\n  }\n}\n\n// Consumo (km/l), digitado pelo dono. Vazio = excluir.\nlet consumo = null;\nif (!erro && acao === 'consumo') {\n  const bruto = texto(corpo.consumo).replace(/\\s+/g, '').replace(',', '.');\n  if (bruto) {\n    const n = Number(bruto);\n    if (!/^\\d{1,2}(\\.\\d{1,2})?$/.test(bruto) || !(n > 0 && n < 100)) erro = 'Consumo inválido. Use só o número de km por litro, por exemplo 9,5.';\n    else consumo = n;\n  }\n}\n// Preço do litro (R$), no mesmo bloco (09/11/2026). Só mexe se o app mandou o campo\n// (app antigo não manda e não apaga o preço). Vazio = excluir.\nlet precoLitro = null;\nconst mandouPreco = Object.prototype.hasOwnProperty.call(corpo, 'precoLitro');\nif (!erro && acao === 'consumo' && mandouPreco) {\n  let bruto = texto(corpo.precoLitro).replace(/\\s+/g, '').replace(/^R\\$/i, '');\n  if (bruto.includes(',')) bruto = bruto.replace(/\\./g, '').replace(',', '.');\n  if (bruto) {\n    const n = Number(bruto);\n    if (!/^\\d{1,2}(\\.\\d{1,3})?$/.test(bruto) || !(n > 0 && n < 100)) erro = 'Preço do litro inválido. Use só o número, por exemplo 6,49.';\n    else precoLitro = n;\n  }\n}\n\n// Pneu (09/11/2026): uma das 5 posições. Tudo vazio = excluir o pneu.\nconst POSICOES = [\"Dianteiro esquerdo\",\"Dianteiro direito\",\"Traseiro esquerdo\",\"Traseiro direito\",\"Estepe\"];\nlet pneu = null;\nif (!erro && acao === 'pneu') {\n  // Número em reais/decimal: vazio -> null; inválido -> NaN. \"1.234,56\" e \"450.5\" valem.\n  const num = (v, re) => {\n    let s = texto(v).replace(/\\s+/g, '').replace(/^R\\$/i, '');\n    if (!s) return null;\n    if (s.includes(',')) s = s.replace(/\\./g, '').replace(',', '.');\n    return re.test(s) ? Number(s) : NaN;\n  };\n  const posicao = texto(corpo.posicao);\n  const marca = texto(corpo.marca).replace(/\\s+/g, ' ').slice(0, 80);\n  const modelo = texto(corpo.modelo).replace(/\\s+/g, ' ').slice(0, 80);\n  const valor = num(corpo.valor, /^\\d{1,7}(\\.\\d{1,2})?$/);\n  const desgaste = num(corpo.desgaste, /^\\d{1,3}(\\.\\d{1,4})?$/);\n  let data = texto(corpo.dataTroca);\n  const br = /^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/.exec(data);\n  if (br) data = br[3] + '-' + br[2] + '-' + br[1];\n  const dataOk = !data || (/^\\d{4}-\\d{2}-\\d{2}$/.test(data) && !isNaN(new Date(data + 'T12:00:00Z'))\n    && new Date(data + 'T12:00:00Z').toISOString().slice(0, 10) === data && data >= '2000-01-01' && data <= '2100-12-31');\n  if (!POSICOES.includes(posicao)) erro = 'Pneu inválido.';\n  else if (Number.isNaN(valor)) erro = 'Valor pago inválido. Use só o número, por exemplo 450,00.';\n  else if (Number.isNaN(desgaste)) erro = 'Desgaste inválido. Use só o número de reais por km, por exemplo 0,009.';\n  else if (!dataOk) erro = 'Data da troca inválida.';\n  else pneu = { posicao, marca, modelo, valor, data: data || null, desgaste,\n    vazio: !marca && !modelo && valor === null && !data && desgaste === null };\n}\n\n// Documento: PDF em base64, até uns 8 MB.\nlet arquivo = '';\nlet nomeArquivo = '';\nif (!erro && acao === 'documento') {\n  arquivo = texto(corpo.arquivo).replace(/^data:[^,]*,/, '');\n  nomeArquivo = texto(corpo.nomeArquivo).replace(/[\\\\/:*?\"<>|\\x00-\\x1f]/g, '_').slice(0, 150) || 'documento-do-veiculo.pdf';\n  if (!/\\.pdf$/i.test(nomeArquivo)) nomeArquivo += '.pdf';\n  if (!arquivo || !/^[A-Za-z0-9+/=]+$/.test(arquivo)) erro = 'Arquivo inválido.';\n  else if (!arquivo.startsWith('JVBERi0')) erro = 'O arquivo precisa ser um PDF.';\n  else if (arquivo.length > 11 * 1024 * 1024) erro = 'O PDF passa de 8 MB. Tente um arquivo menor.';\n}\n// Mês do resumo de deslocamento (AAAA-MM); vazio = o mês atual.\nconst mesPedido = texto(corpo.mes);\nconst mes = /^\\d{4}-(0[1-9]|1[0-2])$/.test(mesPedido) ? mesPedido : new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 7);\nreturn [{ json: { acao, campos, consumo, precoLitro, mandouPreco, pneu, arquivo, nomeArquivo, mes, erro } }];\n"
       }
     },
     {
-      "id": "0f65fd71-8c06-499f-bb0f-7942ef46cfe6",
+      "id": "e2b6c123-f579-4951-a0bf-a9e4ff22b226",
       "name": "Entrada ok?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -127,7 +127,7 @@
           },
           "conditions": [
             {
-              "id": "e2228a2d-f172-4bca-a229-713587d9cdcd",
+              "id": "782abe38-c981-41ef-a3f5-a25107f55159",
               "leftValue": "={{ (!$json.erro) ? 'sim' : 'nao' }}",
               "rightValue": "sim",
               "operator": {
@@ -144,7 +144,7 @@
       }
     },
     {
-      "id": "f1e3f2a9-19f8-4c0a-93c5-088bcb90cf81",
+      "id": "644d0e58-6819-4ca6-a0e2-9fbf4256b520",
       "name": "Monta erro de entrada",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -157,7 +157,7 @@
       }
     },
     {
-      "id": "0b60a967-4f77-45ce-b2c8-55fc5a07d780",
+      "id": "c2625233-7325-419b-8a86-28283f2e37c8",
       "name": "Busca veículo",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -183,7 +183,7 @@
       }
     },
     {
-      "id": "6bdc991d-9e11-482d-af8d-299c5ba2987c",
+      "id": "18ec1f35-e0b3-4303-aee1-6b109fe66ff7",
       "name": "Busca pneus",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -211,7 +211,7 @@
       }
     },
     {
-      "id": "6f8e30b5-e809-4410-ab71-b4dc78210bb4",
+      "id": "e1a08e47-2e46-4177-8520-8ccb70218c15",
       "name": "Decide",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -220,11 +220,11 @@
         300
       ],
       "parameters": {
-        "jsCode": "// Um veículo só, por enquanto: o primeiro (e único) registro da tabela.\nconst e = $('Le entrada').first().json;\nconst registros = ($('Busca veículo').first().json.records || []);\nconst atual = registros[0] || null;\nconst pneus = ($json.records || []);\nconst URL_TABELA = 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblVeiculosFrota1';\nconst URL_PNEUS = 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblPneusVeiculo01';\nlet grava = false, metodo = '', url = '', corpo = null;\nif (e.acao === 'pneu') {\n  const p = e.pneu;\n  const existente = pneus.find((r) => (r.fields || {}).Posicao === p.posicao);\n  if (p.vazio) {\n    // Excluir: apaga o pneu daquela posição (se houver).\n    if (existente) { grava = true; metodo = 'DELETE'; url = URL_PNEUS + '/' + existente.id; corpo = {}; }\n  } else {\n    grava = true;\n    const fields = { Posicao: p.posicao, Marca: p.marca || null, Modelo: p.modelo || null, Valor_Pago: p.valor,\n      Data_Troca: p.data, Desgaste_R_Km: p.desgaste };\n    if (existente) { metodo = 'PATCH'; url = URL_PNEUS + '/' + existente.id; corpo = { fields }; }\n    else { metodo = 'POST'; url = URL_PNEUS; corpo = { fields }; }\n  }\n}\nif (e.acao === 'salvar' || e.acao === 'documento') {\n  const fields = { ...e.campos };\n  // Documento novo substitui o antigo (o arquivo antigo continua na pasta de anexos do PC).\n  if (e.acao === 'documento') fields.Documento = [];\n  grava = true;\n  if (atual) { metodo = 'PATCH'; url = URL_TABELA + '/' + atual.id; corpo = { fields }; }\n  else { metodo = 'POST'; url = URL_TABELA; corpo = { fields }; }\n} else if (e.acao === 'consumo') {\n  grava = true;\n  const fields = { Consumo_Km_L: e.consumo };\n  if (atual) { metodo = 'PATCH'; url = URL_TABELA + '/' + atual.id; corpo = { fields }; }\n  else { metodo = 'POST'; url = URL_TABELA; corpo = { fields }; }\n} else if (e.acao === 'remover-documento' && atual) {\n  grava = true; metodo = 'PATCH'; url = URL_TABELA + '/' + atual.id; corpo = { fields: { Documento: [] } };\n}\nreturn [{ json: { grava, metodo, url, corpo, sobe: e.acao === 'documento' } }];\n"
+        "jsCode": "// Um veículo só, por enquanto: o primeiro (e único) registro da tabela.\nconst e = $('Le entrada').first().json;\nconst registros = ($('Busca veículo').first().json.records || []);\nconst atual = registros[0] || null;\nconst pneus = ($json.records || []);\nconst URL_TABELA = 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblVeiculosFrota1';\nconst URL_PNEUS = 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblPneusVeiculo01';\nlet grava = false, metodo = '', url = '', corpo = null;\nif (e.acao === 'pneu') {\n  const p = e.pneu;\n  const existente = pneus.find((r) => (r.fields || {}).Posicao === p.posicao);\n  if (p.vazio) {\n    // Excluir: apaga o pneu daquela posição (se houver).\n    if (existente) { grava = true; metodo = 'DELETE'; url = URL_PNEUS + '/' + existente.id; corpo = {}; }\n  } else {\n    grava = true;\n    const fields = { Posicao: p.posicao, Marca: p.marca || null, Modelo: p.modelo || null, Valor_Pago: p.valor,\n      Data_Troca: p.data, Desgaste_R_Km: p.desgaste };\n    if (existente) { metodo = 'PATCH'; url = URL_PNEUS + '/' + existente.id; corpo = { fields }; }\n    else { metodo = 'POST'; url = URL_PNEUS; corpo = { fields }; }\n  }\n}\nif (e.acao === 'salvar' || e.acao === 'documento') {\n  const fields = { ...e.campos };\n  // Documento novo substitui o antigo (o arquivo antigo continua na pasta de anexos do PC).\n  if (e.acao === 'documento') fields.Documento = [];\n  grava = true;\n  if (atual) { metodo = 'PATCH'; url = URL_TABELA + '/' + atual.id; corpo = { fields }; }\n  else { metodo = 'POST'; url = URL_TABELA; corpo = { fields }; }\n} else if (e.acao === 'consumo') {\n  grava = true;\n  const fields = { Consumo_Km_L: e.consumo };\n  if (e.mandouPreco) fields.Preco_Litro = e.precoLitro;\n  if (atual) { metodo = 'PATCH'; url = URL_TABELA + '/' + atual.id; corpo = { fields }; }\n  else { metodo = 'POST'; url = URL_TABELA; corpo = { fields }; }\n} else if (e.acao === 'remover-documento' && atual) {\n  grava = true; metodo = 'PATCH'; url = URL_TABELA + '/' + atual.id; corpo = { fields: { Documento: [] } };\n}\nreturn [{ json: { grava, metodo, url, corpo, sobe: e.acao === 'documento' } }];\n"
       }
     },
     {
-      "id": "16ed9438-c604-4969-953f-00502c146835",
+      "id": "f4e3e53b-6c9d-4e87-95c0-56df51a0ef5d",
       "name": "Precisa gravar?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -242,7 +242,7 @@
           },
           "conditions": [
             {
-              "id": "a5826e14-9b2e-4715-9c5a-3a23e5273316",
+              "id": "f721bab1-88e9-462c-82f8-289c7c4de3ae",
               "leftValue": "={{ ($json.grava === true) ? 'sim' : 'nao' }}",
               "rightValue": "sim",
               "operator": {
@@ -259,7 +259,7 @@
       }
     },
     {
-      "id": "0b9d780f-1daa-40e5-91d5-9312c1605e03",
+      "id": "9c51d18d-de9f-4149-89da-1aa4465b3b44",
       "name": "Grava no banco",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -288,7 +288,7 @@
       }
     },
     {
-      "id": "1a9a60fb-da5a-4ee3-bed8-8e3924195ef0",
+      "id": "c43ca1be-39b4-424b-9733-ac4365cbe5c0",
       "name": "Precisa subir o PDF?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -306,7 +306,7 @@
           },
           "conditions": [
             {
-              "id": "df67cd7b-e71b-41b7-b1f6-0c3a6edcf979",
+              "id": "ac3848c6-8c4a-4d61-b747-38910c8fb323",
               "leftValue": "={{ ($('Decide').first().json.sobe === true) ? 'sim' : 'nao' }}",
               "rightValue": "sim",
               "operator": {
@@ -323,7 +323,7 @@
       }
     },
     {
-      "id": "ab839a48-e4c0-4f2c-b38a-467635221295",
+      "id": "3cbcc961-bfcc-441a-9fdb-7cbf4324fdf6",
       "name": "Prepara envio do PDF",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -336,7 +336,7 @@
       }
     },
     {
-      "id": "6e99223a-3148-4649-999b-3c01f1d07d5f",
+      "id": "6a1aa3f1-8648-4bb1-8f71-49147c566a03",
       "name": "Sobe o PDF",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -365,7 +365,7 @@
       }
     },
     {
-      "id": "528861a9-8109-4d1a-9ad5-2e3fcd1cbbdd",
+      "id": "d1b28f23-0f27-47fa-a441-968c2f530c31",
       "name": "Monta falha",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -378,7 +378,7 @@
       }
     },
     {
-      "id": "2b42037a-1c5f-445e-8ee4-65b2ae58b58a",
+      "id": "35702e24-23f4-4a56-a55e-4435ef448b77",
       "name": "Busca de novo",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -404,7 +404,7 @@
       }
     },
     {
-      "id": "766d313a-f7ee-485b-bdb7-70af6002b335",
+      "id": "97c908ed-0021-4be9-b777-27a9fbfa1ce4",
       "name": "Busca pneus de novo",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -432,7 +432,63 @@
       }
     },
     {
-      "id": "48352efa-ae4d-43cb-b56c-e089fadfdd7b",
+      "id": "9dc96aa1-4809-461d-a484-11b02e0dad88",
+      "name": "Busca visitas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2800,
+        450
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/Visitas?_itens=1",
+        "options": {
+          "timeout": 20000
+        }
+      }
+    },
+    {
+      "id": "d076e305-c784-464e-b559-fb5eece612c8",
+      "name": "Busca chamados",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2830,
+        600
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/Chamados?_itens=1",
+        "options": {
+          "timeout": 20000
+        }
+      }
+    },
+    {
+      "id": "dd44cb78-bf00-48a6-b8f3-e730f7c87da4",
       "name": "Monta resposta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -441,11 +497,11 @@
         300
       ],
       "parameters": {
-        "jsCode": "// Anexo guardado no PC vem com endereço relativo (/webhook/anexo...): completa com o\n// endereço por onde o app chegou (o túnel), senão o PDF não abre no celular.\nconst cab = $('Recebe pedido do app').first().json.headers || {};\nconst origem = String(cab['x-forwarded-proto'] || 'http').split(',')[0].trim() + '://' + (cab['x-forwarded-host'] || cab.host || 'localhost:5678');\nconst urlAnexo = (u) => (String(u || '').startsWith('/') ? origem + u : u);\nconst CAMPOS = [\"Placa\",\"Marca_Modelo\",\"Especie_Tipo\",\"Carroceria\",\"Categoria\",\"Cor\",\"Combustivel\",\"Ano_Fabricacao\",\"Ano_Modelo\",\"Renavam\",\"Chassi\",\"Motor\",\"Numero_CRV\",\"Codigo_Seguranca_CLA\",\"CAT\",\"Placa_Anterior\",\"Potencia_Cilindrada\",\"Capacidade\",\"Lotacao\",\"Peso_Bruto_Total\",\"CMT\",\"Eixos\",\"Proprietario_Nome\",\"Proprietario_Documento\",\"Local\",\"Data_Documento\",\"Exercicio\",\"Observacoes\"];\nconst POSICOES = [\"Dianteiro esquerdo\",\"Dianteiro direito\",\"Traseiro esquerdo\",\"Traseiro direito\",\"Estepe\"];\nconst reg = ($('Busca de novo').first().json.records || [])[0] || null;\nconst numero = (v) => (v === null || v === undefined || v === '' ? null : Number(v));\nconst salvos = ($json.records || []).map((r) => r.fields || {});\nconst pneus = POSICOES.map((posicao) => {\n  const f = salvos.find((s) => s.Posicao === posicao);\n  return f ? { posicao, salvo: true, marca: f.Marca || '', modelo: f.Modelo || '', valor: numero(f.Valor_Pago),\n    dataTroca: f.Data_Troca ? String(f.Data_Troca).slice(0, 10) : '', desgaste: numero(f.Desgaste_R_Km) }\n    : { posicao, salvo: false, marca: '', modelo: '', valor: null, dataTroca: '', desgaste: null };\n});\nlet veiculo = null;\nif (reg) {\n  const f = reg.fields || {};\n  const campos = {};\n  for (const c of CAMPOS) campos[c] = f[c] || '';\n  const doc = (f.Documento || [])[0] || null;\n  const consumo = typeof f.Consumo_Km_L === 'number' ? f.Consumo_Km_L : (f.Consumo_Km_L ? Number(f.Consumo_Km_L) : null);\n  veiculo = { id: reg.id, campos, consumo, documento: doc ? { nome: doc.filename, url: urlAnexo(doc.url), tamanho: doc.size || 0 } : null };\n}\nconst acao = $('Le entrada').first().json.acao;\nconst consumoNovo = $('Le entrada').first().json.consumo;\nconst pneuNovo = $('Le entrada').first().json.pneu;\nconst MSG = { consumo: consumoNovo === null ? 'Consumo excluído.' : 'Consumo salvo.', salvar: 'Salvo.', documento: 'Documento anexado.', 'remover-documento': 'Documento removido.',\n  pneu: pneuNovo && pneuNovo.vazio ? 'Pneu excluído.' : 'Pneu salvo.' };\nreturn [{ json: { ok: true, veiculo, pneus, mensagem: MSG[acao] || '' } }];\n"
+        "jsCode": "// Anexo guardado no PC vem com endereço relativo (/webhook/anexo...): completa com o\n// endereço por onde o app chegou (o túnel), senão o PDF não abre no celular.\nconst cab = $('Recebe pedido do app').first().json.headers || {};\nconst origem = String(cab['x-forwarded-proto'] || 'http').split(',')[0].trim() + '://' + (cab['x-forwarded-host'] || cab.host || 'localhost:5678');\nconst urlAnexo = (u) => (String(u || '').startsWith('/') ? origem + u : u);\nconst CAMPOS = [\"Placa\",\"Marca_Modelo\",\"Especie_Tipo\",\"Carroceria\",\"Categoria\",\"Cor\",\"Combustivel\",\"Ano_Fabricacao\",\"Ano_Modelo\",\"Renavam\",\"Chassi\",\"Motor\",\"Numero_CRV\",\"Codigo_Seguranca_CLA\",\"CAT\",\"Placa_Anterior\",\"Potencia_Cilindrada\",\"Capacidade\",\"Lotacao\",\"Peso_Bruto_Total\",\"CMT\",\"Eixos\",\"Proprietario_Nome\",\"Proprietario_Documento\",\"Local\",\"Data_Documento\",\"Exercicio\",\"Observacoes\"];\nconst POSICOES = [\"Dianteiro esquerdo\",\"Dianteiro direito\",\"Traseiro esquerdo\",\"Traseiro direito\",\"Estepe\"];\nconst reg = ($('Busca de novo').first().json.records || [])[0] || null;\nconst numero = (v) => (v === null || v === undefined || v === '' ? null : Number(v));\nconst salvos = ($('Busca pneus de novo').first().json.records || []).map((r) => r.fields || {});\nconst pneus = POSICOES.map((posicao) => {\n  const f = salvos.find((s) => s.Posicao === posicao);\n  return f ? { posicao, salvo: true, marca: f.Marca || '', modelo: f.Modelo || '', valor: numero(f.Valor_Pago),\n    dataTroca: f.Data_Troca ? String(f.Data_Troca).slice(0, 10) : '', desgaste: numero(f.Desgaste_R_Km) }\n    : { posicao, salvo: false, marca: '', modelo: '', valor: null, dataTroca: '', desgaste: null };\n});\nlet veiculo = null;\nif (reg) {\n  const f = reg.fields || {};\n  const campos = {};\n  for (const c of CAMPOS) campos[c] = f[c] || '';\n  const doc = (f.Documento || [])[0] || null;\n  const consumo = typeof f.Consumo_Km_L === 'number' ? f.Consumo_Km_L : (f.Consumo_Km_L ? Number(f.Consumo_Km_L) : null);\n  const precoLitro = typeof f.Preco_Litro === 'number' ? f.Preco_Litro : (f.Preco_Litro ? Number(f.Preco_Litro) : null);\n  veiculo = { id: reg.id, campos, consumo, precoLitro, documento: doc ? { nome: doc.filename, url: urlAnexo(doc.url), tamanho: doc.size || 0 } : null };\n}\nconst acao = $('Le entrada').first().json.acao;\nconst consumoNovo = $('Le entrada').first().json.consumo;\nconst pneuNovo = $('Le entrada').first().json.pneu;\nconst entrada = $('Le entrada').first().json;\nconst consumoVazio = consumoNovo === null && (!entrada.mandouPreco || entrada.precoLitro === null);\nconst MSG = { consumo: consumoVazio ? 'Consumo excluído.' : 'Salvo.', salvar: 'Salvo.', documento: 'Documento anexado.', 'remover-documento': 'Documento removido.',\n  pneu: pneuNovo && pneuNovo.vazio ? 'Pneu excluído.' : 'Pneu salvo.' };\n// Gasto de deslocamento do mês: as visitas iniciadas no mês que o cálculo da noite já passou.\nconst mes = $('Le entrada').first().json.mes;\nconst diaBR = (iso) => new Date(new Date(iso).getTime() - 3 * 3600e3).toISOString().slice(0, 10);\nconst listaDe = (nome) => { try { return $(nome).all().map((i) => i.json).filter((j) => j && j.id && j.fields); } catch (e) { return []; } };\nconst chamadosPorId = new Map(listaDe('Busca chamados').map((c) => [c.id, c.fields]));\nconst itens = listaDe('Busca visitas').filter((v) => v.fields.Inicio_Real && v.fields.Calculado_Em && diaBR(v.fields.Inicio_Real).slice(0, 7) === mes)\n  .sort((a, b) => new Date(a.fields.Inicio_Real) - new Date(b.fields.Inicio_Real))\n  .map((v) => {\n    const ch = chamadosPorId.get([].concat(v.fields.Chamado || [])[0]) || {};\n    let detalhe = {};\n    try { detalhe = JSON.parse(v.fields.Custo_Detalhe || '{}'); } catch (e) { detalhe = {}; }\n    return { dia: diaBR(v.fields.Inicio_Real), numero: ch.Numero_Chamado || '', cliente: ch.Cliente_Nome || '',\n      tipo: ch.Tipo_Chamado || '', km: numero(v.fields.Km_Deslocamento), custo: numero(v.fields.Custo_Deslocamento),\n      partes: detalhe.partes || {}, motivo: detalhe.motivo || '' };\n  });\nconst somar = (k) => Math.round(itens.reduce((a, i) => a + (i[k] || 0), 0) * 100) / 100;\nconst deslocamento = { mes, atendimentos: itens.length, km: Math.round(somar('km') * 10) / 10, custo: somar('custo'), itens };\nreturn [{ json: { ok: true, veiculo, pneus, deslocamento, mensagem: MSG[acao] || '' } }];\n"
       }
     },
     {
-      "id": "36d9b45d-7d0f-4e7b-a476-969c9a51b2aa",
+      "id": "7f9ebd15-c17a-453f-8644-900d72114deb",
       "name": "Responde",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
@@ -691,6 +747,28 @@
       ]
     },
     "Busca pneus de novo": {
+      "main": [
+        [
+          {
+            "node": "Busca visitas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca visitas": {
+      "main": [
+        [
+          {
+            "node": "Busca chamados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca chamados": {
       "main": [
         [
           {

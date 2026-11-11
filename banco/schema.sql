@@ -142,6 +142,11 @@ create table "Visitas" (
   "Iniciado_Por" text,
   "Concluido_Por" text,
   "Reservado_Antes" text,            -- JSON com os horários antes do empurrão (para desfazer)
+  -- Gasto de deslocamento (09/11/2026), calculado toda noite pela rota do dia:
+  "Km_Deslocamento" numeric(8,1),
+  "Custo_Deslocamento" numeric(10,2),
+  "Custo_Detalhe" text,              -- JSON: custo por km de cada parte (combustível, pneus...) e o preço usado
+  "Calculado_Em" timestamptz,
   "Criado_Em" timestamptz not null default now()
 );
 create index on "Visitas" ("Chamado");
@@ -353,6 +358,11 @@ create table "Empresas_Emissoras" (
   "Conta" text,
   "Chave_PIX" text,
   "Credencial_Asaas" text,         -- id da credencial do Asaas no n8n
+  -- Certificado A1 de cada CNPJ (11/11/2026): fica instalado no Windows (Cert:CurrentUserMy); aqui só
+  -- a impressão digital, a validade e onde está o .pfx (nunca a senha nem o arquivo).
+  "Certificado_Thumbprint" text,
+  "Certificado_Validade" date,
+  "Certificado_Arquivo" text,
   "Observacoes" text,
   "Criado_Em" timestamptz not null default now()
 );
@@ -390,6 +400,7 @@ create table "Veiculos" (
   "Exercicio" text,
   "Observacoes" text,
   "Consumo_Km_L" numeric(5,2) check ("Consumo_Km_L" > 0 and "Consumo_Km_L" < 100), -- digitado pelo dono, fora do documento
+  "Preco_Litro" numeric(6,3) check ("Preco_Litro" > 0 and "Preco_Litro" < 100),        -- idem (09/11/2026), R$ por litro
   "Criado_Em" timestamptz not null default now()
 );
 
@@ -402,6 +413,19 @@ create table "Pneus" (
   "Valor_Pago" numeric(10,2) check ("Valor_Pago" >= 0),
   "Data_Troca" date,
   "Desgaste_R_Km" numeric(10,4) check ("Desgaste_R_Km" >= 0),
+  "Criado_Em" timestamptz not null default now()
+);
+
+-- Coordenadas de cada endereço já consultado no mapa (OpenStreetMap), 09/11/2026: cada endereço
+-- é consultado uma vez só. "Achou" = false guarda que não foi encontrado (não tenta de novo).
+create table "Geo_Enderecos" (
+  id text primary key default novo_id(),
+  "Endereco" text not null unique,
+  "Consulta" text,
+  "Lat" numeric(10,7),
+  "Lon" numeric(10,7),
+  "Achou" boolean not null default false,
+  "Consultado_Em" timestamptz not null default now(),
   "Criado_Em" timestamptz not null default now()
 );
 

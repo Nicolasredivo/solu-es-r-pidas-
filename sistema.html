@@ -2111,13 +2111,32 @@
         <h1>Veículo</h1>
         <p class="subtitle">O documento do carro e os dados dele.</p>
 
-        <!-- Consumo (km/l): digitado pelo dono, fora dos dados do documento (08/11/2026).
+        <!-- Gasto de deslocamento (09/11/2026): calculado toda noite às 23h pelo fluxo
+             "Veículo - Gasto do dia" (rota do dia). Aqui só mostra o mês escolhido. -->
+        <div class="moldura veiculo-deslocamento">
+          <div class="veiculo-deslocamento-topo">
+            <div class="secao-titulo">Gasto de deslocamento</div>
+            <div class="veiculo-mes-nav">
+              <button type="button" id="veiculo-mes-anterior" class="botao-secundario" aria-label="Mês anterior">‹</button>
+              <span id="veiculo-mes-nome"></span>
+              <button type="button" id="veiculo-mes-seguinte" class="botao-secundario" aria-label="Mês seguinte">›</button>
+            </div>
+          </div>
+          <p id="veiculo-desloc-total" class="veiculo-desloc-total"></p>
+          <p id="veiculo-custo-km" class="doc-hint"></p>
+          <ul id="veiculo-desloc-lista" class="veiculo-desloc-lista"></ul>
+        </div>
+
+        <!-- Consumo (km/l) e preço do litro: digitados pelo dono, fora dos dados do documento (08 e 09/11/2026).
              Tocar no valor edita; Salvar / Cancelar / Excluir aparecem editando. -->
         <div id="veiculo-consumo" class="moldura veiculo-consumo leitura">
           <div class="secao-titulo">Consumo</div>
           <label for="veiculo-consumo-valor">Consumo médio (km/l)</label>
           <input type="text" id="veiculo-consumo-valor" inputmode="decimal" autocomplete="off" maxlength="6" placeholder="Ex: 9,5" disabled />
-          <p class="doc-hint">Na cidade, com a carga de sempre. Vai ser usado no gasto de combustível por chamado.</p>
+          <p class="doc-hint">Na cidade, com a carga de sempre. Vale para o gasto de deslocamento de cada chamado.</p>
+          <label for="veiculo-preco-litro">Preço do litro (R$)</label>
+          <input type="text" id="veiculo-preco-litro" inputmode="decimal" autocomplete="off" maxlength="8" placeholder="Ex: 6,49" disabled />
+          <p class="doc-hint">Da gasolina. Troque quando o preço mudar; os dias já calculados não mudam.</p>
           <div class="veiculo-consumo-acoes hidden">
             <button type="button" class="acao-salvar">Salvar</button>
             <button type="button" class="acao-cancelar botao-secundario">Cancelar</button>

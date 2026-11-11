@@ -1,0 +1,753 @@
+{
+  "name": "Veículo - Gasto do dia",
+  "nodes": [
+    {
+      "id": "1b9082e3-1509-4d08-b468-ba20d4d3084f",
+      "name": "Toda noite às 23h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        100
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 23,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a1825685-dc13-4118-8295-01974381cf9c",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        400
+      ],
+      "webhookId": "7277fad7-62b0-4e74-98f3-33a685bc8253",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gasto-deslocamento",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      }
+    },
+    {
+      "id": "940d1e0b-6793-4844-b7ea-a5c4e2d3e5cc",
+      "name": "Confere acesso",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        400
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "acesso",
+            "senha": "={{ $json.body.senha }}",
+            "tokenAcesso": "={{ $json.body.tokenAcesso }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d2e8189e-cdc0-4bca-b59c-b5c9d0db6738",
+      "name": "Acesso permitido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d605f70a-4404-4f25-b391-3bc3a872b746",
+              "leftValue": "={{ ($json.permitido === true) ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "9b07ab00-7864-4d29-9dec-7d0db2dc2895",
+      "name": "Monta acesso negado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        600
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, acessoNegado: true, mensagem: 'Acesso não autorizado. Entre de novo.' } }];"
+      }
+    },
+    {
+      "id": "321eef44-87d8-43e4-bb56-ff673017c26a",
+      "name": "Define o dia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        250
+      ],
+      "parameters": {
+        "jsCode": "// Dia a calcular (AAAA-MM-DD, horário de Brasília). Pelo app: o dia pedido; pela agenda: hoje.\nconst hojeBR = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);\nlet corpo = null;\ntry { if ($('Recebe pedido do app').isExecuted) corpo = $('Recebe pedido do app').first().json.body || {}; } catch (e) { corpo = null; }\nif (!corpo) return [{ json: { dia: hojeBR, origem: 'agenda', erro: '' } }];\nconst dia = String(corpo.dia || '').trim() || hojeBR;\nconst ok = /^\\d{4}-\\d{2}-\\d{2}$/.test(dia) && !isNaN(new Date(dia + 'T12:00:00Z')) && new Date(dia + 'T12:00:00Z').toISOString().slice(0, 10) === dia;\nreturn [{ json: { dia, origem: 'app', erro: ok ? '' : 'Dia inválido.' } }];\n"
+      }
+    },
+    {
+      "id": "111b99d3-fc5c-492c-b34b-221a20e8996d",
+      "name": "Dia ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        250
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7fcefdbd-1d25-4416-9f90-62c37a9e844d",
+              "leftValue": "={{ (!$json.erro) ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "ec4e9080-c32e-43e5-b08e-02599e3ea032",
+      "name": "Monta erro do dia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        600
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, mensagem: $json.erro } }];"
+      }
+    },
+    {
+      "id": "9c7178a7-5967-4ce0-8332-e883492c86f6",
+      "name": "Busca visitas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        250
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/Visitas?_itens=1",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "b6f1cee3-fb6e-4018-9d7e-0275a3226e0e",
+      "name": "Busca chamados",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        250
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/Chamados?_itens=1",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "9314736a-b3cb-4f90-a1c5-fa82193f8e9e",
+      "name": "Busca locais",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1500,
+        250
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/Locais_Atendimento?_itens=1",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "e047ebad-7eb0-49a7-8163-aff13076c11e",
+      "name": "Busca veículo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1700,
+        250
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblVeiculosFrota1?_itens=1",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "96a8ae34-59c7-4525-8879-45a8c9ad7a3a",
+      "name": "Busca pneus",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1900,
+        250
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblPneusVeiculo01?_itens=1",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "f78e6393-7092-4c1b-af9b-dfe99688c5cb",
+      "name": "Busca endereços",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2100,
+        250
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "method": "GET",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblGeoEnderecos01?_itens=1",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "5442eb51-8a09-4c6f-9e40-b9217781b32d",
+      "name": "Calcula",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2300,
+        250
+      ],
+      "parameters": {
+        "jsCode": "const dia = $('Define o dia').first().json.dia;\n// Base da empresa (Rua Canelinha, 68, Joinville), já consultada no mapa.\nconst BASE_GEO = { lat: -26.3201511, lon: -48.8750111 };\nconst UA = { 'User-Agent': 'solucoes-rapidas-sistema/1.0 (uso interno)' };\nconst URL_BANCO = 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B';\nconst espera = (ms) => new Promise((ok) => setTimeout(ok, ms));\nconst todos = (nome) => $(nome).all().map((i) => i.json).filter((j) => j && j.id && j.fields);\nconst primeiro = (v) => (Array.isArray(v) ? v[0] : v) || '';\nconst num = (v) => (v === null || v === undefined || v === '' || isNaN(Number(v)) ? null : Number(v));\nconst r2 = (n) => Math.round(n * 100) / 100;\nconst normal = (s) => String(s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim();\n\nconst visitas = todos('Busca visitas');\nconst chamados = new Map(todos('Busca chamados').map((c) => [c.id, c]));\nconst locais = todos('Busca locais');\nconst veiculo = todos('Busca veículo')[0] || { fields: {} };\nconst pneus = todos('Busca pneus');\nconst geoGuardado = new Map(todos('Busca endereços').map((g) => [g.fields.Endereco, g.fields]));\n\n// Visitas iniciadas no dia (horário de Brasília), na ordem em que começaram.\nconst diaBR = (iso) => new Date(new Date(iso).getTime() - 3 * 3600e3).toISOString().slice(0, 10);\nconst doDia = visitas.filter((v) => v.fields.Inicio_Real && diaBR(v.fields.Inicio_Real) === dia)\n  .sort((a, b) => new Date(a.fields.Inicio_Real) - new Date(b.fields.Inicio_Real));\n\n// Endereço de cada visita: o do chamado; cidade/UF pelo local do cliente com o mesmo endereço.\nfunction enderecoDa(v) {\n  const ch = chamados.get(primeiro(v.fields.Chamado));\n  if (!ch) return null;\n  const end = String(ch.fields.Endereco_Copia || '').trim();\n  if (!end) return null;\n  const cliente = primeiro(ch.fields.Cliente_Ref);\n  const doCliente = locais.filter((l) => !cliente || [].concat(l.fields.Cliente_Vinculado || []).includes(cliente));\n  const igual = doCliente.find((l) => normal(l.fields.Endereco_Completo) === normal(end))\n    || locais.find((l) => normal(l.fields.Endereco_Completo) === normal(end));\n  const bc = String((igual && igual.fields.Bairro_Cidade) || '');\n  // \"Bairro / Cidade - UF\"\n  const m = /\\/\\s*([^/]+?)\\s*-\\s*([A-Za-z]{2})\\s*$/.exec(bc);\n  const cidade = m ? m[1].trim() : 'Joinville';\n  const uf = m ? m[2].toUpperCase() : 'SC';\n  const cep = (/(\\d{5})-?(\\d{3})/.exec(end) || []).slice(1).join('-');\n  const semCep = end.replace(/,?\\s*CEP\\s*\\d{5}-?\\d{3}/i, '').replace(/\\d{5}-\\d{3}/, '').trim().replace(/,\\s*$/, '');\n  const partes = semCep.split(',').map((p) => p.trim()).filter(Boolean);\n  const rua = partes[0] || '';\n  const numero = (partes.slice(1).find((p) => /^\\d+[A-Za-z]?$/.test(p)) || '');\n  return { chave: normal(end + ' | ' + cidade + ' - ' + uf), rua, numero, cidade, uf, cep };\n}\n\n// Coordenadas: do que já está guardado; senão pergunta ao mapa (1 por segundo, regra do serviço).\nconst novosGeo = [];\nlet consultasMapa = 0;\nasync function coordenadas(e) {\n  if (geoGuardado.has(e.chave)) {\n    const g = geoGuardado.get(e.chave);\n    return g.Achou ? { lat: Number(g.Lat), lon: Number(g.Lon) } : null;\n  }\n  const tentativas = [\n    e.numero ? `${e.rua}, ${e.numero}, ${e.cidade}, ${e.uf}, Brasil` : null,\n    `${e.rua}, ${e.cidade}, ${e.uf}, Brasil`,\n  ].filter(Boolean);\n  let achado = null, consulta = '';\n  for (const q of tentativas) {\n    if (consultasMapa) await espera(1100);\n    consultasMapa++;\n    try {\n      const r = await this.helpers.httpRequest({ method: 'GET', url: 'https://nominatim.openstreetmap.org/search', qs: { format: 'json', limit: 1, countrycodes: 'br', q }, headers: UA, json: true, timeout: 20000 });\n      if (Array.isArray(r) && r[0]) { achado = { lat: Number(r[0].lat), lon: Number(r[0].lon) }; consulta = q; break; }\n    } catch (err) { /* serviço fora: tenta a próxima forma; se nada der, fica sem km */ }\n    consulta = q;\n  }\n  const g = { Endereco: e.chave, Consulta: consulta, Lat: achado ? achado.lat : null, Lon: achado ? achado.lon : null, Achou: Boolean(achado) };\n  geoGuardado.set(e.chave, g);\n  novosGeo.push(g);\n  return achado;\n}\n\nconst pontos = [];\nconst semEndereco = [];\nconst naoAchados = [];\nfor (const v of doDia) {\n  const e = enderecoDa(v);\n  if (!e) { semEndereco.push(v.id); continue; }\n  const c = await coordenadas.call(this, e);\n  if (!c) { naoAchados.push(v.id); continue; }\n  pontos.push({ visita: v, ...c });\n}\n\n// Rota base -> clientes -> base, numa consulta só.\nlet trechos = null;\nlet erroRota = '';\nif (pontos.length) {\n  const coords = [BASE_GEO, ...pontos, BASE_GEO].map((p) => p.lon.toFixed(6) + ',' + p.lat.toFixed(6)).join(';');\n  try {\n    const r = await this.helpers.httpRequest({ method: 'GET', url: 'https://router.project-osrm.org/route/v1/driving/' + coords, qs: { overview: 'false' }, headers: UA, json: true, timeout: 30000 });\n    if (r && r.code === 'Ok' && r.routes && r.routes[0]) trechos = r.routes[0].legs.map((l) => l.distance / 1000);\n    else erroRota = 'A rota não foi encontrada.';\n  } catch (err) { erroRota = 'O serviço de rotas não respondeu.'; }\n}\n\n// Custo do km, por partes (outras partes entram aqui no futuro).\nconst vf = veiculo.fields || {};\nconst consumo = num(vf.Consumo_Km_L);\nconst precoLitro = num(vf.Preco_Litro);\nconst desgastes = pneus.filter((p) => p.fields.Posicao !== 'Estepe').map((p) => num(p.fields.Desgaste_R_Km)).filter((n) => n !== null);\nconst porKm = {};\nif (consumo && precoLitro) porKm.combustivel = precoLitro / consumo;\nif (desgastes.length) porKm.pneus = desgastes.reduce((a, b) => a + b, 0);\nconst custoKm = Object.values(porKm).reduce((a, b) => a + b, 0);\nconst avisos = [];\nif (!precoLitro) avisos.push('Sem preço do litro: o combustível ficou fora da conta.');\nif (!consumo) avisos.push('Sem consumo (km/l): o combustível ficou fora da conta.');\nif (erroRota) avisos.push(erroRota);\nif (naoAchados.length) avisos.push(naoAchados.length + ' endereço(s) não achado(s) no mapa.');\nif (semEndereco.length) avisos.push(semEndereco.length + ' atendimento(s) sem endereço.');\n\nconst agora = new Date().toISOString();\nconst mudancas = [];\nlet kmDia = 0, custoDia = 0;\nif (trechos) {\n  pontos.forEach((p, i) => {\n    let km = trechos[i];\n    const ultimo = i === pontos.length - 1;\n    if (ultimo) km += trechos[i + 1];\n    km = Math.round(km * 10) / 10;\n    const partes = {};\n    for (const [k, v] of Object.entries(porKm)) partes[k] = r2(km * v);\n    const custo = custoKm > 0 ? r2(km * custoKm) : null;\n    kmDia += km; if (custo) custoDia += custo;\n    mudancas.push({ id: p.visita.id, fields: {\n      Km_Deslocamento: km, Custo_Deslocamento: custo, Calculado_Em: agora,\n      Custo_Detalhe: JSON.stringify({ versao: 1, dia, ordem: i + 1, de: i === 0 ? 'base' : 'atendimento anterior', voltaBase: ultimo,\n        km, porKm: Object.fromEntries(Object.entries(porKm).map(([k, v]) => [k, Math.round(v * 10000) / 10000])), partes,\n        precoLitro, consumo, pneusSomados: desgastes.length }),\n    } });\n  });\n}\n// Quem ficou sem km também é marcado, para o app mostrar o motivo.\nfor (const id of [...semEndereco, ...naoAchados]) {\n  mudancas.push({ id, fields: { Km_Deslocamento: null, Custo_Deslocamento: null, Calculado_Em: agora,\n    Custo_Detalhe: JSON.stringify({ versao: 1, dia, motivo: semEndereco.includes(id) ? 'sem endereço' : 'endereço não achado no mapa' }) } });\n}\n\nconst resumo = { ok: true, dia, atendimentos: doDia.length, calculados: trechos ? pontos.length : 0,\n  km: Math.round(kmDia * 10) / 10, custo: r2(custoDia), custoKm: Math.round(custoKm * 10000) / 10000, avisos };\n\nconst itens = [];\nfor (let i = 0; i < novosGeo.length; i += 10) itens.push({ metodo: 'POST', url: URL_BANCO + '/Geo_Enderecos', corpo: { records: novosGeo.slice(i, i + 10).map((fields) => ({ fields })) } });\nfor (let i = 0; i < mudancas.length; i += 10) itens.push({ metodo: 'PATCH', url: URL_BANCO + '/Visitas', corpo: { records: mudancas.slice(i, i + 10) } });\nif (!itens.length) return [{ json: { pular: true, resumo } }];\nreturn itens.map((j, i) => ({ json: { ...j, resumo: i === 0 ? resumo : undefined } }));\n"
+      }
+    },
+    {
+      "id": "c380d925-f751-4259-b4c3-c3346e9f6595",
+      "name": "Tem o que gravar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2500,
+        250
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "65675bbb-9cd6-4640-91d0-30e9dfbc4c45",
+              "leftValue": "={{ ($json.pular !== true) ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "d8ff15ce-d1e0-4a70-ab35-ff00abc106a9",
+      "name": "Grava",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2700,
+        150
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "b5d058df-35e6-45db-a155-5a3176745893",
+      "name": "Falha ao gravar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2900,
+        450
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, mensagem: 'Calculou, mas não conseguiu gravar. Tente de novo.' } }];"
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "c53f0ee2-bf77-4061-a90d-24f62263d8d3",
+      "name": "Monta resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2900,
+        250
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: $('Calcula').first().json.resumo }];"
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "135d479a-dab1-4281-be16-611e2c79ad42",
+      "name": "Veio do app?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3100,
+        250
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3dfa18e2-959d-4f67-b5d6-272595439b9d",
+              "leftValue": "={{ ($('Define o dia').first().json.origem === 'app') ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "cc628fe6-45be-4201-9fb0-bca1a7ecf828",
+      "name": "Responde",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3300,
+        400
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Toda noite às 23h": {
+      "main": [
+        [
+          {
+            "node": "Define o dia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Confere acesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere acesso": {
+      "main": [
+        [
+          {
+            "node": "Acesso permitido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acesso permitido?": {
+      "main": [
+        [
+          {
+            "node": "Define o dia",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta acesso negado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta acesso negado": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Define o dia": {
+      "main": [
+        [
+          {
+            "node": "Dia ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dia ok?": {
+      "main": [
+        [
+          {
+            "node": "Busca visitas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta erro do dia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta erro do dia": {
+      "main": [
+        [
+          {
+            "node": "Veio do app?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca visitas": {
+      "main": [
+        [
+          {
+            "node": "Busca chamados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca chamados": {
+      "main": [
+        [
+          {
+            "node": "Busca locais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca locais": {
+      "main": [
+        [
+          {
+            "node": "Busca veículo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca veículo": {
+      "main": [
+        [
+          {
+            "node": "Busca pneus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca pneus": {
+      "main": [
+        [
+          {
+            "node": "Busca endereços",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca endereços": {
+      "main": [
+        [
+          {
+            "node": "Calcula",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcula": {
+      "main": [
+        [
+          {
+            "node": "Tem o que gravar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem o que gravar?": {
+      "main": [
+        [
+          {
+            "node": "Grava",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta resumo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava": {
+      "main": [
+        [
+          {
+            "node": "Monta resumo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Falha ao gravar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Falha ao gravar": {
+      "main": [
+        [
+          {
+            "node": "Veio do app?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resumo": {
+      "main": [
+        [
+          {
+            "node": "Veio do app?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Veio do app?": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "timezone": "America/Sao_Paulo"
+  }
+}

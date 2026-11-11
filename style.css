@@ -4763,7 +4763,8 @@ div.lembrete-item:hover {
   }
 }
 
-#veiculo-consumo-valor {
+#veiculo-consumo-valor,
+#veiculo-preco-litro {
   max-width: 160px;
 }
 
@@ -4886,4 +4887,80 @@ div.lembrete-item:hover {
 /* No cartão lendo, a última linha (desgaste) não precisa do espaço de baixo. */
 .pneu.leitura input:last-of-type {
   margin-bottom: 0;
+}
+
+/* Gasto de deslocamento (09/11/2026): total do mês e um atendimento por linha. */
+.veiculo-deslocamento-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.veiculo-mes-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.veiculo-mes-nav button {
+  width: auto;
+  min-width: 36px;
+  padding: 4px 10px;
+}
+
+#veiculo-mes-nome {
+  min-width: 140px;
+  text-align: center;
+}
+
+.veiculo-desloc-total {
+  margin: 6px 0 4px;
+  font-size: 1.05rem;
+}
+
+.veiculo-desloc-lista {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.veiculo-desloc-lista li {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 0;
+  border-top: 1px solid #2c3153;
+}
+
+.veiculo-desloc-lista li.doc-hint {
+  display: block;
+  border-top: 0;
+}
+
+.veiculo-desloc-dia {
+  color: var(--muted);
+}
+
+.veiculo-desloc-quem {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.veiculo-desloc-valor {
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .veiculo-desloc-lista li {
+    grid-template-columns: 44px 1fr;
+  }
+
+  .veiculo-desloc-valor {
+    grid-column: 2;
+    text-align: left;
+  }
 }

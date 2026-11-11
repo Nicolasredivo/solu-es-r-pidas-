@@ -82,7 +82,7 @@ const PDF = Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2
 
     // ---- consumo (km/l), à parte dos dados do documento ----
     r = await app({ acao: 'consumo', consumo: '9,5' });
-    confere('consumo: salva 9,5', r.ok && r.veiculo.consumo === 9.5 && r.mensagem === 'Consumo salvo.', r);
+    confere('consumo: salva 9,5', r.ok && r.veiculo.consumo === 9.5 && r.mensagem === 'Salvo.', r);
     confere('consumo: não mexe nos dados do documento', r.veiculo.campos.Placa === 'TST0A00' && r.veiculo.id === testeId, r.veiculo);
     r = await app({ acao: 'consumo', consumo: '10.25' });
     confere('consumo: altera para 10.25', r.ok && r.veiculo.consumo === 10.25, r.veiculo && r.veiculo.consumo);
@@ -92,8 +92,19 @@ const PDF = Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2
     }
     r = await app({ acao: 'salvar', campos: JSON.stringify({ Cor: 'PRATA' }) });
     confere('salvar os dados do documento mantém o consumo', r.ok && r.veiculo.consumo === 10.25, r.veiculo && r.veiculo.consumo);
-    r = await app({ acao: 'consumo', consumo: '' });
-    confere('consumo: excluir deixa vazio', r.ok && r.veiculo.consumo === null && r.mensagem === 'Consumo excluído.', r);
+    // Preço do litro (09/11/2026): vem junto do consumo; app antigo (sem o campo) não apaga o preço.
+    r = await app({ acao: 'consumo', consumo: '10.25', precoLitro: '6,49' });
+    confere('preço do litro: salva 6,49', r.ok && r.veiculo.precoLitro === 6.49 && r.veiculo.consumo === 10.25, r.veiculo);
+    r = await app({ acao: 'consumo', consumo: '10.25' });
+    confere('preço do litro: pedido sem o campo não apaga', r.ok && r.veiculo.precoLitro === 6.49, r.veiculo);
+    for (const ruim of ['abc', '0', '6,4999', '150']) {
+      r = await app({ acao: 'consumo', consumo: '9,5', precoLitro: ruim });
+      confere(`preço do litro inválido recusado (${ruim})`, r.ok === false && /Preço do litro inválido/.test(r.mensagem), r);
+    }
+    r = await app({ acao: 'carregar', mes: '2001-01' });
+    confere('carregar com mês: resumo de deslocamento do mês pedido', r.ok && r.deslocamento && r.deslocamento.mes === '2001-01' && Array.isArray(r.deslocamento.itens), r.deslocamento);
+    r = await app({ acao: 'consumo', consumo: '', precoLitro: '' });
+    confere('consumo: excluir deixa vazio (consumo e preço)', r.ok && r.veiculo.consumo === null && r.veiculo.precoLitro === null && r.mensagem === 'Consumo excluído.', r);
     // ---- pneus (numa posição que o dono não usa; o Modelo leva a marca do teste) ----
     if (!livre) {
       console.log('(pneus: as 5 posições já estão preenchidas pelo dono; parte dos pneus pulada)');

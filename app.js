@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.09a";
+const APP_VERSION = "2026.11.11a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -11818,6 +11818,8 @@ async function carregarVeiculo() {
     desenharVeiculo();
     desenharConsumo();
     desenharPneus();
+    deslocamentoAtual = dados.deslocamento || null;
+    desenharDeslocamento();
     if (!veiculoDocStatus.classList.contains("ok")) mostrarVeiculoStatus(veiculoDocStatus, null, dicaDoDocumento());
   } catch (err) {
     mostrarVeiculoStatus(veiculoStatus, "error", "Não foi possível falar com o n8n.");
@@ -11991,12 +11993,15 @@ document.addEventListener("click", (evento) => {
   }
 });
 
-// ----- Consumo do veículo (km/l), digitado pelo dono (08/11/2026) -----
-// Bloco à parte dos dados do documento. Tocar no valor edita; Salvar grava,
-// Excluir (com confirmação) apaga. Ação "consumo" do fluxo "App - Veículo".
+// ----- Consumo do veículo (km/l) e preço do litro, digitados pelo dono -----
+// Bloco à parte dos dados do documento (consumo 08/11/2026, preço 09/11/2026).
+// Tocar no bloco edita os dois; Salvar grava os dois (campo vazio = apaga aquele);
+// Excluir (com confirmação) apaga os dois. Ação "consumo" do fluxo "App - Veículo".
 
 const consumoBloco = document.getElementById("veiculo-consumo");
 const consumoCampo = document.getElementById("veiculo-consumo-valor");
+const precoLitroCampo = document.getElementById("veiculo-preco-litro");
+const consumoCamposTodos = [consumoCampo, precoLitroCampo];
 const consumoAcoes = consumoBloco.querySelector(".veiculo-consumo-acoes");
 const consumoSalvar = consumoBloco.querySelector(".acao-salvar");
 const consumoCancelar = consumoBloco.querySelector(".acao-cancelar");
@@ -12004,13 +12009,16 @@ const consumoExcluir = consumoBloco.querySelector(".acao-excluir");
 const consumoStatus = document.getElementById("veiculo-consumo-status");
 
 const formatarConsumo = (n) => (typeof n === "number" && isFinite(n) ? String(n).replace(".", ",") : "");
+const formatarPrecoLitro = (n) => (typeof n === "number" && isFinite(n)
+  ? n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : "");
+const fotoDoConsumo = () => JSON.stringify(consumoCamposTodos.map((c) => c.value.trim()));
 
 function consumoEditando() {
   return consumoBloco.classList.contains("editando");
 }
 
 function consumoEmAndamento() {
-  return naTela(consumoBloco) && consumoEditando() && consumoCampo.value.trim() !== consumoBloco.valorEdicao;
+  return naTela(consumoBloco) && consumoEditando() && fotoDoConsumo() !== consumoBloco.valorEdicao;
 }
 
 function desarmarExcluirConsumo() {
@@ -12020,8 +12028,9 @@ function desarmarExcluirConsumo() {
 
 function desenharConsumo() {
   consumoCampo.value = formatarConsumo(veiculoAtual && veiculoAtual.consumo);
-  consumoCampo.disabled = true;
-  marcarVaziosNaLeitura([consumoCampo], true);
+  precoLitroCampo.value = formatarPrecoLitro(veiculoAtual && veiculoAtual.precoLitro);
+  consumoCamposTodos.forEach((c) => (c.disabled = true));
+  marcarVaziosNaLeitura(consumoCamposTodos, true);
   consumoBloco.classList.add("leitura");
   consumoBloco.classList.remove("editando");
   consumoAcoes.classList.add("hidden");
@@ -12031,25 +12040,27 @@ function desenharConsumo() {
 consumoBloco.addEventListener("click", (evento) => {
   if (!consumoBloco.classList.contains("leitura") || veiculoOcupado || !veiculoCarregado) return;
   if (evento.target.closest("button, a")) return;
-  consumoCampo.disabled = false;
-  marcarVaziosNaLeitura([consumoCampo], false);
+  const campo = campoNoPonto(consumoBloco, evento.target, evento.clientX, evento.clientY);
+  consumoCamposTodos.forEach((c) => (c.disabled = false));
+  marcarVaziosNaLeitura(consumoCamposTodos, false);
   consumoBloco.classList.remove("leitura");
   consumoBloco.classList.add("editando");
   consumoAcoes.classList.remove("hidden");
-  // Excluir só faz sentido quando já há um consumo salvo.
-  consumoExcluir.classList.toggle("hidden", !(veiculoAtual && typeof veiculoAtual.consumo === "number"));
-  consumoBloco.valorEdicao = consumoCampo.value.trim();
+  // Excluir só faz sentido quando já há algo salvo.
+  const temAlgo = veiculoAtual && (typeof veiculoAtual.consumo === "number" || typeof veiculoAtual.precoLitro === "number");
+  consumoExcluir.classList.toggle("hidden", !temAlgo);
+  consumoBloco.valorEdicao = fotoDoConsumo();
   mostrarVeiculoStatus(consumoStatus, null, "");
-  focarCampo(consumoCampo);
+  focarCampo(campo || consumoCampo);
 });
 
-async function gravarConsumo(valor) {
+async function gravarConsumo(consumo, precoLitro) {
   if (veiculoOcupado) return;
   veiculoOcupado = true;
   [consumoSalvar, consumoExcluir].forEach((b) => (b.disabled = true));
-  mostrarVeiculoStatus(consumoStatus, "neutral", valor ? "Salvando..." : "Excluindo...");
+  mostrarVeiculoStatus(consumoStatus, "neutral", consumo || precoLitro ? "Salvando..." : "Excluindo...");
   try {
-    const dados = await pedirAoN8n("veiculo", { acao: "consumo", consumo: valor });
+    const dados = await pedirAoN8n("veiculo", { acao: "consumo", consumo, precoLitro });
     if (!dados || !dados.ok) {
       mostrarVeiculoStatus(consumoStatus, "error", (dados && dados.mensagem) || "Não foi possível salvar.");
       return;
@@ -12057,6 +12068,7 @@ async function gravarConsumo(valor) {
     veiculoAtual = dados.veiculo;
     veiculoCarregado = true;
     desenharConsumo();
+    desenharCustoKm();
     mostrarVeiculoStatus(consumoStatus, "ok", dados.mensagem || "Salvo.");
   } catch (err) {
     mostrarVeiculoStatus(consumoStatus, "error", "Não foi possível falar com o n8n.");
@@ -12067,21 +12079,23 @@ async function gravarConsumo(valor) {
 }
 
 consumoSalvar.addEventListener("click", () => {
-  const valor = consumoCampo.value.trim().replace(/\s+/g, "");
-  if (valor && !/^\d{1,2}([.,]\d{1,2})?$/.test(valor)) {
-    mostrarVeiculoStatus(consumoStatus, "error", "Use só o número de km por litro, por exemplo 9,5.");
+  const consumo = consumoCampo.value.trim().replace(/\s+/g, "");
+  const preco = precoLitroCampo.value.trim().replace(/\s+/g, "").replace(/^R\$/i, "");
+  if (consumo && (!/^\d{1,2}([.,]\d{1,2})?$/.test(consumo) || Number(consumo.replace(",", ".")) <= 0)) {
+    mostrarVeiculoStatus(consumoStatus, "error", "Consumo: use só o número de km por litro, por exemplo 9,5.");
     consumoCampo.focus();
     return;
   }
-  if (valor && Number(valor.replace(",", ".")) <= 0) {
-    mostrarVeiculoStatus(consumoStatus, "error", "O consumo precisa ser maior que zero.");
-    consumoCampo.focus();
+  if (preco && (!/^\d{1,2}([.,]\d{1,3})?$/.test(preco) || Number(preco.replace(",", ".")) <= 0)) {
+    mostrarVeiculoStatus(consumoStatus, "error", "Preço do litro: use só o número, por exemplo 6,49.");
+    precoLitroCampo.focus();
     return;
   }
-  gravarConsumo(valor);
+  gravarConsumo(consumo, preco);
 });
 
-consumoCampo.addEventListener("keydown", (evento) => {
+consumoBloco.addEventListener("keydown", (evento) => {
+  if (!evento.target.matches("input")) return;
   if (evento.key === "Enter") { evento.preventDefault(); consumoSalvar.click(); }
   if (evento.key === "Escape") { evento.preventDefault(); consumoCancelar.click(); }
 });
@@ -12095,10 +12109,10 @@ consumoExcluir.addEventListener("click", () => {
   if (!consumoExcluir.classList.contains("confirmando")) {
     consumoExcluir.classList.add("confirmando");
     consumoExcluir.textContent = "Confirmar exclusão";
-    mostrarVeiculoStatus(consumoStatus, "error", "Apaga o consumo salvo. Clique de novo para confirmar.");
+    mostrarVeiculoStatus(consumoStatus, "error", "Apaga o consumo e o preço do litro salvos. Clique de novo para confirmar.");
     return;
   }
-  gravarConsumo("");
+  gravarConsumo("", "");
 });
 
 // Clicar fora do "Confirmar exclusão" desarma.
@@ -12109,7 +12123,7 @@ document.addEventListener("click", (evento) => {
   }
 });
 
-consumoCampo.addEventListener("input", esquecerSaidaPendente);
+consumoBloco.addEventListener("input", esquecerSaidaPendente);
 desenharConsumo();
 
 // ----- Pneus (09/11/2026) -----
@@ -12253,6 +12267,7 @@ async function gravarPneu(cartao, excluir) {
     pneusAtuais = resposta.pneus || pneusAtuais;
     if (resposta.veiculo !== undefined) veiculoAtual = resposta.veiculo;
     travarPneu(cartao, true);
+    desenharCustoKm();
     mostrarStatusPneu(cartao, "ok", resposta.mensagem || "Salvo.");
   } catch (err) {
     mostrarStatusPneu(cartao, "error", "Não foi possível falar com o n8n.");
@@ -12308,6 +12323,101 @@ document.addEventListener("click", (evento) => {
 
 pneusLista.addEventListener("input", esquecerSaidaPendente);
 desenharPneus();
+
+// ----- Gasto de deslocamento (09/11/2026) -----
+// Só mostra: o cálculo roda toda noite às 23h no fluxo "Veículo - Gasto do dia"
+// (rota base -> clientes -> base; custo do km = litro ÷ consumo + pneus).
+// O "App - Veículo" devolve o resumo do mês pedido (ação carregar, campo "mes").
+
+const deslocMesNome = document.getElementById("veiculo-mes-nome");
+const deslocTotal = document.getElementById("veiculo-desloc-total");
+const deslocCustoKm = document.getElementById("veiculo-custo-km");
+const deslocLista = document.getElementById("veiculo-desloc-lista");
+const deslocMesSeguinte = document.getElementById("veiculo-mes-seguinte");
+let deslocamentoAtual = null;
+let deslocMes = "";
+
+const mesAtualBR = () => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 7);
+const nomeDoMes = (mes) => {
+  const [a, m] = mes.split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1, 15)).toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
+};
+const somarMes = (mes, n) => {
+  const [a, m] = mes.split("-").map(Number);
+  const d = new Date(Date.UTC(a, m - 1 + n, 15));
+  return d.toISOString().slice(0, 7);
+};
+const reais = (n) => (typeof n === "number" && isFinite(n)
+  ? n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—");
+const reaisKm = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 3, maximumFractionDigits: 3 });
+const kmTexto = (n) => `${(Number(n) || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} km`;
+
+// Custo do km com o que está salvo hoje (o mesmo jeito do cálculo da noite).
+function desenharCustoKm() {
+  const consumo = veiculoAtual && veiculoAtual.consumo;
+  const preco = veiculoAtual && veiculoAtual.precoLitro;
+  const partes = [];
+  let total = 0;
+  if (consumo && preco) { total += preco / consumo; partes.push(`combustível ${reaisKm(preco / consumo)}`); }
+  const desg = (pneusAtuais || []).filter((p) => p.posicao !== "Estepe" && typeof p.desgaste === "number");
+  if (desg.length) {
+    const soma = desg.reduce((a, p) => a + p.desgaste, 0);
+    total += soma;
+    partes.push(`pneus ${reaisKm(soma)}`);
+  }
+  const faltando = [];
+  if (!consumo) faltando.push("o consumo");
+  if (!preco) faltando.push("o preço do litro");
+  deslocCustoKm.textContent = (total > 0 ? `Custo do km hoje: ${reaisKm(total)} (${partes.join(" + ")}).` : "")
+    + (faltando.length ? ` Falta preencher ${faltando.join(" e ")} para o combustível entrar na conta.` : "");
+}
+
+function desenharDeslocamento() {
+  const d = deslocamentoAtual;
+  deslocMes = (d && d.mes) || deslocMes || mesAtualBR();
+  deslocMesNome.textContent = nomeDoMes(deslocMes);
+  deslocMesSeguinte.disabled = deslocMes >= mesAtualBR();
+  desenharCustoKm();
+  if (!d || !d.itens || !d.itens.length) {
+    deslocTotal.textContent = "Nenhum atendimento calculado neste mês.";
+    deslocLista.innerHTML = `<li class="doc-hint">O cálculo roda toda noite às 23h, com os atendimentos iniciados no dia.</li>`;
+    return;
+  }
+  deslocTotal.innerHTML = `<strong>${reais(d.custo)}</strong> · ${kmTexto(d.km)} · ${d.atendimentos} atendimento${d.atendimentos > 1 ? "s" : ""}`;
+  deslocLista.innerHTML = d.itens.map((i) => {
+    const dia = i.dia.split("-").reverse().slice(0, 2).join("/");
+    const quem = `${i.numero ? "#" + escapeHtml(String(i.numero)) + " " : ""}${escapeHtml(i.cliente || "")}`;
+    const valor = i.motivo
+      ? `<span class="doc-hint">${escapeHtml(i.motivo)}</span>`
+      : `${kmTexto(i.km)} · <strong>${reais(i.custo)}</strong>`;
+    return `<li><span class="veiculo-desloc-dia">${dia}</span><span class="veiculo-desloc-quem">${quem}${i.tipo === "Orçamento" ? ' <span class="chamado-tipo-badge">Orçamento</span>' : ""}</span><span class="veiculo-desloc-valor">${valor}</span></li>`;
+  }).join("");
+}
+
+async function trocarMesDeslocamento(n) {
+  if (veiculoOcupado) return;
+  const alvo = somarMes(deslocMes || mesAtualBR(), n);
+  if (alvo > mesAtualBR()) return;
+  deslocMes = alvo;
+  deslocMesNome.textContent = nomeDoMes(alvo);
+  deslocTotal.textContent = "Carregando...";
+  deslocLista.innerHTML = "";
+  try {
+    const dados = await pedirAoN8n("veiculo", { acao: "carregar", mes: alvo });
+    if (!dados || !dados.ok) {
+      deslocTotal.textContent = (dados && dados.mensagem) || "Não foi possível carregar.";
+      return;
+    }
+    deslocamentoAtual = dados.deslocamento || { mes: alvo, itens: [] };
+    desenharDeslocamento();
+  } catch (err) {
+    deslocTotal.textContent = "Não foi possível falar com o n8n.";
+  }
+}
+
+document.getElementById("veiculo-mes-anterior").addEventListener("click", () => trocarMesDeslocamento(-1));
+deslocMesSeguinte.addEventListener("click", () => trocarMesDeslocamento(1));
+desenharDeslocamento();
 
 document.querySelector('.sidebar-item[data-page="veiculo"]').addEventListener("click", () => {
   carregarVeiculo();

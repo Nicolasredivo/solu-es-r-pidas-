@@ -5479,3 +5479,38 @@ ligação em tudo, nas duas contas.
 - O sub-fluxo "Asaas - Sincroniza cliente" agora deixa todos os canais desmarcados ao criar ou mover
   um cliente (lista DESEJADO toda `false`), além do `notificationDisabled: true`.
 - Os avisos para o próprio dono (ForProvider) não foram mexidos.
+
+## Gasto de deslocamento por chamado (09/11/2026)
+Pedido do dono: calcular o gasto de cada chamado com o carro. Decisões dele: consumo FIXO de 9,5 km/l
+(o do bloco Consumo, mesmo abastecendo gasolina), preço do litro num campo fixo, orçamentos entram,
+desgaste dos pneus soma. "Ainda adicionaremos mais custos futuramente": o custo vai por partes.
+- **Preço do litro:** campo novo no bloco Consumo (`Veiculos.Preco_Litro`), salvo junto do consumo
+  (ação `consumo` com `precoLitro`; app antigo sem o campo não apaga o preço).
+- **Cálculo (fluxo "Veículo - Gasto do dia", id vRhd7zPmjs2qzwZP):** toda noite às 23h (fuso
+  America/Sao_Paulo) e pelo webhook `gasto-deslocamento` ({ dia }, com login).
+  - Atendimentos = Visitas iniciadas no dia, na ordem do Inicio_Real.
+  - Endereço = Endereco_Copia do chamado; cidade/UF pelo local do cliente com o mesmo endereço
+    (Bairro_Cidade "Bairro / Cidade - UF"); sem achar, Joinville - SC.
+  - Coordenadas pelo OpenStreetMap (Nominatim, 1 consulta/s), guardadas em `Geo_Enderecos`
+    (tblGeoEnderecos01); "Achou = false" também fica guardado e não é consultado de novo.
+  - Rota base (Rua Canelinha, 68: -26.3201511, -48.8750111) → clientes → base numa consulta ao OSRM
+    (router.project-osrm.org). Cada atendimento fica com o trecho até ele; a volta à base vai no último.
+  - Custo do km = preço do litro ÷ consumo + soma do desgaste dos pneus que rodam (estepe fora).
+    Grava em cada visita `Km_Deslocamento`, `Custo_Deslocamento`, `Calculado_Em` e
+    `Custo_Detalhe` (JSON: porKm e partes por item, preço e consumo usados). Custo novo = mais um
+    item em porKm no "Calcula". Mudar o preço depois não altera dias já calculados (só recalculando).
+- **Tela:** bloco "Gasto de deslocamento" no alto da aba Veículo: total do mês, um atendimento por
+  linha (km e valor, ou o motivo de não ter km), setas de mês e "Custo do km hoje". O "App - Veículo"
+  devolve `deslocamento` do mês (campo `mes` AAAA-MM no carregar).
+- **Testes:** `testar-gasto-deslocamento.js` (dia 02/01/2001 com chamados de teste e os serviços de
+  mapa de verdade) e `testar-veiculo.js` (preço do litro e o resumo do mês).
+- Ficou para depois: botão de recalcular na tela e calcular dias antigos.
+
+## Certificado A1 do CNPJ 2 (11/11/2026)
+O dono instalou o e-CNPJ A1 do CNPJ 2. Os dois certificados estão no Windows (Cert:\CurrentUser\My,
+com chave privada) e os dois .pfx ficam juntos na Área de Trabalho. No banco, `Empresas_Emissoras`
+ganhou `Certificado_Thumbprint`, `Certificado_Validade` e `Certificado_Arquivo` (caminho do .pfx),
+preenchidos para CNPJ 1 (válido até 04/11/2027) e CNPJ 2 (até 11/11/2027). Senha e arquivo nunca
+vão para o banco nem para o repositório. A NFS-e do CNPJ 2 (fase 4) ainda não foi feita: o assinador
+continua usando o certificado do CNPJ 1.
+Junto: `Geo_Enderecos` ganhou `Criado_Em` (o Airtable local exige essa coluna em toda tabela).
