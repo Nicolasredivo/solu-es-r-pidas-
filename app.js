@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.12a";
+const APP_VERSION = "2026.11.12b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -12978,21 +12978,31 @@ n8nUrlInput.value = baseUrlN8n();
 // Pedido do dono (12/11/2026): em toda área onde se altera algum dado, um botão
 // redondo de voltar que desfaz a última ação. Ele só aparece, e só funciona,
 // enquanto algo está sendo editado.
-// É um só e genérico: acompanha qualquer campo que a pessoa mexe (texto, lista,
-// data, caixinha), em qualquer tela, sem ligar tela por tela.
+// No mesmo dia ele pediu o botão DENTRO do bloco que está sendo alterado (não no
+// campo, no bloco). Cada bloco mexido (moldura, cartão, formulário) ganha o seu
+// botão no canto de cima à direita, que desfaz a última alteração daquele bloco.
+// Num bloco comprido o botão acompanha a rolagem (fica preso no alto do bloco).
+// É um só código, genérico: acompanha qualquer campo que a pessoa mexe (texto,
+// lista, data, caixinha), em qualquer tela, sem ligar tela por tela.
 // Uma "ação" é o que se digitou num campo de uma vez (até sair dele), ou cada
 // escolha numa lista ou caixinha. Desfazer devolve o valor de antes e avisa a
 // tela (input/change), como se a pessoa tivesse mudado de volta. Assim a
 // detecção de "não salvo" e os campos que dependem dele acompanham.
 // Uma ação deixa de valer quando o campo trava ou some (salvou ou cancelou)
-// ou quando o formulário é salvo, cancelado ou excluído.
+// ou quando o bloco é salvo, cancelado ou excluído.
 // Busca e filtro ficam de fora, porque não são dado. Senha também fica de fora.
 
-const botaoDesfazer = document.getElementById("botao-desfazer");
-let pilhaDesfazer = []; // { el, antes } — a última no fim
+// O bloco de um campo: a moldura/cartão/formulário mais perto dele.
+// `.bloco-editavel` marca um bloco à mão quando a tela não usa as classes de sempre.
+const SELETOR_BLOCO = ".bloco-editavel, .pneu, .local, .contato, .moldura-parte, .moldura, "
+  + ".chamado-editar-box, .bloco-cartao, .cadastro, form, .card";
+const blocoDoCampo = (el) => el.closest(SELETOR_BLOCO) || el.parentElement;
+
+let pilhaDesfazer = []; // { el, antes, bloco } — a última no fim
 const ultimoValor = new WeakMap(); // valor do campo quando a pessoa entrou nele
 let campoDigitando = null; // campo com a ação aberta (ainda digitando nele)
 let desfazendo = false;
+const botoesDesfazer = new Map(); // bloco -> o botão dele
 
 const lerCampo = (el) => (el.type === "checkbox" ? el.checked : el.value);
 
@@ -13008,11 +13018,51 @@ function campoDesfazivel(el) {
 const acaoValendo = (p) => p.el.isConnected && !p.el.disabled && !p.el.readOnly
   && p.el.getClientRects().length > 0;
 
+function criarBotaoDesfazer() {
+  const botao = document.createElement("button");
+  botao.type = "button";
+  botao.className = "botao-desfazer";
+  botao.title = "Desfazer a última alteração deste bloco";
+  botao.setAttribute("aria-label", "Desfazer a última alteração deste bloco");
+  botao.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>';
+  return botao;
+}
+
+// Endereço e contato já têm o "Remover" no canto: o desfazer entra ao lado dele.
+// Bloco com barra de ações (Salvar/Cancelar no alto): entra no fim da barra.
+// Nos outros, fica no canto de cima à direita do bloco.
+function porBotaoNoBloco(botao, bloco) {
+  const canto = bloco.querySelector(":scope > .local-topo, :scope > .contato-topo");
+  const barra = bloco.querySelector(":scope > .detalhe-acoes");
+  if (canto) {
+    botao.classList.add("na-barra");
+    canto.prepend(botao);
+  } else if (barra) {
+    botao.classList.add("na-barra");
+    barra.append(botao);
+  } else {
+    bloco.prepend(botao);
+  }
+}
+
 let observadorDesfazer = null;
 let conferenciaMarcada = false;
 function atualizarBotaoDesfazer() {
   pilhaDesfazer = pilhaDesfazer.filter(acaoValendo);
-  botaoDesfazer.hidden = pilhaDesfazer.length === 0;
+  const blocos = new Set(pilhaDesfazer.map((p) => p.bloco));
+  // Tira o botão dos blocos que não têm mais o que desfazer.
+  botoesDesfazer.forEach((botao, bloco) => {
+    if (blocos.has(bloco) && bloco.isConnected && botao.isConnected) return;
+    botao.remove();
+    botoesDesfazer.delete(bloco);
+  });
+  // Põe nos que têm (sem mexer em quem já tem: evita mexer na tela à toa).
+  blocos.forEach((bloco) => {
+    if (botoesDesfazer.has(bloco)) return;
+    const botao = criarBotaoDesfazer();
+    porBotaoNoBloco(botao, bloco);
+    botoesDesfazer.set(bloco, botao);
+  });
   // Só observa a tela (campo travando/sumindo) enquanto há o que desfazer.
   if (pilhaDesfazer.length && !observadorDesfazer) {
     observadorDesfazer = new MutationObserver(() => {
@@ -13044,7 +13094,7 @@ function registrarAlteracao(evento) {
   const agora = lerCampo(el);
   if (el.type === "checkbox") {
     if (evento.type !== "change") return; // a caixinha dispara os dois: conta uma vez só
-    pilhaDesfazer.push({ el, antes: !agora });
+    pilhaDesfazer.push({ el, antes: !agora, bloco: blocoDoCampo(el) });
   } else if (campoDigitando === el && pilhaDesfazer.length && pilhaDesfazer[pilhaDesfazer.length - 1].el === el) {
     // Continua a mesma ação (ainda digitando no mesmo campo).
     // Se voltou ao que era antes, a ação deixa de existir.
@@ -13054,7 +13104,7 @@ function registrarAlteracao(evento) {
     if (!ultimoValor.has(el)) return; // sem saber o valor de antes, não há como voltar
     const antes = ultimoValor.get(el);
     if (antes === agora) return;
-    pilhaDesfazer.push({ el, antes });
+    pilhaDesfazer.push({ el, antes, bloco: blocoDoCampo(el) });
     if (!(el instanceof HTMLSelectElement)) campoDigitando = el;
   }
   ultimoValor.set(el, agora);
@@ -13063,8 +13113,8 @@ function registrarAlteracao(evento) {
 document.addEventListener("input", registrarAlteracao);
 document.addEventListener("change", registrarAlteracao);
 
-// Salvar, cancelar, excluir ou fechar encerra a edição daquela área: o que foi
-// alterado nela não é mais "a última ação" a desfazer.
+// Salvar, cancelar, excluir ou fechar encerra a edição daquele bloco: o que foi
+// alterado nele não é mais "a última ação" a desfazer.
 const BOTAO_QUE_ENCERRA = /^\s*(salvar|cancelar|excluir|remover|fechar|descartar|confirmar|emitir|criar|cadastrar|gravar|enviar|concluir)/i;
 function encerrarEdicaoDa(area) {
   if (!area) return;
@@ -13075,19 +13125,33 @@ function encerrarEdicaoDa(area) {
 document.addEventListener("submit", (evento) => encerrarEdicaoDa(evento.target), true);
 document.addEventListener("click", (evento) => {
   const botao = evento.target.closest && evento.target.closest("button");
-  if (!botao || botao === botaoDesfazer || !pilhaDesfazer.length) return;
+  if (!botao || botao.classList.contains("botao-desfazer") || !pilhaDesfazer.length) return;
   if (botao.type === "submit" && botao.form) return; // o "submit" acima cuida
+  // A pergunta "Salvar as alterações?" aperta o próprio botão do bloco depois.
+  if (botao.closest("dialog")) return;
   const encerra = /\bacao-(salvar|cancelar|excluir|fechar)\b/.test(botao.className) || BOTAO_QUE_ENCERRA.test(botao.textContent || "");
-  if (encerra) encerrarEdicaoDa(botao.closest("form") || botao.closest(".page") || document.body);
+  if (encerra) encerrarEdicaoDa(botao.closest(SELETOR_BLOCO) || botao.closest(".page") || document.body);
 }, true);
 
-// Não tira o foco do campo ao tocar no botão (no celular o teclado não fecha e abre).
-botaoDesfazer.addEventListener("pointerdown", (evento) => evento.preventDefault());
-botaoDesfazer.addEventListener("mousedown", (evento) => evento.preventDefault());
-botaoDesfazer.addEventListener("click", () => {
+// Tocar no botão não tira o foco do campo (no celular o teclado não fecha e
+// abre) e não chega ao bloco (que, lendo, abriria a edição).
+["pointerdown", "mousedown"].forEach((tipo) => document.addEventListener(tipo, (evento) => {
+  if (evento.target.closest && evento.target.closest(".botao-desfazer")) evento.preventDefault();
+}, true));
+
+document.addEventListener("click", (evento) => {
+  const botao = evento.target.closest && evento.target.closest(".botao-desfazer");
+  if (!botao) return;
+  evento.preventDefault();
+  evento.stopPropagation();
   atualizarBotaoDesfazer();
-  const acao = pilhaDesfazer.pop();
-  if (!acao) return;
+  const bloco = [...botoesDesfazer.entries()].find(([, b]) => b === botao)?.[0];
+  let indice = -1;
+  for (let i = pilhaDesfazer.length - 1; i >= 0; i--) {
+    if (pilhaDesfazer[i].bloco === bloco) { indice = i; break; }
+  }
+  if (indice < 0) return;
+  const [acao] = pilhaDesfazer.splice(indice, 1);
   const el = acao.el;
   desfazendo = true;
   try {
@@ -13106,7 +13170,7 @@ botaoDesfazer.addEventListener("click", () => {
   el.classList.add("campo-desfeito");
   setTimeout(() => el.classList.remove("campo-desfeito"), 1000);
   atualizarBotaoDesfazer();
-});
+}, true);
 
 // sistema.html#senha: a tela antiga, com a senha de acesso única -- fica até
 // o dono autorizar tirar. Qualquer outro jeito de abrir usa o login por

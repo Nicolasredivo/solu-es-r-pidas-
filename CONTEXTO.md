@@ -5518,8 +5518,19 @@ Junto: `Geo_Enderecos` ganhou `Criado_Em` (o Airtable local exige essa coluna em
 ## Botão de desfazer (↺) em todo o sistema (12/11/2026)
 Pedido do dono: em toda área onde se altera dado, um botão redondo de voltar que desfaz a última
 ação. Ele só aparece, e só funciona, enquanto há alteração para desfazer.
-- **Onde fica:** `#botao-desfazer` está na barra de cima, antes do indicador de conexão. Fica visível
-  em qualquer tela e não disputa espaço com os lembretes (canto de baixo).
+- **Onde fica (mudou no mesmo dia, pedido do dono: "dentro do próprio bloco que está sendo
+  alterado, não no campo"):** cada bloco mexido ganha o seu botão, que desfaz a última alteração
+  daquele bloco.
+  - **Bloco** = o mais perto do campo entre `.bloco-editavel`, `.pneu`, `.local`, `.contato`,
+    `.moldura-parte`, `.moldura`, `.chamado-editar-box`, `.bloco-cartao`, `.cadastro`, `form` e `.card`
+    (`SELETOR_BLOCO`). `.bloco-editavel` marca um bloco à mão.
+  - **Posição:** o botão entra como primeiro filho e flutua no canto de cima à direita
+    (`float` + `position: sticky`). Ele não ocupa altura (margem de baixo negativa) e acompanha a
+    rolagem num bloco comprido.
+  - **Quando há uma barra no bloco:** em endereço/contato vai para o canto do "Remover"
+    (`.local-topo`). Num bloco com `.detalhe-acoes` (Salvar/Cancelar no alto, como a ficha do
+    veículo), entra no fim dessa barra.
+  - A primeira versão (um botão só, na barra de cima) saiu no commit 868afea e foi trocada por esta.
 - **Como funciona:** o código é genérico (app.js, "Desfazer (↺)") e escuta `focusin`, `input` e
   `change` no documento inteiro, sem ligar tela por tela.
 - **O que é uma ação:** tudo o que se digita num campo de uma vez (até sair dele), ou cada escolha

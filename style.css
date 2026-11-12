@@ -943,10 +943,14 @@ input[type="number"]:focus {
   position: absolute;
   top: 12px;
   right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.local-topo:has(.remover-local.hidden),
-.contato-topo:has(.remover-contato.hidden) {
+/* Sem o Remover e sem o desfazer, o canto some. */
+.local-topo:has(.remover-local.hidden):not(:has(.botao-desfazer)),
+.contato-topo:has(.remover-contato.hidden):not(:has(.botao-desfazer)) {
   display: none;
 }
 
@@ -4966,38 +4970,55 @@ div.lembrete-item:hover {
 }
 
 /* ----- Desfazer (12/11/2026) -----
-   Botão redondo na barra de cima que desfaz a última alteração não salva.
-   Fica antes do indicador de conexão e só aparece quando há o que desfazer.
-   As margens negativas evitam que a barra mude de altura quando ele aparece. */
+   Botão redondo que desfaz a última alteração não salva DO BLOCO onde ele está
+   (pedido do dono: dentro do bloco que está sendo alterado). Fica no canto de
+   cima à direita do bloco, preso no alto ao rolar um bloco comprido, e não
+   empurra nada (margem de baixo negativa). Onde o bloco já tem uma barra de
+   ações (Remover do endereço/contato, Salvar/Cancelar da ficha), entra nela. */
 .botao-desfazer {
-  margin: -6px 0 -6px auto;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  flex-shrink: 0;
-  border-radius: 50%;
-  border: 1px solid var(--accent);
-  background: transparent;
-  color: var(--accent);
+  float: right;
+  position: sticky;
+  top: calc(var(--altura-topo, 60px) + 8px);
+  z-index: 4;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 28px !important;
+  height: 28px;
+  /* Centrado na linha do primeiro nome de campo, sem ocupar altura (margem de
+     baixo negativa) e sem tapar o campo de baixo. */
+  margin: -6px 0 -28px 8px;
+  padding: 0 !important;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  background: var(--card);
+  color: var(--accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   cursor: pointer;
   transition: background var(--transicao), color var(--transicao);
 }
 
 .botao-desfazer svg {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.botao-desfazer[hidden] {
-  display: none;
+/* Bloco com borda e espaço por dentro: o botão sobe para o vão do canto. */
+:is(.moldura, .veiculo-cartao, .bloco-cartao, .chamado-editar-box) > .botao-desfazer {
+  margin: -8px -8px -28px 8px;
 }
 
-/* Com o botão à vista, o indicador de conexão fica colado nele. */
-.botao-desfazer:not([hidden]) + .conexao {
-  margin-left: 0;
+.botao-desfazer.na-barra {
+  float: none;
+  position: static;
+  flex-shrink: 0;
+  margin: 0;
+  box-shadow: none;
 }
 
 .botao-desfazer:active {
@@ -5009,7 +5030,19 @@ div.lembrete-item:hover {
   .botao-desfazer:hover {
     background: var(--accent);
     color: #fff;
+    filter: none;
   }
+}
+
+/* No canto do endereço/contato, o círculo pede um pouco mais de espaço. */
+:is(.local-topo, .contato-topo):has(.botao-desfazer) {
+  top: 6px;
+  right: 8px;
+}
+
+/* O título do bloco continua sem a margem de cima com o botão antes dele. */
+.botao-desfazer:first-child + .titulo-bloco {
+  margin-top: 0;
 }
 
 /* O campo que acabou de voltar pisca de leve, pra ver o que mudou. */
