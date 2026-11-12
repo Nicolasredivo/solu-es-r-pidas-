@@ -5514,3 +5514,27 @@ preenchidos para CNPJ 1 (válido até 04/11/2027) e CNPJ 2 (até 11/11/2027). Se
 vão para o banco nem para o repositório. A NFS-e do CNPJ 2 (fase 4) ainda não foi feita: o assinador
 continua usando o certificado do CNPJ 1.
 Junto: `Geo_Enderecos` ganhou `Criado_Em` (o Airtable local exige essa coluna em toda tabela).
+
+## Botão de desfazer (↺) em todo o sistema (12/11/2026)
+Pedido do dono: em toda área onde se altera dado, um botão redondo de voltar que desfaz a última
+ação. Ele só aparece, e só funciona, enquanto há alteração para desfazer.
+- **Onde fica:** `#botao-desfazer` está na barra de cima, antes do indicador de conexão. Fica visível
+  em qualquer tela e não disputa espaço com os lembretes (canto de baixo).
+- **Como funciona:** o código é genérico (app.js, "Desfazer (↺)") e escuta `focusin`, `input` e
+  `change` no documento inteiro, sem ligar tela por tela.
+- **O que é uma ação:** tudo o que se digita num campo de uma vez (até sair dele), ou cada escolha
+  numa lista ou caixinha.
+- **Desfazer:** devolve o valor de antes, dispara `input` e `change` (o "não salvo" e os campos que
+  dependem acompanham) e o campo pisca. O foco não sai do campo.
+- **Quando uma ação deixa de valer:**
+  - o campo trava (`disabled`/`readonly`), some ou sai da página;
+  - o formulário é enviado (`submit`);
+  - aperta-se um botão que encerra a edição (`.acao-salvar/cancelar/excluir/fechar` ou texto
+    Salvar, Cancelar, Excluir…).
+- **Ficam de fora:**
+  - busca e filtro (id, classe ou aria-label com busca/filtro);
+  - senha e arquivo;
+  - campos dentro de `<dialog>` e da tela de login;
+  - quem tiver `data-sem-desfazer`.
+- **Não cobre** ações que não são campo, como acrescentar ou remover linha, anexar ou arrastar.
+  A Agenda continua com o desfazer próprio do arrasto (`#agenda-desfazer`, Ctrl+Z).

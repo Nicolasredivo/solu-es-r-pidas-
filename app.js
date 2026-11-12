@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.11a";
+const APP_VERSION = "2026.11.12a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -12972,6 +12972,141 @@ if ("serviceWorker" in navigator) {
 // ----- Estado inicial da tela de entrada -----
 
 n8nUrlInput.value = baseUrlN8n();
+
+// ----- Desfazer (↺) -----
+//
+// Pedido do dono (12/11/2026): em toda área onde se altera algum dado, um botão
+// redondo de voltar que desfaz a última ação. Ele só aparece, e só funciona,
+// enquanto algo está sendo editado.
+// É um só e genérico: acompanha qualquer campo que a pessoa mexe (texto, lista,
+// data, caixinha), em qualquer tela, sem ligar tela por tela.
+// Uma "ação" é o que se digitou num campo de uma vez (até sair dele), ou cada
+// escolha numa lista ou caixinha. Desfazer devolve o valor de antes e avisa a
+// tela (input/change), como se a pessoa tivesse mudado de volta. Assim a
+// detecção de "não salvo" e os campos que dependem dele acompanham.
+// Uma ação deixa de valer quando o campo trava ou some (salvou ou cancelou)
+// ou quando o formulário é salvo, cancelado ou excluído.
+// Busca e filtro ficam de fora, porque não são dado. Senha também fica de fora.
+
+const botaoDesfazer = document.getElementById("botao-desfazer");
+let pilhaDesfazer = []; // { el, antes } — a última no fim
+const ultimoValor = new WeakMap(); // valor do campo quando a pessoa entrou nele
+let campoDigitando = null; // campo com a ação aberta (ainda digitando nele)
+let desfazendo = false;
+
+const lerCampo = (el) => (el.type === "checkbox" ? el.checked : el.value);
+
+function campoDesfazivel(el) {
+  if (!(el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement)) return false;
+  if (el instanceof HTMLInputElement && /^(file|password|search|hidden|button|submit|reset|image|range|color|radio)$/.test(el.type)) return false;
+  const nome = `${el.id} ${typeof el.className === "string" ? el.className : ""} ${el.getAttribute("aria-label") || ""}`;
+  if (/busca|filtro|buscar/i.test(nome)) return false;
+  return !el.closest("dialog, #gate-view, [data-sem-desfazer]");
+}
+
+// Ainda dá para desfazer: o campo está na tela e liberado para edição.
+const acaoValendo = (p) => p.el.isConnected && !p.el.disabled && !p.el.readOnly
+  && p.el.getClientRects().length > 0;
+
+let observadorDesfazer = null;
+let conferenciaMarcada = false;
+function atualizarBotaoDesfazer() {
+  pilhaDesfazer = pilhaDesfazer.filter(acaoValendo);
+  botaoDesfazer.hidden = pilhaDesfazer.length === 0;
+  // Só observa a tela (campo travando/sumindo) enquanto há o que desfazer.
+  if (pilhaDesfazer.length && !observadorDesfazer) {
+    observadorDesfazer = new MutationObserver(() => {
+      if (conferenciaMarcada) return;
+      conferenciaMarcada = true;
+      requestAnimationFrame(() => { conferenciaMarcada = false; atualizarBotaoDesfazer(); });
+    });
+    observadorDesfazer.observe(document.body, {
+      subtree: true, childList: true, attributes: true, attributeFilter: ["disabled", "readonly", "class", "hidden", "style"],
+    });
+  } else if (!pilhaDesfazer.length && observadorDesfazer) {
+    observadorDesfazer.disconnect();
+    observadorDesfazer = null;
+  }
+}
+
+document.addEventListener("focusin", (evento) => {
+  const el = evento.target;
+  if (campoDesfazivel(el)) ultimoValor.set(el, lerCampo(el));
+});
+
+document.addEventListener("focusout", (evento) => {
+  if (evento.target === campoDigitando) campoDigitando = null;
+});
+
+function registrarAlteracao(evento) {
+  const el = evento.target;
+  if (desfazendo || !campoDesfazivel(el)) return;
+  const agora = lerCampo(el);
+  if (el.type === "checkbox") {
+    if (evento.type !== "change") return; // a caixinha dispara os dois: conta uma vez só
+    pilhaDesfazer.push({ el, antes: !agora });
+  } else if (campoDigitando === el && pilhaDesfazer.length && pilhaDesfazer[pilhaDesfazer.length - 1].el === el) {
+    // Continua a mesma ação (ainda digitando no mesmo campo).
+    // Se voltou ao que era antes, a ação deixa de existir.
+    const topo = pilhaDesfazer[pilhaDesfazer.length - 1];
+    if (topo.antes === agora) pilhaDesfazer.pop();
+  } else {
+    if (!ultimoValor.has(el)) return; // sem saber o valor de antes, não há como voltar
+    const antes = ultimoValor.get(el);
+    if (antes === agora) return;
+    pilhaDesfazer.push({ el, antes });
+    if (!(el instanceof HTMLSelectElement)) campoDigitando = el;
+  }
+  ultimoValor.set(el, agora);
+  atualizarBotaoDesfazer();
+}
+document.addEventListener("input", registrarAlteracao);
+document.addEventListener("change", registrarAlteracao);
+
+// Salvar, cancelar, excluir ou fechar encerra a edição daquela área: o que foi
+// alterado nela não é mais "a última ação" a desfazer.
+const BOTAO_QUE_ENCERRA = /^\s*(salvar|cancelar|excluir|remover|fechar|descartar|confirmar|emitir|criar|cadastrar|gravar|enviar|concluir)/i;
+function encerrarEdicaoDa(area) {
+  if (!area) return;
+  pilhaDesfazer = pilhaDesfazer.filter((p) => !area.contains(p.el));
+  if (campoDigitando && area.contains(campoDigitando)) campoDigitando = null;
+  atualizarBotaoDesfazer();
+}
+document.addEventListener("submit", (evento) => encerrarEdicaoDa(evento.target), true);
+document.addEventListener("click", (evento) => {
+  const botao = evento.target.closest && evento.target.closest("button");
+  if (!botao || botao === botaoDesfazer || !pilhaDesfazer.length) return;
+  if (botao.type === "submit" && botao.form) return; // o "submit" acima cuida
+  const encerra = /\bacao-(salvar|cancelar|excluir|fechar)\b/.test(botao.className) || BOTAO_QUE_ENCERRA.test(botao.textContent || "");
+  if (encerra) encerrarEdicaoDa(botao.closest("form") || botao.closest(".page") || document.body);
+}, true);
+
+// Não tira o foco do campo ao tocar no botão (no celular o teclado não fecha e abre).
+botaoDesfazer.addEventListener("pointerdown", (evento) => evento.preventDefault());
+botaoDesfazer.addEventListener("mousedown", (evento) => evento.preventDefault());
+botaoDesfazer.addEventListener("click", () => {
+  atualizarBotaoDesfazer();
+  const acao = pilhaDesfazer.pop();
+  if (!acao) return;
+  const el = acao.el;
+  desfazendo = true;
+  try {
+    if (el.type === "checkbox") el.checked = acao.antes;
+    else el.value = acao.antes;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  } finally {
+    desfazendo = false;
+  }
+  ultimoValor.set(el, lerCampo(el));
+  if (campoDigitando === el) campoDigitando = null;
+  el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  el.classList.remove("campo-desfeito");
+  void el.offsetWidth; // reinicia a piscada se desfizer o mesmo campo de novo
+  el.classList.add("campo-desfeito");
+  setTimeout(() => el.classList.remove("campo-desfeito"), 1000);
+  atualizarBotaoDesfazer();
+});
 
 // sistema.html#senha: a tela antiga, com a senha de acesso única -- fica até
 // o dono autorizar tirar. Qualquer outro jeito de abrir usa o login por

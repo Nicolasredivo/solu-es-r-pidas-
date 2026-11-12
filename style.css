@@ -4964,3 +4964,60 @@ div.lembrete-item:hover {
     text-align: left;
   }
 }
+
+/* ----- Desfazer (12/11/2026) -----
+   Botão redondo na barra de cima que desfaz a última alteração não salva.
+   Fica antes do indicador de conexão e só aparece quando há o que desfazer.
+   As margens negativas evitam que a barra mude de altura quando ele aparece. */
+.botao-desfazer {
+  margin: -6px 0 -6px auto;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--transicao), color var(--transicao);
+}
+
+.botao-desfazer svg {
+  width: 20px;
+  height: 20px;
+}
+
+.botao-desfazer[hidden] {
+  display: none;
+}
+
+/* Com o botão à vista, o indicador de conexão fica colado nele. */
+.botao-desfazer:not([hidden]) + .conexao {
+  margin-left: 0;
+}
+
+.botao-desfazer:active {
+  background: var(--accent);
+  color: #fff;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .botao-desfazer:hover {
+    background: var(--accent);
+    color: #fff;
+  }
+}
+
+/* O campo que acabou de voltar pisca de leve, pra ver o que mudou. */
+.campo-desfeito {
+  animation: campo-desfeito 0.9s ease;
+}
+
+@keyframes campo-desfeito {
+  0%, 40% { box-shadow: 0 0 0 3px var(--accent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
