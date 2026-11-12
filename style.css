@@ -4655,317 +4655,980 @@ div.lembrete-item:hover {
   color: var(--aviso);
 }
 
-/* ----- Veículo (08/11/2026): o PDF do documento e os dados dele ----- */
+/* ----- Veículo (08/11/2026; visual novo em 12/11/2026) -----
+   Pedido do dono: tudo tinha a mesma cara (moldura + nome + valor) e era
+   difícil achar as coisas. Agora cada tipo de informação tem um desenho próprio:
+   - cabeçalho do carro (nome grande + placa no formato Mercosul), sempre à vista;
+   - abas internas (as mesmas do resto do sistema): Custos, Pneus, Documento;
+   - números grandes para custo e combustível, com barra das partes do custo;
+   - tabela para o deslocamento do mês (números alinhados à direita);
+   - o carro visto de cima com os 5 pneus em volta;
+   - o arquivo do documento como cartão de arquivo + ficha com "nome ..... valor".
+   Cada assunto tem uma cor fixa no ícone (combustível âmbar, pneus lilás,
+   deslocamento azul, custo verde), repetida na barra e na legenda. */
 #page-veiculo {
   max-width: 960px;
 }
 
-.veiculo-doc-linha {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.veiculo-doc-linha button {
-  width: auto;
-  padding: 8px 12px;
-}
-
-.veiculo-doc-link {
-  flex: 1 1 220px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--accent);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.veiculo-doc-link:hover {
-  text-decoration: underline;
-}
-
-.veiculo-doc-status {
-  margin-top: 8px;
-}
-
-.veiculo-doc-status.ok { color: var(--ok); }
-.veiculo-doc-status.error,
-#veiculo-status.error { color: var(--error); }
-.veiculo-doc-status.aviso { color: var(--aviso); }
-#veiculo-status.ok { color: var(--ok); }
-
-#veiculo-status:empty {
-  display: none;
-}
-
-#veiculo-status {
-  margin-bottom: 10px;
-}
-
-/* A barra Salvar/Cancelar do cliente aberto supõe 14px de espaço em volta;
-   aqui ela fica direto no card. */
-.veiculo-detalhe .detalhe-acoes {
-  margin-bottom: 10px;
-}
-
-.veiculo-detalhe.editando .detalhe-acoes {
-  margin: 0 0 10px;
-  padding: 10px 0;
-}
-
-/* Campos lado a lado dentro de cada bloco; no celular, um embaixo do outro. */
-.veiculo-campos {
+/* Cabeçalho: quem é o carro. */
+.veiculo-cabecalho {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  column-gap: 18px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 14px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(91, 141, 239, 0.16), rgba(91, 141, 239, 0.04));
+  border: 1px solid rgba(91, 141, 239, 0.28);
 }
 
-.veiculo-campo {
-  min-width: 0;
+.veiculo-cab-icone {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(91, 141, 239, 0.18);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.veiculo-campo-largo {
-  grid-column: span 2;
+.veiculo-cab-icone svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.veiculo-campo :is(input, textarea) {
-  margin-bottom: 14px;
-}
-
-.veiculo-campo :is(input, textarea):disabled {
-  margin-bottom: 14px;
+.veiculo-cab-nome {
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 480px) {
-  .veiculo-campo-largo {
-    grid-column: auto;
+.veiculo-cab-detalhes {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+/* Placa no formato Mercosul: reconhecida de relance. */
+.veiculo-placa {
+  display: flex;
+  flex-direction: column;
+  min-width: 118px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f4f6fb;
+  border: 2px solid #0d1022;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.veiculo-placa-faixa {
+  padding: 2px 0 1px;
+  background: #1f4fc4;
+  color: #fff;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-align: center;
+}
+
+.veiculo-placa-texto {
+  padding: 3px 10px 4px;
+  color: #111827;
+  font-family: "Arial Narrow", "Roboto Condensed", "Helvetica Neue", Arial, sans-serif;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .veiculo-cabecalho {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .veiculo-placa {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 
-/* A última linha de campos já tem o espaço de baixo do campo; a moldura não
-   precisa somar mais. */
-.veiculo-grupo > .veiculo-campos {
-  margin-bottom: -14px;
+.veiculo-aviso-geral {
+  margin: -6px 0 14px;
 }
 
-/* Consumo (km/l): bloco à parte, acima do documento. Lendo, o bloco todo
-   reage ao toque; editando, os botões ficam logo embaixo do campo. */
+.veiculo-aviso-geral:empty {
+  display: none;
+}
+
+.veiculo-aviso-geral.error {
+  color: var(--error);
+}
+
+.veiculo-abas {
+  margin-bottom: 16px;
+}
+
+/* Cartão de cada assunto: fundo um pouco mais fundo que a página. */
+.veiculo-cartao {
+  margin-bottom: 14px;
+  padding: 16px;
+  border-radius: 14px;
+  background: #151a2e;
+  border: 1px solid #262b47;
+}
+
+.veiculo-cartao-titulo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+/* Ícone do assunto, sempre com a mesma cor. */
+.veiculo-chip {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.veiculo-chip svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chip-custo { background: rgba(62, 207, 142, 0.14); color: var(--ok); }
+.chip-combustivel { background: rgba(245, 166, 35, 0.14); color: var(--aviso); }
+.chip-rota { background: rgba(91, 141, 239, 0.16); color: var(--accent); }
+.chip-pneu { background: rgba(167, 139, 250, 0.16); color: #a78bfa; }
+.chip-documento { background: rgba(229, 72, 77, 0.14); color: #f07075; }
+.chip-ficha { background: rgba(154, 160, 180, 0.14); color: var(--muted); }
+
+.cor-combustivel { background: var(--aviso); }
+.cor-pneu { background: #a78bfa; }
+
+/* ===== Aba Custos ===== */
+
+/* Custo por km e Combustível lado a lado quando cabe; um embaixo do outro no celular. */
+.veiculo-custos-topo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.veiculo-custos-topo > .veiculo-cartao {
+  margin-bottom: 0;
+}
+
+.veiculo-numero-grande {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.veiculo-numero-legenda {
+  margin: 4px 0 14px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+/* Barra das partes do custo do km (cada parte do tamanho do que pesa). */
+.veiculo-barra {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  margin-bottom: 12px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: #262b47;
+}
+
+.veiculo-barra-parte {
+  min-width: 4px;
+}
+
+.veiculo-legenda {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.veiculo-legenda li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+}
+
+.veiculo-legenda-cor {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.veiculo-legenda-nome {
+  flex: 1;
+  color: var(--muted);
+}
+
+.veiculo-legenda strong {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.veiculo-custo-falta {
+  margin: 12px 0 0;
+}
+
+/* Combustível: lendo, dois números grandes; tocar no bloco edita os dois. */
+.veiculo-consumo-grade {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+}
+
+.veiculo-consumo-item {
+  min-width: 0;
+}
+
+.veiculo-leitura-valor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+}
+
+.veiculo-leitura-valor strong {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.veiculo-unidade {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* A conta do combustível por km, à vista: preço ÷ consumo. */
+.veiculo-consumo-conta {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid #232842;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.veiculo-consumo-conta strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.veiculo-consumo-conta:empty,
+.veiculo-consumo.editando .veiculo-consumo-conta {
+  display: none;
+}
+
+.veiculo-leitura-valor.vazio strong {
+  color: var(--muted);
+}
+
+.veiculo-leitura-valor.vazio .veiculo-unidade {
+  display: none;
+}
+
+.veiculo-consumo.leitura input,
+.veiculo-consumo.leitura .doc-hint,
+.veiculo-consumo.editando .veiculo-leitura-valor {
+  display: none;
+}
+
 .veiculo-consumo.leitura {
   cursor: pointer;
   transition: border-color var(--transicao);
 }
 
-.veiculo-consumo.leitura input:disabled {
-  pointer-events: none;
-}
-
 @media (hover: hover) and (pointer: fine) {
   .veiculo-consumo.leitura:hover {
-    border-color: rgba(91, 141, 239, 0.55);
+    border-color: rgba(245, 166, 35, 0.55);
   }
 }
 
-#veiculo-consumo-valor,
-#veiculo-preco-litro {
-  max-width: 160px;
+.veiculo-consumo.editando,
+.veiculo-pneu-editor {
+  border-color: var(--accent);
 }
 
-.veiculo-consumo-acoes {
+.veiculo-consumo-acoes,
+.pneu-acoes {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 4px;
 }
 
-.veiculo-consumo-acoes button {
-  width: auto;
-  padding: 8px 12px;
-}
-
-.veiculo-consumo-acoes .acao-salvar {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-}
-
-.veiculo-consumo-acoes .acao-excluir {
-  margin-left: auto;
-}
-
-.veiculo-consumo-status {
-  margin-top: 8px;
-}
-
-.veiculo-consumo-status:empty {
-  display: none;
-}
-
-.veiculo-consumo-status.ok { color: var(--ok); }
-.veiculo-consumo-status.error { color: var(--error); }
-
-/* Pneus (09/11/2026): um cartão por posição, lado a lado; no celular, um
-   embaixo do outro. Lendo, o cartão todo reage ao toque. */
-.veiculo-pneus-lista {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 10px;
-  align-items: start;
-}
-
-.pneu {
-  min-width: 0;
-  border: 1px solid #2c3153;
-  border-radius: 10px;
-  padding: 12px;
-}
-
-.pneu.leitura {
-  cursor: pointer;
-  transition: border-color var(--transicao);
-}
-
-.pneu.leitura input:disabled {
-  pointer-events: none;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .pneu.leitura:hover {
-    border-color: rgba(91, 141, 239, 0.55);
-  }
-}
-
-.pneu.editando {
-  border-color: var(--accent);
-  grid-column: span 2;
-}
-
-@media (max-width: 560px) {
-  .pneu.editando {
-    grid-column: auto;
-  }
-}
-
-.pneu-titulo {
-  font-weight: 700;
-  margin-bottom: 10px;
-}
-
-.pneu input {
-  margin-bottom: 12px;
-}
-
-.pneu-acoes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
+.veiculo-consumo-acoes button,
 .pneu-acoes button {
   width: auto;
   padding: 8px 12px;
 }
 
+.veiculo-consumo-acoes .acao-salvar,
 .pneu-acoes .acao-salvar {
   background: var(--accent);
   border-color: var(--accent);
   color: white;
 }
 
+.veiculo-consumo-acoes .acao-excluir,
 .pneu-acoes .acao-excluir {
   margin-left: auto;
 }
 
-.pneu-status {
-  margin-top: 8px;
+.veiculo-consumo-status,
+.pneu-status,
+.veiculo-pneus-aviso,
+.veiculo-doc-status {
+  margin-top: 10px;
 }
 
-.pneu-status:empty {
+:is(.veiculo-consumo-status, .pneu-status, .veiculo-pneus-aviso, #veiculo-status):empty {
   display: none;
 }
 
-.pneu-status.ok { color: var(--ok); }
-.pneu-status.error { color: var(--error); }
+:is(.veiculo-consumo-status, .pneu-status, .veiculo-pneus-aviso, .veiculo-doc-status, #veiculo-status).ok { color: var(--ok); }
+:is(.veiculo-consumo-status, .pneu-status, .veiculo-pneus-aviso, .veiculo-doc-status, #veiculo-status).error { color: var(--error); }
+.veiculo-doc-status.aviso { color: var(--aviso); }
 
-/* No cartão lendo, a última linha (desgaste) não precisa do espaço de baixo. */
-.pneu.leitura input:last-of-type {
-  margin-bottom: 0;
-}
-
-/* Gasto de deslocamento (09/11/2026): total do mês e um atendimento por linha. */
+/* Deslocamento do mês: três números e a tabela dos atendimentos. */
 .veiculo-deslocamento-topo {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.veiculo-deslocamento-topo .veiculo-cartao-titulo {
+  margin: 0;
 }
 
 .veiculo-mes-nav {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: #12162a;
+  border: 1px solid #262b47;
 }
 
 .veiculo-mes-nav button {
-  width: auto;
-  min-width: 36px;
-  padding: 4px 10px;
+  width: 32px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 1.15rem;
+}
+
+.veiculo-mes-nav button:disabled {
+  opacity: 0.3;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .veiculo-mes-nav button:not(:disabled):hover {
+    background: rgba(91, 141, 239, 0.16);
+  }
 }
 
 #veiculo-mes-nome {
   min-width: 140px;
+  font-size: 0.9rem;
+  font-weight: 600;
   text-align: center;
 }
 
-.veiculo-desloc-total {
-  margin: 6px 0 4px;
-  font-size: 1.05rem;
-}
-
-.veiculo-desloc-lista {
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
-}
-
-.veiculo-desloc-lista li {
+.veiculo-desloc-numeros {
   display: grid;
-  grid-template-columns: 52px 1fr auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  align-items: baseline;
-  padding: 7px 0;
-  border-top: 1px solid #2c3153;
+  margin-bottom: 14px;
 }
 
-.veiculo-desloc-lista li.doc-hint {
+.veiculo-desloc-numeros:empty {
+  display: none;
+}
+
+.veiculo-mini {
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #12162a;
+}
+
+.veiculo-mini-rotulo {
   display: block;
-  border-top: 0;
-}
-
-.veiculo-desloc-dia {
+  margin-bottom: 4px;
   color: var(--muted);
+  font-size: 0.75rem;
 }
 
-.veiculo-desloc-quem {
+.veiculo-mini-valor {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.vd-linha {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 84px 96px;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 6px;
+  border-top: 1px solid #232842;
+  font-size: 0.92rem;
+}
+
+.vd-cabeca {
+  padding-top: 0;
+  padding-bottom: 8px;
+  border-top: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vd-dia,
+.vd-num {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.vd-quem {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.veiculo-desloc-valor {
-  text-align: right;
-  white-space: nowrap;
+.vd-quem .chamado-tipo-badge {
+  margin: 0 0 0 4px;
+  vertical-align: 1px;
 }
 
-@media (max-width: 480px) {
-  .veiculo-desloc-lista li {
-    grid-template-columns: 44px 1fr;
+.vd-km,
+.vd-custo {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.vd-custo {
+  font-weight: 600;
+}
+
+.vd-aviso {
+  grid-column: 3 / 5;
+  text-align: right;
+  color: var(--aviso);
+  font-size: 0.85rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .vd-linha:not(.vd-cabeca):hover {
+    background: rgba(255, 255, 255, 0.025);
+  }
+}
+
+/* Celular: cliente e custo na primeira linha; dia e km embaixo, menores. */
+@media (max-width: 560px) {
+  .vd-cabeca {
+    display: none;
   }
 
-  .veiculo-desloc-valor {
-    grid-column: 2;
+  .vd-linha {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "quem quem custo"
+      "dia km km";
+    gap: 2px 10px;
+    padding: 10px 2px;
+  }
+
+  .vd-quem { grid-area: quem; }
+  .vd-custo { grid-area: custo; }
+  .vd-dia { grid-area: dia; font-size: 0.8rem; }
+
+  .vd-km,
+  .vd-aviso {
+    grid-area: km;
     text-align: left;
+    font-size: 0.8rem;
+  }
+
+  .vd-km {
+    color: var(--muted);
+  }
+
+  /* O gasto do mês na linha toda; rodados e atendimentos lado a lado. */
+  .veiculo-desloc-numeros {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .veiculo-mini:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .veiculo-mini {
+    padding: 8px 10px;
+  }
+}
+
+/* Lista vazia (ou carregando): uma frase no meio, com borda tracejada. */
+.veiculo-vazio {
+  margin: 0;
+  padding: 18px 12px;
+  border: 1px dashed #2c3153;
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.veiculo-vazio.error {
+  color: var(--error);
+}
+
+/* ===== Aba Pneus: o carro visto de cima, com os pneus em volta ===== */
+.veiculo-pneus-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.veiculo-pneus-topo .veiculo-cartao-titulo {
+  margin: 0;
+}
+
+.veiculo-pneus-resumo {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.veiculo-pneus-resumo strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.veiculo-pneus-dica {
+  margin: 8px 0 16px;
+}
+
+.veiculo-pneus-mapa {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px minmax(0, 1fr);
+  grid-template-areas:
+    "de carro dd"
+    "te carro td"
+    "estepe estepe estepe";
+  /* As duas linhas de pneus com a mesma altura: as rodas do desenho ficam na frente delas. */
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 10px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.pneu-area-de { grid-area: de; }
+.pneu-area-dd { grid-area: dd; }
+.pneu-area-te { grid-area: te; }
+.pneu-area-td { grid-area: td; }
+
+.pneu-tile.pneu-area-estepe {
+  grid-area: estepe;
+  justify-self: center;
+  width: min(100%, 300px);
+}
+
+.pneus-carro {
+  grid-area: carro;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.pneus-carro svg {
+  width: 100%;
+  max-width: 82px;
+  height: auto;
+}
+
+.pneus-frente {
+  color: var(--muted);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pneus-carro-corpo { fill: #20253f; stroke: #3a4170; stroke-width: 1.5; }
+.pneus-carro-vidro { fill: rgba(91, 141, 239, 0.35); }
+.pneus-carro-teto { fill: #282e4e; }
+.pneus-carro-cacamba { fill: none; stroke: #3a4170; stroke-width: 1.5; stroke-dasharray: 3 3; }
+.pneus-carro-roda { fill: #0b0e1a; stroke: #565e93; stroke-width: 1; }
+
+/* Cada pneu é um botão: preenchido tem a faixa lilás; vazio é tracejado. */
+.pneu-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: #12162a;
+  border: 1px solid #262b47;
+  border-left: 3px solid #a78bfa;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 400;
+  text-align: left;
+}
+
+.pneu-tile.vazio {
+  border: 1px dashed #3a4170;
+  background: transparent;
+}
+
+.pneu-tile.selecionado {
+  border-color: var(--accent);
+  background: rgba(91, 141, 239, 0.1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pneu-tile:not(.selecionado):hover {
+    border-color: rgba(91, 141, 239, 0.6);
+    filter: none;
+  }
+}
+
+.pneu-tile-posicao {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.pneu-tile-nome {
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.pneu-tile-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.pneu-tile-valor {
+  margin-top: 4px;
+  color: #c4b5fd;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.pneu-tile-vazio {
+  margin-top: 2px;
+  color: var(--accent);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.pneu-tile-glifo {
+  display: none;
+  width: 22px;
+  height: 37px;
+}
+
+.pneu-tile-glifo .corpo {
+  fill: none;
+  stroke: #4a5180;
+  stroke-width: 1.4;
+}
+
+.pneu-tile-glifo rect:not(.corpo) {
+  fill: #3a4170;
+}
+
+.pneu-tile-glifo .ativa {
+  fill: #a78bfa !important;
+}
+
+/* Celular: o desenho grande não cabe; os pneus viram uma lista, cada um com o
+   carrinho pequeno mostrando qual roda é. */
+@media (max-width: 560px) {
+  .veiculo-pneus-mapa {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pneus-carro {
+    display: none;
+  }
+
+  .pneu-tile,
+  .pneu-tile.pneu-area-estepe {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    align-items: start;
+    gap: 2px 12px;
+    width: 100%;
+  }
+
+  .pneu-tile > * {
+    grid-column: 2;
+  }
+
+  .pneu-tile-glifo {
+    display: block;
+    grid-column: 1;
+    grid-row: 1 / span 6;
+  }
+}
+
+/* Formulário do pneu tocado, embaixo do desenho. */
+.veiculo-pneu-campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  column-gap: 16px;
+}
+
+.veiculo-pneu-campo {
+  min-width: 0;
+}
+
+.veiculo-pneu-campo-largo {
+  grid-column: 1 / -1;
+}
+
+/* ===== Aba Documento ===== */
+.veiculo-doc-vazio {
+  display: flex;
+  justify-content: center;
+  padding: 22px 16px;
+  border: 1.5px dashed #3a4170;
+  border-radius: 12px;
+}
+
+.veiculo-doc-anexar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  padding: 10px 16px;
+  border-color: #3a4170;
+  color: var(--text);
+}
+
+.veiculo-doc-anexar svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* O PDF anexado, como cartão de arquivo. */
+.veiculo-arquivo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #12162a;
+  border: 1px solid #262b47;
+}
+
+.veiculo-arquivo-icone {
+  flex-shrink: 0;
+  width: 40px;
+  height: 48px;
+  padding-bottom: 7px;
+  border-radius: 6px 12px 6px 6px;
+  background: rgba(229, 72, 77, 0.16);
+  color: #f07075;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.veiculo-doc-link {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.veiculo-doc-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.veiculo-arquivo-acoes {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.veiculo-arquivo-acoes button {
+  width: auto;
+  padding: 8px 12px;
+}
+
+/* Ficha do documento: "nome ..... valor" em linhas, como ficha técnica. */
+.veiculo-detalhe .detalhe-acoes {
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.veiculo-ficha-titulo {
+  margin: 0 auto 0 0;
+}
+
+.veiculo-detalhe.editando .detalhe-acoes {
+  margin: -16px -16px 10px;
+  padding: 12px 16px;
+  background: #151a2e;
+  border-radius: 14px 14px 0 0;
+}
+
+#veiculo-status {
+  margin-bottom: 8px;
+}
+
+.veiculo-grupo {
+  padding: 14px 0 4px;
+  border-top: 1px solid #232842;
+}
+
+.veiculo-grupo:first-child {
+  padding-top: 4px;
+  border-top: 0;
+}
+
+.veiculo-grupo-titulo {
+  margin: 0 0 4px;
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.veiculo-campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  column-gap: 28px;
+}
+
+.veiculo-campo {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid #1f2440;
+}
+
+.veiculo-campo-largo {
+  grid-column: 1 / -1;
+}
+
+.veiculo-campo label {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.veiculo-campo :is(input, textarea) {
+  margin-bottom: 0;
+  font-size: 0.95rem;
+}
+
+.veiculo-campo :is(input, textarea):disabled {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+/* Números de identificação: letra de largura fixa, mais fácil de conferir. */
+.veiculo-campo-codigo input {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Roboto Mono", monospace;
+  letter-spacing: 0.03em;
+}
+
+.veiculo-detalhe.leitura .veiculo-campo {
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .veiculo-detalhe.leitura .veiculo-campo:hover label {
+    color: var(--text);
+  }
+}
+
+/* Celular: o nome em cima do valor (lado a lado, o valor comprido era cortado). */
+@media (max-width: 480px) {
+  .veiculo-campo {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
   }
 }
 

@@ -2109,71 +2109,188 @@
            tocar num campo edita. Os blocos de campos são montados pelo app.js (VEICULO_GRUPOS). -->
       <div id="page-veiculo" class="card page hidden">
         <h1>Veículo</h1>
-        <p class="subtitle">O documento do carro e os dados dele.</p>
 
-        <!-- Gasto de deslocamento (09/11/2026): calculado toda noite às 23h pelo fluxo
-             "Veículo - Gasto do dia" (rota do dia). Aqui só mostra o mês escolhido. -->
-        <div class="moldura veiculo-deslocamento">
-          <div class="veiculo-deslocamento-topo">
-            <div class="secao-titulo">Gasto de deslocamento</div>
-            <div class="veiculo-mes-nav">
-              <button type="button" id="veiculo-mes-anterior" class="botao-secundario" aria-label="Mês anterior">‹</button>
-              <span id="veiculo-mes-nome"></span>
-              <button type="button" id="veiculo-mes-seguinte" class="botao-secundario" aria-label="Mês seguinte">›</button>
+        <!-- Visual novo (12/11/2026, pedido do dono: cada tipo de informação com cara própria).
+             Cabeçalho do carro sempre à vista; o resto em três abas (Custos, Pneus, Documento).
+             Cada tipo tem um tratamento próprio: números grandes (custos), tabela (deslocamento),
+             desenho do carro (pneus), arquivo + ficha técnica (documento). -->
+        <section class="veiculo-cabecalho" aria-label="O carro">
+          <span class="veiculo-cab-icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 16.5V12l2.5-5h7l2 4H20a1 1 0 0 1 1 1v4.5h-2"/><path d="M8.5 16.5h7"/><path d="M3 16.5h1.5"/><circle cx="6.5" cy="16.5" r="2"/><circle cx="17.5" cy="16.5" r="2"/><path d="M5.5 11h9"/></svg>
+          </span>
+          <div class="veiculo-cab-texto">
+            <div id="veiculo-cab-nome" class="veiculo-cab-nome">Carro</div>
+            <div id="veiculo-cab-detalhes" class="veiculo-cab-detalhes"></div>
+          </div>
+          <div id="veiculo-placa" class="veiculo-placa hidden" title="Placa">
+            <span class="veiculo-placa-faixa">BRASIL</span>
+            <span id="veiculo-placa-texto" class="veiculo-placa-texto"></span>
+          </div>
+        </section>
+        <p id="veiculo-aviso-geral" class="placeholder-text veiculo-aviso-geral"></p>
+
+        <div class="subtabs veiculo-abas">
+          <button type="button" class="subtab active" data-subpage="veic-custos">Custos</button>
+          <button type="button" class="subtab" data-subpage="veic-pneus">Pneus</button>
+          <button type="button" class="subtab" data-subpage="veic-documento">Documento</button>
+        </div>
+
+        <!-- ===== Aba Custos ===== -->
+        <div id="subpage-veic-custos" class="subpage">
+          <div class="veiculo-custos-topo">
+            <!-- Custo do km: só leitura. É a soma das partes (combustível + pneus; outros custos entram depois). -->
+            <section class="veiculo-cartao veiculo-custo-km">
+              <h2 class="veiculo-cartao-titulo">
+                <span class="veiculo-chip chip-custo" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6.5 9.5v5M17.5 9.5v5"/></svg></span>
+                Custo por km
+              </h2>
+              <div id="veiculo-custo-km-valor" class="veiculo-numero-grande">—</div>
+              <p class="veiculo-numero-legenda">por km rodado, com o que está salvo hoje</p>
+              <div id="veiculo-custo-km-barra" class="veiculo-barra hidden" aria-hidden="true"></div>
+              <ul id="veiculo-custo-km-partes" class="veiculo-legenda"></ul>
+              <p id="veiculo-custo-km" class="doc-hint veiculo-custo-falta"></p>
+            </section>
+
+            <!-- Combustível: consumo (km/l) e preço do litro, digitados pelo dono (08 e 09/11/2026).
+                 Lendo, mostra os números grandes; tocar no bloco edita os dois. -->
+            <section id="veiculo-consumo" class="veiculo-cartao veiculo-consumo leitura bloco-editavel">
+              <h2 class="veiculo-cartao-titulo">
+                <span class="veiculo-chip chip-combustivel" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v15"/><path d="M3 20h12"/><path d="M6.5 8h5"/><path d="M14 10h2a1 1 0 0 1 1 1v5a1.5 1.5 0 0 0 3 0V8.5L17.5 6"/></svg></span>
+                Combustível
+              </h2>
+              <div class="veiculo-consumo-grade">
+                <div class="veiculo-consumo-item">
+                  <label for="veiculo-consumo-valor">Consumo médio</label>
+                  <div class="veiculo-leitura-valor"><strong id="veiculo-consumo-ver">—</strong><span class="veiculo-unidade">km/l</span></div>
+                  <input type="text" id="veiculo-consumo-valor" inputmode="decimal" autocomplete="off" maxlength="6" placeholder="Ex: 9,5" disabled />
+                  <p class="doc-hint">Na cidade, com a carga de sempre.</p>
+                </div>
+                <div class="veiculo-consumo-item">
+                  <label for="veiculo-preco-litro">Preço do litro</label>
+                  <div class="veiculo-leitura-valor"><strong id="veiculo-preco-ver">—</strong><span class="veiculo-unidade">por litro</span></div>
+                  <input type="text" id="veiculo-preco-litro" inputmode="decimal" autocomplete="off" maxlength="8" placeholder="Ex: 6,49" disabled />
+                  <p class="doc-hint">Da gasolina. Os dias já calculados não mudam.</p>
+                </div>
+              </div>
+              <p id="veiculo-consumo-conta" class="veiculo-consumo-conta"></p>
+              <div class="veiculo-consumo-acoes hidden">
+                <button type="button" class="acao-salvar">Salvar</button>
+                <button type="button" class="acao-cancelar botao-secundario">Cancelar</button>
+                <button type="button" class="acao-excluir botao-secundario botao-perigo">Excluir</button>
+              </div>
+              <p id="veiculo-consumo-status" class="placeholder-text veiculo-consumo-status"></p>
+            </section>
+          </div>
+
+          <!-- Gasto de deslocamento (09/11/2026): calculado toda noite às 23h pelo fluxo
+               "Veículo - Gasto do dia" (rota do dia). Aqui só mostra o mês escolhido. -->
+          <section class="veiculo-cartao veiculo-deslocamento">
+            <div class="veiculo-deslocamento-topo">
+              <h2 class="veiculo-cartao-titulo">
+                <span class="veiculo-chip chip-rota" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16"/></svg></span>
+                Deslocamento
+              </h2>
+              <div class="veiculo-mes-nav">
+                <button type="button" id="veiculo-mes-anterior" class="botao-secundario" aria-label="Mês anterior">‹</button>
+                <span id="veiculo-mes-nome"></span>
+                <button type="button" id="veiculo-mes-seguinte" class="botao-secundario" aria-label="Mês seguinte">›</button>
+              </div>
             </div>
-          </div>
-          <p id="veiculo-desloc-total" class="veiculo-desloc-total"></p>
-          <p id="veiculo-custo-km" class="doc-hint"></p>
-          <ul id="veiculo-desloc-lista" class="veiculo-desloc-lista"></ul>
+            <div id="veiculo-desloc-total" class="veiculo-desloc-numeros"></div>
+            <div id="veiculo-desloc-lista" class="veiculo-desloc-lista"></div>
+          </section>
         </div>
 
-        <!-- Consumo (km/l) e preço do litro: digitados pelo dono, fora dos dados do documento (08 e 09/11/2026).
-             Tocar no valor edita; Salvar / Cancelar / Excluir aparecem editando. -->
-        <div id="veiculo-consumo" class="moldura veiculo-consumo leitura">
-          <div class="secao-titulo">Consumo</div>
-          <label for="veiculo-consumo-valor">Consumo médio (km/l)</label>
-          <input type="text" id="veiculo-consumo-valor" inputmode="decimal" autocomplete="off" maxlength="6" placeholder="Ex: 9,5" disabled />
-          <p class="doc-hint">Na cidade, com a carga de sempre. Vale para o gasto de deslocamento de cada chamado.</p>
-          <label for="veiculo-preco-litro">Preço do litro (R$)</label>
-          <input type="text" id="veiculo-preco-litro" inputmode="decimal" autocomplete="off" maxlength="8" placeholder="Ex: 6,49" disabled />
-          <p class="doc-hint">Da gasolina. Troque quando o preço mudar; os dias já calculados não mudam.</p>
-          <div class="veiculo-consumo-acoes hidden">
-            <button type="button" class="acao-salvar">Salvar</button>
-            <button type="button" class="acao-cancelar botao-secundario">Cancelar</button>
-            <button type="button" class="acao-excluir botao-secundario">Excluir</button>
-          </div>
-          <p id="veiculo-consumo-status" class="placeholder-text veiculo-consumo-status"></p>
+        <!-- ===== Aba Pneus ===== -->
+        <!-- Pneus (09/11/2026; desenho do carro em 12/11/2026): os 5 pneus em volta do carro visto de
+             cima. Tocar num pneu abre o formulário dele embaixo do desenho. -->
+        <div id="subpage-veic-pneus" class="subpage hidden">
+          <section class="veiculo-cartao veiculo-pneus">
+            <div class="veiculo-pneus-topo">
+              <h2 class="veiculo-cartao-titulo">
+                <span class="veiculo-chip chip-pneu" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M12 3v5.5M12 15.5V21M3 12h5.5M15.5 12H21"/></svg></span>
+                Pneus
+              </h2>
+              <span id="veiculo-pneus-resumo" class="veiculo-pneus-resumo"></span>
+            </div>
+            <p class="doc-hint veiculo-pneus-dica">Toque num pneu para preencher ou trocar os dados dele.</p>
+            <div id="veiculo-pneus-lista" class="veiculo-pneus-mapa"></div>
+            <p id="veiculo-pneus-aviso" class="placeholder-text veiculo-pneus-aviso"></p>
+          </section>
+
+          <section id="veiculo-pneu-editor" class="veiculo-cartao veiculo-pneu-editor bloco-editavel hidden" aria-labelledby="veiculo-pneu-editor-titulo">
+            <h2 class="veiculo-cartao-titulo" id="veiculo-pneu-editor-titulo"></h2>
+            <div class="veiculo-pneu-campos">
+              <div class="veiculo-pneu-campo">
+                <label for="pneu-marca">Marca</label>
+                <input type="text" id="pneu-marca" data-campo-pneu="marca" maxlength="80" autocomplete="off" placeholder="Ex: Pirelli" />
+              </div>
+              <div class="veiculo-pneu-campo">
+                <label for="pneu-modelo">Modelo</label>
+                <input type="text" id="pneu-modelo" data-campo-pneu="modelo" maxlength="80" autocomplete="off" placeholder="Ex: Cinturato P1 175/70 R14" />
+              </div>
+              <div class="veiculo-pneu-campo">
+                <label for="pneu-valor">Valor pago (R$)</label>
+                <input type="text" id="pneu-valor" data-campo-pneu="valor" maxlength="12" inputmode="decimal" autocomplete="off" placeholder="Ex: 450,00" />
+              </div>
+              <div class="veiculo-pneu-campo">
+                <label for="pneu-data">Data da troca</label>
+                <input type="date" id="pneu-data" data-campo-pneu="dataTroca" />
+              </div>
+              <div class="veiculo-pneu-campo veiculo-pneu-campo-largo">
+                <label for="pneu-desgaste">Desgaste (R$ por km)</label>
+                <input type="text" id="pneu-desgaste" data-campo-pneu="desgaste" maxlength="12" inputmode="decimal" autocomplete="off" placeholder="Ex: 0,009" />
+                <p class="doc-hint">Valor pago ÷ quantos km o pneu dura. Ex: R$ 450 ÷ 50.000 km = 0,009.</p>
+              </div>
+            </div>
+            <div class="pneu-acoes">
+              <button type="button" class="acao-salvar">Salvar</button>
+              <button type="button" class="acao-cancelar botao-secundario">Cancelar</button>
+              <button type="button" class="acao-excluir botao-secundario botao-perigo">Excluir</button>
+            </div>
+            <p class="placeholder-text pneu-status"></p>
+          </section>
         </div>
 
-        <!-- Pneus (09/11/2026): um cartão por posição, preenchido à mão. Tocar no cartão edita;
-             Salvar / Cancelar / Excluir aparecem nele. Os cartões são montados pelo app.js. -->
-        <div class="moldura veiculo-pneus">
-          <div class="secao-titulo">Pneus</div>
-          <div id="veiculo-pneus-lista" class="veiculo-pneus-lista"></div>
-        </div>
+        <!-- ===== Aba Documento ===== -->
+        <div id="subpage-veic-documento" class="subpage hidden">
+          <section class="veiculo-cartao veiculo-documento">
+            <h2 class="veiculo-cartao-titulo">
+              <span class="veiculo-chip chip-documento" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></span>
+              Documento do veículo (CRLV-e)
+            </h2>
+            <div id="veiculo-doc-vazio" class="veiculo-doc-vazio">
+              <button type="button" id="veiculo-doc-anexar" class="botao-secundario veiculo-doc-anexar">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+                Anexar o PDF do documento
+              </button>
+            </div>
+            <div id="veiculo-doc-atual" class="veiculo-arquivo hidden">
+              <span class="veiculo-arquivo-icone" aria-hidden="true">PDF</span>
+              <a id="veiculo-doc-link" class="veiculo-doc-link" href="#" target="_blank" rel="noopener"></a>
+              <div class="veiculo-arquivo-acoes">
+                <button type="button" id="veiculo-doc-substituir" class="botao-secundario">Substituir</button>
+                <button type="button" id="veiculo-doc-remover" class="botao-secundario botao-perigo">Remover</button>
+              </div>
+            </div>
+            <input type="file" id="veiculo-doc-input" accept="application/pdf,.pdf" hidden />
+            <p id="veiculo-doc-status" class="placeholder-text veiculo-doc-status">Ao anexar, o sistema lê o documento e preenche os dados abaixo.</p>
+          </section>
 
-        <div class="moldura veiculo-documento">
-          <div class="secao-titulo">Documento do veículo (PDF)</div>
-          <div id="veiculo-doc-vazio" class="veiculo-doc-linha">
-            <button type="button" id="veiculo-doc-anexar" class="botao-secundario">Anexar PDF do documento</button>
+          <!-- Ficha do documento: os dados lidos do PDF, em grupos. Tocar num dado edita todos. -->
+          <div id="veiculo-detalhe" class="detalhe leitura veiculo-detalhe veiculo-cartao bloco-editavel">
+            <div class="detalhe-acoes">
+              <h2 class="veiculo-cartao-titulo veiculo-ficha-titulo">
+                <span class="veiculo-chip chip-ficha" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg></span>
+                Dados do documento
+              </h2>
+              <span class="detalhe-dica">Toque num dado para corrigir.</span>
+              <button type="button" class="acao-salvar hidden">Salvar</button>
+              <button type="button" class="acao-cancelar botao-secundario hidden">Cancelar</button>
+            </div>
+            <p id="veiculo-status" class="placeholder-text"></p>
+            <div id="veiculo-grupos" class="veiculo-ficha"></div>
           </div>
-          <div id="veiculo-doc-atual" class="veiculo-doc-linha hidden">
-            <a id="veiculo-doc-link" class="veiculo-doc-link" href="#" target="_blank" rel="noopener"></a>
-            <button type="button" id="veiculo-doc-substituir" class="botao-secundario">Substituir</button>
-            <button type="button" id="veiculo-doc-remover" class="botao-secundario">Remover</button>
-          </div>
-          <input type="file" id="veiculo-doc-input" accept="application/pdf,.pdf" hidden />
-          <p id="veiculo-doc-status" class="placeholder-text veiculo-doc-status">Ao anexar, o sistema lê o documento e preenche os dados abaixo.</p>
-        </div>
-
-        <div id="veiculo-detalhe" class="detalhe leitura veiculo-detalhe">
-          <div class="detalhe-acoes">
-            <span class="detalhe-dica">Toque em qualquer campo para editar.</span>
-            <button type="button" class="acao-salvar hidden">Salvar</button>
-            <button type="button" class="acao-cancelar hidden">Cancelar</button>
-          </div>
-          <p id="veiculo-status" class="placeholder-text"></p>
-          <div id="veiculo-grupos"></div>
         </div>
       </div>
 

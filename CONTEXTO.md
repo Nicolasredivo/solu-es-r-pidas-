@@ -5549,3 +5549,35 @@ ação. Ele só aparece, e só funciona, enquanto há alteração para desfazer.
   - quem tiver `data-sem-desfazer`.
 - **Não cobre** ações que não são campo, como acrescentar ou remover linha, anexar ou arrastar.
   A Agenda continua com o desfazer próprio do arrasto (`#agenda-desfazer`, Ctrl+Z).
+
+## Aba Veículo com visual novo (12/11/2026)
+**Pedido do dono:** tudo tinha a mesma cara (moldura + nome + valor) e era difícil achar o que
+procurava. Ele cobrou o uso das técnicas de construção de site e sistema já consolidadas no
+mercado. Cada tipo de informação ganhou um desenho próprio:
+- **Cabeçalho do carro** (sempre à vista): ícone, `Marca_Modelo` grande, anos/cor/combustível
+  (`comoFrase` tira as maiúsculas do documento) e a **placa no formato Mercosul**.
+- **Abas internas** iguais às do resto do sistema (`.subtab` / `subpage-veic-*`): Custos, Pneus,
+  Documento. A troca de aba com algo mexido pergunta se quer salvar.
+- **Custos:**
+  - "Custo por km": número grande, barra das partes (combustível âmbar, pneus lilás) e legenda.
+  - "Combustível": consumo e preço do litro em número grande, mais a conta preço ÷ consumo.
+    Lendo, os campos ficam escondidos e aparecem os números (`#veiculo-consumo-ver`,
+    `#veiculo-preco-ver`); tocar no bloco edita.
+  - "Deslocamento": três números do mês e uma tabela (Dia, Chamado, Km, Custo) com os números à
+    direita. No celular vira uma lista de duas linhas.
+- **Pneus:**
+  - No computador, o carro visto de cima (picape: capô, cabine, caçamba) com os 5 pneus em volta.
+  - No celular, uma lista em que cada pneu leva um carrinho pequeno com a roda em destaque
+    (`glifoDoPneu`).
+  - Tocar num pneu abre UM formulário embaixo (`#veiculo-pneu-editor`, `pneuAberto`). Trocar de pneu
+    com algo mexido pergunta se quer salvar.
+- **Documento:**
+  - O PDF aparece como cartão de arquivo; sem PDF, uma área tracejada para anexar.
+  - Os dados ficam numa **ficha "nome ..... valor"** em linhas, com os grupos em títulos pequenos
+    azuis. Os números de identificação usam letra de largura fixa (`veiculo-campo-codigo`).
+  - No celular, o nome fica em cima do valor (o valor comprido era cortado).
+- **Cores por assunto, fixas:** custo verde, combustível âmbar, deslocamento azul, pneus lilás,
+  documento vermelho. Estão no ícone, na barra e na legenda.
+- **O resto ficou igual:** Remover e Excluir viraram `.botao-perigo` (regra de hierarquia dos
+  botões). O aviso de carregamento ficou em `#veiculo-aviso-geral`, debaixo do cabeçalho.
+  Fluxos e banco não mudaram.
