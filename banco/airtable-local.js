@@ -21,6 +21,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { gerarBackupExcel } = require('./backup-excel.js');
 const { Pool, types } = require('C:/Users/rediv/AppData/Roaming/npm/node_modules/n8n/node_modules/pg');
 
 const PORTA = 5690;
@@ -666,8 +667,18 @@ async function backupCadastros() {
   const temp = ARQ_BACKUP_CADASTROS + '.novo';
   fs.writeFileSync(temp, JSON.stringify(conteudo, null, 1));
   fs.renameSync(temp, ARQ_BACKUP_CADASTROS); // troca o anterior de uma vez só
+  // Excel organizado para ler (13/11/2026): se falhar, o backup JSON acima já está salvo e nada para.
+  let excel;
+  try {
+    excel = await gerarBackupExcel(atuais, apagados);
+    // Uma pasta que falhou (arquivo aberto no Excel, disco do Drive ainda não montado): tenta de novo em 1 minuto.
+    if (excel && excel.falhas && excel.falhas.length) agendarBackup(60);
+  } catch (e) {
+    console.error(new Date().toISOString(), 'backup em Excel falhou:', e && e.message);
+    excel = { ok: false, erro: String(e && e.message) };
+  }
   return {
-    ok: true, arquivo: ARQ_BACKUP_CADASTROS, feito_em: agora,
+    ok: true, arquivo: ARQ_BACKUP_CADASTROS, feito_em: agora, excel,
     clientes: atuais.Entidades_Cadastradas.length, locais: atuais.Locais_Atendimento.length, contatos: atuais.Contatos_Solicitantes.length,
     sindicaturas: atuais.Sindicaturas.length, administradoras: atuais.Administradoras.length, emails: atuais.Emails.length,
     apagados_guardados: TABELAS_CADASTRO.reduce((s, t) => s + apagados[t].length, 0),
@@ -784,6 +795,27 @@ async function tratar(req, res) {
   throw new ErroApi(405, 'METHOD_NOT_ALLOWED', 'Method not allowed');
 }
 
+// Toda gravação em cliente, endereço ou contato refaz o backup (13/11/2026). A espera junta várias alterações
+// seguidas (um cadastro grava vários registros) numa só geração.
+const TABELAS_DO_BACKUP_EXCEL = new Set(['Entidades_Cadastradas', 'Locais_Atendimento', 'Contatos_Solicitantes']);
+let esperaBackup = null;
+function agendarBackup(segundos = 10) {
+  if (esperaBackup) clearTimeout(esperaBackup);
+  esperaBackup = setTimeout(() => {
+    esperaBackup = null;
+    backupCadastros().catch((e) => console.error(new Date().toISOString(), 'backup agendado falhou:', e && e.message));
+  }, segundos * 1000);
+}
+
+function mudouCadastro(req, res) {
+  if (!['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method) || res.statusCode >= 300) return;
+  const partes = req.url.split('?')[0].split('/').filter(Boolean).map(decodeURIComponent);
+  if (partes[0] !== 'v0' || partes.length < 3) return;
+  try {
+    if (TABELAS_DO_BACKUP_EXCEL.has(acharTabela(partes[1], partes[2]))) agendarBackup();
+  } catch (e) { /* tabela desconhecida: não é cadastro */ }
+}
+
 const servidor = http.createServer((req, res) => {
   const t0 = Date.now();
   tratar(req, res)
@@ -796,11 +828,15 @@ const servidor = http.createServer((req, res) => {
     })
     .finally(() => {
       console.log(new Date().toISOString(), req.method, req.url.split('?')[0], res.statusCode, (Date.now() - t0) + 'ms');
+      mudouCadastro(req, res);
     });
 });
 
 carregarEsquema()
-  .then(() => servidor.listen(PORTA, '127.0.0.1', () => console.log(new Date().toISOString(), `Airtable local ouvindo em http://127.0.0.1:${PORTA}`)))
+  .then(() => servidor.listen(PORTA, '127.0.0.1', () => {
+    console.log(new Date().toISOString(), `Airtable local ouvindo em http://127.0.0.1:${PORTA}`);
+    agendarBackup(20); // ao ligar, confere e refaz o backup (cobre o que mudou com o servidor desligado)
+  }))
   .catch((e) => { console.error('Não consegui ligar:', e); process.exit(1); });
 
 module.exports = { analisar, avaliar, tokenizar };

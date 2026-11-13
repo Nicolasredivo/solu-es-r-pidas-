@@ -5715,3 +5715,30 @@ existem fora do sistema (documentos antigos, notas feitas no portal) entram na p
   recusado, três de uma vez, repetido não duplica, e PDF importado na pasta NFS-e que abre no visualizador.
 - Com isso as 5 etapas do plano "Arquivos por cliente" estão feitas. Falta definir o que serão **Serviços** e
   **Relatório técnico**.
+
+## Backup dos cadastros em Excel, na nuvem (13/11/2026)
+Pedido do dono: backup de todos os cadastros de clientes, atualizado a cada alteração, sem duplicar, fácil de ler,
+guardado na pasta "beckup clientes" do Google Drive. Primeiro tentei uma planilha do Google com um script (Apps
+Script) que o sistema chamaria; foi descartado: exigia deixar o endereço do script aberto a "Qualquer pessoa" (o
+sistema de permissões barrou) e o conector do Drive do Claude só lê/cria arquivos (não edita célula) e não é
+acessível ao n8n. Solução adotada, a comum no mercado: o sistema gera um **arquivo Excel** numa pasta do PC que o
+aplicativo de nuvem sincroniza sozinho.
+- **`banco/backup-excel.js`** (carregado pelo `airtable-local.js`): `gerarBackupExcel(atuais, apagados)`. Arquivo
+  `Backup de clientes - Soluções Rápidas.xlsx` com as abas **Leia-me, Clientes** (uma linha por cliente, todos os campos
+  do cadastro + resumo dos endereços e dos contatos), **Endereços, Contatos** e **Apagados** (quem saiu do sistema, com a
+  data; vem do `apagados_do_sistema` do backup JSON, que guarda também restos da migração de outubro). Cada linha tem
+  "Atualizado em" (só muda quando a linha muda; impressão digital por linha em `banco-solucoes/backup-excel-estado.json`)
+  e "ID no sistema". Cabeçalho azul congelado, filtros, faixas, telefones e CNPJ formatados. Sem mudança, não regrava
+  (a nuvem não sobe de novo à toa). Uma cópia por dia em `Historico/` (últimos 30 dias).
+- **Quando roda:** `backupCadastros()` (já chamado pelos fluxos) agora também gera o Excel (erro contido: o JSON já foi
+  salvo); e o banco local agenda um backup 10 s depois de QUALQUER gravação (POST/PATCH/PUT/DELETE) em
+  Entidades_Cadastradas, Locais_Atendimento ou Contatos_Solicitantes, e 20 s depois de ligar. Exige reiniciar o
+  "Servidor n8n" para valer.
+- **Destinos:** `C:\Users\rediv\OneDrive\Backup de clientes` (sempre; o OneDrive já sincroniza) e, se existir, a pasta
+  `beckup clientes` dentro do "Meu Drive"/"My Drive" de um disco montado pelo **Google Drive para computador** (ainda
+  não instalado em 13/11; ao instalar, o backup passa a ir para o Drive do dono sem mudar nada no código).
+- **Biblioteca:** `exceljs` instalada em `C:\Users\rediv\banco-solucoes\modulos` (fora do OneDrive e do repositório),
+  carregada só ao gerar (se faltar, só o backup em Excel falha, o banco local liga normal).
+- **Teste:** `banco/testes/testar-backup-excel.js` (27 ok, dados fictícios, pasta temporária).
+- O projeto de script (Apps Script) criado dentro da planilha "beckup clientes" ficou salvo e sem implantar; pode ser
+  apagado. A planilha vazia "beckup clientes" continua lá.
