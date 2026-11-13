@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.12c";
+const APP_VERSION = "2026.11.13a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -5616,7 +5616,7 @@ function formularioFinanceiroEmAndamento() {
 
 function haAlgoParaPerder() {
   return cadastroEmAndamento() || edicaoDaConsultaAbertaEmEdicao() || formularioFinanceiroEmAndamento()
-    || contatoEmAndamento() || veiculoEmAndamento() || consumoEmAndamento() || pneuEmAndamento();
+    || contatoEmAndamento() || veiculoEmAndamento() || consumoEmAndamento() || manutEmAndamento() || pneuEmAndamento();
 }
 
 // Usado quando o usuário confirma que quer sair mesmo assim: devolve o bloco
@@ -5665,6 +5665,9 @@ function pendenteDeSalvar() {
   }
   if (consumoEmAndamento()) {
     return { pendente: consumoEmAndamento, salvar: () => consumoSalvar.click(), descartar: () => consumoCancelar.click() };
+  }
+  if (manutEmAndamento()) {
+    return { pendente: manutEmAndamento, salvar: () => manutSalvar.click(), descartar: () => manutCancelar.click() };
   }
   if (veiculoEmAndamento()) {
     return { pendente: veiculoEmAndamento, salvar: () => veiculoSalvar.click(), descartar: () => veiculoCancelar.click() };
@@ -11840,13 +11843,14 @@ async function carregarVeiculo() {
       return;
     }
     // Quem já está editando não perde o que digitou.
-    if (veiculoEditando() || consumoEditando() || pneuEditando()) return;
+    if (veiculoEditando() || consumoEditando() || manutEditando() || pneuEditando()) return;
     veiculoAtual = dados.veiculo;
     pneusAtuais = dados.pneus || [];
     veiculoCarregado = true;
     mostrarVeiculoStatus(veiculoAvisoGeral, null, "");
     desenharVeiculo();
     desenharConsumo();
+    desenharManutencao();
     desenharPneus();
     deslocamentoAtual = dados.deslocamento || null;
     desenharDeslocamento();
@@ -12176,6 +12180,132 @@ document.addEventListener("click", (evento) => {
 consumoBloco.addEventListener("input", esquecerSaidaPendente);
 desenharConsumo();
 
+// ----- Manutenção por km (13/11/2026) -----
+// Bloco "Manutenção" da aba Custos: um número só (R$ por km), digitado pelo dono.
+// Lendo, mostra o número grande; tocar edita. Salvar grava (vazio = apaga); Excluir
+// (com confirmação) apaga. Ação "manutencao" do fluxo "App - Veículo". Entra na conta
+// do "Custo por km" (desenharCustoKm) e no cálculo das 23h (nó "Calcula").
+
+const manutBloco = document.getElementById("veiculo-manutencao");
+const manutCampo = document.getElementById("veiculo-manutencao-valor");
+const manutVer = document.getElementById("veiculo-manutencao-ver");
+const manutConta = document.getElementById("veiculo-manutencao-conta");
+const manutAcoes = manutBloco.querySelector(".veiculo-consumo-acoes");
+const manutSalvar = manutBloco.querySelector(".acao-salvar");
+const manutCancelar = manutBloco.querySelector(".acao-cancelar");
+const manutExcluir = manutBloco.querySelector(".acao-excluir");
+const manutStatus = document.getElementById("veiculo-manutencao-status");
+
+const formatarManutencao = (n) => (typeof n === "number" && isFinite(n)
+  ? n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : "");
+
+function manutEditando() {
+  return manutBloco.classList.contains("editando");
+}
+
+function manutEmAndamento() {
+  return naTela(manutBloco) && manutEditando() && manutCampo.value.trim() !== manutBloco.valorEdicao;
+}
+
+function desarmarExcluirManut() {
+  manutExcluir.classList.remove("confirmando");
+  manutExcluir.textContent = "Excluir";
+}
+
+function desenharManutencao() {
+  const valor = veiculoAtual && veiculoAtual.manutencaoKm;
+  manutCampo.value = formatarManutencao(valor);
+  mostrarNumeroDoConsumo(manutVer, formatarManutencao(valor) ? `R$ ${formatarManutencao(valor)}` : "");
+  manutConta.innerHTML = typeof valor === "number"
+    ? `Somado ao custo do km: <strong>${reaisKm(valor)} de manutenção por km</strong>` : "";
+  manutCampo.disabled = true;
+  marcarVaziosNaLeitura([manutCampo], true);
+  manutBloco.classList.add("leitura");
+  manutBloco.classList.remove("editando");
+  manutAcoes.classList.add("hidden");
+  desarmarExcluirManut();
+}
+
+manutBloco.addEventListener("click", (evento) => {
+  if (!manutBloco.classList.contains("leitura") || veiculoOcupado || !veiculoCarregado) return;
+  if (evento.target.closest("button, a")) return;
+  manutCampo.disabled = false;
+  marcarVaziosNaLeitura([manutCampo], false);
+  manutBloco.classList.remove("leitura");
+  manutBloco.classList.add("editando");
+  manutAcoes.classList.remove("hidden");
+  manutExcluir.classList.toggle("hidden", !(veiculoAtual && typeof veiculoAtual.manutencaoKm === "number"));
+  manutBloco.valorEdicao = manutCampo.value.trim();
+  mostrarVeiculoStatus(manutStatus, null, "");
+  focarCampo(manutCampo);
+});
+
+async function gravarManutencao(valor) {
+  if (veiculoOcupado) return;
+  veiculoOcupado = true;
+  [manutSalvar, manutExcluir].forEach((b) => (b.disabled = true));
+  mostrarVeiculoStatus(manutStatus, "neutral", valor ? "Salvando..." : "Excluindo...");
+  try {
+    const dados = await pedirAoN8n("veiculo", { acao: "manutencao", manutencaoKm: valor });
+    if (!dados || !dados.ok) {
+      mostrarVeiculoStatus(manutStatus, "error", (dados && dados.mensagem) || "Não foi possível salvar.");
+      return;
+    }
+    veiculoAtual = dados.veiculo;
+    veiculoCarregado = true;
+    desenharManutencao();
+    desenharCustoKm();
+    mostrarVeiculoStatus(manutStatus, "ok", dados.mensagem || "Salvo.");
+  } catch (err) {
+    mostrarVeiculoStatus(manutStatus, "error", "Não foi possível falar com o n8n.");
+  } finally {
+    veiculoOcupado = false;
+    [manutSalvar, manutExcluir].forEach((b) => (b.disabled = false));
+  }
+}
+
+manutSalvar.addEventListener("click", () => {
+  const valor = manutCampo.value.trim().replace(/\s+/g, "").replace(/^R\$/i, "");
+  if (valor && (!/^\d{1,2}([.,]\d{1,3})?$/.test(valor) || Number(valor.replace(",", ".")) <= 0)) {
+    mostrarVeiculoStatus(manutStatus, "error", "Manutenção: use só o número, por exemplo 0,50.");
+    manutCampo.focus();
+    return;
+  }
+  gravarManutencao(valor);
+});
+
+manutBloco.addEventListener("keydown", (evento) => {
+  if (!evento.target.matches("input")) return;
+  if (evento.key === "Enter") { evento.preventDefault(); manutSalvar.click(); }
+  if (evento.key === "Escape") { evento.preventDefault(); manutCancelar.click(); }
+});
+
+manutCancelar.addEventListener("click", () => {
+  desenharManutencao();
+  mostrarVeiculoStatus(manutStatus, null, "");
+});
+
+manutExcluir.addEventListener("click", () => {
+  if (!manutExcluir.classList.contains("confirmando")) {
+    manutExcluir.classList.add("confirmando");
+    manutExcluir.textContent = "Confirmar exclusão";
+    mostrarVeiculoStatus(manutStatus, "error", "Apaga o gasto de manutenção salvo. Clique de novo para confirmar.");
+    return;
+  }
+  gravarManutencao("");
+});
+
+// Clicar fora do "Confirmar exclusão" desarma.
+document.addEventListener("click", (evento) => {
+  if (manutExcluir.classList.contains("confirmando") && evento.target !== manutExcluir) {
+    desarmarExcluirManut();
+    mostrarVeiculoStatus(manutStatus, null, "");
+  }
+});
+
+manutBloco.addEventListener("input", esquecerSaidaPendente);
+desenharManutencao();
+
 // ----- Pneus (09/11/2026; desenho do carro em 12/11/2026) -----
 // Os 5 pneus em volta do carro visto de cima (as 5 posições vêm sempre do
 // fluxo, salvas ou não). Tocar num pneu abre o formulário dele embaixo do
@@ -12421,6 +12551,18 @@ const custoKmValor = document.getElementById("veiculo-custo-km-valor");
 const custoKmBarra = document.getElementById("veiculo-custo-km-barra");
 const custoKmPartes = document.getElementById("veiculo-custo-km-partes");
 const custoKmFalta = document.getElementById("veiculo-custo-km");
+const pneusCustoQtd = document.getElementById("veiculo-pneus-qtd");
+const pneusCustoKm = document.getElementById("veiculo-pneus-km");
+const pneusCustoQtdValor = document.getElementById("veiculo-pneus-qtd-valor");
+const pneusCustoKmValor = document.getElementById("veiculo-pneus-km-valor");
+const pneusCustoConta = document.getElementById("veiculo-pneus-custo-conta");
+const pneusCustoBloco = document.getElementById("veiculo-pneus-custo");
+// Tocar no bloco Pneus leva para a aba Pneus.
+const abrirAbaPneus = () => document.querySelector('.subtab[data-subpage="veic-pneus"]').click();
+pneusCustoBloco.addEventListener("click", abrirAbaPneus);
+pneusCustoBloco.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrirAbaPneus(); }
+});
 let deslocamentoAtual = null;
 let deslocMes = "";
 
@@ -12452,7 +12594,18 @@ function desenharCustoKm() {
   if (desg.length) {
     partes.push({ nome: `Pneus (${desg.length})`, valor: desg.reduce((a, p) => a + p.desgaste, 0), cor: "pneu" });
   }
+  const manutencao = veiculoAtual && veiculoAtual.manutencaoKm;
+  if (typeof manutencao === "number" && manutencao > 0) partes.push({ nome: "Manutenção", valor: manutencao, cor: "manutencao" });
   const total = partes.reduce((a, p) => a + p.valor, 0);
+  // Bloco "Pneus" (só leitura): quantos pneus entram na conta e o desgaste somado por km.
+  const somaPneus = desg.reduce((a, p) => a + p.desgaste, 0);
+  pneusCustoQtd.textContent = desg.length ? String(desg.length) : "—";
+  pneusCustoKm.textContent = desg.length ? reaisKm(somaPneus) : "—";
+  pneusCustoQtdValor.classList.toggle("vazio", !desg.length);
+  pneusCustoKmValor.classList.toggle("vazio", !desg.length);
+  pneusCustoConta.innerHTML = desg.length
+    ? `Soma do desgaste dos ${desg.length} pneus em uso = <strong>${reaisKm(somaPneus)} de pneus por km</strong>`
+    : "Preencha o desgaste por km dos pneus na aba Pneus. O estepe não entra na conta.";
   custoKmValor.textContent = total > 0 ? reaisKm(total) : "—";
   custoKmBarra.classList.toggle("hidden", !(total > 0));
   custoKmBarra.innerHTML = total > 0

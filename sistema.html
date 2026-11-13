@@ -2151,6 +2151,7 @@
               <p id="veiculo-custo-km" class="doc-hint veiculo-custo-falta"></p>
             </section>
 
+            <div class="veiculo-custos-coluna">
             <!-- Combustível: consumo (km/l) e preço do litro, digitados pelo dono (08 e 09/11/2026).
                  Lendo, mostra os números grandes; tocar no bloco edita os dois. -->
             <section id="veiculo-consumo" class="veiculo-cartao veiculo-consumo leitura bloco-editavel">
@@ -2180,6 +2181,51 @@
               </div>
               <p id="veiculo-consumo-status" class="placeholder-text veiculo-consumo-status"></p>
             </section>
+
+            <!-- Pneus (13/11/2026): só leitura, igual ao Combustível. Os dados vêm da aba Pneus;
+                 tocar no bloco abre essa aba. -->
+            <section id="veiculo-pneus-custo" class="veiculo-cartao veiculo-pneus-custo" role="button" tabindex="0" aria-label="Abrir a aba Pneus">
+              <h2 class="veiculo-cartao-titulo">
+                <span class="veiculo-chip chip-pneu" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M12 3v5.5M12 15.5V21M3 12h5.5M15.5 12H21"/></svg></span>
+                Pneus
+              </h2>
+              <div class="veiculo-consumo-grade">
+                <div class="veiculo-consumo-item">
+                  <span class="veiculo-pneus-rotulo">Pneus em uso</span>
+                  <div id="veiculo-pneus-qtd-valor" class="veiculo-leitura-valor"><strong id="veiculo-pneus-qtd">—</strong><span class="veiculo-unidade">de 4</span></div>
+                </div>
+                <div class="veiculo-consumo-item">
+                  <span class="veiculo-pneus-rotulo">Desgaste somado</span>
+                  <div id="veiculo-pneus-km-valor" class="veiculo-leitura-valor"><strong id="veiculo-pneus-km">—</strong><span class="veiculo-unidade">por km</span></div>
+                </div>
+              </div>
+              <p id="veiculo-pneus-custo-conta" class="veiculo-consumo-conta"></p>
+            </section>
+
+            <!-- Manutenção (13/11/2026): gasto de manutenção por km, digitado pelo dono (R$ 0,50 de
+                 início). Entra na conta do "Custo por km" e do cálculo das 23h. Tocar edita. -->
+            <section id="veiculo-manutencao" class="veiculo-cartao veiculo-consumo veiculo-manutencao leitura bloco-editavel">
+              <h2 class="veiculo-cartao-titulo">
+                <span class="veiculo-chip chip-manutencao" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L4 16.8V20h3.2l5.3-5.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg></span>
+                Manutenção
+              </h2>
+              <div class="veiculo-consumo-grade uma">
+                <div class="veiculo-consumo-item">
+                  <label for="veiculo-manutencao-valor">Gasto de manutenção</label>
+                  <div class="veiculo-leitura-valor"><strong id="veiculo-manutencao-ver">—</strong><span class="veiculo-unidade">por km</span></div>
+                  <input type="text" id="veiculo-manutencao-valor" inputmode="decimal" autocomplete="off" maxlength="8" placeholder="Ex: 0,50" disabled />
+                  <p class="doc-hint">Óleo, revisões, peças e mão de obra, em reais por km rodado.</p>
+                </div>
+              </div>
+              <p id="veiculo-manutencao-conta" class="veiculo-consumo-conta"></p>
+              <div class="veiculo-consumo-acoes hidden">
+                <button type="button" class="acao-salvar">Salvar</button>
+                <button type="button" class="acao-cancelar botao-secundario">Cancelar</button>
+                <button type="button" class="acao-excluir botao-secundario botao-perigo">Excluir</button>
+              </div>
+              <p id="veiculo-manutencao-status" class="placeholder-text veiculo-consumo-status"></p>
+            </section>
+            </div>
           </div>
 
           <!-- Gasto de deslocamento (09/11/2026): calculado toda noite às 23h pelo fluxo

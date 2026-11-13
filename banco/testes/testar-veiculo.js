@@ -105,6 +105,22 @@ const PDF = Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2
     confere('carregar com mês: resumo de deslocamento do mês pedido', r.ok && r.deslocamento && r.deslocamento.mes === '2001-01' && Array.isArray(r.deslocamento.itens), r.deslocamento);
     r = await app({ acao: 'consumo', consumo: '', precoLitro: '' });
     confere('consumo: excluir deixa vazio (consumo e preço)', r.ok && r.veiculo.consumo === null && r.veiculo.precoLitro === null && r.mensagem === 'Consumo excluído.', r);
+    // ---- manutenção por km (13/11/2026): bloco próprio, não mexe no consumo nem no preço ----
+    r = await app({ acao: 'manutencao', manutencaoKm: '0,50' });
+    confere('manutenção: salva 0,50', r.ok && r.veiculo.manutencaoKm === 0.5 && r.mensagem === 'Salvo.', r);
+    r = await app({ acao: 'consumo', consumo: '9,5', precoLitro: '6,10' });
+    confere('manutenção: salvar o consumo não apaga', r.ok && r.veiculo.manutencaoKm === 0.5, r.veiculo);
+    r = await app({ acao: 'manutencao', manutencaoKm: 'R$ 0,75' });
+    confere('manutenção: altera para 0,75 (com R$)', r.ok && r.veiculo.manutencaoKm === 0.75 && r.veiculo.consumo === 9.5, r.veiculo);
+    for (const ruim of ['abc', '0', '0,5555', '150']) {
+      r = await app({ acao: 'manutencao', manutencaoKm: ruim });
+      confere(`manutenção inválida recusada (${ruim})`, r.ok === false && /Manutenção inválida/.test(r.mensagem), r);
+    }
+    r = await app({ acao: 'carregar' });
+    confere('manutenção: valor recusado não mudou nada', r.ok && r.veiculo.manutencaoKm === 0.75, r.veiculo);
+    r = await app({ acao: 'manutencao', manutencaoKm: '' });
+    confere('manutenção: excluir deixa vazio', r.ok && r.veiculo.manutencaoKm === null && r.mensagem === 'Manutenção excluída.' && r.veiculo.consumo === 9.5, r);
+    r = await app({ acao: 'consumo', consumo: '', precoLitro: '' });
     // ---- pneus (numa posição que o dono não usa; o Modelo leva a marca do teste) ----
     if (!livre) {
       console.log('(pneus: as 5 posições já estão preenchidas pelo dono; parte dos pneus pulada)');

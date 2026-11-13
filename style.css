@@ -4837,8 +4837,47 @@ div.lembrete-item:hover {
   margin-bottom: 14px;
 }
 
-.veiculo-custos-topo > .veiculo-cartao {
+.veiculo-custos-topo > .veiculo-cartao,
+.veiculo-custos-coluna > .veiculo-cartao {
   margin-bottom: 0;
+}
+
+/* Combustível e Pneus um embaixo do outro, na coluna da direita. */
+.veiculo-custos-coluna {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  min-width: 0;
+}
+
+.chip-manutencao { background: rgba(56, 189, 248, 0.14); color: #38bdf8; }
+.cor-manutencao { background: #38bdf8; }
+
+.veiculo-consumo-grade.uma {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .veiculo-manutencao.leitura:hover {
+    border-color: rgba(56, 189, 248, 0.55);
+  }
+}
+
+.veiculo-pneus-rotulo {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.veiculo-pneus-custo {
+  cursor: pointer;
+  transition: border-color var(--transicao);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .veiculo-pneus-custo:hover {
+    border-color: rgba(167, 139, 250, 0.55);
+  }
 }
 
 .veiculo-numero-grande {

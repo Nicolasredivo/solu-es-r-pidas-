@@ -5581,3 +5581,14 @@ mercado. Cada tipo de informação ganhou um desenho próprio:
 - **O resto ficou igual:** Remover e Excluir viraram `.botao-perigo` (regra de hierarquia dos
   botões). O aviso de carregamento ficou em `#veiculo-aviso-geral`, debaixo do cabeçalho.
   Fluxos e banco não mudaram.
+
+## Aba Veículo: blocos Pneus e Manutenção no Custos (13/11/2026)
+Pedido do dono: na aba Custos, um bloco **Pneus** (só leitura, igual ao Combustível) e um bloco
+**Manutenção** (R$ 0,50 por km, editável), os dois entrando na conta do "Custo por km".
+- **Pneus:** mostra quantos pneus entram (estepe fora) e o desgaste somado por km; tocar abre a aba Pneus.
+- **Manutenção:** coluna nova `Veiculos.Manutencao_Km` (numeric(6,3)), gravada com 0,50. Ação `manutencao`
+  do "App - Veículo" (vazio = excluir; não mexe em consumo/preço). O "Veículo - Gasto do dia" soma
+  `porKm.manutencao` no "Calcula"; dias já calculados não mudam.
+- **Atenção:** o "Airtable local" lê a lista de colunas só ao ligar: coluna nova exige reiniciar o servidor.
+- Backup antes da mudança: `C:\Users\rediv\banco-solucoes\backups\antes-manutencao-2026-11-13.sql`.
+- Testes: `testar-veiculo.js` (43 ok) e `testar-gasto-deslocamento.js` (16 ok).

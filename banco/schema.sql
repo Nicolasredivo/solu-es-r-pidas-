@@ -401,6 +401,7 @@ create table "Veiculos" (
   "Observacoes" text,
   "Consumo_Km_L" numeric(5,2) check ("Consumo_Km_L" > 0 and "Consumo_Km_L" < 100), -- digitado pelo dono, fora do documento
   "Preco_Litro" numeric(6,3) check ("Preco_Litro" > 0 and "Preco_Litro" < 100),        -- idem (09/11/2026), R$ por litro
+  "Manutencao_Km" numeric(6,3) check ("Manutencao_Km" > 0 and "Manutencao_Km" < 100),  -- idem (13/11/2026), R$ de manutenção por km
   "Criado_Em" timestamptz not null default now()
 );
 
