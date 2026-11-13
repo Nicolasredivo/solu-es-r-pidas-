@@ -5613,3 +5613,23 @@ linha do tempo para o agora (mesma ideia dos botões de zoom); a rolagem automá
 enquanto ele estiver ali. Tocar em Agora com outro dedo durante o arrasto refaz a prévia no lugar novo.
 Nenhuma data é mudada: só ao soltar. Sem arrasto, o botão Agora é o de sempre.
 (Uma primeira versão que movia o horário dos chamados amarelos foi descartada pelo dono.)
+
+## NFS-e: fase 4, segundo emissor (CNPJ 2) (13/11/2026, versão 2026.11.13d)
+A emissão de nota agora escolhe o MEI (CNPJ 1 ou 2) pelo "Atendido por" do cliente, com certificado A1,
+série e numeração próprios.
+- **Config (`C:\Users\rediv\nfse-config.json`, fora do repositório):** ganhou `emissores` ({"CNPJ 1": {cnpj, serie,
+  fone, email}, "CNPJ 2": {...}}); os campos antigos no topo ficam por compatibilidade. Cópia antes:
+  `nfse-config.antes-fase4-2026-11-13.json`. CNPJ 2: série 1, nDPS própria desde o 1, mesmo fone/e-mail.
+- **Serviço `banco/nfse-local.js`:** o pedido traz `emissor` (padrão "CNPJ 1"); o assinador já escolhia o
+  certificado pelo CNPJ. `/saude` lista os emissores; `/dps/<id>` e `/dps-numero/<n>` aceitam `?emissor=`.
+  `NFSE_AMBIENTE` força o ambiente (os testes usam, para nunca emitir nota real: o config está em `producao`).
+- **Banco:** `Notas_Fiscais.Emissor` (padrão "CNPJ 1"; as notas 440 e 441 ficaram CNPJ 1) e índice único
+  (Ambiente, Emissor, Serie, Numero_DPS). Backup antes: `antes-nfse-fase4-2026-11-13.sql`.
+- **Fluxo "App - Notas fiscais":** `Emissor` vem do `Atendido_Por` do cliente; numeração e "nota igual hoje" por
+  emissor; `conferir` consulta o governo pelo emissor da nota. **Trava:** serviço sem `emissores` (código antigo)
+  não prepara, emite nem confere nota do CNPJ 2 ("Reabra o atalho Servidor n8n"): nunca sai em nome do CNPJ 1.
+- **Tela:** a conferência mostra "Emitir por"; a lista mostra o emissor de cada nota.
+- **Testes (só ambiente de testes do governo):** `testar-nfse-local.js` (41 ok; o CNPJ 2 emitiu com o próprio A1)
+  e `testar-fluxo-notas.js` (64 ok, numa cópia do fluxo ligada a um serviço de teste na porta 5699).
+- **Falta:** nenhuma nota REAL do CNPJ 2 foi emitida (só com o "sim" explícito do dono; a primeira, pequena e
+  conferida no portal). A conta Asaas do CNPJ 2 ainda aguarda aprovação (dados bancários e documentação).

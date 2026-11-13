@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.13c";
+const APP_VERSION = "2026.11.13d";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -13246,7 +13246,9 @@ function nfMostrarConferencia(r, pedido) {
   const titulo = document.createElement("div");
   titulo.className = "moldura-titulo";
   titulo.textContent = nfAmbiente === "Testes" ? "Conferência (ambiente de testes)" : "Conferência: confira tudo antes de emitir";
+  // Fase 4 (13/11/2026): quem emite (MEI) vem do "Atendido por" do cliente; aqui só se confere.
   caixa.append(titulo,
+    nfLinha("Emitir por", r.emissor || "CNPJ 1"),
     nfLinha("Cliente", r.tomador.nome),
     nfLinha(r.tomador.tipo || "CPF/CNPJ", formatarDocumento(r.tomador.documento)),
     nfLinha("Endereço do cliente", r.tomador.endereco),
@@ -13399,7 +13401,7 @@ async function carregarNotas() {
     topo.append(numero, selo, valor);
     const quem = document.createElement("div");
     quem.className = "nf-item-quem";
-    quem.textContent = [n.tomadorNome, nfData(n.competencia)].filter(Boolean).join(" · ");
+    quem.textContent = [n.tomadorNome, nfData(n.competencia), n.emissor].filter(Boolean).join(" · ");
     li.append(topo, quem);
     if (n.status === "Recusada" && n.erro) {
       const e = document.createElement("div");

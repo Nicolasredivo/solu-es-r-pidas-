@@ -1,6 +1,8 @@
 // NFS-e local: emite notas só no ambiente de testes do governo (sem validade), com cliente e endereço
 // fictícios. Liga o serviço numa porta própria durante o teste e desliga no fim.
 // Uso: node banco/testes/testar-nfse-local.js
+// O teste nunca pode emitir nota de verdade: força o ambiente de testes mesmo com o config em produção.
+process.env.NFSE_AMBIENTE = 'restrita';
 const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
@@ -31,15 +33,18 @@ const pedido = (extra) => ({
 });
 
 (async () => {
-  const serv = spawn('node', [path.join(__dirname, '..', 'nfse-local.js')], { env: { ...process.env, NFSE_PORTA: String(PORTA) }, windowsHide: true });
+  const serv = spawn('node', [path.join(__dirname, '..', 'nfse-local.js')], { env: { ...process.env, NFSE_PORTA: String(PORTA), NFSE_AMBIENTE: 'restrita' }, windowsHide: true });
   try {
     for (let i = 0; i < 30; i++) {
       try { if ((await fetch(BASE + '/saude')).ok) break; } catch (e) { /* ainda ligando */ }
       await new Promise((r) => setTimeout(r, 200));
     }
+    const montarDpsPronto = (p) => require('../nfse-local.js').montarDps(p, 'restrita');
     const saude = await pedir('/saude');
     confere('saude: só ambiente de testes', saude.ok && saude.ambiente === 'restrita', saude);
+    if (saude.ambiente !== 'restrita') throw new Error('PARADO: o serviço de teste não está no ambiente de testes do governo');
     confere('saude: informa a série', saude.serie === 1, saude);
+    confere('saude: informa os dois emissores', saude.emissores && saude.emissores['CNPJ 1'] && saude.emissores['CNPJ 2'] && saude.emissores['CNPJ 2'].serie === 1, saude);
     confere('sem o token é recusado', (await pedir('/emitir', pedido(), 'errado')).status === 401);
 
     // ---- conferência antes de ir ao governo ----
@@ -66,6 +71,24 @@ const pedido = (extra) => ({
     confere('nota tem a obra', xml.includes('<obra>') && xml.includes('Rua de Teste'));
     confere('nota tem o valor', xml.includes('<vServ>1.00</vServ>'));
     confere('caractere especial na descrição', xml.includes('&amp; e acentuação'));
+
+    // ---- segundo emissor (CNPJ 2, fase 4, 13/11/2026): certificado e numeração próprios ----
+    const cnpj2 = JSON.parse(fs.readFileSync('C:/Users/rediv/nfse-config.json', 'utf8').replace(/^﻿/, '')).emissores['CNPJ 2'].cnpj;
+    const cnpj1 = JSON.parse(fs.readFileSync('C:/Users/rediv/nfse-config.json', 'utf8').replace(/^﻿/, '')).emissores['CNPJ 1'].cnpj;
+    await recusa('emissor desconhecido', { emissor: 'CNPJ 3' });
+    const e2 = await pedir('/emitir', pedido({ emissor: 'CNPJ 2', numero: NUMERO + 2 }));
+    confere('CNPJ 2 emitiu no ambiente de testes', e2.status === 201 && e2.ok && e2.chaveAcesso, e2);
+    confere('CNPJ 2: o prestador da nota é o CNPJ 2', String(e2.nfseXml).includes(`<CNPJ>${cnpj2}</CNPJ>`) && !String(e2.nfseXml).includes(`<emit><CNPJ>${cnpj1}`), String(e2.nfseXml).slice(0, 300));
+    confere('CNPJ 2: o identificador leva o CNPJ 2', String(e2.idDps).includes(cnpj2) && !String(e2.idDps).includes(cnpj1), e2.idDps);
+    const c2 = await pedir('/dps/' + e2.idDps + '?emissor=CNPJ%202');
+    confere('CNPJ 2: consulta acha a nota pelo emissor', c2.existe && c2.chaveAcesso === e2.chaveAcesso, c2);
+    const c2n = await pedir('/dps-numero/' + (NUMERO + 2) + '?emissor=CNPJ%202');
+    confere('CNPJ 2: consulta pelo número acha a nota', c2n.existe && c2n.chaveAcesso === e2.chaveAcesso, c2n);
+    const c1n = await pedir('/dps-numero/' + (NUMERO + 2));
+    confere('o mesmo número no CNPJ 1 não existe (numeração separada)', c1n.ok && !c1n.existe, c1n);
+    const d1 = montarDpsPronto(pedido());
+    const d2 = montarDpsPronto(pedido({ emissor: 'CNPJ 2' }));
+    confere('XML do CNPJ 1 e do CNPJ 2 só diferem no prestador e no identificador', d1.xml.replace(new RegExp(cnpj1, 'g'), 'X') === d2.xml.replace(new RegExp(cnpj2, 'g'), 'X'), { a: d1.id, b: d2.id });
 
     // ---- tomador com CPF ----
     const nCpf = await pedir('/emitir', pedido({ numero: NUMERO + 1, tomador: { cpf: '52998224725', nome: 'PESSOA FICTICIA DE TESTE', endereco: TOMADOR.endereco } }));

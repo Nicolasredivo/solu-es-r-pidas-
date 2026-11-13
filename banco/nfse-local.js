@@ -5,7 +5,8 @@
 // validade; é o padrão) ou "producao" (nota de verdade, tpAmb 1). Os dois têm layout próprio.
 //
 // Escuta só em 127.0.0.1 e exige o token do Airtable local (C:\Users\rediv\senha-banco.txt).
-// O CNPJ da empresa fica em C:\Users\rediv\nfse-config.json, fora do repositório.
+// Os CNPJs dos emissores ("CNPJ 1" e "CNPJ 2") ficam em C:\Users\rediv\nfse-config.json, fora do repositório.
+// O pedido de emissão traz "emissor" (padrão "CNPJ 1"); o certificado A1 é escolhido pelo CNPJ dele.
 // Uso: node banco/nfse-local.js
 
 const http = require('http');
@@ -23,8 +24,19 @@ const NS = 'http://www.sped.fazenda.gov.br/nfse';
 
 const TOKEN = fs.readFileSync('C:/Users/rediv/senha-banco.txt', 'utf8').match(/^token do airtable local:\s*(\S+)/m)[1];
 const CONFIG = JSON.parse(fs.readFileSync('C:/Users/rediv/nfse-config.json', 'utf8').replace(/^\uFEFF/, ''));
-const AMBIENTE = CONFIG.ambiente === undefined ? 'restrita' : CONFIG.ambiente;
+// NFSE_AMBIENTE força o ambiente (só os testes usam, para nunca emitir nota de verdade por engano);
+// o atalho "Servidor n8n" não define, então vale o "ambiente" do nfse-config.json.
+const AMBIENTE = process.env.NFSE_AMBIENTE || (CONFIG.ambiente === undefined ? 'restrita' : CONFIG.ambiente);
 if (!['restrita', 'producao'].includes(AMBIENTE)) throw new Error('ambiente desconhecido em nfse-config.json');
+
+// Os dois MEIs (fase 4, 13/11/2026): cada emissor tem CNPJ, série, telefone e e-mail próprios, com
+// numeração própria. Config antiga, sem "emissores", vale só como "CNPJ 1".
+const EMISSORES = CONFIG.emissores || { 'CNPJ 1': { cnpj: CONFIG.cnpj, serie: CONFIG.serie, fone: CONFIG.fone, email: CONFIG.email } };
+for (const [nome, e] of Object.entries(EMISSORES)) {
+  if (!/^\d{14}$/.test(String(e.cnpj || ''))) throw new Error(`emissor ${nome}: CNPJ inválido em nfse-config.json`);
+  if (!/^\d{1,5}$/.test(String(e.serie || ''))) throw new Error(`emissor ${nome}: série inválida em nfse-config.json`);
+}
+const emissorDe = (nome) => EMISSORES[nome === undefined || nome === '' ? 'CNPJ 1' : nome];
 
 const escapar = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const so = (v) => String(v == null ? '' : v).replace(/\D/g, '');
@@ -72,6 +84,7 @@ function conferirEndereco(e, nome, erros) {
 // Devolve a lista do que está faltando ou errado, em português, antes de gastar uma ida ao governo.
 function conferirPedido(p) {
   const erros = [];
+  if (!emissorDe(p.emissor)) erros.push('emissor desconhecido ou sem configuração neste servidor');
   if (!/^[1-9]\d{0,14}$/.test(String(p.numero == null ? '' : p.numero))) erros.push('número da DPS inválido');
   if (!String(p.descricao || '').trim()) erros.push('falta a descrição do serviço');
   if (String(p.descricao || '').length > LIMITE_DESCRICAO) erros.push(`descrição acima de ${LIMITE_DESCRICAO} caracteres`);
@@ -86,25 +99,27 @@ function conferirPedido(p) {
   return erros;
 }
 
-function idDaDps(numero) {
-  return 'DPS' + CONFIG.municipioIbge + '2' + CONFIG.cnpj + String(CONFIG.serie).padStart(5, '0') + String(numero).padStart(15, '0');
+function idDaDps(numero, emissor) {
+  const em = emissorDe(emissor);
+  return 'DPS' + CONFIG.municipioIbge + '2' + em.cnpj + String(em.serie).padStart(5, '0') + String(numero).padStart(15, '0');
 }
 
 // Os layouts mudam pouco: o de testes (esquema de 20/10/2026) exige finNFSe e põe cNBS antes da
 // descrição; o de produção é o das notas reais aceitas em 04/11/2026, sem finNFSe e com cNBS depois.
 function montarDps(p, ambiente = AMBIENTE) {
   const producao = ambiente === 'producao';
-  const id = idDaDps(p.numero);
+  const em = emissorDe(p.emissor);
+  const id = idDaDps(p.numero, p.emissor);
   const { dhEmi, dCompet } = agoraBrasilia();
   const toma = p.tomador
     ? `<toma>${p.tomador.cpf ? `<CPF>${so(p.tomador.cpf)}</CPF>` : `<CNPJ>${so(p.tomador.cnpj)}</CNPJ>`}<xNome>${escapar(p.tomador.nome)}</xNome><end><endNac><cMun>${so(p.tomador.endereco.municipioIbge)}</cMun><CEP>${so(p.tomador.endereco.cep)}</CEP></endNac>${enderecoXml(p.tomador.endereco)}</end></toma>`
     : '';
-  const contato = (CONFIG.fone ? `<fone>${escapar(CONFIG.fone)}</fone>` : '') + (CONFIG.email ? `<email>${escapar(CONFIG.email)}</email>` : '');
+  const contato = (em.fone ? `<fone>${escapar(em.fone)}</fone>` : '') + (em.email ? `<email>${escapar(em.email)}</email>` : '');
   const descricao = `<xDescServ>${escapar(p.descricao)}</xDescServ>`;
   const xml = `<?xml version="1.0" encoding="UTF-8"?><DPS versao="1.01" xmlns="${NS}"><infDPS Id="${id}">`
-    + `<tpAmb>${producao ? 1 : 2}</tpAmb><dhEmi>${dhEmi}</dhEmi><verAplic>SolRapidas_1.0</verAplic><serie>${CONFIG.serie}</serie><nDPS>${p.numero}</nDPS>`
+    + `<tpAmb>${producao ? 1 : 2}</tpAmb><dhEmi>${dhEmi}</dhEmi><verAplic>SolRapidas_1.0</verAplic><serie>${em.serie}</serie><nDPS>${p.numero}</nDPS>`
     + `<dCompet>${dCompet}</dCompet><tpEmit>1</tpEmit>${producao ? '' : '<finNFSe>0</finNFSe>'}<cLocEmi>${CONFIG.municipioIbge}</cLocEmi>`
-    + `<prest><CNPJ>${CONFIG.cnpj}</CNPJ>${contato}<regTrib><opSimpNac>2</opSimpNac><regEspTrib>0</regEspTrib></regTrib></prest>${toma}`
+    + `<prest><CNPJ>${em.cnpj}</CNPJ>${contato}<regTrib><opSimpNac>2</opSimpNac><regEspTrib>0</regEspTrib></regTrib></prest>${toma}`
     + `<serv><locPrest><cLocPrestacao>${CONFIG.municipioIbge}</cLocPrestacao></locPrest>`
     + `<cServ><cTribNac>070501</cTribNac>${producao ? `${descricao}<cNBS>101011200</cNBS>` : `<cNBS>101011200</cNBS>${descricao}`}</cServ>`
     + `<obra><end><CEP>${so(p.obra.cep)}</CEP>${enderecoXml(p.obra)}</end></obra></serv>`
@@ -113,7 +128,7 @@ function montarDps(p, ambiente = AMBIENTE) {
   return { id, xml };
 }
 
-function falarComSefin(pedido) {
+function falarComSefin(pedido, emissor) {
   return new Promise((resolve) => {
     const ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT], { windowsHide: true });
     const saida = [];
@@ -125,7 +140,7 @@ function falarComSefin(pedido) {
       clearTimeout(relogio);
       try { resolve(JSON.parse(Buffer.concat(saida).toString('utf8'))); } catch (e) { resolve({ falha: 'sem resposta do assinador' }); }
     });
-    ps.stdin.end(JSON.stringify({ cnpj: CONFIG.cnpj, ambiente: AMBIENTE, ...pedido }));
+    ps.stdin.end(JSON.stringify({ cnpj: emissorDe(emissor).cnpj, ambiente: AMBIENTE, ...pedido }));
   });
 }
 
@@ -135,7 +150,7 @@ async function emitir(p) {
   const erros = conferirPedido(p);
   if (erros.length) return { http: 400, ok: false, erros: erros.map((d) => ({ descricao: d })) };
   const { id, xml } = montarDps(p);
-  const r = await falarComSefin({ metodo: 'POST', caminho: '/nfse', id, xml });
+  const r = await falarComSefin({ metodo: 'POST', caminho: '/nfse', id, xml }, p.emissor);
   // Sem resposta a nota pode ter saído: quem chamou consulta /dps/<id> antes de tentar de novo.
   if (r.falha) return { http: 502, ok: false, idDps: id, semResposta: true, erros: [{ descricao: r.falha }] };
   let j = {};
@@ -154,9 +169,10 @@ async function emitir(p) {
   };
 }
 
-async function consultarDps(id) {
+async function consultarDps(id, emissor) {
   if (!/^DPS\d{42}$/.test(id)) return { http: 400, ok: false, erros: [{ descricao: 'identificador inválido' }] };
-  const r = await falarComSefin({ metodo: 'GET', caminho: '/dps/' + id });
+  if (!emissorDe(emissor)) return { http: 400, ok: false, erros: [{ descricao: 'emissor desconhecido' }] };
+  const r = await falarComSefin({ metodo: 'GET', caminho: '/dps/' + id }, emissor);
   if (r.falha) return { http: 502, ok: false, erros: [{ descricao: r.falha }] };
   let j = {};
   try { j = JSON.parse(r.corpo); } catch (e) { /* fica sem chave */ }
@@ -165,7 +181,7 @@ async function consultarDps(id) {
   const resposta = { http: 200, ok: true, existe, chaveAcesso: j.chaveAcesso || '', statusSefin: r.status };
   if (!existe) return resposta;
   // A nota existe: traz número e XML para quem ficou sem resposta na hora de emitir.
-  const n = await falarComSefin({ metodo: 'GET', caminho: '/nfse/' + j.chaveAcesso });
+  const n = await falarComSefin({ metodo: 'GET', caminho: '/nfse/' + j.chaveAcesso }, emissor);
   try {
     const nota = zlib.gunzipSync(Buffer.from(JSON.parse(n.corpo).nfseXmlGZipB64, 'base64')).toString('utf8');
     return { ...resposta, numeroNota: tag(nota, 'nNFSe'), situacao: tag(nota, 'cStat'), nfseXml: nota };
@@ -186,13 +202,20 @@ function responder(res, obj) {
 
 const servidor = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
-  if (req.method === 'GET' && url.pathname === '/saude') return responder(res, { ok: true, ambiente: AMBIENTE, serie: Number(CONFIG.serie) });
+  if (req.method === 'GET' && url.pathname === '/saude') {
+    return responder(res, { ok: true, ambiente: AMBIENTE, serie: Number(emissorDe('CNPJ 1').serie),
+      emissores: Object.fromEntries(Object.entries(EMISSORES).map(([nome, e]) => [nome, { serie: Number(e.serie) }])) });
+  }
   if (!autorizado(req)) return responder(res, { http: 401, ok: false, erros: [{ descricao: 'não autorizado' }] });
   const dps = url.pathname.match(/^\/dps\/([A-Za-z0-9]+)$/);
-  if (req.method === 'GET' && dps) return consultarDps(dps[1]).then((r) => responder(res, r));
+  const emissorPedido = url.searchParams.get('emissor') || 'CNPJ 1';
+  if (req.method === 'GET' && dps) return consultarDps(dps[1], emissorPedido).then((r) => responder(res, r));
   // Pelo número: quem ficou sem resposta na hora de emitir não chegou a receber o identificador.
   const porNumero = url.pathname.match(/^\/dps-numero\/([1-9]\d{0,14})$/);
-  if (req.method === 'GET' && porNumero) return consultarDps(idDaDps(porNumero[1])).then((r) => responder(res, r));
+  if (req.method === 'GET' && porNumero) {
+    if (!emissorDe(emissorPedido)) return responder(res, { http: 400, ok: false, erros: [{ descricao: 'emissor desconhecido' }] });
+    return consultarDps(idDaDps(porNumero[1], emissorPedido), emissorPedido).then((r) => responder(res, r));
+  }
   if (req.method !== 'POST' || url.pathname !== '/emitir') return responder(res, { http: 404, ok: false, erros: [{ descricao: 'rota inexistente' }] });
   const partes = [];
   let tamanho = 0;

@@ -324,6 +324,7 @@ create index on "Pagamentos_Fatura" ("Cartao_Ref");
 create table "Notas_Fiscais" (
   id text primary key default novo_id(),
   "Ambiente" text not null,          -- Producao | Testes
+  "Emissor" text not null default 'CNPJ 1' check ("Emissor" in ('CNPJ 1', 'CNPJ 2')),  -- qual MEI emitiu (13/11/2026)
   "Serie" integer not null,
   "Numero_DPS" integer not null,
   "Id_DPS" text,
@@ -343,7 +344,7 @@ create table "Notas_Fiscais" (
   "Emitida_Em" timestamptz,
   "Criado_Em" timestamptz not null default now()
 );
-create unique index on "Notas_Fiscais" ("Ambiente", "Serie", "Numero_DPS");
+create unique index on "Notas_Fiscais" ("Ambiente", "Emissor", "Serie", "Numero_DPS");
 create index on "Notas_Fiscais" ("Cliente_Ref");
 
 -- Os dois CNPJs (MEIs) da mesma empresa, 08/11/2026. Cada cliente diz por qual é atendido
