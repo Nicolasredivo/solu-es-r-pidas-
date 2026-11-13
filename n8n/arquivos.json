@@ -1,0 +1,614 @@
+{
+  "name": "App - Arquivos",
+  "nodes": [
+    {
+      "id": "8b9fc8bf-7ede-41b9-b52f-257d736c07a8",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "f880f8e4-1e03-4d4a-930e-b9c1a8aba8ce",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "arquivos",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      }
+    },
+    {
+      "id": "0517646b-45bc-47fa-bbb1-e08801caf7b9",
+      "name": "Confere acesso",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "acesso",
+            "senha": "={{ $json.body.senha }}",
+            "tokenAcesso": "={{ $json.body.tokenAcesso }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "4280c1d8-5308-4a3e-a921-ffdbaf8646d9",
+      "name": "Acesso permitido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d0c7ea10-e82c-4040-9ee2-95210cd687e3",
+              "leftValue": "={{ ($json.permitido === true) ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "abbdc3c4-3818-4c8b-9a6f-ea8631f89632",
+      "name": "Monta acesso negado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        500
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, acessoNegado: true, mensagem: 'Acesso não autorizado. Entre de novo.' } }];"
+      }
+    },
+    {
+      "id": "e7c1bb75-7736-4450-8928-a47276886bca",
+      "name": "Le entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Tudo chega como texto (o app manda formulário simples).\nconst corpo = $('Recebe pedido do app').first().json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst ACOES = ['salvar'];\nconst acao = ACOES.includes(texto(corpo.acao)) ? texto(corpo.acao) : '';\nlet erro = acao ? '' : 'Ação inválida.';\n\n// Por enquanto só os PDFs gerados no app; \"servico\" e \"relatorio_tecnico\" entram quando forem definidos.\nconst TIPOS = ['orcamento', 'recibo', 'comunicado', 'laudo'];\nconst clienteId = texto(corpo.clienteId);\nconst tipo = texto(corpo.tipo);\nconst titulo = texto(corpo.titulo).replace(/\\s+/g, ' ').slice(0, 200);\nconst descricao = texto(corpo.descricao).replace(/\\s+/g, ' ').slice(0, 500);\nconst textoBusca = texto(corpo.textoBusca).slice(0, 20000);\nconst clienteNome = texto(corpo.clienteNome).replace(/\\s+/g, ' ').slice(0, 200);\nconst dataDocumento = texto(corpo.dataDocumento);\nconst emissor = texto(corpo.emissor) === 'CNPJ 2' ? 'CNPJ 2' : 'CNPJ 1';\nconst hash = texto(corpo.hash).toLowerCase();\nconst dadosJson = texto(corpo.dadosJson).slice(0, 100000);\n\n// Valor em reais: vazio = sem valor (comunicado e laudo não têm). Aceita 290 / 290,5 / 1.290,50 / 290.50.\nlet bruto = texto(corpo.valor).replace(/\\s+/g, '').replace(/^R\\$/i, '');\nif (bruto.includes(',')) bruto = bruto.replace(/\\./g, '').replace(',', '.');\nlet valor = null;\nif (bruto) {\n  if (/^\\d{1,9}(\\.\\d{1,2})?$/.test(bruto)) valor = Number(bruto);\n  else if (!erro) erro = 'Valor inválido.';\n}\n\n// PDF em base64, até uns 8 MB.\nlet arquivo = texto(corpo.arquivo).replace(/^data:[^,]*,/, '');\nlet nomeArquivo = texto(corpo.nomeArquivo).replace(/[\\\\/:*?\"<>|\\x00-\\x1f]/g, '_').slice(0, 150) || 'documento.pdf';\nif (!/\\.pdf$/i.test(nomeArquivo)) nomeArquivo += '.pdf';\n\nif (!erro && !/^rec[A-Za-z0-9]{14}$/.test(clienteId)) erro = 'Escolha um cliente do cadastro.';\nif (!erro && !TIPOS.includes(tipo)) erro = 'Tipo de documento inválido.';\nif (!erro && !titulo) erro = 'Falta o título do documento.';\nif (!erro && !/^\\d{4}-\\d{2}-\\d{2}$/.test(dataDocumento)) erro = 'Data do documento inválida.';\nif (!erro && hash && !/^[0-9a-f]{64}$/.test(hash)) erro = 'Identificação do arquivo inválida.';\nif (!erro && (!arquivo || !/^[A-Za-z0-9+/=]+$/.test(arquivo))) erro = 'Arquivo inválido.';\nelse if (!erro && !arquivo.startsWith('JVBERi0')) erro = 'O arquivo precisa ser um PDF.';\nelse if (!erro && arquivo.length > 11 * 1024 * 1024) erro = 'O PDF passa de 8 MB.';\nreturn [{ json: { acao, clienteId, tipo, titulo, descricao, textoBusca, clienteNome, dataDocumento, valor, emissor, hash, dadosJson, arquivo, nomeArquivo, erro } }];"
+      }
+    },
+    {
+      "id": "979d0295-a5a7-403a-9f92-195c3abd4f9b",
+      "name": "Entrada ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "daf718b4-5389-4217-a6d7-2ce11c5e55d5",
+              "leftValue": "={{ (!$json.erro) ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "e3eb3f9f-e854-4585-9ceb-aef73dfce86b",
+      "name": "Monta erro de entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        500
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, mensagem: $json.erro } }];"
+      }
+    },
+    {
+      "id": "ddcd405f-5326-4862-b194-96f9c7d237c5",
+      "name": "Busca duplicado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        300
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        },
+        "method": "GET",
+        "url": "={{ 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblArquivosClie01?_itens=1&fields%5B%5D=Cliente_Ref&fields%5B%5D=Hash_PDF&filterByFormula=' + encodeURIComponent(\"{Hash_PDF}='\" + ($('Le entrada').first().json.hash || 'sem-hash') + \"'\") }}"
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "bc221eb9-cba6-4e23-891a-5c38124cf7f3",
+      "name": "Decide",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const e = $('Le entrada').first().json;\nconst achados = $('Busca duplicado').all().map((i) => i.json).filter((j) => j && j.id && j.fields);\n// O mesmo PDF (mesma impressão digital) do mesmo cliente não é guardado duas vezes.\nconst dup = e.hash ? achados.find((r) => r.fields.Cliente_Ref === e.clienteId) : null;\nif (dup) return [{ json: { proximo: 'responder', resposta: { ok: true, jaGuardado: true, id: dup.id, mensagem: 'Esta cópia já estava guardada na pasta do cliente.' } } }];\nconst fields = {\n  Cliente_Ref: e.clienteId, Cliente_Nome: e.clienteNome, Tipo: e.tipo, Titulo: e.titulo, Descricao: e.descricao,\n  Texto_Busca: e.textoBusca, Data_Documento: e.dataDocumento, Emissor: e.emissor, Origem: 'gerado', Dados_Json: e.dadosJson,\n};\nif (e.valor !== null) fields.Valor = e.valor;\nif (e.hash) fields.Hash_PDF = e.hash;\nreturn [{ json: { proximo: 'gravar', url: 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblArquivosClie01', corpo: { fields } } }];"
+      }
+    },
+    {
+      "id": "c66ee747-98ce-4998-8da0-3bd3949031e4",
+      "name": "Vai gravar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d3bca911-b033-4804-91a2-2706ca5dee8a",
+              "leftValue": "={{ ($json.proximo === 'gravar') ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "fab97455-adb7-4ae5-b8c7-4ec7689bc9c8",
+      "name": "Cria registro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        200
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        },
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "8da3cae9-1151-4490-87d2-8fc5024d14be",
+      "name": "Prepara envio do PDF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const e = $('Le entrada').first().json;\nconst id = $json.id || (($json.records || [])[0] || {}).id;\nreturn [{ json: {\n  url: 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/' + id + '/Arquivo/uploadAttachment',\n  corpo: { contentType: 'application/pdf', file: e.arquivo, filename: e.nomeArquivo },\n} }];"
+      }
+    },
+    {
+      "id": "b1e14e0b-ac83-4252-a0d2-dfb47896049f",
+      "name": "Sobe o PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        100
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 60000
+        },
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "709b80a4-0adb-4957-8562-734eeb8efe77",
+      "name": "Monta resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: true, id: $('Cria registro').first().json.id, mensagem: 'Guardado na pasta do cliente.' } }];"
+      }
+    },
+    {
+      "id": "81ce6ae8-33ab-4e2f-87c8-54a8ff3c7f6f",
+      "name": "Desfaz registro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        260
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        },
+        "method": "DELETE",
+        "url": "={{ 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblArquivosClie01/' + $('Cria registro').first().json.id }}"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "c80d8283-a1d1-4e01-8a5a-c66fc2e4c34f",
+      "name": "Monta falha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        400
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, mensagem: 'Não foi possível guardar a cópia agora. O PDF foi gerado normalmente.' } }];"
+      }
+    },
+    {
+      "id": "09352b05-cb71-403a-b8bf-a039e7b1735d",
+      "name": "Monta resposta direta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        500
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: $json.resposta }];"
+      }
+    },
+    {
+      "id": "1872daa6-5291-484a-91fd-c3f733678308",
+      "name": "Responde",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2860,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Confere acesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere acesso": {
+      "main": [
+        [
+          {
+            "node": "Acesso permitido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acesso permitido?": {
+      "main": [
+        [
+          {
+            "node": "Le entrada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta acesso negado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta acesso negado": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le entrada": {
+      "main": [
+        [
+          {
+            "node": "Entrada ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada ok?": {
+      "main": [
+        [
+          {
+            "node": "Busca duplicado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta erro de entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta erro de entrada": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca duplicado": {
+      "main": [
+        [
+          {
+            "node": "Decide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide": {
+      "main": [
+        [
+          {
+            "node": "Vai gravar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vai gravar?": {
+      "main": [
+        [
+          {
+            "node": "Cria registro",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta resposta direta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta direta": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cria registro": {
+      "main": [
+        [
+          {
+            "node": "Prepara envio do PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara envio do PDF": {
+      "main": [
+        [
+          {
+            "node": "Sobe o PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sobe o PDF": {
+      "main": [
+        [
+          {
+            "node": "Monta resposta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Desfaz registro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Desfaz registro": {
+      "main": [
+        [
+          {
+            "node": "Monta falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta falha": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none"
+  }
+}

@@ -5645,3 +5645,21 @@ duas abas (`subtab-doc`, blocos `subdoc-pdfs` e `subdoc-notas`): **PDFs** (abre 
   nome) → página do cliente com as pastas NFS-e, Orçamentos, Recibos, Comunicados, Laudos, Serviços (a definir)
   e Relatório técnico (a definir), com visualizar; 4) busca por palavras, filtro de período, ordem e valor;
   5) importar documentos antigos. A maquete clicável (dados fictícios) ficou fora do repositório, no scratchpad.
+
+## Arquivos por cliente: etapa 2, guardar o PDF gerado (13/11/2026, versão 2026.11.13f)
+Cada PDF gerado na aba PDFs e entregue (baixado ou compartilhado) também é guardado no PC, na pasta do cliente.
+- **Tabela `Arquivos_Cliente`** (`tblArquivosClie01`, registrada em `BASES` do `airtable-local.js`): Cliente_Ref (FK,
+  on delete set null), Cliente_Nome, Tipo (orcamento, recibo, comunicado, laudo; servico e relatorio_tecnico previstos),
+  Titulo, Descricao, Texto_Busca, Data_Documento, Valor, Emissor, Origem (gerado | importado), Hash_PDF (SHA-256),
+  Dados_Json (dados usados, para refazer), Arquivo (anexo, mesmo esquema do Veículo). NFS-e continua em `Notas_Fiscais`.
+  Backup antes: `antes-arquivos-cliente-2026-11-13.sql`. Tabela nova exige reiniciar o "Servidor n8n".
+- **Fluxo `App - Arquivos`** (webhook `arquivos`, só `salvar` por enquanto): valida, não guarda o mesmo PDF (mesma
+  impressão digital) do mesmo cliente duas vezes, grava o registro, sobe o PDF e, se o envio falhar, desfaz o registro.
+- **App:** `docClienteId` guarda o cliente escolhido na busca do cadastro; trocar o nome à mão apaga o vínculo.
+  Sem cliente escolhido: o PDF sai normal e o aviso diz que a cópia não foi guardada. Compartilhar cancelado: não
+  guarda. Falha ao guardar: só avisa (o PDF já foi entregue).
+- **Segurança:** o PDF abre por `/webhook/anexo?id=att...` (128 bits aleatórios), como fotos de chamado e documento
+  do Veículo; a lista e a busca (etapa 3) ficam atrás do login.
+- **Testes:** `testar-arquivos.js` (30 ok; dois clientes de teste e os PDFs deles apagados no fim). `Arquivos_Cliente`
+  entrou na contagem de `comum.js`.
+- **Falta:** etapa 3 (aba Arquivos: lista de clientes, pastas, visualizar), 4 (busca e filtros), 5 (importar antigos).

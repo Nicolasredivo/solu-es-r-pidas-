@@ -55,6 +55,8 @@ const BASES = {
     Pneus: 'tblPneusVeiculo01',
     // Coordenadas dos endereços (gasto de deslocamento, 09/11/2026).
     Geo_Enderecos: 'tblGeoEnderecos01',
+    // Arquivos de cada cliente: PDFs gerados no app (13/11/2026).
+    Arquivos_Cliente: 'tblArquivosClie01',
   },
   appjAmWXV7Zr33UqE: {
     Despesas: 'tblNduEKl2jY280V0', Fornecedores: 'tblhsabIIg8SLqMMj', Recorrentes: 'tblb8QplhcGRP6SZ7',

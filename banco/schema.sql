@@ -435,6 +435,31 @@ create table "Geo_Enderecos" (
   "Criado_Em" timestamptz not null default now()
 );
 
+-- Arquivos de cada cliente (13/11/2026): cada PDF gerado no app (orçamento, recibo, comunicado, laudo) fica
+-- guardado aqui, ligado ao cliente do cadastro, para ver e buscar depois. O PDF em si fica na pasta de
+-- anexos do PC (coluna "Arquivo"). "Texto_Busca" junta o que foi digitado, para a busca por palavras;
+-- "Hash_PDF" evita guardar duas vezes o mesmo PDF do mesmo cliente. NFS-e não entra aqui: já está em
+-- "Notas_Fiscais". "servico" e "relatorio_tecnico" estão previstos e ainda serão definidos.
+create table "Arquivos_Cliente" (
+  id text primary key default novo_id(),
+  "Cliente_Ref" text references "Entidades_Cadastradas"(id) on delete set null,
+  "Cliente_Nome" text,                -- nome como saiu no documento
+  "Tipo" text not null check ("Tipo" in ('orcamento','recibo','comunicado','laudo','servico','relatorio_tecnico')),
+  "Titulo" text not null,
+  "Descricao" text,
+  "Texto_Busca" text,
+  "Data_Documento" date,
+  "Valor" numeric(12,2),
+  "Emissor" text not null default 'CNPJ 1' check ("Emissor" in ('CNPJ 1','CNPJ 2')),
+  "Origem" text not null default 'gerado' check ("Origem" in ('gerado','importado')),
+  "Hash_PDF" text,
+  "Dados_Json" text,                  -- dados usados no documento, para refazer
+  "Arquivo" jsonb not null default '[]',
+  "Criado_Em" timestamptz not null default now()
+);
+create index on "Arquivos_Cliente" ("Cliente_Ref", "Tipo", "Data_Documento");
+create index on "Arquivos_Cliente" ("Hash_PDF");
+
 -- Usuário que o n8n usa: lê e grava dados, mas não muda a estrutura.
 -- (a senha é definida fora deste arquivo; ver C:\Users\rediv\senha-banco.txt)
 do $$ begin

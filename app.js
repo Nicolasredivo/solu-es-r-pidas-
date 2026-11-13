@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.13e";
+const APP_VERSION = "2026.11.13f";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -11329,6 +11329,10 @@ const RESPONSAVEL_PADRAO = DocumentosPdf.RESPONSAVEL_PADRAO;
 // campos, caso ele tenha mais de um.
 let docEnderecosCliente = [];
 let docContatosCliente = [];
+// Cliente do cadastro escolhido na busca (13/11/2026): é para a pasta dele que a cópia do PDF vai. Se o nome
+// do cliente for trocado à mão depois, o vínculo cai (não pode guardar o PDF na pasta errada).
+let docClienteId = "";
+let docClienteNomePuxado = "";
 
 function mostrarDocStatus(tipo, mensagem) {
   docStatus.textContent = mensagem;
@@ -11469,6 +11473,8 @@ async function puxarClienteNoDocumento(id) {
   if (!cliente) return;
   const nome = nomeComIniciais(cliente.nomeFantasia || cliente.razaoSocial);
   docCampos.cliente.value = nome;
+  docClienteId = id;
+  docClienteNomePuxado = nome;
   docCampos.edificio.value = nomeDoEdificio(nome);
   // O documento sai pelo CNPJ que atende o cliente (dá para trocar à mão depois).
   escolherEmissorDoDocumento(cliente.atendidoPor);
@@ -11522,6 +11528,9 @@ ligarSugestoesContato(docCampos.solicitante, document.getElementById("doc-solici
     docCampos.solicitante.value = valor;
   });
 docCampos.endereco.addEventListener("input", () => ajustarAlturaAuto(docCampos.endereco));
+docCampos.cliente.addEventListener("input", () => {
+  if (docCampos.cliente.value.trim() !== docClienteNomePuxado.trim()) docClienteId = "";
+});
 ligarMascaraDinheiro(docCampos.valor);
 
 // ---- gerar ----
@@ -11669,6 +11678,62 @@ async function entregarPdf(blob, nomeArquivo) {
   return "baixado";
 }
 
+// ---- cópia na pasta do cliente (13/11/2026) ----
+// Cada PDF gerado e entregue (baixado ou compartilhado) também é guardado no PC, na pasta do cliente do
+// cadastro (fluxo "App - Arquivos"), para ver e buscar depois. Se não guardar, o PDF já foi entregue:
+// só avisa. Sem cliente escolhido da lista do cadastro, não há pasta: avisa e não guarda.
+
+const ROTULO_TIPO_DOCUMENTO = { orcamento: "Orçamento", recibo: "Recibo", comunicado: "Comunicado", laudo: "Laudo" };
+
+async function impressaoDoPdf(blob) {
+  try {
+    const bytes = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+    return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch (err) {
+    return ""; // sem isso só perde a conferência de duplicado
+  }
+}
+
+function pdfEmBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onload = () => resolve(String(leitor.result).replace(/^data:[^,]*,/, ""));
+    leitor.onerror = () => reject(new Error("Não li o PDF"));
+    leitor.readAsDataURL(blob);
+  });
+}
+
+function resumoDoDocumento(tipo, dados) {
+  const rotulo = ROTULO_TIPO_DOCUMENTO[tipo];
+  const quem = dados.cliente || dados.edificio || dados.solicitante;
+  const titulo = [rotulo, quem].filter(Boolean).join(" · ");
+  const itens = (dados.itens || []).map((i) => i.desc).filter(Boolean);
+  const descricao = { orcamento: itens.join("; "), recibo: dados.referente, comunicado: dados.obs || dados.endereco, laudo: [dados.edificio, dados.obs].filter(Boolean).join(" · ") }[tipo] || "";
+  const textoBusca = [dados.cliente, dados.edificio, dados.solicitante, dados.endereco, dados.referente, dados.condicoes, dados.obs, dados.responsavel, ...itens]
+    .filter(Boolean).join(" | ");
+  const valor = tipo === "recibo" ? dados.valor : tipo === "orcamento" ? (dados.itens || []).reduce((soma, i) => soma + i.qtd * i.unit, 0) : 0;
+  return { titulo, descricao, textoBusca, valor: valor > 0 ? valor.toFixed(2) : "" };
+}
+
+// Devolve { ok, mensagem }: nunca lança erro (o PDF já foi entregue).
+async function guardarCopiaDoDocumento(tipo, dados, blob, nomeArquivo) {
+  if (!docClienteId) return { ok: false, mensagem: "Sem cliente escolhido na lista do cadastro: esta cópia não foi guardada na pasta de nenhum cliente." };
+  try {
+    const resumo = resumoDoDocumento(tipo, dados);
+    const iso = docCampos.data.value;
+    const r = await pedirAoN8n("arquivos", {
+      acao: "salvar", clienteId: docClienteId, clienteNome: dados.cliente || dados.edificio || "", tipo,
+      titulo: resumo.titulo, descricao: resumo.descricao, textoBusca: resumo.textoBusca, valor: resumo.valor,
+      dataDocumento: iso, emissor: dados.emissor ? "CNPJ 2" : "CNPJ 1", hash: await impressaoDoPdf(blob),
+      dadosJson: JSON.stringify({ ...dados, emissor: dados.emissor ? "CNPJ 2" : "CNPJ 1" }), nomeArquivo, arquivo: await pdfEmBase64(blob),
+    });
+    if (r && r.ok) return { ok: true, mensagem: r.jaGuardado ? "Esta cópia já estava guardada na pasta do cliente." : "Cópia guardada na pasta do cliente." };
+    return { ok: false, mensagem: (r && r.mensagem) || "Não consegui guardar a cópia na pasta do cliente." };
+  } catch (err) {
+    return { ok: false, mensagem: "Não consegui guardar a cópia na pasta do cliente (servidor fora?)." };
+  }
+}
+
 formDocumento.addEventListener("submit", async (evento) => {
   evento.preventDefault();
   const tipo = tipoDocumento();
@@ -11689,9 +11754,16 @@ formDocumento.addEventListener("submit", async (evento) => {
     }
     const logos = await carregarGeradorPdf();
     const { doc, nomeArquivo } = DocumentosPdf.gerar(tipo, dados, logos);
-    const resultado = await entregarPdf(doc.output("blob"), nomeArquivo);
-    if (resultado === "cancelado") mostrarDocStatus("", "");
-    else mostrarDocStatus("ok", `PDF pronto: ${nomeArquivo}`);
+    const blob = doc.output("blob");
+    const resultado = await entregarPdf(blob, nomeArquivo);
+    if (resultado === "cancelado") {
+      mostrarDocStatus("", "");
+    } else {
+      mostrarDocStatus("ok", `PDF pronto: ${nomeArquivo}`);
+      // dados.emissor é null para o CNPJ 1 e um objeto para o CNPJ 2 (ver emissorDoDocumento).
+      const copia = await guardarCopiaDoDocumento(tipo, dados, blob, nomeArquivo);
+      mostrarDocStatus(copia.ok ? "ok" : "error", `PDF pronto: ${nomeArquivo}. ${copia.mensagem}`);
+    }
   } catch (err) {
     mostrarDocStatus("error", "Não consegui gerar o PDF. Confira a internet e tente de novo.");
   } finally {
@@ -11706,6 +11778,8 @@ function limparDocumento() {
   docCampos.data.value = hojeParaCampoData();
   docEnderecosCliente = [];
   docContatosCliente = [];
+  docClienteId = "";
+  docClienteNomePuxado = "";
   escolherEmissorDoDocumento("CNPJ 1");
   docClienteStatus.textContent = "Preenche cliente, endereço e solicitante. Dá para mudar tudo depois.";
   docItens.innerHTML = "";
