@@ -5663,3 +5663,24 @@ Cada PDF gerado na aba PDFs e entregue (baixado ou compartilhado) também é gua
 - **Testes:** `testar-arquivos.js` (30 ok; dois clientes de teste e os PDFs deles apagados no fim). `Arquivos_Cliente`
   entrou na contagem de `comum.js`.
 - **Falta:** etapa 3 (aba Arquivos: lista de clientes, pastas, visualizar), 4 (busca e filtros), 5 (importar antigos).
+
+## Arquivos por cliente: etapa 3, aba "Arquivos" (13/11/2026, versão 2026.11.13g)
+Terceira aba de **Documentos** (só para quem tem acesso total, junto com a de notas): lista de todos os clientes
+(só o nome, em ordem alfabética com a letra, busca pelo nome, e quantos arquivos cada um tem) → página do cliente
+com as pastas **NFS-e, Orçamentos, Recibos, Comunicados, Laudos, Serviços e Relatório técnico** (os dois últimos
+"em elaboração", a definir) → lista dos arquivos da pasta, do mais recente ao mais antigo → **Visualizar**.
+- **Fluxo `App - Arquivos`:** ganhou `resumo` (contagem por cliente e pasta, sem conteúdo) e `cliente` (todos os
+  arquivos do cliente, PDFs com endereço completo + as NFS-e). NFS-e: só as "Emitida"; em produção só as de verdade,
+  no ambiente de testes só as de teste (pelo `Status do servico`). Lição: o n8n roda o passo seguinte uma vez POR
+  ITEM recebido; entre buscas de listas é preciso juntar em um item só (nós "Junta ...") ou a busca seguinte repete.
+- **Visualizar PDF:** o n8n manda `Content-Security-Policy: sandbox` nas respostas dos webhooks e o visualizador de
+  PDF do navegador não abre PDF assim (fica em branco). O app busca o PDF (`fetch` com `cache: "no-store"`: um
+  carregamento anterior do mesmo endereço, sem os cabeçalhos CORS, ficaria no cache e quebraria a leitura) e mostra
+  por `blob:` no iframe; "Abrir em outra aba" usa o mesmo `blob:`. NFS-e: dados da nota, copiar chave e "Abrir no
+  portal (PDF)" (só em produção). Vale conferir: o link do documento do Veículo abre direto o endereço do n8n e pode
+  sofrer do mesmo problema do `sandbox`.
+- **Testes:** `testar-arquivos.js` (44 ok; numa cópia do fluxo com o ambiente de notas simulado). Na tela, com o n8n
+  de verdade e um usuário de teste (Dono), clientes e PDFs de demonstração (apagados no fim): lista, busca, pastas,
+  PDF no visualizador, NFS-e, Esc fecha, celular de 375 px sem rolagem lateral.
+- **Falta:** etapa 4 (busca por palavras, período, ordem e valor dentro das pastas), 5 (importar documentos antigos);
+  definir o que serão "Serviços" e "Relatório técnico".

@@ -5784,3 +5784,103 @@ div.lembrete-item:hover {
   0%, 40% { box-shadow: 0 0 0 3px var(--accent); }
   100% { box-shadow: 0 0 0 0 transparent; }
 }
+
+/* ===== Documentos > aba Arquivos (13/11/2026): pastas de cada cliente ===== */
+
+.arq-busca input { width: 100%; }
+.arq-conta { color: var(--muted); font-size: 0.85rem; margin: 8px 2px 6px; }
+.arq-letra { color: var(--muted); font-size: 0.75rem; letter-spacing: 0.1em; font-weight: 700; margin: 14px 4px 6px; }
+.arq-vazio {
+  text-align: center; color: var(--muted); padding: 30px 12px;
+  border: 1px dashed #262b47; border-radius: 12px; line-height: 1.5;
+}
+
+.arq-cliente {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: #14172a; border: 1px solid #262b47; border-radius: 12px;
+  padding: 12px 14px; margin-bottom: 8px; color: var(--text); cursor: pointer;
+  transition: border-color var(--transicao);
+}
+@media (hover: hover) and (pointer: fine) { .arq-cliente:hover { border-color: rgba(91, 141, 239, 0.6); } }
+.arq-av {
+  width: 34px; height: 34px; border-radius: 10px; background: #222a55; color: var(--accent);
+  display: grid; place-items: center; font-weight: 700; flex-shrink: 0;
+}
+.arq-av.grande { width: 46px; height: 46px; font-size: 1.2rem; border-radius: 12px; }
+.arq-nome { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.arq-qt { color: var(--muted); font-size: 0.82rem; white-space: nowrap; }
+.arq-seta { color: var(--muted); }
+
+.arq-migalhas { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--muted); font-size: 0.9rem; margin-bottom: 12px; }
+.arq-migalhas button { width: auto; background: none; border: 0; color: var(--accent); cursor: pointer; padding: 2px 0; font-size: inherit; }
+.arq-sep { opacity: 0.5; }
+.arq-cab { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.arq-cab h2 { margin: 0; font-size: 1.25rem; }
+.arq-cab small { color: var(--muted); }
+
+.arq-pastas { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.arq-pasta {
+  background: #14172a; border: 1px solid #262b47; border-radius: 14px; padding: 16px;
+  cursor: pointer; text-align: left; color: var(--text); transition: border-color var(--transicao);
+}
+@media (hover: hover) and (pointer: fine) { .arq-pasta:hover { border-color: rgba(91, 141, 239, 0.6); } }
+.arq-pasta.breve { border-style: dashed; }
+.arq-pasta h3 { margin: 10px 0 4px; font-size: 1.05rem; }
+.arq-pasta .arq-n { font-size: 1.5rem; font-weight: 700; }
+.arq-pasta .arq-n small { font-size: 0.8rem; color: var(--muted); font-weight: 400; }
+.arq-ult { color: var(--muted); font-size: 0.8rem; margin-top: 6px; }
+.arq-etiqueta {
+  display: inline-block; font-size: 0.72rem; padding: 3px 9px; border-radius: 99px;
+  background: rgba(167, 139, 250, 0.16); color: #a78bfa; font-weight: 600;
+}
+
+.arq-ic { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; flex-shrink: 0; }
+.arq-ic svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.arq-c-nfs { background: rgba(62, 207, 142, 0.14); color: #3ecf8e; }
+.arq-c-orc { background: rgba(91, 141, 239, 0.16); color: #5b8def; }
+.arq-c-rec { background: rgba(245, 166, 35, 0.15); color: #f5a623; }
+.arq-c-com { background: rgba(244, 114, 182, 0.15); color: #f472b6; }
+.arq-c-lau { background: rgba(45, 212, 191, 0.15); color: #2dd4bf; }
+.arq-c-ser { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
+.arq-c-rel { background: rgba(167, 139, 250, 0.16); color: #a78bfa; }
+
+.arq-arquivo {
+  display: flex; align-items: center; gap: 12px; background: #14172a; border: 1px solid #262b47;
+  border-radius: 12px; padding: 12px 14px; margin-bottom: 8px;
+}
+.arq-arquivo .arq-ic { width: 38px; height: 38px; }
+.arq-arquivo .arq-ic svg { width: 20px; height: 20px; }
+.arq-texto { flex: 1; min-width: 0; }
+.arq-titulo { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arq-meta, .arq-desc { color: var(--muted); font-size: 0.82rem; margin-top: 2px; }
+.arq-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arq-valor { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.arq-acoes button { width: auto; padding: 8px 14px; }
+
+.arq-modal {
+  position: fixed; inset: 0; z-index: 200; background: rgba(5, 6, 14, 0.78);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.arq-modal.hidden { display: none; }
+.arq-caixa {
+  background: var(--card); border: 1px solid #262b47; border-radius: 16px;
+  width: min(820px, 100%); max-height: 94vh; display: flex; flex-direction: column;
+}
+.arq-caixa header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #262b47; flex-wrap: wrap; }
+.arq-tt { flex: 1; min-width: 160px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arq-botoes { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.arq-botoes button { width: auto; padding: 8px 12px; }
+.arq-corpo { overflow: auto; padding: 0; flex: 1; min-height: 0; }
+.arq-pdf { display: block; width: 100%; height: 76vh; border: 0; background: #fff; border-radius: 0 0 16px 16px; }
+.arq-nota { padding: 14px 16px; display: grid; gap: 10px; }
+.arq-nota-linha { display: grid; gap: 2px; }
+.arq-nota-linha span { color: var(--muted); font-size: 0.8rem; }
+.arq-nota-desc { font-weight: 500; white-space: pre-wrap; }
+.arq-chave { font-family: ui-monospace, Consolas, monospace; font-size: 0.85rem; word-break: break-all; }
+
+@media (max-width: 600px) {
+  .arq-arquivo { flex-wrap: wrap; }
+  .arq-acoes { width: 100%; }
+  .arq-acoes button { width: 100%; }
+  .arq-pdf { height: 70vh; }
+}

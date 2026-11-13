@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.13f";
+const APP_VERSION = "2026.11.13g";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -13516,6 +13516,253 @@ document.getElementById("aba-doc-notas").addEventListener("click", () => {
   requestAnimationFrame(() => ajustarAlturaAuto(nfCampos.servico));
 });
 nfAtualizarPrevia();
+
+// ----- Arquivos por cliente (etapa 3, 13/11/2026) -----
+//
+// Terceira aba de Documentos: a lista de todos os clientes (só o nome); tocar num cliente abre as pastas dele
+// (NFS-e, Orçamentos, Recibos, Comunicados, Laudos, Serviços e Relatório técnico, os dois últimos ainda a
+// definir); tocar numa pasta lista os arquivos, do mais recente para o mais antigo; "Visualizar" abre o PDF
+// por cima da tela. Dados do fluxo "App - Arquivos" (ações "resumo" e "cliente"); a busca por palavras e os
+// filtros de período, ordem e valor entram na etapa 4. Só aparece para quem tem acesso total.
+
+const arqTela = document.getElementById("arq-tela");
+const arqModal = document.getElementById("arq-modal");
+const ARQ_PASTAS = [
+  { id: "nfs", nome: "NFS-e", cls: "arq-c-nfs", ic: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>' },
+  { id: "orcamento", nome: "Orçamentos", cls: "arq-c-orc", ic: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h4"/>' },
+  { id: "recibo", nome: "Recibos", cls: "arq-c-rec", ic: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>' },
+  { id: "comunicado", nome: "Comunicados", cls: "arq-c-com", ic: '<path d="M4 10v4h3l6 4V6L7 10z"/><path d="M16 9a4 4 0 0 1 0 6"/>' },
+  { id: "laudo", nome: "Laudos", cls: "arq-c-lau", ic: '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>' },
+  { id: "servico", nome: "Serviços", cls: "arq-c-ser", breve: true, ic: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L4 16.8V20h3.2l5.3-5.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>' },
+  { id: "relatorio_tecnico", nome: "Relatório técnico", cls: "arq-c-rel", breve: true, ic: '<path d="M4 20V5"/><path d="M4 20h16"/><path d="M8 16v-5M12 16V8M16 16v-3"/>' },
+];
+const arq = { view: "lista", cliente: null, pasta: null, busca: "", resumo: null, itens: [], carregando: false, erro: "" };
+const arqPasta = (id) => ARQ_PASTAS.find((p) => p.id === id);
+const arqIcone = (p) => `<svg viewBox="0 0 24 24" aria-hidden="true">${p.ic}</svg>`;
+const arqNomeDoCliente = (c) => String(c.nomeFantasia || c.razaoSocial || "Cliente sem nome").trim();
+const arqPlural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+
+async function arqCarregarResumo() {
+  arq.erro = "";
+  try {
+    const r = await pedirAoN8n("arquivos", { acao: "resumo" });
+    if (r && r.ok) arq.resumo = r.clientes || {};
+    else arq.erro = (r && r.mensagem) || "Não consegui carregar os arquivos.";
+  } catch (err) {
+    arq.erro = "Não consegui falar com o servidor. O n8n está ligado?";
+  }
+}
+
+async function arqAbrirAba() {
+  arq.view = "lista";
+  arq.carregando = true;
+  arqDesenhar();
+  await garantirCadastrosCarregados();
+  await arqCarregarResumo();
+  arq.carregando = false;
+  arqDesenhar();
+}
+
+async function arqAbrirCliente(id) {
+  arq.cliente = cadastros.find((c) => c.id === id) || null;
+  if (!arq.cliente) return;
+  arq.view = "cliente";
+  arq.itens = [];
+  arq.carregando = true;
+  arq.erro = "";
+  arqDesenhar();
+  try {
+    const r = await pedirAoN8n("arquivos", { acao: "cliente", clienteId: id });
+    if (r && r.ok) arq.itens = r.itens || [];
+    else arq.erro = (r && r.mensagem) || "Não consegui carregar os arquivos deste cliente.";
+  } catch (err) {
+    arq.erro = "Não consegui falar com o servidor. O n8n está ligado?";
+  }
+  arq.carregando = false;
+  arqDesenhar();
+}
+
+function arqMigalhas(itens) {
+  return `<div class="arq-migalhas">${itens.map((i, k) => (i.acao
+    ? `<button type="button" data-arq="${i.acao}">${escapeHtml(i.texto)}</button>`
+    : `<span>${escapeHtml(i.texto)}</span>`) + (k < itens.length - 1 ? '<span class="arq-sep">›</span>' : "")).join("")}</div>`;
+}
+
+function arqLinha(it) {
+  const p = arqPasta(it.pasta) || ARQ_PASTAS[0];
+  const meta = [nfData(it.data), it.emissor].filter(Boolean).join(" · ");
+  return `<div class="arq-arquivo"><div class="arq-ic ${p.cls}">${arqIcone(p)}</div>
+    <div class="arq-texto"><div class="arq-titulo">${escapeHtml(it.titulo)}</div><div class="arq-meta">${escapeHtml(meta)}</div>
+    ${it.descricao ? `<div class="arq-desc">${escapeHtml(it.descricao)}</div>` : ""}</div>
+    ${it.valor != null ? `<div class="arq-valor">${escapeHtml(nfReais(it.valor))}</div>` : ""}
+    <div class="arq-acoes"><button type="button" data-arq-ver="${escapeHtml(it.id)}">Visualizar</button></div></div>`;
+}
+
+function arqDesenhar() {
+  if (arq.carregando && arq.view === "lista") {
+    arqTela.innerHTML = '<p class="placeholder-text">Carregando...</p>';
+    return;
+  }
+  if (arq.view === "lista") return arqDesenharLista();
+  if (arq.view === "cliente") return arqDesenharCliente();
+  return arqDesenharPasta();
+}
+
+function arqDesenharLista() {
+  const termo = normalizarTexto(arq.busca);
+  const clientes = cadastros.map((c) => ({ id: c.id, nome: arqNomeDoCliente(c) }))
+    .filter((c) => normalizarTexto(c.nome).includes(termo))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt"));
+  let html = `<div class="arq-busca"><input type="text" id="arq-busca" placeholder="Buscar cliente pelo nome" autocomplete="off" value="${escapeHtml(arq.busca)}" /></div>
+    <div class="arq-conta">${arqPlural(clientes.length, "cliente", "clientes")}</div>`;
+  if (arq.erro) html += `<p class="status show error">${escapeHtml(arq.erro)}</p>`;
+  if (!clientes.length) html += `<div class="arq-vazio">${cadastros.length ? "Nenhum cliente com esse nome." : "Nenhum cliente cadastrado ainda."}</div>`;
+  let letra = "";
+  clientes.forEach((c) => {
+    const inicial = (normalizarTexto(c.nome)[0] || "#").toUpperCase();
+    if (inicial !== letra) { letra = inicial; html += `<div class="arq-letra">${escapeHtml(inicial)}</div>`; }
+    const n = arq.resumo && arq.resumo[c.id] ? arq.resumo[c.id].total : 0;
+    html += `<button type="button" class="arq-cliente" data-arq-cli="${escapeHtml(c.id)}"><span class="arq-av">${escapeHtml((c.nome[0] || "?").toUpperCase())}</span>
+      <span class="arq-nome">${escapeHtml(c.nome)}</span><span class="arq-qt">${n ? arqPlural(n, "arquivo", "arquivos") : ""}</span><span class="arq-seta">›</span></button>`;
+  });
+  arqTela.innerHTML = html;
+  const campo = document.getElementById("arq-busca");
+  campo.addEventListener("input", () => {
+    arq.busca = campo.value;
+    const pos = campo.selectionStart;
+    arqDesenharLista();
+    const novo = document.getElementById("arq-busca");
+    novo.focus();
+    novo.setSelectionRange(pos, pos);
+  });
+  arqTela.querySelectorAll("[data-arq-cli]").forEach((b) => b.addEventListener("click", () => arqAbrirCliente(b.dataset.arqCli)));
+}
+
+function arqDesenharCliente() {
+  const nome = arqNomeDoCliente(arq.cliente);
+  let html = arqMigalhas([{ texto: "Arquivos", acao: "lista" }, { texto: nome }])
+    + `<div class="arq-cab"><span class="arq-av grande">${escapeHtml((nome[0] || "?").toUpperCase())}</span><div><h2>${escapeHtml(nome)}</h2>
+       <small>${arq.carregando ? "Carregando..." : arqPlural(arq.itens.length, "arquivo guardado", "arquivos guardados")}</small></div></div>`;
+  if (arq.erro) html += `<p class="status show error">${escapeHtml(arq.erro)}</p>`;
+  html += '<div class="arq-pastas">' + ARQ_PASTAS.map((p) => {
+    if (p.breve) {
+      return `<button type="button" class="arq-pasta breve" data-arq-pasta="${p.id}"><div class="arq-ic ${p.cls}">${arqIcone(p)}</div><h3>${p.nome}</h3>
+        <div><span class="arq-etiqueta">Em elaboração</span></div><div class="arq-ult">Ainda vamos definir como será</div></button>`;
+    }
+    const doTipo = arq.itens.filter((i) => i.pasta === p.id);
+    return `<button type="button" class="arq-pasta" data-arq-pasta="${p.id}"><div class="arq-ic ${p.cls}">${arqIcone(p)}</div><h3>${p.nome}</h3>
+      <div class="arq-n">${arq.carregando ? "…" : doTipo.length} <small>${doTipo.length === 1 ? "arquivo" : "arquivos"}</small></div>
+      <div class="arq-ult">${doTipo.length ? "Último: " + nfData(doTipo[0].data) : "Vazia"}</div></button>`;
+  }).join("") + "</div>";
+  arqTela.innerHTML = html;
+  arqLigarCliques();
+  arqTela.querySelectorAll("[data-arq-pasta]").forEach((b) => b.addEventListener("click", () => {
+    arq.pasta = b.dataset.arqPasta;
+    arq.view = "pasta";
+    arqDesenhar();
+  }));
+}
+
+function arqDesenharPasta() {
+  const p = arqPasta(arq.pasta);
+  const nome = arqNomeDoCliente(arq.cliente);
+  const itens = arq.itens.filter((i) => i.pasta === p.id);
+  let html = arqMigalhas([{ texto: "Arquivos", acao: "lista" }, { texto: nome, acao: "cliente" }, { texto: p.nome }])
+    + `<div class="arq-cab"><span class="arq-ic ${p.cls}">${arqIcone(p)}</span><div><h2>${p.nome}</h2><small>${escapeHtml(nome)} · ${arqPlural(itens.length, "arquivo", "arquivos")}</small></div></div>`;
+  if (p.breve) {
+    html += `<div class="arq-vazio">Esta pasta ainda está em elaboração.<br>Quando definirmos como ${p.nome.toLowerCase()} será feito, ele passa a ser guardado aqui.</div>`;
+  } else if (!itens.length) {
+    html += `<div class="arq-vazio">${p.id === "nfs" ? "Nenhuma nota emitida pelo sistema para este cliente ainda." : "Nada guardado nesta pasta ainda. Os PDFs gerados na aba PDFs, com este cliente escolhido na busca, aparecem aqui."}</div>`;
+  } else {
+    html += itens.map(arqLinha).join("");
+  }
+  arqTela.innerHTML = html;
+  arqLigarCliques();
+  arqTela.querySelectorAll("[data-arq-ver]").forEach((b) => b.addEventListener("click", () => arqVisualizar(b.dataset.arqVer)));
+}
+
+function arqLigarCliques() {
+  arqTela.querySelectorAll("[data-arq]").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.arq === "lista") { arq.view = "lista"; arq.erro = ""; arqCarregarResumo().then(arqDesenhar); arqDesenhar(); }
+    if (b.dataset.arq === "cliente") { arq.view = "cliente"; arqDesenhar(); }
+  }));
+}
+
+// ---- visualizar ----
+
+// O n8n manda "Content-Security-Policy: sandbox" nas respostas dos webhooks, e o visualizador de PDF do
+// navegador não abre PDF assim (fica em branco). Por isso o PDF é buscado aqui e mostrado por um endereço
+// local temporário (blob:), que o navegador abre normalmente. Vale também para "Abrir em outra aba".
+let arqBlobUrl = "";
+
+function arqFecharModal() {
+  arqModal.classList.add("hidden");
+  arqModal.innerHTML = "";
+  arqModal.dataset.item = "";
+  if (arqBlobUrl) { URL.revokeObjectURL(arqBlobUrl); arqBlobUrl = ""; }
+}
+
+async function arqCarregarPdf(it, areaDoPdf, link) {
+  try {
+    // "no-store": uma carga anterior desse endereço (sem os cabeçalhos de acesso) ficaria no cache e quebraria a leitura.
+    const resposta = await fetch(it.arquivo.url, { cache: "no-store" });
+    if (!resposta.ok) throw new Error("HTTP " + resposta.status);
+    const url = URL.createObjectURL(new Blob([await resposta.arrayBuffer()], { type: "application/pdf" }));
+    if (arqModal.dataset.item !== it.id) { URL.revokeObjectURL(url); return; } // fechou ou trocou enquanto carregava
+    arqBlobUrl = url;
+    link.href = url;
+    areaDoPdf.innerHTML = `<iframe class="arq-pdf" src="${url}" title="${escapeHtml(it.titulo)}"></iframe>`;
+  } catch (err) {
+    if (arqModal.dataset.item === it.id) areaDoPdf.innerHTML = '<div class="arq-vazio">Não consegui abrir o PDF aqui. Tente "Abrir em outra aba".</div>';
+  }
+}
+
+function arqVisualizar(id) {
+  const it = arq.itens.find((i) => i.id === id);
+  if (!it) return;
+  const titulo = `${it.titulo} · ${arqNomeDoCliente(arq.cliente)}`;
+  let corpo;
+  if (it.pasta === "nfs") {
+    const n = it.nota || {};
+    corpo = `<div class="arq-nota"><div class="arq-nota-linha"><span>Cliente</span><strong>${escapeHtml(n.tomador || "—")}</strong></div>
+      <div class="arq-nota-linha"><span>CPF/CNPJ</span><strong>${escapeHtml(formatarDocumento(n.documento || "") || "—")}</strong></div>
+      <div class="arq-nota-linha"><span>Obra</span><strong>${escapeHtml(n.obra || "—")}</strong></div>
+      <div class="arq-nota-linha"><span>Competência</span><strong>${escapeHtml(nfData(it.data) || "—")}</strong></div>
+      <div class="arq-nota-linha"><span>Valor</span><strong>${escapeHtml(nfReais(it.valor))}</strong></div>
+      <div class="arq-nota-linha"><span>Emitida por</span><strong>${escapeHtml(it.emissor)}</strong></div>
+      <div class="arq-nota-linha"><span>Descrição</span><strong class="arq-nota-desc">${escapeHtml(it.descricao || "—")}</strong></div>
+      <div class="arq-nota-linha"><span>Chave de acesso</span><strong class="arq-chave">${escapeHtml(n.chave || "—")}</strong></div></div>`;
+  } else if (it.arquivo) {
+    corpo = '<div class="arq-vazio">Carregando o PDF...</div>';
+  } else {
+    corpo = '<div class="arq-vazio">Este registro não tem arquivo.</div>';
+  }
+  arqModal.innerHTML = `<div class="arq-caixa"><header><div class="arq-tt">${escapeHtml(titulo)}</div><div class="arq-botoes"></div></header><div class="arq-corpo">${corpo}</div></div>`;
+  const botoes = arqModal.querySelector(".arq-botoes");
+  let linkPdf = null;
+  const botao = (txt, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.textContent = txt; if (cls) b.className = cls; b.addEventListener("click", fn); botoes.append(b); };
+  if (it.pasta === "nfs") {
+    const n = it.nota || {};
+    if (n.chave) botao("Copiar chave", "", () => copiarTexto(n.chave, "Chave copiada."));
+    if (n.chave && n.ambiente !== "Testes") {
+      const a = document.createElement("a");
+      a.href = nfPortal(n.chave); a.target = "_blank"; a.rel = "noopener"; a.className = "botao-link"; a.textContent = "Abrir no portal (PDF)";
+      botoes.append(a);
+    }
+  } else if (it.arquivo) {
+    linkPdf = document.createElement("a");
+    linkPdf.href = it.arquivo.url; linkPdf.target = "_blank"; linkPdf.rel = "noopener"; linkPdf.className = "botao-link"; linkPdf.textContent = "Abrir em outra aba";
+    botoes.append(linkPdf);
+  }
+  botao("Fechar", "botao-secundario", arqFecharModal);
+  arqModal.dataset.item = it.id;
+  arqModal.classList.remove("hidden");
+  if (linkPdf) arqCarregarPdf(it, arqModal.querySelector(".arq-corpo"), linkPdf);
+}
+
+arqModal.addEventListener("click", (e) => { if (e.target === arqModal) arqFecharModal(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !arqModal.classList.contains("hidden")) arqFecharModal(); });
+document.getElementById("aba-doc-arquivos").addEventListener("click", arqAbrirAba);
 
 // ----- Aviso de e-mail e telefone com jeito de errado -----
 

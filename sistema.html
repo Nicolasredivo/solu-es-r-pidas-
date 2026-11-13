@@ -1942,6 +1942,7 @@
         <div class="subtabs" id="abas-doc">
           <button type="button" class="subtab-doc active" data-subdoc="pdfs">PDFs</button>
           <button type="button" class="subtab-doc" data-subdoc="notas" id="aba-doc-notas">Notas fiscais</button>
+          <button type="button" class="subtab-doc" data-subdoc="arquivos" id="aba-doc-arquivos">Arquivos</button>
         </div>
 
         <div id="subdoc-pdfs" class="subpage-doc">
@@ -2107,6 +2108,12 @@
         <p id="nf-lista-status" class="placeholder-text"></p>
         <ul id="nf-lista" class="nf-lista"></ul>
       </div>
+
+        <!-- Arquivos por cliente (13/11/2026): lista de clientes, pastas de cada um e visualizar. -->
+        <div id="subdoc-arquivos" class="subpage-doc hidden">
+          <div id="arq-tela"></div>
+        </div>
+        <div id="arq-modal" class="arq-modal hidden" role="dialog" aria-modal="true"></div>
       </div>
 
             <!-- Veículo (08/11/2026): o PDF do documento do carro (CRLV) e os dados dele.
