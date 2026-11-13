@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.13g";
+const APP_VERSION = "2026.11.13h";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -13527,6 +13527,11 @@ nfAtualizarPrevia();
 
 const arqTela = document.getElementById("arq-tela");
 const arqModal = document.getElementById("arq-modal");
+document.getElementById("veiculo-doc-link").addEventListener("click", (e) => {
+  e.preventDefault();
+  const href = e.currentTarget.getAttribute("href");
+  if (href && href !== "#") abrirPdfEmNovaAba(href);
+});
 const ARQ_PASTAS = [
   { id: "nfs", nome: "NFS-e", cls: "arq-c-nfs", ic: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>' },
   { id: "orcamento", nome: "Orçamentos", cls: "arq-c-orc", ic: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h4"/>' },
@@ -13536,7 +13541,8 @@ const ARQ_PASTAS = [
   { id: "servico", nome: "Serviços", cls: "arq-c-ser", breve: true, ic: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L4 16.8V20h3.2l5.3-5.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>' },
   { id: "relatorio_tecnico", nome: "Relatório técnico", cls: "arq-c-rel", breve: true, ic: '<path d="M4 20V5"/><path d="M4 20h16"/><path d="M8 16v-5M12 16V8M16 16v-3"/>' },
 ];
-const arq = { view: "lista", cliente: null, pasta: null, busca: "", resumo: null, itens: [], carregando: false, erro: "" };
+const arq = { view: "lista", cliente: null, pasta: null, busca: "", resumo: null, itens: [], carregando: false, erro: "", qCliente: "", f: null };
+const arqFiltrosLimpos = () => ({ q: "", per: "tudo", de: "", ate: "", ord: "novo", em: "", vmin: "", vmax: "", mais: false });
 const arqPasta = (id) => ARQ_PASTAS.find((p) => p.id === id);
 const arqIcone = (p) => `<svg viewBox="0 0 24 24" aria-hidden="true">${p.ic}</svg>`;
 const arqNomeDoCliente = (c) => String(c.nomeFantasia || c.razaoSocial || "Cliente sem nome").trim();
@@ -13568,6 +13574,8 @@ async function arqAbrirCliente(id) {
   if (!arq.cliente) return;
   arq.view = "cliente";
   arq.itens = [];
+  arq.qCliente = "";
+  arq.f = arqFiltrosLimpos();
   arq.carregando = true;
   arq.erro = "";
   arqDesenhar();
@@ -13586,16 +13594,6 @@ function arqMigalhas(itens) {
   return `<div class="arq-migalhas">${itens.map((i, k) => (i.acao
     ? `<button type="button" data-arq="${i.acao}">${escapeHtml(i.texto)}</button>`
     : `<span>${escapeHtml(i.texto)}</span>`) + (k < itens.length - 1 ? '<span class="arq-sep">›</span>' : "")).join("")}</div>`;
-}
-
-function arqLinha(it) {
-  const p = arqPasta(it.pasta) || ARQ_PASTAS[0];
-  const meta = [nfData(it.data), it.emissor].filter(Boolean).join(" · ");
-  return `<div class="arq-arquivo"><div class="arq-ic ${p.cls}">${arqIcone(p)}</div>
-    <div class="arq-texto"><div class="arq-titulo">${escapeHtml(it.titulo)}</div><div class="arq-meta">${escapeHtml(meta)}</div>
-    ${it.descricao ? `<div class="arq-desc">${escapeHtml(it.descricao)}</div>` : ""}</div>
-    ${it.valor != null ? `<div class="arq-valor">${escapeHtml(nfReais(it.valor))}</div>` : ""}
-    <div class="arq-acoes"><button type="button" data-arq-ver="${escapeHtml(it.id)}">Visualizar</button></div></div>`;
 }
 
 function arqDesenhar() {
@@ -13638,46 +13636,177 @@ function arqDesenharLista() {
   arqTela.querySelectorAll("[data-arq-cli]").forEach((b) => b.addEventListener("click", () => arqAbrirCliente(b.dataset.arqCli)));
 }
 
+// ---- busca e filtros (etapa 4) ----
+
+const arqTermos = (q) => normalizarTexto(q).split(/\s+/).filter(Boolean);
+
+// Palavras digitadas em destaque (sem diferenciar maiúscula; o acento precisa bater na parte destacada).
+function arqMarcar(texto, termos) {
+  let html = escapeHtml(texto);
+  (termos || []).forEach((t) => {
+    if (!t) return;
+    html = html.replace(new RegExp("(" + escapeHtml(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "ig"), "<mark>$1</mark>");
+  });
+  return html;
+}
+
+function arqIntervalo(per) {
+  const hoje = hojeParaCampoData();
+  const dia = (n) => { const d = new Date(`${hoje}T12:00:00`); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
+  const [a, m] = hoje.split("-").map(Number);
+  const mesPassado = new Date(a, m - 2, 1);
+  const ym = `${mesPassado.getFullYear()}-${String(mesPassado.getMonth() + 1).padStart(2, "0")}`;
+  return {
+    hoje: [hoje, hoje], "7": [dia(7), hoje], mes: [hoje.slice(0, 7) + "-01", hoje],
+    ant: [ym + "-01", ym + "-31"], ano: [hoje.slice(0, 4) + "-01-01", hoje],
+  }[per];
+}
+
+function arqFiltrar(lista, f) {
+  const termos = arqTermos(f.q);
+  let de = f.de, ate = f.ate;
+  if (f.per !== "tudo" && f.per !== "custom") [de, ate] = arqIntervalo(f.per);
+  const resultado = lista.filter((it) => {
+    const alvo = normalizarTexto(`${it.titulo} ${it.descricao} ${it.emissor} ${nfData(it.data)} ${it.texto || ""}`);
+    if (!termos.every((t) => alvo.includes(t))) return false;
+    if (de && String(it.data) < de) return false;
+    if (ate && String(it.data) > ate) return false;
+    if (f.em && it.emissor !== f.em) return false;
+    if (f.vmin !== "" && (it.valor == null || it.valor < Number(f.vmin))) return false;
+    if (f.vmax !== "" && (it.valor == null || it.valor > Number(f.vmax))) return false;
+    return true;
+  });
+  resultado.sort((a, b) => (f.ord === "velho" ? String(a.data).localeCompare(String(b.data)) : String(b.data).localeCompare(String(a.data))));
+  return resultado;
+}
+
+// Redesenha mantendo o cursor no campo de busca (a tela é refeita a cada letra).
+function arqRedesenharMantendoFoco(idCampo, desenhar) {
+  const antes = document.getElementById(idCampo);
+  let pos = null;
+  try { pos = antes ? antes.selectionStart : null; } catch (err) { pos = null; } // campo numérico não tem posição de cursor
+  desenhar();
+  const depois = document.getElementById(idCampo);
+  if (!depois) return;
+  depois.focus();
+  if (pos !== null) { try { depois.setSelectionRange(pos, pos); } catch (err) { /* campo sem cursor */ } }
+}
+
+function arqLinha(it, termos, mostrarPasta) {
+  const p = arqPasta(it.pasta) || ARQ_PASTAS[0];
+  const meta = [nfData(it.data), it.emissor].filter(Boolean).join(" · ");
+  return `<div class="arq-arquivo"><div class="arq-ic ${p.cls}">${arqIcone(p)}</div>
+    <div class="arq-texto"><div class="arq-titulo">${arqMarcar(it.titulo, termos)}${mostrarPasta ? `<span class="arq-pasta-tag">${p.nome}</span>` : ""}</div><div class="arq-meta">${escapeHtml(meta)}</div>
+    ${it.descricao ? `<div class="arq-desc">${arqMarcar(it.descricao, termos)}</div>` : ""}</div>
+    ${it.valor != null ? `<div class="arq-valor">${escapeHtml(nfReais(it.valor))}</div>` : ""}
+    <div class="arq-acoes"><button type="button" data-arq-ver="${escapeHtml(it.id)}">Visualizar</button></div></div>`;
+}
+
 function arqDesenharCliente() {
   const nome = arqNomeDoCliente(arq.cliente);
+  const busca = arq.qCliente.trim();
   let html = arqMigalhas([{ texto: "Arquivos", acao: "lista" }, { texto: nome }])
     + `<div class="arq-cab"><span class="arq-av grande">${escapeHtml((nome[0] || "?").toUpperCase())}</span><div><h2>${escapeHtml(nome)}</h2>
-       <small>${arq.carregando ? "Carregando..." : arqPlural(arq.itens.length, "arquivo guardado", "arquivos guardados")}</small></div></div>`;
+       <small>${arq.carregando ? "Carregando..." : arqPlural(arq.itens.length, "arquivo guardado", "arquivos guardados")}</small></div></div>
+    <div class="arq-busca"><input type="text" id="arq-busca-cliente" autocomplete="off" placeholder="Buscar em todas as pastas deste cliente (ex.: caixa d'água, boia, 2026)" value="${escapeHtml(arq.qCliente)}" /></div>`;
   if (arq.erro) html += `<p class="status show error">${escapeHtml(arq.erro)}</p>`;
-  html += '<div class="arq-pastas">' + ARQ_PASTAS.map((p) => {
-    if (p.breve) {
-      return `<button type="button" class="arq-pasta breve" data-arq-pasta="${p.id}"><div class="arq-ic ${p.cls}">${arqIcone(p)}</div><h3>${p.nome}</h3>
-        <div><span class="arq-etiqueta">Em elaboração</span></div><div class="arq-ult">Ainda vamos definir como será</div></button>`;
-    }
-    const doTipo = arq.itens.filter((i) => i.pasta === p.id);
-    return `<button type="button" class="arq-pasta" data-arq-pasta="${p.id}"><div class="arq-ic ${p.cls}">${arqIcone(p)}</div><h3>${p.nome}</h3>
-      <div class="arq-n">${arq.carregando ? "…" : doTipo.length} <small>${doTipo.length === 1 ? "arquivo" : "arquivos"}</small></div>
-      <div class="arq-ult">${doTipo.length ? "Último: " + nfData(doTipo[0].data) : "Vazia"}</div></button>`;
-  }).join("") + "</div>";
+  if (busca) {
+    const termos = arqTermos(busca);
+    const achados = arqFiltrar(arq.itens, { ...arqFiltrosLimpos(), q: busca });
+    html += `<div class="arq-conta">${arqPlural(achados.length, "resultado", "resultados")} em todas as pastas</div>`
+      + (achados.length ? achados.map((it) => arqLinha(it, termos, true)).join("") : '<div class="arq-vazio">Nada encontrado com essas palavras.</div>');
+  } else {
+    html += '<div class="arq-pastas">' + ARQ_PASTAS.map((p) => {
+      if (p.breve) {
+        return `<button type="button" class="arq-pasta breve" data-arq-pasta="${p.id}"><div class="arq-ic ${p.cls}">${arqIcone(p)}</div><h3>${p.nome}</h3>
+          <div><span class="arq-etiqueta">Em elaboração</span></div><div class="arq-ult">Ainda vamos definir como será</div></button>`;
+      }
+      const doTipo = arqFiltrar(arq.itens.filter((i) => i.pasta === p.id), arqFiltrosLimpos());
+      return `<button type="button" class="arq-pasta" data-arq-pasta="${p.id}"><div class="arq-ic ${p.cls}">${arqIcone(p)}</div><h3>${p.nome}</h3>
+        <div class="arq-n">${arq.carregando ? "…" : doTipo.length} <small>${doTipo.length === 1 ? "arquivo" : "arquivos"}</small></div>
+        <div class="arq-ult">${doTipo.length ? "Último: " + nfData(doTipo[0].data) : "Vazia"}</div></button>`;
+    }).join("") + "</div>";
+  }
   arqTela.innerHTML = html;
   arqLigarCliques();
+  const campo = document.getElementById("arq-busca-cliente");
+  campo.addEventListener("input", () => { arq.qCliente = campo.value; arqRedesenharMantendoFoco("arq-busca-cliente", arqDesenharCliente); });
   arqTela.querySelectorAll("[data-arq-pasta]").forEach((b) => b.addEventListener("click", () => {
     arq.pasta = b.dataset.arqPasta;
+    arq.f = arqFiltrosLimpos();
     arq.view = "pasta";
     arqDesenhar();
   }));
+  arqTela.querySelectorAll("[data-arq-ver]").forEach((b) => b.addEventListener("click", () => arqVisualizar(b.dataset.arqVer)));
 }
+
+const ARQ_PERIODOS = [["tudo", "Todo o período"], ["hoje", "Hoje"], ["7", "Últimos 7 dias"], ["mes", "Este mês"], ["ant", "Mês passado"], ["ano", "Este ano"], ["custom", "Escolher datas…"]];
 
 function arqDesenharPasta() {
   const p = arqPasta(arq.pasta);
   const nome = arqNomeDoCliente(arq.cliente);
-  const itens = arq.itens.filter((i) => i.pasta === p.id);
+  const base = arq.itens.filter((i) => i.pasta === p.id);
+  const f = arq.f;
+  const termos = arqTermos(f.q);
+  const itens = p.breve ? [] : arqFiltrar(base, f);
   let html = arqMigalhas([{ texto: "Arquivos", acao: "lista" }, { texto: nome, acao: "cliente" }, { texto: p.nome }])
-    + `<div class="arq-cab"><span class="arq-ic ${p.cls}">${arqIcone(p)}</span><div><h2>${p.nome}</h2><small>${escapeHtml(nome)} · ${arqPlural(itens.length, "arquivo", "arquivos")}</small></div></div>`;
+    + `<div class="arq-cab"><span class="arq-ic ${p.cls}">${arqIcone(p)}</span><div><h2>${p.nome}</h2><small>${escapeHtml(nome)} · ${arqPlural(base.length, "arquivo", "arquivos")}</small></div></div>`;
   if (p.breve) {
-    html += `<div class="arq-vazio">Esta pasta ainda está em elaboração.<br>Quando definirmos como ${p.nome.toLowerCase()} será feito, ele passa a ser guardado aqui.</div>`;
-  } else if (!itens.length) {
-    html += `<div class="arq-vazio">${p.id === "nfs" ? "Nenhuma nota emitida pelo sistema para este cliente ainda." : "Nada guardado nesta pasta ainda. Os PDFs gerados na aba PDFs, com este cliente escolhido na busca, aparecem aqui."}</div>`;
+    html += `<div class="arq-vazio">Esta pasta ainda está em elaboração.<br>Quando definirmos como ${p.nome.toLowerCase()} será feito, ele passa a ser guardado aqui, com a mesma busca e os mesmos filtros das outras pastas.</div>`;
+    arqTela.innerHTML = html;
+    arqLigarCliques();
+    return;
+  }
+  const temValor = base.some((i) => i.valor != null);
+  const op = (lista, atual) => lista.map(([v, t]) => `<option value="${v}"${v === atual ? " selected" : ""}>${t}</option>`).join("");
+  const chips = [];
+  if (f.q.trim()) chips.push(["q", `“${f.q.trim()}”`]);
+  if (f.per !== "tudo") chips.push(["per", f.per === "custom" ? `De ${nfData(f.de) || "…"} até ${nfData(f.ate) || "…"}` : ARQ_PERIODOS.find(([v]) => v === f.per)[1]]);
+  if (f.em) chips.push(["em", f.em]);
+  if (f.vmin !== "" || f.vmax !== "") chips.push(["v", `Valor ${f.vmin !== "" ? "de " + nfReais(Number(f.vmin)) : ""} ${f.vmax !== "" ? "até " + nfReais(Number(f.vmax)) : ""}`.replace(/\s+/g, " ").trim()]);
+  html += `<div class="arq-busca"><input type="text" id="arq-busca-pasta" autocomplete="off" placeholder="Buscar nesta pasta por palavras (título, serviço, data)" value="${escapeHtml(f.q)}" /></div>
+    <div class="arq-filtros">
+      <div><label for="arq-f-per">Período</label><select id="arq-f-per">${op(ARQ_PERIODOS, f.per)}</select></div>
+      <div><label for="arq-f-ord">Ordem</label><select id="arq-f-ord">${op([["novo", "Mais recente primeiro"], ["velho", "Mais antigo primeiro"]], f.ord)}</select></div>
+      ${f.per === "custom" ? `<div><label for="arq-f-de">De</label><input type="date" id="arq-f-de" value="${f.de}" /></div><div><label for="arq-f-ate">Até</label><input type="date" id="arq-f-ate" value="${f.ate}" /></div>` : ""}
+    </div>
+    <button type="button" class="arq-mais" id="arq-f-mais">${f.mais ? "− Menos filtros" : "+ Mais filtros"}</button>
+    ${f.mais ? `<div class="arq-filtros"><div><label for="arq-f-em">Emitido por</label><select id="arq-f-em">${op([["", "Os dois"], ["CNPJ 1", "CNPJ 1"], ["CNPJ 2", "CNPJ 2"]], f.em)}</select></div>
+      ${temValor ? `<div><label for="arq-f-vmin">Valor mínimo (R$)</label><input type="number" id="arq-f-vmin" inputmode="decimal" value="${f.vmin}" /></div>
+      <div><label for="arq-f-vmax">Valor máximo (R$)</label><input type="number" id="arq-f-vmax" inputmode="decimal" value="${f.vmax}" /></div>` : ""}</div>` : ""}
+    ${chips.length ? `<div class="arq-chips">${chips.map(([k, t]) => `<span class="arq-chip">${escapeHtml(t)} <b data-arq-x="${k}" role="button" aria-label="Tirar este filtro">×</b></span>`).join("")}<button type="button" class="arq-limpar" id="arq-f-limpar">limpar filtros</button></div>` : ""}`;
+  const soma = itens.reduce((s, i) => s + (i.valor || 0), 0);
+  html += `<div class="arq-conta">${itens.length} de ${arqPlural(base.length, "arquivo", "arquivos")}${itens.some((i) => i.valor != null) ? " · soma " + escapeHtml(nfReais(soma)) : ""}</div>`;
+  if (!itens.length) {
+    html += `<div class="arq-vazio">${base.length ? 'Nenhum arquivo com esses filtros.<br><button type="button" class="arq-limpar" id="arq-f-limpar2">Limpar filtros</button>'
+      : (p.id === "nfs" ? "Nenhuma nota emitida pelo sistema para este cliente ainda." : "Nada guardado nesta pasta ainda. Os PDFs gerados na aba PDFs, com este cliente escolhido na busca, aparecem aqui.")}</div>`;
   } else {
-    html += itens.map(arqLinha).join("");
+    html += itens.map((it) => arqLinha(it, termos, false)).join("");
   }
   arqTela.innerHTML = html;
   arqLigarCliques();
+  const de = (id) => document.getElementById(id);
+  const refazer = () => arqDesenharPasta();
+  de("arq-busca-pasta").addEventListener("input", (e) => { f.q = e.target.value; arqRedesenharMantendoFoco("arq-busca-pasta", refazer); });
+  de("arq-f-per").addEventListener("change", (e) => { f.per = e.target.value; refazer(); });
+  de("arq-f-ord").addEventListener("change", (e) => { f.ord = e.target.value; refazer(); });
+  if (de("arq-f-de")) de("arq-f-de").addEventListener("change", (e) => { f.de = e.target.value; refazer(); });
+  if (de("arq-f-ate")) de("arq-f-ate").addEventListener("change", (e) => { f.ate = e.target.value; refazer(); });
+  de("arq-f-mais").addEventListener("click", () => { f.mais = !f.mais; refazer(); });
+  if (de("arq-f-em")) de("arq-f-em").addEventListener("change", (e) => { f.em = e.target.value; refazer(); });
+  if (de("arq-f-vmin")) de("arq-f-vmin").addEventListener("input", (e) => { f.vmin = e.target.value; arqRedesenharMantendoFoco("arq-f-vmin", refazer); });
+  if (de("arq-f-vmax")) de("arq-f-vmax").addEventListener("input", (e) => { f.vmax = e.target.value; arqRedesenharMantendoFoco("arq-f-vmax", refazer); });
+  const limpar = () => { Object.assign(f, { q: "", per: "tudo", de: "", ate: "", em: "", vmin: "", vmax: "" }); refazer(); };
+  if (de("arq-f-limpar")) de("arq-f-limpar").addEventListener("click", limpar);
+  if (de("arq-f-limpar2")) de("arq-f-limpar2").addEventListener("click", limpar);
+  arqTela.querySelectorAll("[data-arq-x]").forEach((b) => b.addEventListener("click", () => {
+    const k = b.dataset.arqX;
+    if (k === "q") f.q = "";
+    if (k === "per") { f.per = "tudo"; f.de = ""; f.ate = ""; }
+    if (k === "em") f.em = "";
+    if (k === "v") { f.vmin = ""; f.vmax = ""; }
+    refazer();
+  }));
   arqTela.querySelectorAll("[data-arq-ver]").forEach((b) => b.addEventListener("click", () => arqVisualizar(b.dataset.arqVer)));
 }
 
@@ -13694,6 +13823,23 @@ function arqLigarCliques() {
 // navegador não abre PDF assim (fica em branco). Por isso o PDF é buscado aqui e mostrado por um endereço
 // local temporário (blob:), que o navegador abre normalmente. Vale também para "Abrir em outra aba".
 let arqBlobUrl = "";
+
+// Abre um PDF do n8n numa aba nova pelo mesmo caminho (a janela é aberta já no toque, senão o bloqueador de
+// pop-up barra). Usado pelo documento do Veículo (13/11/2026).
+async function abrirPdfEmNovaAba(url) {
+  const janela = window.open("", "_blank");
+  if (!janela) { window.location.href = url; return; }
+  try {
+    const resposta = await fetch(url, { cache: "no-store" });
+    if (!resposta.ok) throw new Error("HTTP " + resposta.status);
+    const blobUrl = URL.createObjectURL(new Blob([await resposta.arrayBuffer()], { type: "application/pdf" }));
+    janela.location.href = blobUrl;
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 120000);
+  } catch (err) {
+    janela.close();
+    mostrarToast("Não consegui abrir o PDF agora.");
+  }
+}
 
 function arqFecharModal() {
   arqModal.classList.add("hidden");

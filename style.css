@@ -5884,3 +5884,14 @@ div.lembrete-item:hover {
   .arq-acoes button { width: 100%; }
   .arq-pdf { height: 70vh; }
 }
+
+/* Etapa 4: busca e filtros dentro das pastas */
+.arq-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; }
+.arq-filtros label { font-size: 0.75rem; color: var(--muted); display: block; margin: 0 0 4px 2px; }
+.arq-mais { width: auto; background: none; border: 0; color: var(--accent); cursor: pointer; padding: 4px 2px; margin-bottom: 6px; font-size: 0.9rem; }
+.arq-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.arq-chip { background: #222a55; color: #cdd6ff; border-radius: 99px; padding: 4px 10px; font-size: 0.78rem; display: flex; gap: 6px; align-items: center; }
+.arq-chip b { cursor: pointer; opacity: 0.7; font-weight: 700; }
+.arq-limpar { width: auto; background: none; border: 0; color: var(--muted); cursor: pointer; text-decoration: underline; font-size: 0.8rem; padding: 2px 4px; }
+.arq-pasta-tag { font-size: 0.7rem; padding: 2px 7px; border-radius: 99px; border: 1px solid #262b47; color: var(--muted); margin-left: 6px; font-weight: 400; }
+.arq mark, .arq-arquivo mark { background: rgba(245, 166, 35, 0.35); color: inherit; border-radius: 3px; padding: 0 1px; }

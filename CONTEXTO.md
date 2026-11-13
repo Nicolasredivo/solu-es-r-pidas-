@@ -5684,3 +5684,19 @@ com as pastas **NFS-e, Orçamentos, Recibos, Comunicados, Laudos, Serviços e Re
   PDF no visualizador, NFS-e, Esc fecha, celular de 375 px sem rolagem lateral.
 - **Falta:** etapa 4 (busca por palavras, período, ordem e valor dentro das pastas), 5 (importar documentos antigos);
   definir o que serão "Serviços" e "Relatório técnico".
+
+## Arquivos por cliente: etapa 4, busca e filtros (13/11/2026, versão 2026.11.13h)
+- **Página do cliente:** barra de busca que procura por palavras em TODAS as pastas (resultado mistura as pastas, cada
+  linha com a etiqueta da pasta e as palavras em destaque). Sem busca, as 7 pastas de sempre.
+- **Dentro da pasta:** busca por palavras (título, descrição, data, emissor e o texto digitado no documento; ignora
+  maiúscula e acento), **período** (todo, hoje, 7 dias, este mês, mês passado, este ano, ou de/até), **ordem** (mais
+  recente ou mais antigo primeiro), e em "Mais filtros" **emitido por** (CNPJ 1/2) e **valor** mínimo e máximo. Os
+  filtros ativos viram etiquetas que se tiram uma a uma; o topo mostra "N de M arquivos · soma R$ ...". Tudo é filtrado
+  no aparelho: o fluxo `cliente` devolve o `texto` de busca (até 4000 caracteres por arquivo; o `resumo` não devolve).
+- **Documento do Veículo:** o link abria o endereço do n8n direto e o `Content-Security-Policy: sandbox` que o n8n
+  coloca (e não dá para trocar: ele sobrescreve) deixava o PDF em branco. Agora `abrirPdfEmNovaAba` abre a aba no
+  toque, busca o PDF (`no-store`) e mostra por `blob:`.
+- **Erro corrigido no teste:** `setSelectionRange` em `<input type="number">` lança erro (virava a faixa "Algo deu
+  errado"); o cursor só é reposto em campo de texto.
+- **Testes:** `testar-arquivos.js` (46 ok) e, na tela com o n8n de verdade, busca em todas as pastas, por palavra, com
+  acento e maiúscula, período (de/até, este mês, este ano), ordem, emissor, faixa de valor, etiquetas e "limpar".
