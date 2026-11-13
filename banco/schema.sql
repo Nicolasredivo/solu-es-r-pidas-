@@ -439,12 +439,13 @@ create table "Geo_Enderecos" (
 -- guardado aqui, ligado ao cliente do cadastro, para ver e buscar depois. O PDF em si fica na pasta de
 -- anexos do PC (coluna "Arquivo"). "Texto_Busca" junta o que foi digitado, para a busca por palavras;
 -- "Hash_PDF" evita guardar duas vezes o mesmo PDF do mesmo cliente. NFS-e não entra aqui: já está em
--- "Notas_Fiscais". "servico" e "relatorio_tecnico" estão previstos e ainda serão definidos.
+-- "Notas_Fiscais" (as emitidas pelo sistema); "nfs" aqui é só o PDF de nota feita fora do sistema (importada).
+-- "servico" e "relatorio_tecnico" estão previstos e ainda serão definidos.
 create table "Arquivos_Cliente" (
   id text primary key default novo_id(),
   "Cliente_Ref" text references "Entidades_Cadastradas"(id) on delete set null,
   "Cliente_Nome" text,                -- nome como saiu no documento
-  "Tipo" text not null check ("Tipo" in ('orcamento','recibo','comunicado','laudo','servico','relatorio_tecnico')),
+  "Tipo" text not null check ("Tipo" in ('nfs','orcamento','recibo','comunicado','laudo','servico','relatorio_tecnico')),
   "Titulo" text not null,
   "Descricao" text,
   "Texto_Busca" text,

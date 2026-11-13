@@ -135,6 +135,25 @@ const hashDe = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
     confere('em produção a NFS-e de teste não aparece (só os arquivos)', resProd.ok === true && resProd.ambiente === 'Producao' && resProd.clientes[cliA.id].total === 4 && !resProd.clientes[cliA.id].pastas.nfs, resProd.clientes && resProd.clientes[cliA.id]);
     const lerProd = await appProd({ acao: 'cliente', clienteId: cliA.id });
     confere('em produção, cliente A só tem os 4 arquivos', lerProd.itens.length === 4 && lerProd.itens.every((i) => i.pasta !== 'nfs'), lerProd.itens.map((i) => i.pasta));
+
+    // ---- importar documento antigo (etapa 5): origem "importado" e PDF de nota feita fora do sistema ----
+    const cliC = await local('POST', `/v0/${CAD}/Entidades_Cadastradas`, { fields: { Razao_Social_Nome: 'TESTE ARQUIVOS CLIENTE C', Status: 'Ativo' } });
+    apagar.unshift(['Entidades_Cadastradas', cliC.id]);
+    const pdfI = pdfDe('nota antiga do portal');
+    const baseI = (extra) => base({ clienteId: cliC.id, clienteNome: 'Cliente C', tipo: 'nfs', titulo: 'Nota 123 (portal)', descricao: 'Instalação antiga', valor: '350,00', dataDocumento: '2025-03-10',
+      origem: 'importado', hash: hashDe(pdfI), arquivo: pdfI.toString('base64'), nomeArquivo: 'nota-123.pdf', dadosJson: '{"arquivoOriginal":"nota-123.pdf"}', ...extra });
+    const rOrigem = await app(baseI({ origem: 'inventada' }));
+    confere('importar: origem inventada é recusada', rOrigem.ok === false && /Origem/.test(rOrigem.mensagem) && (await doCliente(cliC.id)).length === 0, rOrigem);
+    const rI = await app(baseI());
+    const regI = rI.id ? await local('GET', `/v0/${CAD}/${T}/${rI.id}`) : { fields: {} }; guardarAnexos(regI);
+    confere('importar: PDF de nota antiga guardado na pasta NFS-e com origem importado', rI.ok === true && regI.fields.Tipo === 'nfs' && regI.fields.Origem === 'importado' && regI.fields.Data_Documento === '2025-03-10' && regI.fields.Valor === 350, regI.fields);
+    const rI2 = await app(baseI());
+    confere('importar: o mesmo PDF não entra duas vezes', rI2.ok === true && rI2.jaGuardado === true && (await doCliente(cliC.id)).length === 1, rI2);
+    const lerC = await app({ acao: 'cliente', clienteId: cliC.id });
+    const itemC = lerC.itens && lerC.itens[0];
+    confere('importar: aparece na pasta NFS-e como PDF (tem arquivo, sem dados de nota do sistema)', lerC.itens.length === 1 && itemC.pasta === 'nfs' && itemC.arquivo && !itemC.nota && /nota antiga|Nota 123/.test(itemC.titulo + itemC.texto), itemC);
+    const resC = await app({ acao: 'resumo' });
+    confere('importar: o resumo conta na pasta NFS-e', resC.clientes[cliC.id] && resC.clientes[cliC.id].pastas.nfs === 1, resC.clientes[cliC.id]);
   } finally {
     // apaga os registros de teste e os PDFs que eles deixaram na pasta de anexos
     for (const r of (await lista(CAD, T))) {

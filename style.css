@@ -5895,3 +5895,15 @@ div.lembrete-item:hover {
 .arq-limpar { width: auto; background: none; border: 0; color: var(--muted); cursor: pointer; text-decoration: underline; font-size: 0.8rem; padding: 2px 4px; }
 .arq-pasta-tag { font-size: 0.7rem; padding: 2px 7px; border-radius: 99px; border: 1px solid #262b47; color: var(--muted); margin-left: 6px; font-weight: 400; }
 .arq mark, .arq-arquivo mark { background: rgba(245, 166, 35, 0.35); color: inherit; border-radius: 3px; padding: 0 1px; }
+
+/* Etapa 5: importar arquivo antigo para a pasta */
+.arq-cab-linha { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.arq-cab-linha .arq-cab { margin-bottom: 0; flex: 1; min-width: 200px; }
+.arq-adicionar { width: auto; padding: 9px 14px; }
+.arq-form { padding: 14px 16px; display: grid; gap: 12px; }
+.arq-form label { font-size: 0.8rem; color: var(--muted); display: block; margin: 0 0 4px 2px; }
+.arq-form input, .arq-form select { width: 100%; }
+.arq-form-aviso { color: var(--muted); font-size: 0.85rem; line-height: 1.4; }
+.arq-form-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.arq-form-acoes button { width: auto; padding: 9px 16px; }
+.arq-origem { font-size: 0.7rem; padding: 2px 7px; border-radius: 99px; background: rgba(154, 160, 180, 0.14); color: var(--muted); margin-left: 6px; font-weight: 400; }

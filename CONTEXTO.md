@@ -5700,3 +5700,18 @@ com as pastas **NFS-e, Orçamentos, Recibos, Comunicados, Laudos, Serviços e Re
   errado"); o cursor só é reposto em campo de texto.
 - **Testes:** `testar-arquivos.js` (46 ok) e, na tela com o n8n de verdade, busca em todas as pastas, por palavra, com
   acento e maiúscula, período (de/até, este mês, este ano), ordem, emissor, faixa de valor, etiquetas e "limpar".
+
+## Arquivos por cliente: etapa 5, importar documentos antigos (13/11/2026, versão 2026.11.13i)
+Botão **"+ Adicionar arquivo"** no alto de cada pasta (menos Serviços e Relatório técnico, ainda a definir): PDFs que já
+existem fora do sistema (documentos antigos, notas feitas no portal) entram na pasta do cliente.
+- **Um arquivo:** título (do nome do arquivo), data (a do arquivo), valor (orçamento, recibo e NFS-e) e descrição podem ser
+  ajustados. **Vários:** cada um usa o nome como título e a data do próprio arquivo; só o emissor é escolhido (começa no
+  "Atendido por" do cliente). Só PDF de até 8 MB; o mesmo PDF não entra duas vezes (impressão digital).
+- **Fluxo `App - Arquivos`:** `salvar` aceita `origem` ("gerado", padrão, ou "importado") e o tipo `nfs`. No banco, o
+  `Arquivos_Cliente.Tipo` passou a aceitar `nfs` (PDF de nota feita fora do sistema); as notas emitidas pelo sistema
+  continuam vindo de `Notas_Fiscais`. Na pasta NFS-e aparecem as duas: a do sistema mostra os dados e a chave, a
+  importada abre o PDF (`it.nota` x `it.arquivo`). Backup antes: `antes-importar-arquivos-2026-11-13.sql`.
+- **Testes:** `testar-arquivos.js` (51 ok). Na tela, com o n8n de verdade: um arquivo com valor e descrição, não-PDF
+  recusado, três de uma vez, repetido não duplica, e PDF importado na pasta NFS-e que abre no visualizador.
+- Com isso as 5 etapas do plano "Arquivos por cliente" estão feitas. Falta definir o que serão **Serviços** e
+  **Relatório técnico**.

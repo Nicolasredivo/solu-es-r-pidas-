@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.13h";
+const APP_VERSION = "2026.11.13i";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -13750,7 +13750,8 @@ function arqDesenharPasta() {
   const termos = arqTermos(f.q);
   const itens = p.breve ? [] : arqFiltrar(base, f);
   let html = arqMigalhas([{ texto: "Arquivos", acao: "lista" }, { texto: nome, acao: "cliente" }, { texto: p.nome }])
-    + `<div class="arq-cab"><span class="arq-ic ${p.cls}">${arqIcone(p)}</span><div><h2>${p.nome}</h2><small>${escapeHtml(nome)} · ${arqPlural(base.length, "arquivo", "arquivos")}</small></div></div>`;
+    + `<div class="arq-cab-linha"><div class="arq-cab"><span class="arq-ic ${p.cls}">${arqIcone(p)}</span><div><h2>${p.nome}</h2><small>${escapeHtml(nome)} · ${arqPlural(base.length, "arquivo", "arquivos")}</small></div></div>
+       ${p.breve ? "" : '<button type="button" class="arq-adicionar" id="arq-adicionar">+ Adicionar arquivo</button>'}</div>`;
   if (p.breve) {
     html += `<div class="arq-vazio">Esta pasta ainda está em elaboração.<br>Quando definirmos como ${p.nome.toLowerCase()} será feito, ele passa a ser guardado aqui, com a mesma busca e os mesmos filtros das outras pastas.</div>`;
     arqTela.innerHTML = html;
@@ -13787,6 +13788,7 @@ function arqDesenharPasta() {
   arqLigarCliques();
   const de = (id) => document.getElementById(id);
   const refazer = () => arqDesenharPasta();
+  de("arq-adicionar").addEventListener("click", arqAbrirImportacao);
   de("arq-busca-pasta").addEventListener("input", (e) => { f.q = e.target.value; arqRedesenharMantendoFoco("arq-busca-pasta", refazer); });
   de("arq-f-per").addEventListener("change", (e) => { f.per = e.target.value; refazer(); });
   de("arq-f-ord").addEventListener("change", (e) => { f.ord = e.target.value; refazer(); });
@@ -13815,6 +13817,102 @@ function arqLigarCliques() {
     if (b.dataset.arq === "lista") { arq.view = "lista"; arq.erro = ""; arqCarregarResumo().then(arqDesenhar); arqDesenhar(); }
     if (b.dataset.arq === "cliente") { arq.view = "cliente"; arqDesenhar(); }
   }));
+}
+
+// ---- importar arquivo antigo (etapa 5) ----
+//
+// "+ Adicionar arquivo" na pasta: um ou vários PDFs que já existem fora do sistema (documentos antigos, notas
+// feitas no portal) entram na pasta do cliente. Com um arquivo só dá para ajustar título, data, valor e
+// descrição; com vários, cada um usa o nome do arquivo como título e a data do arquivo, e só o emissor é
+// escolhido. Cada um vai pelo mesmo fluxo "App - Arquivos" (origem "importado"); o mesmo PDF não entra duas vezes.
+
+const ARQ_LIMITE_PDF = 8 * 1024 * 1024;
+
+function arqAbrirImportacao() {
+  const p = arqPasta(arq.pasta);
+  const nome = arqNomeDoCliente(arq.cliente);
+  const comValor = ["nfs", "orcamento", "recibo"].includes(p.id);
+  arqModal.innerHTML = `<div class="arq-caixa"><header><div class="arq-tt">Adicionar à pasta ${escapeHtml(p.nome)} · ${escapeHtml(nome)}</div></header>
+    <form class="arq-form" id="arq-form" novalidate autocomplete="off">
+      <div><label for="arq-i-arquivo">Arquivo(s) em PDF</label><input type="file" id="arq-i-arquivo" accept="application/pdf,.pdf" multiple /></div>
+      <div id="arq-i-unico">
+        <div><label for="arq-i-titulo">Título</label><input type="text" id="arq-i-titulo" maxlength="200" /></div>
+        <div><label for="arq-i-data">Data do documento</label><input type="date" id="arq-i-data" /></div>
+        ${comValor ? '<div><label for="arq-i-valor">Valor (opcional)</label><input type="text" id="arq-i-valor" inputmode="decimal" placeholder="Ex: 1.290,50" /></div>' : ""}
+        <div><label for="arq-i-desc">Descrição (opcional, ajuda na busca)</label><input type="text" id="arq-i-desc" maxlength="500" /></div>
+      </div>
+      <p class="arq-form-aviso hidden" id="arq-i-varios">Com vários arquivos, cada um usa o nome do arquivo como título e a data do próprio arquivo. Dá para ajustar um a um depois, enviando de novo com um arquivo só.</p>
+      <div><label for="arq-i-emissor">Emitido por</label><select id="arq-i-emissor"><option>CNPJ 1</option><option>CNPJ 2</option></select></div>
+      <p class="status" id="arq-i-status" role="status"></p>
+      <div class="arq-form-acoes"><button type="submit" id="arq-i-guardar">Guardar</button><button type="button" class="botao-secundario" id="arq-i-cancelar">Cancelar</button></div>
+    </form></div>`;
+  arqModal.dataset.item = "importacao";
+  arqModal.classList.remove("hidden");
+  const el = (id) => document.getElementById(id);
+  el("arq-i-emissor").value = arq.cliente.atendidoPor === "CNPJ 2" ? "CNPJ 2" : "CNPJ 1";
+  const status = (tipo, msg) => { el("arq-i-status").textContent = msg; el("arq-i-status").className = msg ? `status show ${tipo}` : "status"; };
+  el("arq-i-cancelar").addEventListener("click", arqFecharModal);
+  const dataDoArquivo = (a) => { const d = new Date(a.lastModified || Date.now()); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  const tituloDoArquivo = (a) => a.name.replace(/\.pdf$/i, "").replace(/[_]+/g, " ").trim();
+  el("arq-i-arquivo").addEventListener("change", () => {
+    const arquivos = [...el("arq-i-arquivo").files];
+    el("arq-i-unico").classList.toggle("hidden", arquivos.length > 1);
+    el("arq-i-varios").classList.toggle("hidden", arquivos.length <= 1);
+    if (arquivos.length === 1) {
+      el("arq-i-titulo").value = tituloDoArquivo(arquivos[0]);
+      el("arq-i-data").value = dataDoArquivo(arquivos[0]);
+    }
+    status("", "");
+  });
+  el("arq-form").addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    const arquivos = [...el("arq-i-arquivo").files];
+    if (!arquivos.length) { status("error", "Escolha o arquivo em PDF."); return; }
+    const ruins = arquivos.filter((a) => !/\.pdf$/i.test(a.name) || a.size > ARQ_LIMITE_PDF || a.size === 0);
+    if (ruins.length) { status("error", `Só PDF de até 8 MB: ${ruins.map((a) => a.name).join(", ")}.`); return; }
+    const unico = arquivos.length === 1;
+    if (unico && !el("arq-i-titulo").value.trim()) { status("error", "Escreva um título."); return; }
+    if (unico && !el("arq-i-data").value) { status("error", "Escolha a data do documento."); return; }
+    const botao = el("arq-i-guardar");
+    botao.disabled = true;
+    let guardados = 0, repetidos = 0;
+    const falhas = [];
+    for (let i = 0; i < arquivos.length; i++) {
+      const a = arquivos[i];
+      status("neutral", `Guardando ${i + 1} de ${arquivos.length}...`);
+      const titulo = unico ? el("arq-i-titulo").value.trim() : tituloDoArquivo(a);
+      const descricao = unico ? el("arq-i-desc").value.trim() : "";
+      const valorCampo = unico && el("arq-i-valor") ? el("arq-i-valor").value.trim() : "";
+      try {
+        const r = await pedirAoN8n("arquivos", {
+          acao: "salvar", origem: "importado", clienteId: arq.cliente.id, clienteNome: arqNomeDoCliente(arq.cliente), tipo: p.id,
+          titulo, descricao, textoBusca: [titulo, descricao, a.name].filter(Boolean).join(" | "), valor: valorCampo,
+          dataDocumento: unico ? el("arq-i-data").value : dataDoArquivo(a), emissor: el("arq-i-emissor").value,
+          hash: await impressaoDoPdf(a), dadosJson: JSON.stringify({ arquivoOriginal: a.name }), nomeArquivo: a.name, arquivo: await pdfEmBase64(a),
+        });
+        if (r && r.ok) { if (r.jaGuardado) repetidos++; else guardados++; } else falhas.push(`${a.name}: ${(r && r.mensagem) || "não guardou"}`);
+      } catch (err) {
+        falhas.push(`${a.name}: servidor fora?`);
+      }
+    }
+    botao.disabled = false;
+    await arqAtualizarCliente();
+    if (!falhas.length) {
+      arqFecharModal();
+      mostrarToast(`${arqPlural(guardados, "arquivo guardado", "arquivos guardados")}` + (repetidos ? ` (${arqPlural(repetidos, "já estava guardado", "já estavam guardados")})` : "") + ".");
+      return;
+    }
+    status("error", `${guardados ? guardados + " guardado(s). " : ""}Não consegui: ${falhas.join("; ")}`);
+  });
+}
+
+// Recarrega os arquivos do cliente aberto (depois de importar) e redesenha a tela em que a pessoa está.
+async function arqAtualizarCliente() {
+  try {
+    const r = await pedirAoN8n("arquivos", { acao: "cliente", clienteId: arq.cliente.id });
+    if (r && r.ok) arq.itens = r.itens || [];
+  } catch (err) { /* fica com a lista de antes */ }
+  arqDesenhar();
 }
 
 // ---- visualizar ----
@@ -13868,7 +13966,7 @@ function arqVisualizar(id) {
   if (!it) return;
   const titulo = `${it.titulo} · ${arqNomeDoCliente(arq.cliente)}`;
   let corpo;
-  if (it.pasta === "nfs") {
+  if (it.nota) {
     const n = it.nota || {};
     corpo = `<div class="arq-nota"><div class="arq-nota-linha"><span>Cliente</span><strong>${escapeHtml(n.tomador || "—")}</strong></div>
       <div class="arq-nota-linha"><span>CPF/CNPJ</span><strong>${escapeHtml(formatarDocumento(n.documento || "") || "—")}</strong></div>
@@ -13887,7 +13985,7 @@ function arqVisualizar(id) {
   const botoes = arqModal.querySelector(".arq-botoes");
   let linkPdf = null;
   const botao = (txt, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.textContent = txt; if (cls) b.className = cls; b.addEventListener("click", fn); botoes.append(b); };
-  if (it.pasta === "nfs") {
+  if (it.nota) {
     const n = it.nota || {};
     if (n.chave) botao("Copiar chave", "", () => copiarTexto(n.chave, "Chave copiada."));
     if (n.chave && n.ambiente !== "Testes") {
