@@ -53,6 +53,8 @@ const ENDERECOS = [
     const custo1 = lidas[0].fields.Custo_Deslocamento;
     confere('custo = km × custo do km (por partes)', custoKm > 0 ? Math.abs(custo1 - km[0] * custoKm) < 0.05 : (custo1 === null || custo1 === undefined), { custo1, km: km[0], porKm: det[0].porKm });
     confere('custo do km inclui a manutenção salva (13/11/2026)', det[0].porKm && typeof det[0].porKm.manutencao === 'number' && det[0].porKm.manutencao > 0, det[0].porKm);
+    confere('custo do km inclui o IPVA salvo (13/11/2026)', det[0].porKm && typeof det[0].porKm.ipva === 'number' && det[0].porKm.ipva > 0, det[0].porKm);
+    confere('custo do km inclui o seguro salvo (13/11/2026)', det[0].porKm && typeof det[0].porKm.seguro === 'number' && det[0].porKm.seguro > 0, det[0].porKm);
     confere('resumo: soma dos km', Math.abs(r.km - (km[0] + km[1])) < 0.2, { resumo: r.km, soma: km[0] + km[1] });
     confere('endereços guardados (3, um como não achado)', (await t.lista(CAD, 'Geo_Enderecos')).filter((g) => !geoAntes.has(g.id)).length === 3);
 

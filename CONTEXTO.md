@@ -5592,3 +5592,16 @@ Pedido do dono: na aba Custos, um bloco **Pneus** (só leitura, igual ao Combust
 - **Atenção:** o "Airtable local" lê a lista de colunas só ao ligar: coluna nova exige reiniciar o servidor.
 - Backup antes da mudança: `C:\Users\rediv\banco-solucoes\backups\antes-manutencao-2026-11-13.sql`.
 - Testes: `testar-veiculo.js` (43 ok) e `testar-gasto-deslocamento.js` (16 ok).
+
+## Aba Veículo: blocos IPVA e Seguro no Custos (13/11/2026)
+Mais dois custos por km, no mesmo molde da Manutenção (bloco próprio, tocar edita, ação própria no
+"App - Veículo", soma no "Custo por km" e no nó "Calcula" das 23h, dias já calculados não mudam).
+- **IPVA:** `Veiculos.Ipva_Ano` (R$ 1.500,00 por ano) e `Ipva_Km` (R$ 0,10 por km). Só o por km entra na
+  conta; o por ano serve de conferência (1.500 ÷ 0,10 = 15.000 km por ano). Ação `ipva`, `porKm.ipva`.
+- **Seguro:** `Seguro_Mes` (R$ 196,00 por mês) e `Seguro_Km` (R$ 0,16 por km; 196 ÷ 0,16 = 1.225 km por mês).
+  Ação `seguro`, `porKm.seguro`.
+- Custo por km hoje: combustível 0,642 + pneus 0,064 + manutenção 0,50 + IPVA 0,10 + seguro 0,16 = R$ 1,466.
+- Bloco Manutenção: valor movido para a coluna da direita (alinha com os outros); borda de hover de cada
+  bloco com a cor própria.
+- Backups: `C:\Users\rediv\banco-solucoes\backups\antes-ipva-2026-11-13.sql` e `antes-seguro-2026-11-13.sql`.
+- Testes: `testar-veiculo.js` (65 ok) e `testar-gasto-deslocamento.js` (18 ok).

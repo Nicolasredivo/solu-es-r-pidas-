@@ -2209,12 +2209,16 @@
                 <span class="veiculo-chip chip-manutencao" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L4 16.8V20h3.2l5.3-5.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg></span>
                 Manutenção
               </h2>
-              <div class="veiculo-consumo-grade uma">
+              <div class="veiculo-consumo-grade">
                 <div class="veiculo-consumo-item">
-                  <label for="veiculo-manutencao-valor">Gasto de manutenção</label>
+                  <span class="veiculo-pneus-rotulo">O que entra</span>
+                  <p class="veiculo-manut-texto">Óleo, revisões, peças e mão de obra.</p>
+                </div>
+                <div class="veiculo-consumo-item">
+                  <label for="veiculo-manutencao-valor">Gasto por km</label>
                   <div class="veiculo-leitura-valor"><strong id="veiculo-manutencao-ver">—</strong><span class="veiculo-unidade">por km</span></div>
                   <input type="text" id="veiculo-manutencao-valor" inputmode="decimal" autocomplete="off" maxlength="8" placeholder="Ex: 0,50" disabled />
-                  <p class="doc-hint">Óleo, revisões, peças e mão de obra, em reais por km rodado.</p>
+                  <p class="doc-hint">Em reais por km rodado.</p>
                 </div>
               </div>
               <p id="veiculo-manutencao-conta" class="veiculo-consumo-conta"></p>
@@ -2224,6 +2228,66 @@
                 <button type="button" class="acao-excluir botao-secundario botao-perigo">Excluir</button>
               </div>
               <p id="veiculo-manutencao-status" class="placeholder-text veiculo-consumo-status"></p>
+            </section>
+
+            <!-- IPVA (13/11/2026): valor por ano e custo por km, digitados pelo dono (R$ 1.500 por ano,
+                 R$ 0,10 por km). O custo por km entra na conta do "Custo por km" e do cálculo das 23h. -->
+            <section id="veiculo-ipva" class="veiculo-cartao veiculo-consumo veiculo-ipva leitura bloco-editavel">
+              <h2 class="veiculo-cartao-titulo">
+                <span class="veiculo-chip chip-ipva" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span>
+                IPVA
+              </h2>
+              <div class="veiculo-consumo-grade">
+                <div class="veiculo-consumo-item">
+                  <label for="veiculo-ipva-ano">Valor por ano</label>
+                  <div class="veiculo-leitura-valor"><strong id="veiculo-ipva-ano-ver">—</strong><span class="veiculo-unidade">por ano</span></div>
+                  <input type="text" id="veiculo-ipva-ano" inputmode="decimal" autocomplete="off" maxlength="12" placeholder="Ex: 1500" disabled />
+                  <p class="doc-hint">O que o IPVA custa no ano.</p>
+                </div>
+                <div class="veiculo-consumo-item">
+                  <label for="veiculo-ipva-km">Custo por km</label>
+                  <div class="veiculo-leitura-valor"><strong id="veiculo-ipva-km-ver">—</strong><span class="veiculo-unidade">por km</span></div>
+                  <input type="text" id="veiculo-ipva-km" inputmode="decimal" autocomplete="off" maxlength="8" placeholder="Ex: 0,10" disabled />
+                  <p class="doc-hint">É este valor que entra no custo do km.</p>
+                </div>
+              </div>
+              <p id="veiculo-ipva-conta" class="veiculo-consumo-conta"></p>
+              <div class="veiculo-consumo-acoes hidden">
+                <button type="button" class="acao-salvar">Salvar</button>
+                <button type="button" class="acao-cancelar botao-secundario">Cancelar</button>
+                <button type="button" class="acao-excluir botao-secundario botao-perigo">Excluir</button>
+              </div>
+              <p id="veiculo-ipva-status" class="placeholder-text veiculo-consumo-status"></p>
+            </section>
+
+<!-- Seguro (13/11/2026): valor por mês e custo por km, digitados pelo dono (R$ 196,00 por mês,
+                 R$ 0,16 por km). O custo por km entra na conta do "Custo por km" e do cálculo das 23h. -->
+            <section id="veiculo-seguro" class="veiculo-cartao veiculo-consumo veiculo-seguro leitura bloco-editavel">
+              <h2 class="veiculo-cartao-titulo">
+                <span class="veiculo-chip chip-seguro" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+                Seguro
+              </h2>
+              <div class="veiculo-consumo-grade">
+                <div class="veiculo-consumo-item">
+                  <label for="veiculo-seguro-mes">Valor por mês</label>
+                  <div class="veiculo-leitura-valor"><strong id="veiculo-seguro-mes-ver">—</strong><span class="veiculo-unidade">por mês</span></div>
+                  <input type="text" id="veiculo-seguro-mes" inputmode="decimal" autocomplete="off" maxlength="12" placeholder="Ex: 196" disabled />
+                  <p class="doc-hint">O que o seguro custa no mês.</p>
+                </div>
+                <div class="veiculo-consumo-item">
+                  <label for="veiculo-seguro-km">Custo por km</label>
+                  <div class="veiculo-leitura-valor"><strong id="veiculo-seguro-km-ver">—</strong><span class="veiculo-unidade">por km</span></div>
+                  <input type="text" id="veiculo-seguro-km" inputmode="decimal" autocomplete="off" maxlength="8" placeholder="Ex: 0,16" disabled />
+                  <p class="doc-hint">É este valor que entra no custo do km.</p>
+                </div>
+              </div>
+              <p id="veiculo-seguro-conta" class="veiculo-consumo-conta"></p>
+              <div class="veiculo-consumo-acoes hidden">
+                <button type="button" class="acao-salvar">Salvar</button>
+                <button type="button" class="acao-cancelar botao-secundario">Cancelar</button>
+                <button type="button" class="acao-excluir botao-secundario botao-perigo">Excluir</button>
+              </div>
+              <p id="veiculo-seguro-status" class="placeholder-text veiculo-consumo-status"></p>
             </section>
             </div>
           </div>

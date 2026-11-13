@@ -4853,12 +4853,37 @@ div.lembrete-item:hover {
 .chip-manutencao { background: rgba(56, 189, 248, 0.14); color: #38bdf8; }
 .cor-manutencao { background: #38bdf8; }
 
+.chip-ipva { background: rgba(244, 114, 182, 0.14); color: #f472b6; }
+.cor-ipva { background: #f472b6; }
+
+@media (hover: hover) and (pointer: fine) {
+  .veiculo-consumo.veiculo-ipva.leitura:hover {
+    border-color: rgba(244, 114, 182, 0.55);
+  }
+}
+
+.chip-seguro { background: rgba(45, 212, 191, 0.14); color: #2dd4bf; }
+.cor-seguro { background: #2dd4bf; }
+
+@media (hover: hover) and (pointer: fine) {
+  .veiculo-consumo.veiculo-seguro.leitura:hover {
+    border-color: rgba(45, 212, 191, 0.55);
+  }
+}
+
+.veiculo-manut-texto {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
 .veiculo-consumo-grade.uma {
   grid-template-columns: minmax(0, 1fr);
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .veiculo-manutencao.leitura:hover {
+  .veiculo-consumo.veiculo-manutencao.leitura:hover {
     border-color: rgba(56, 189, 248, 0.55);
   }
 }

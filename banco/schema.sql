@@ -402,6 +402,10 @@ create table "Veiculos" (
   "Consumo_Km_L" numeric(5,2) check ("Consumo_Km_L" > 0 and "Consumo_Km_L" < 100), -- digitado pelo dono, fora do documento
   "Preco_Litro" numeric(6,3) check ("Preco_Litro" > 0 and "Preco_Litro" < 100),        -- idem (09/11/2026), R$ por litro
   "Manutencao_Km" numeric(6,3) check ("Manutencao_Km" > 0 and "Manutencao_Km" < 100),  -- idem (13/11/2026), R$ de manutenção por km
+  "Ipva_Ano" numeric(10,2) check ("Ipva_Ano" > 0 and "Ipva_Ano" < 1000000),  -- idem (13/11/2026), IPVA em R$ por ano
+  "Ipva_Km" numeric(6,3) check ("Ipva_Km" > 0 and "Ipva_Km" < 100),  -- idem, IPVA em R$ por km (o que entra na conta)
+  "Seguro_Mes" numeric(10,2) check ("Seguro_Mes" > 0 and "Seguro_Mes" < 1000000),  -- idem (13/11/2026), seguro em R$ por mês
+  "Seguro_Km" numeric(6,3) check ("Seguro_Km" > 0 and "Seguro_Km" < 100),  -- idem, seguro em R$ por km (o que entra na conta)
   "Criado_Em" timestamptz not null default now()
 );
 

@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.13a";
+const APP_VERSION = "2026.11.13b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -5616,7 +5616,7 @@ function formularioFinanceiroEmAndamento() {
 
 function haAlgoParaPerder() {
   return cadastroEmAndamento() || edicaoDaConsultaAbertaEmEdicao() || formularioFinanceiroEmAndamento()
-    || contatoEmAndamento() || veiculoEmAndamento() || consumoEmAndamento() || manutEmAndamento() || pneuEmAndamento();
+    || contatoEmAndamento() || veiculoEmAndamento() || consumoEmAndamento() || manutEmAndamento() || ipvaEmAndamento() || seguroEmAndamento() || pneuEmAndamento();
 }
 
 // Usado quando o usuário confirma que quer sair mesmo assim: devolve o bloco
@@ -5668,6 +5668,12 @@ function pendenteDeSalvar() {
   }
   if (manutEmAndamento()) {
     return { pendente: manutEmAndamento, salvar: () => manutSalvar.click(), descartar: () => manutCancelar.click() };
+  }
+  if (ipvaEmAndamento()) {
+    return { pendente: ipvaEmAndamento, salvar: () => ipvaSalvar.click(), descartar: () => ipvaCancelar.click() };
+  }
+  if (seguroEmAndamento()) {
+    return { pendente: seguroEmAndamento, salvar: () => seguroSalvar.click(), descartar: () => seguroCancelar.click() };
   }
   if (veiculoEmAndamento()) {
     return { pendente: veiculoEmAndamento, salvar: () => veiculoSalvar.click(), descartar: () => veiculoCancelar.click() };
@@ -11843,7 +11849,7 @@ async function carregarVeiculo() {
       return;
     }
     // Quem já está editando não perde o que digitou.
-    if (veiculoEditando() || consumoEditando() || manutEditando() || pneuEditando()) return;
+    if (veiculoEditando() || consumoEditando() || manutEditando() || ipvaEditando() || seguroEditando() || pneuEditando()) return;
     veiculoAtual = dados.veiculo;
     pneusAtuais = dados.pneus || [];
     veiculoCarregado = true;
@@ -11851,6 +11857,8 @@ async function carregarVeiculo() {
     desenharVeiculo();
     desenharConsumo();
     desenharManutencao();
+    desenharIpva();
+    desenharSeguro();
     desenharPneus();
     deslocamentoAtual = dados.deslocamento || null;
     desenharDeslocamento();
@@ -12306,6 +12314,302 @@ document.addEventListener("click", (evento) => {
 manutBloco.addEventListener("input", esquecerSaidaPendente);
 desenharManutencao();
 
+// ----- IPVA (13/11/2026) -----
+// Bloco "IPVA" da aba Custos: valor por ano e custo por km, digitados pelo dono.
+// Só o custo por km entra na conta (desenharCustoKm e nó "Calcula" das 23h); o valor
+// por ano é para o dono conferir (km por ano = valor ÷ custo por km). Lendo, mostra os
+// números grandes; tocar edita. Salvar grava os dois (vazio = apaga aquele); Excluir
+// (com confirmação) apaga os dois. Ação "ipva" do fluxo "App - Veículo".
+
+const ipvaBloco = document.getElementById("veiculo-ipva");
+const ipvaAnoCampo = document.getElementById("veiculo-ipva-ano");
+const ipvaKmCampo = document.getElementById("veiculo-ipva-km");
+const ipvaAnoVer = document.getElementById("veiculo-ipva-ano-ver");
+const ipvaKmVer = document.getElementById("veiculo-ipva-km-ver");
+const ipvaConta = document.getElementById("veiculo-ipva-conta");
+const ipvaCampos = [ipvaAnoCampo, ipvaKmCampo];
+const ipvaAcoes = ipvaBloco.querySelector(".veiculo-consumo-acoes");
+const ipvaSalvar = ipvaBloco.querySelector(".acao-salvar");
+const ipvaCancelar = ipvaBloco.querySelector(".acao-cancelar");
+const ipvaExcluir = ipvaBloco.querySelector(".acao-excluir");
+const ipvaStatus = document.getElementById("veiculo-ipva-status");
+
+const fotoDoIpva = () => JSON.stringify(ipvaCampos.map((c) => c.value.trim()));
+
+function ipvaEditando() {
+  return ipvaBloco.classList.contains("editando");
+}
+
+function ipvaEmAndamento() {
+  return naTela(ipvaBloco) && ipvaEditando() && fotoDoIpva() !== ipvaBloco.valorEdicao;
+}
+
+function desarmarExcluirIpva() {
+  ipvaExcluir.classList.remove("confirmando");
+  ipvaExcluir.textContent = "Excluir";
+}
+
+function desenharIpva() {
+  const ano = veiculoAtual && veiculoAtual.ipvaAno;
+  const km = veiculoAtual && veiculoAtual.ipvaKm;
+  ipvaAnoCampo.value = typeof ano === "number" ? formatarReais(ano) : "";
+  ipvaKmCampo.value = formatarManutencao(km);
+  mostrarNumeroDoConsumo(ipvaAnoVer, typeof ano === "number" ? `R$ ${formatarReais(ano)}` : "");
+  mostrarNumeroDoConsumo(ipvaKmVer, formatarManutencao(km) ? `R$ ${formatarManutencao(km)}` : "");
+  const kmAno = ano && km ? Math.round(ano / km) : 0;
+  ipvaConta.innerHTML = typeof km === "number"
+    ? `Somado ao custo do km: <strong>${reaisKm(km)} de IPVA por km</strong>`
+      + (kmAno ? ` (R$ ${escapeHtml(formatarReais(ano))} ÷ ${kmAno.toLocaleString("pt-BR")} km por ano)` : "")
+    : "";
+  ipvaCampos.forEach((c) => (c.disabled = true));
+  marcarVaziosNaLeitura(ipvaCampos, true);
+  ipvaBloco.classList.add("leitura");
+  ipvaBloco.classList.remove("editando");
+  ipvaAcoes.classList.add("hidden");
+  desarmarExcluirIpva();
+}
+
+ipvaBloco.addEventListener("click", (evento) => {
+  if (!ipvaBloco.classList.contains("leitura") || veiculoOcupado || !veiculoCarregado) return;
+  if (evento.target.closest("button, a")) return;
+  // Lendo, os campos estão escondidos: vale o número tocado (ano ou km).
+  const item = evento.target.closest(".veiculo-consumo-item");
+  const campo = (item && item.querySelector("input")) || ipvaAnoCampo;
+  ipvaCampos.forEach((c) => (c.disabled = false));
+  marcarVaziosNaLeitura(ipvaCampos, false);
+  ipvaBloco.classList.remove("leitura");
+  ipvaBloco.classList.add("editando");
+  ipvaAcoes.classList.remove("hidden");
+  const temAlgo = veiculoAtual && (typeof veiculoAtual.ipvaAno === "number" || typeof veiculoAtual.ipvaKm === "number");
+  ipvaExcluir.classList.toggle("hidden", !temAlgo);
+  ipvaBloco.valorEdicao = fotoDoIpva();
+  mostrarVeiculoStatus(ipvaStatus, null, "");
+  focarCampo(campo);
+});
+
+async function gravarIpva(ano, km) {
+  if (veiculoOcupado) return;
+  veiculoOcupado = true;
+  [ipvaSalvar, ipvaExcluir].forEach((b) => (b.disabled = true));
+  mostrarVeiculoStatus(ipvaStatus, "neutral", ano || km ? "Salvando..." : "Excluindo...");
+  try {
+    const dados = await pedirAoN8n("veiculo", { acao: "ipva", ipvaAno: ano, ipvaKm: km });
+    if (!dados || !dados.ok) {
+      mostrarVeiculoStatus(ipvaStatus, "error", (dados && dados.mensagem) || "Não foi possível salvar.");
+      return;
+    }
+    veiculoAtual = dados.veiculo;
+    veiculoCarregado = true;
+    desenharIpva();
+    desenharCustoKm();
+    mostrarVeiculoStatus(ipvaStatus, "ok", dados.mensagem || "Salvo.");
+  } catch (err) {
+    mostrarVeiculoStatus(ipvaStatus, "error", "Não foi possível falar com o n8n.");
+  } finally {
+    veiculoOcupado = false;
+    [ipvaSalvar, ipvaExcluir].forEach((b) => (b.disabled = false));
+  }
+}
+
+ipvaSalvar.addEventListener("click", () => {
+  const limpo = (c) => c.value.trim().replace(/\s+/g, "").replace(/^R\$/i, "");
+  const ano = limpo(ipvaAnoCampo);
+  const km = limpo(ipvaKmCampo);
+  // Valor por ano pode ter ponto de milhar (1.500,00); o do km, no máximo 3 casas.
+  const anoOk = !ano || (/^\d{1,3}(\.\d{3})*,\d{1,2}$/.test(ano) || /^\d{1,7}([.,]\d{1,2})?$/.test(ano));
+  if (!anoOk || (ano && Number(ano.replace(/\./g, "").replace(",", ".")) <= 0)) {
+    mostrarVeiculoStatus(ipvaStatus, "error", "Valor por ano: use só o número, por exemplo 1500.");
+    ipvaAnoCampo.focus();
+    return;
+  }
+  if (km && (!/^\d{1,2}([.,]\d{1,3})?$/.test(km) || Number(km.replace(",", ".")) <= 0)) {
+    mostrarVeiculoStatus(ipvaStatus, "error", "Custo por km: use só o número, por exemplo 0,10.");
+    ipvaKmCampo.focus();
+    return;
+  }
+  gravarIpva(ano, km);
+});
+
+ipvaBloco.addEventListener("keydown", (evento) => {
+  if (!evento.target.matches("input")) return;
+  if (evento.key === "Enter") { evento.preventDefault(); ipvaSalvar.click(); }
+  if (evento.key === "Escape") { evento.preventDefault(); ipvaCancelar.click(); }
+});
+
+ipvaCancelar.addEventListener("click", () => {
+  desenharIpva();
+  mostrarVeiculoStatus(ipvaStatus, null, "");
+});
+
+ipvaExcluir.addEventListener("click", () => {
+  if (!ipvaExcluir.classList.contains("confirmando")) {
+    ipvaExcluir.classList.add("confirmando");
+    ipvaExcluir.textContent = "Confirmar exclusão";
+    mostrarVeiculoStatus(ipvaStatus, "error", "Apaga o IPVA por ano e por km salvos. Clique de novo para confirmar.");
+    return;
+  }
+  gravarIpva("", "");
+});
+
+// Clicar fora do "Confirmar exclusão" desarma.
+document.addEventListener("click", (evento) => {
+  if (ipvaExcluir.classList.contains("confirmando") && evento.target !== ipvaExcluir) {
+    desarmarExcluirIpva();
+    mostrarVeiculoStatus(ipvaStatus, null, "");
+  }
+});
+
+ipvaBloco.addEventListener("input", esquecerSaidaPendente);
+desenharIpva();
+
+// ----- Seguro (13/11/2026) -----
+// Bloco "Seguro" da aba Custos: valor por mês e custo por km, digitados pelo dono.
+// Só o custo por km entra na conta (desenharCustoKm e nó "Calcula" das 23h); o valor
+// por ano é para o dono conferir (km por mês = valor ÷ custo por km). Lendo, mostra os
+// números grandes; tocar edita. Salvar grava os dois (vazio = apaga aquele); Excluir
+// (com confirmação) apaga os dois. Ação "seguro" do fluxo "App - Veículo".
+
+const seguroBloco = document.getElementById("veiculo-seguro");
+const seguroMesCampo = document.getElementById("veiculo-seguro-mes");
+const seguroKmCampo = document.getElementById("veiculo-seguro-km");
+const seguroMesVer = document.getElementById("veiculo-seguro-mes-ver");
+const seguroKmVer = document.getElementById("veiculo-seguro-km-ver");
+const seguroConta = document.getElementById("veiculo-seguro-conta");
+const seguroCampos = [seguroMesCampo, seguroKmCampo];
+const seguroAcoes = seguroBloco.querySelector(".veiculo-consumo-acoes");
+const seguroSalvar = seguroBloco.querySelector(".acao-salvar");
+const seguroCancelar = seguroBloco.querySelector(".acao-cancelar");
+const seguroExcluir = seguroBloco.querySelector(".acao-excluir");
+const seguroStatus = document.getElementById("veiculo-seguro-status");
+
+const fotoDoSeguro = () => JSON.stringify(seguroCampos.map((c) => c.value.trim()));
+
+function seguroEditando() {
+  return seguroBloco.classList.contains("editando");
+}
+
+function seguroEmAndamento() {
+  return naTela(seguroBloco) && seguroEditando() && fotoDoSeguro() !== seguroBloco.valorEdicao;
+}
+
+function desarmarExcluirSeguro() {
+  seguroExcluir.classList.remove("confirmando");
+  seguroExcluir.textContent = "Excluir";
+}
+
+function desenharSeguro() {
+  const ano = veiculoAtual && veiculoAtual.seguroMes;
+  const km = veiculoAtual && veiculoAtual.seguroKm;
+  seguroMesCampo.value = typeof ano === "number" ? formatarReais(ano) : "";
+  seguroKmCampo.value = formatarManutencao(km);
+  mostrarNumeroDoConsumo(seguroMesVer, typeof ano === "number" ? `R$ ${formatarReais(ano)}` : "");
+  mostrarNumeroDoConsumo(seguroKmVer, formatarManutencao(km) ? `R$ ${formatarManutencao(km)}` : "");
+  const kmAno = ano && km ? Math.round(ano / km) : 0;
+  seguroConta.innerHTML = typeof km === "number"
+    ? `Somado ao custo do km: <strong>${reaisKm(km)} de seguro por km</strong>`
+      + (kmAno ? ` (R$ ${escapeHtml(formatarReais(ano))} ÷ ${kmAno.toLocaleString("pt-BR")} km por mês)` : "")
+    : "";
+  seguroCampos.forEach((c) => (c.disabled = true));
+  marcarVaziosNaLeitura(seguroCampos, true);
+  seguroBloco.classList.add("leitura");
+  seguroBloco.classList.remove("editando");
+  seguroAcoes.classList.add("hidden");
+  desarmarExcluirSeguro();
+}
+
+seguroBloco.addEventListener("click", (evento) => {
+  if (!seguroBloco.classList.contains("leitura") || veiculoOcupado || !veiculoCarregado) return;
+  if (evento.target.closest("button, a")) return;
+  // Lendo, os campos estão escondidos: vale o número tocado (mês ou km).
+  const item = evento.target.closest(".veiculo-consumo-item");
+  const campo = (item && item.querySelector("input")) || seguroMesCampo;
+  seguroCampos.forEach((c) => (c.disabled = false));
+  marcarVaziosNaLeitura(seguroCampos, false);
+  seguroBloco.classList.remove("leitura");
+  seguroBloco.classList.add("editando");
+  seguroAcoes.classList.remove("hidden");
+  const temAlgo = veiculoAtual && (typeof veiculoAtual.seguroMes === "number" || typeof veiculoAtual.seguroKm === "number");
+  seguroExcluir.classList.toggle("hidden", !temAlgo);
+  seguroBloco.valorEdicao = fotoDoSeguro();
+  mostrarVeiculoStatus(seguroStatus, null, "");
+  focarCampo(campo);
+});
+
+async function gravarSeguro(ano, km) {
+  if (veiculoOcupado) return;
+  veiculoOcupado = true;
+  [seguroSalvar, seguroExcluir].forEach((b) => (b.disabled = true));
+  mostrarVeiculoStatus(seguroStatus, "neutral", ano || km ? "Salvando..." : "Excluindo...");
+  try {
+    const dados = await pedirAoN8n("veiculo", { acao: "seguro", seguroMes: ano, seguroKm: km });
+    if (!dados || !dados.ok) {
+      mostrarVeiculoStatus(seguroStatus, "error", (dados && dados.mensagem) || "Não foi possível salvar.");
+      return;
+    }
+    veiculoAtual = dados.veiculo;
+    veiculoCarregado = true;
+    desenharSeguro();
+    desenharCustoKm();
+    mostrarVeiculoStatus(seguroStatus, "ok", dados.mensagem || "Salvo.");
+  } catch (err) {
+    mostrarVeiculoStatus(seguroStatus, "error", "Não foi possível falar com o n8n.");
+  } finally {
+    veiculoOcupado = false;
+    [seguroSalvar, seguroExcluir].forEach((b) => (b.disabled = false));
+  }
+}
+
+seguroSalvar.addEventListener("click", () => {
+  const limpo = (c) => c.value.trim().replace(/\s+/g, "").replace(/^R\$/i, "");
+  const ano = limpo(seguroMesCampo);
+  const km = limpo(seguroKmCampo);
+  // Valor por mês pode ter ponto de milhar (1.500,00); o do km, no máximo 3 casas.
+  const anoOk = !ano || (/^\d{1,3}(\.\d{3})*,\d{1,2}$/.test(ano) || /^\d{1,7}([.,]\d{1,2})?$/.test(ano));
+  if (!anoOk || (ano && Number(ano.replace(/\./g, "").replace(",", ".")) <= 0)) {
+    mostrarVeiculoStatus(seguroStatus, "error", "Valor por mês: use só o número, por exemplo 196.");
+    seguroMesCampo.focus();
+    return;
+  }
+  if (km && (!/^\d{1,2}([.,]\d{1,3})?$/.test(km) || Number(km.replace(",", ".")) <= 0)) {
+    mostrarVeiculoStatus(seguroStatus, "error", "Custo por km: use só o número, por exemplo 0,16.");
+    seguroKmCampo.focus();
+    return;
+  }
+  gravarSeguro(ano, km);
+});
+
+seguroBloco.addEventListener("keydown", (evento) => {
+  if (!evento.target.matches("input")) return;
+  if (evento.key === "Enter") { evento.preventDefault(); seguroSalvar.click(); }
+  if (evento.key === "Escape") { evento.preventDefault(); seguroCancelar.click(); }
+});
+
+seguroCancelar.addEventListener("click", () => {
+  desenharSeguro();
+  mostrarVeiculoStatus(seguroStatus, null, "");
+});
+
+seguroExcluir.addEventListener("click", () => {
+  if (!seguroExcluir.classList.contains("confirmando")) {
+    seguroExcluir.classList.add("confirmando");
+    seguroExcluir.textContent = "Confirmar exclusão";
+    mostrarVeiculoStatus(seguroStatus, "error", "Apaga o seguro por mês e por km salvos. Clique de novo para confirmar.");
+    return;
+  }
+  gravarSeguro("", "");
+});
+
+// Clicar fora do "Confirmar exclusão" desarma.
+document.addEventListener("click", (evento) => {
+  if (seguroExcluir.classList.contains("confirmando") && evento.target !== seguroExcluir) {
+    desarmarExcluirSeguro();
+    mostrarVeiculoStatus(seguroStatus, null, "");
+  }
+});
+
+seguroBloco.addEventListener("input", esquecerSaidaPendente);
+desenharSeguro();
+
 // ----- Pneus (09/11/2026; desenho do carro em 12/11/2026) -----
 // Os 5 pneus em volta do carro visto de cima (as 5 posições vêm sempre do
 // fluxo, salvas ou não). Tocar num pneu abre o formulário dele embaixo do
@@ -12596,6 +12900,10 @@ function desenharCustoKm() {
   }
   const manutencao = veiculoAtual && veiculoAtual.manutencaoKm;
   if (typeof manutencao === "number" && manutencao > 0) partes.push({ nome: "Manutenção", valor: manutencao, cor: "manutencao" });
+  const ipva = veiculoAtual && veiculoAtual.ipvaKm;
+  if (typeof ipva === "number" && ipva > 0) partes.push({ nome: "IPVA", valor: ipva, cor: "ipva" });
+  const seguro = veiculoAtual && veiculoAtual.seguroKm;
+  if (typeof seguro === "number" && seguro > 0) partes.push({ nome: "Seguro", valor: seguro, cor: "seguro" });
   const total = partes.reduce((a, p) => a + p.valor, 0);
   // Bloco "Pneus" (só leitura): quantos pneus entram na conta e o desgaste somado por km.
   const somaPneus = desg.reduce((a, p) => a + p.desgaste, 0);

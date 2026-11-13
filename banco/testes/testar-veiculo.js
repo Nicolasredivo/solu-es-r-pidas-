@@ -121,6 +121,42 @@ const PDF = Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2
     r = await app({ acao: 'manutencao', manutencaoKm: '' });
     confere('manutenção: excluir deixa vazio', r.ok && r.veiculo.manutencaoKm === null && r.mensagem === 'Manutenção excluída.' && r.veiculo.consumo === 9.5, r);
     r = await app({ acao: 'consumo', consumo: '', precoLitro: '' });
+    // ---- IPVA (13/11/2026): valor por ano e custo por km, bloco próprio ----
+    r = await app({ acao: 'manutencao', manutencaoKm: '0,50' });
+    r = await app({ acao: 'ipva', ipvaAno: '1.500,00', ipvaKm: '0,10' });
+    confere('ipva: salva 1500 por ano e 0,10 por km', r.ok && r.veiculo.ipvaAno === 1500 && r.veiculo.ipvaKm === 0.1 && r.mensagem === 'Salvo.', r);
+    confere('ipva: não mexe na manutenção', r.veiculo.manutencaoKm === 0.5, r.veiculo);
+    r = await app({ acao: 'manutencao', manutencaoKm: '0,60' });
+    confere('ipva: salvar a manutenção não apaga o IPVA', r.ok && r.veiculo.ipvaAno === 1500 && r.veiculo.ipvaKm === 0.1, r.veiculo);
+    r = await app({ acao: 'ipva', ipvaAno: '1800', ipvaKm: '' });
+    confere('ipva: valor vazio apaga só aquele', r.ok && r.veiculo.ipvaAno === 1800 && r.veiculo.ipvaKm === null, r.veiculo);
+    for (const [ano, km] of [['abc', '0,10'], ['0', '0,10'], ['1500', 'x'], ['1500', '0,5555'], ['1500', '150']]) {
+      r = await app({ acao: 'ipva', ipvaAno: ano, ipvaKm: km });
+      confere(`ipva inválido recusado (${ano} / ${km})`, r.ok === false && /IPVA/.test(r.mensagem), r);
+    }
+    r = await app({ acao: 'carregar' });
+    confere('ipva: valor recusado não mudou nada', r.ok && r.veiculo.ipvaAno === 1800, r.veiculo);
+    r = await app({ acao: 'ipva', ipvaAno: '', ipvaKm: '' });
+    confere('ipva: excluir deixa vazio', r.ok && r.veiculo.ipvaAno === null && r.veiculo.ipvaKm === null && r.mensagem === 'IPVA excluído.' && r.veiculo.manutencaoKm === 0.6, r);
+    r = await app({ acao: 'manutencao', manutencaoKm: '' });
+    // ---- Seguro (13/11/2026): valor por mês e custo por km, bloco próprio ----
+    r = await app({ acao: 'ipva', ipvaAno: '1500', ipvaKm: '0,10' });
+    r = await app({ acao: 'seguro', seguroMes: '196,00', seguroKm: '0,16' });
+    confere('seguro: salva 196 por mês e 0,16 por km', r.ok && r.veiculo.seguroMes === 196 && r.veiculo.seguroKm === 0.16 && r.mensagem === 'Salvo.', r);
+    confere('seguro: não mexe no IPVA', r.veiculo.ipvaAno === 1500 && r.veiculo.ipvaKm === 0.1, r.veiculo);
+    r = await app({ acao: 'ipva', ipvaAno: '1600', ipvaKm: '0,11' });
+    confere('seguro: salvar o IPVA não apaga o seguro', r.ok && r.veiculo.seguroMes === 196 && r.veiculo.seguroKm === 0.16, r.veiculo);
+    r = await app({ acao: 'seguro', seguroMes: '210', seguroKm: '' });
+    confere('seguro: valor vazio apaga só aquele', r.ok && r.veiculo.seguroMes === 210 && r.veiculo.seguroKm === null, r.veiculo);
+    for (const [mes, km] of [['abc', '0,16'], ['0', '0,16'], ['196', 'x'], ['196', '0,5555'], ['196', '150']]) {
+      r = await app({ acao: 'seguro', seguroMes: mes, seguroKm: km });
+      confere(`seguro inválido recusado (${mes} / ${km})`, r.ok === false && /Seguro/.test(r.mensagem), r);
+    }
+    r = await app({ acao: 'carregar' });
+    confere('seguro: valor recusado não mudou nada', r.ok && r.veiculo.seguroMes === 210, r.veiculo);
+    r = await app({ acao: 'seguro', seguroMes: '', seguroKm: '' });
+    confere('seguro: excluir deixa vazio', r.ok && r.veiculo.seguroMes === null && r.veiculo.seguroKm === null && r.mensagem === 'Seguro excluído.' && r.veiculo.ipvaAno === 1600, r);
+    r = await app({ acao: 'ipva', ipvaAno: '', ipvaKm: '' });
     // ---- pneus (numa posição que o dono não usa; o Modelo leva a marca do teste) ----
     if (!livre) {
       console.log('(pneus: as 5 posições já estão preenchidas pelo dono; parte dos pneus pulada)');
