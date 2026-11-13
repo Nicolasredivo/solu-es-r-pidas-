@@ -5633,3 +5633,15 @@ série e numeração próprios.
   e `testar-fluxo-notas.js` (64 ok, numa cópia do fluxo ligada a um serviço de teste na porta 5699).
 - **Falta:** nenhuma nota REAL do CNPJ 2 foi emitida (só com o "sim" explícito do dono; a primeira, pequena e
   conferida no portal). A conta Asaas do CNPJ 2 ainda aguarda aprovação (dados bancários e documentação).
+
+## Documentos: PDFs e Notas fiscais numa página só (13/11/2026, versão 2026.11.13e)
+Etapa 1 do plano "Arquivos por cliente". O item "Notas fiscais" saiu do menu: a página **Documentos** tem
+duas abas (`subtab-doc`, blocos `subdoc-pdfs` e `subdoc-notas`): **PDFs** (abre primeiro) e **Notas fiscais**.
+- O conteúdo de cada aba é o de antes, sem mudança por dentro (formulário, conferência, lista, emissor).
+- Quem não tem acesso total (não é o Dono) não vê a barra de abas, só os PDFs; o servidor continua recusando.
+- `carregarNotas()` roda ao abrir a aba Notas fiscais (antes era ao tocar no item do menu).
+- **Próximas etapas combinadas (ainda não feitas):** 2) tabela `Arquivos_Cliente` e guardar cada PDF gerado
+  (orçamento, recibo, comunicado, laudo; NFS-e já está no banco); 3) aba **Arquivos**: lista de clientes (só o
+  nome) → página do cliente com as pastas NFS-e, Orçamentos, Recibos, Comunicados, Laudos, Serviços (a definir)
+  e Relatório técnico (a definir), com visualizar; 4) busca por palavras, filtro de período, ordem e valor;
+  5) importar documentos antigos. A maquete clicável (dados fictícios) ficou fora do repositório, no scratchpad.

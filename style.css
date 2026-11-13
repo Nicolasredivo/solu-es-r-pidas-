@@ -2064,7 +2064,8 @@ button.lembrete-item:hover {
 
 /* ----- Financeiro: resumo e lista de despesas ----- */
 
-.subtab-fin {
+.subtab-fin,
+.subtab-doc {
   flex: 1;
   padding: 9px 10px;
   border-radius: 8px;
@@ -2073,7 +2074,8 @@ button.lembrete-item:hover {
   font-size: 0.9rem;
 }
 
-.subtab-fin.active {
+.subtab-fin.active,
+.subtab-doc.active {
   background: var(--accent);
   color: white;
 }

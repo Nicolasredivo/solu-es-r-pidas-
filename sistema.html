@@ -96,10 +96,6 @@
         <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h14.5a1.5 1.5 0 0 1 1.5 1.5v9.5a1.5 1.5 0 0 1-1.5 1.5H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M4 7.5 15.5 4v3.5"/><path d="M15.5 13.75h1.5"/></svg>
         <span class="sidebar-texto">Financeiro</span>
       </button>
-      <button type="button" class="sidebar-item" data-page="notas" id="menu-notas">
-        <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>
-        <span class="sidebar-texto">Notas fiscais</span>
-      </button>
       <!-- Chamados: uma página só, com as abas Consultar e Criar chamado (08/11/2026). -->
       <button type="button" class="sidebar-item" data-page="chamados">
         <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3H9z"/><path d="M9 11.5h6M9 15.5h4"/></svg>
@@ -1941,6 +1937,15 @@
            campos aparecem conforme o tipo escolhido (data-tipos). -->
       <div id="page-documentos" class="card page hidden">
         <h1>Documentos</h1>
+        <!-- Duas abas numa página só (13/11/2026): os PDFs e as notas fiscais. A aba das notas só aparece
+             para quem tem acesso total (o servidor também recusa). -->
+        <div class="subtabs" id="abas-doc">
+          <button type="button" class="subtab-doc active" data-subdoc="pdfs">PDFs</button>
+          <button type="button" class="subtab-doc" data-subdoc="notas" id="aba-doc-notas">Notas fiscais</button>
+        </div>
+
+        <div id="subdoc-pdfs" class="subpage-doc">
+        
         <p class="subtitle">Orçamento, recibo, comunicado e laudo em PDF, no modelo da Soluções Rápidas.</p>
 
         <div class="opcoes doc-tipos" id="doc-tipo">
@@ -2046,11 +2051,10 @@
         </template>
       </div>
 
-      <!-- Notas fiscais (08/11/2026): emite NFS-e pela API do governo, com o
-           certificado A1 do PC (fluxo "App - Notas fiscais"). Nada sai sem a
-           conferência: qualquer mudança no formulário esconde a conferência. -->
-      <div id="page-notas" class="card page hidden">
-        <h1>Notas fiscais</h1>
+        <!-- Notas fiscais (08/11/2026; aba de Documentos desde 13/11/2026): emite NFS-e pela API do governo, com o
+             certificado A1 do PC (fluxo "App - Notas fiscais"). Nada sai sem a conferência: qualquer mudança
+             no formulário esconde a conferência. -->
+        <div id="subdoc-notas" class="subpage-doc hidden">
         <p class="subtitle">Emite a NFS-e direto no governo, com o certificado digital, sem abrir o portal.</p>
         <div id="nf-aviso-testes" class="aviso-caixa hidden"><strong>Ambiente de testes</strong>As notas emitidas aqui não têm validade.</div>
 
@@ -2103,8 +2107,9 @@
         <p id="nf-lista-status" class="placeholder-text"></p>
         <ul id="nf-lista" class="nf-lista"></ul>
       </div>
+      </div>
 
-      <!-- Veículo (08/11/2026): o PDF do documento do carro (CRLV) e os dados dele.
+            <!-- Veículo (08/11/2026): o PDF do documento do carro (CRLV) e os dados dele.
            Anexar o PDF lê o documento (ler-crlv.js + pdf.js) e preenche os campos;
            tocar num campo edita. Os blocos de campos são montados pelo app.js (VEICULO_GRUPOS). -->
       <div id="page-veiculo" class="card page hidden">

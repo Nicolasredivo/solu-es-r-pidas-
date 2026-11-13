@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.13d";
+const APP_VERSION = "2026.11.13e";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -323,6 +323,8 @@ function ligarAbasInternas(classeAba, atributo, prefixoId, classeBloco) {
 
 ligarAbasInternas("subtab", "subpage", "subpage-", "subpage");
 ligarAbasInternas("subtab-fin", "subfin", "subfin-", "subpage-fin");
+// Documentos: PDFs e Notas fiscais na mesma página (13/11/2026).
+ligarAbasInternas("subtab-doc", "subdoc", "subdoc-", "subpage-doc");
 
 // Páginas de cadastro abrem na aba "Consultar" (pedido do dono, 08/11/2026). Vindo de outra tela,
 // volta para ela; tocar no menu já estando na página não troca a aba (não esconde um cadastro
@@ -5477,8 +5479,9 @@ function mostrarUsuarioConectado() {
   // senha antiga não há conta pra confirmar a senha nas ações de lá.
   const dono = modoAcesso === "login" && Boolean(sessao && sessao.usuario && sessao.usuario.papel === "Dono");
   document.getElementById("menu-usuarios").classList.toggle("hidden", !dono);
-  // Notas fiscais: o servidor só atende o Dono (ou a senha antiga, que é do dono).
-  document.getElementById("menu-notas").classList.toggle("hidden", modoAcesso === "login" && !dono);
+  // Notas fiscais (aba de Documentos): o servidor só atende o Dono (ou a senha antiga, que é do dono).
+  // Sem a aba das notas, a barra de abas inteira some: sobra só os PDFs.
+  document.getElementById("abas-doc").classList.toggle("hidden", modoAcesso === "login" && !dono);
 
   const el = document.getElementById("usuario-conectado");
   const nome = sessao && sessao.usuario && String(sessao.usuario.nome || "").trim().split(/\s+/)[0];
@@ -13433,7 +13436,7 @@ async function carregarNotas() {
 }
 
 formNota.addEventListener("submit", nfConferir);
-document.querySelector('.sidebar-item[data-page="notas"]').addEventListener("click", () => {
+document.getElementById("aba-doc-notas").addEventListener("click", () => {
   garantirCadastrosCarregados();
   carregarNotas();
   requestAnimationFrame(() => ajustarAlturaAuto(nfCampos.servico));
