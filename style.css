@@ -3065,7 +3065,8 @@ input[type="text"].campo-busca-entrada {
 
 /* Durante um arrasto, passar o mouse em cima de um nível e segurar um
    instante troca a escala sem soltar o chamado. */
-.agenda-nivel.alvo-arraste {
+.agenda-nivel.alvo-arraste,
+#agenda-agora.alvo-arraste {
   background: rgba(62, 207, 142, 0.25);
   color: var(--text);
 }

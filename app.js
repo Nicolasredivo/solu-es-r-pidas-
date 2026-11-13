@@ -83,7 +83,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.13b";
+const APP_VERSION = "2026.11.13c";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -7514,13 +7514,23 @@ function agendaAvaliarAlvoSobPonteiro() {
   a.sobreFila = Boolean(achar(".agenda-painel")) && a.tipo === "mover" && a.chamado.status !== "Concluído";
   agendaPainelEl.classList.toggle("alvo-solta", a.sobreFila);
 
-  const nivelEl = achar(".agenda-nivel");
-  document.querySelectorAll(".agenda-nivel.alvo-arraste").forEach((el) => el.classList.remove("alvo-arraste"));
+  // Segurar o chamado em cima do botão "Agora" leva a linha do tempo pro
+  // agora sem largar o chamado (13/11/2026); só uma vez por vez que passa por lá.
+  const nivelEl = achar(".agenda-nivel, #agenda-agora");
+  document.querySelectorAll(".agenda-nivel.alvo-arraste, #agenda-agora.alvo-arraste").forEach((el) => el.classList.remove("alvo-arraste"));
   if (nivelEl) {
     nivelEl.classList.add("alvo-arraste");
-    if (a.zoomHover !== nivelEl.dataset.nivel) {
-      a.zoomHover = nivelEl.dataset.nivel;
+    const chave = nivelEl.dataset.nivel || "agora";
+    if (a.zoomHover !== chave) {
+      a.zoomHover = chave;
       a.zoomDesde = Date.now();
+      a.zoomFeito = false;
+    } else if (chave === "agora") {
+      if (!a.zoomFeito && Date.now() - a.zoomDesde > AGENDA_ESPERA_ZOOM_MS) {
+        a.zoomFeito = true;
+        agendaIrPara(agAgora(), agendaAlturaTela() * 0.35);
+        return true;
+      }
     } else if (Date.now() - a.zoomDesde > AGENDA_ESPERA_ZOOM_MS && agendaNivelId !== a.zoomHover) {
       agendaDefinirNivel(a.zoomHover);
       a.zoomHover = null;
@@ -7583,7 +7593,10 @@ function agendaPassoAuto() {
   const r = agendaViewport.getBoundingClientRect();
   const y = a.ponteiro.y;
   let direcao = 0, proximidade = 0;
-  if (y < r.top + AGENDA_MARGEM_AUTO_PX && y > r.top - 200) {
+  // Em cima do botão "Agora" a tela fica parada no agora (sem rolar pela borda).
+  if (a.zoomHover === "agora") {
+    // nada: direcao continua 0
+  } else if (y < r.top + AGENDA_MARGEM_AUTO_PX && y > r.top - 200) {
     direcao = -1;
     proximidade = (r.top + AGENDA_MARGEM_AUTO_PX - y) / AGENDA_MARGEM_AUTO_PX;
   } else if (y > r.bottom - AGENDA_MARGEM_AUTO_PX && y < r.bottom + 200) {
@@ -7619,7 +7632,7 @@ function agendaLimparArraste() {
   window.removeEventListener("pointercancel", agendaCancelarArraste);
   agendaFantasmaEl.classList.add("hidden");
   agendaPainelEl.classList.remove("alvo-solta");
-  document.querySelectorAll(".agenda-nivel.alvo-arraste").forEach((el) => el.classList.remove("alvo-arraste"));
+  document.querySelectorAll(".agenda-nivel.alvo-arraste, #agenda-agora.alvo-arraste").forEach((el) => el.classList.remove("alvo-arraste"));
   agendaMarcarCardsArrastando();
   return a;
 }
@@ -7910,7 +7923,16 @@ document.querySelectorAll(".agenda-nivel").forEach((botao) => {
 });
 agendaZoomMaisBotao.addEventListener("click", () => agendaMudarZoom(1));
 agendaZoomMenosBotao.addEventListener("click", () => agendaMudarZoom(-1));
-agendaAgoraBotao.addEventListener("click", () => agendaIrPara(agAgora(), agendaAlturaTela() * 0.35));
+agendaAgoraBotao.addEventListener("click", () => {
+  agendaIrPara(agAgora(), agendaAlturaTela() * 0.35);
+  // Com um chamado sendo arrastado (ex.: outro dedo tocou em "Agora"), o amarelo
+  // flutuante acompanha a tela: refaz a prévia no lugar novo (13/11/2026).
+  if (agArraste && agArraste.ativo) {
+    agendaCalcularAlvo();
+    agendaDesenharItens();
+    agendaDesenharFantasma();
+  }
+});
 agendaDesfazerBotao.addEventListener("click", agendaDesfazer);
 agendaRefazerBotao.addEventListener("click", agendaRefazer);
 

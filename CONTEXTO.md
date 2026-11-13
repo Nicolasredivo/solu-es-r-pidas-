@@ -5605,3 +5605,11 @@ Mais dois custos por km, no mesmo molde da Manutenção (bloco próprio, tocar e
   bloco com a cor própria.
 - Backups: `C:\Users\rediv\banco-solucoes\backups\antes-ipva-2026-11-13.sql` e `antes-seguro-2026-11-13.sql`.
 - Testes: `testar-veiculo.js` (65 ok) e `testar-gasto-deslocamento.js` (18 ok).
+
+## Agenda: arrastar o chamado até o botão "Agora" (13/11/2026)
+Pedido do dono: durante o arrasto de um chamado (o amarelo flutuante, antes de soltar), levar a tela para
+o dia/horário de hoje sem largar o chamado. Segurar o chamado ~0,45 s em cima do botão **Agora** leva a
+linha do tempo para o agora (mesma ideia dos botões de zoom); a rolagem automática de borda fica parada
+enquanto ele estiver ali. Tocar em Agora com outro dedo durante o arrasto refaz a prévia no lugar novo.
+Nenhuma data é mudada: só ao soltar. Sem arrasto, o botão Agora é o de sempre.
+(Uma primeira versão que movia o horário dos chamados amarelos foi descartada pelo dono.)
