@@ -271,7 +271,9 @@ async function gerarBackupExcel(atuais, apagados, opcoes = {}) {
 
   const wb = construir(abas, novo, agora);
   const buffer = Buffer.from(await wb.xlsx.writeBuffer());
-  const hoje = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+  // Dia (em Brasília) do mesmo instante usado nos carimbos "Atualizado em". Antes vinha do relógio do PC mesmo
+  // quando quem chamava informava o instante (os testes): o teste da cópia diária só passava no dia 13/11/2026.
+  const hoje = new Date(new Date(agora).getTime() - 3 * 3600 * 1000).toISOString().slice(0, 10);
   const gravados = [];
   const falhas = [];
   for (const pasta of pastas) {

@@ -22,7 +22,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const corpo = $input.first().json.body || {};\nconst cabecalhos = $input.first().json.headers || {};\n\nconst email = String(corpo.email || '').trim().toLowerCase();\nconst senha = String(corpo.senha || '');\nconst dispositivo = String(corpo.dispositivo || cabecalhos['user-agent'] || '').slice(0, 200);\n\nconst emailEscapado = email.replace(/'/g, \"\\\\'\");\n\nreturn [{\n  json: {\n    email,\n    senha,\n    dispositivo,\n    formula: \"LOWER({Email}) = '\" + emailEscapado + \"'\"\n  }\n}];\n"
+        "jsCode": "const corpo = $input.first().json.body || {};\nconst cabecalhos = $input.first().json.headers || {};\n\nconst email = String(corpo.email || '').trim().toLowerCase();\nconst senha = String(corpo.senha || '');\nconst dispositivo = String(corpo.dispositivo || cabecalhos['user-agent'] || '').slice(0, 200);\n\nconst emailEscapado = email.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, \"\\\\'\");\n\nreturn [{\n  json: {\n    email,\n    senha,\n    dispositivo,\n    formula: \"LOWER({Email}) = '\" + emailEscapado + \"'\"\n  }\n}];\n"
       },
       "id": "l0000000-0000-4000-8000-000000000003",
       "name": "Monta busca",
@@ -498,5 +498,8 @@
       ]
     }
   },
-  "settings": {}
+  "settings": {
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  }
 }

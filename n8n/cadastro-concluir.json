@@ -739,5 +739,8 @@
       ]
     }
   },
-  "settings": {}
+  "settings": {
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  }
 }

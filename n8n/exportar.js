@@ -23,9 +23,13 @@ const api = async (p) => {
 };
 
 // Valores que nunca podem ir para o repositório (lidos dos arquivos locais, nunca impressos).
+// Todo arquivo "chave-*.txt" / "senha-*.txt" / "token-*.txt" da pasta do usuário. Antes a lista era fixa e não
+// incluía o chave-asaas-cnpj2.txt (criado em 08/11/2026): a chave da segunda conta passaria sem ser vista.
+const ARQUIVOS_DE_SEGREDO = fs.readdirSync('C:/Users/rediv').filter((f) => /^(chave|senha|token)-.*\.txt$/i.test(f));
+
 function segredosLocais() {
   const lista = [CHAVE];
-  for (const arq of ['chave-asaas.txt', 'senha-app.txt', 'senha-banco.txt']) {
+  for (const arq of ARQUIVOS_DE_SEGREDO) {
     let txt = '';
     try { txt = fs.readFileSync('C:/Users/rediv/' + arq, 'utf8'); } catch (e) { continue; }
     for (const linha of txt.split(/\r?\n/)) {

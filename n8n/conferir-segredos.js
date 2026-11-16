@@ -9,9 +9,13 @@ const RAIZ = path.resolve(__dirname, '..');
 const CHAVE_N8N = fs.readFileSync('C:/Users/rediv/chave-n8n.txt', 'utf8').trim();
 const TOKEN_LOCAL = (fs.readFileSync('C:/Users/rediv/senha-banco.txt', 'utf8').match(/^token do airtable local:\s*(\S+)/m) || [])[1];
 
+// Todo arquivo "chave-*.txt" / "senha-*.txt" / "token-*.txt" da pasta do usuário. Antes a lista era fixa e não
+// incluía o chave-asaas-cnpj2.txt (criado em 08/11/2026): a chave da segunda conta passaria sem ser vista.
+const ARQUIVOS_DE_SEGREDO = fs.readdirSync('C:/Users/rediv').filter((f) => /^(chave|senha|token)-.*\.txt$/i.test(f));
+
 function valoresDosArquivos() {
   const lista = [['chave do n8n', CHAVE_N8N]];
-  for (const arq of ['chave-asaas.txt', 'senha-app.txt', 'senha-banco.txt']) {
+  for (const arq of ARQUIVOS_DE_SEGREDO) {
     let txt = '';
     try { txt = fs.readFileSync('C:/Users/rediv/' + arq, 'utf8'); } catch (e) { continue; }
     txt.split(/\r?\n/).forEach((linha, i) => {

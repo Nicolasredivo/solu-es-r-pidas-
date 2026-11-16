@@ -200,8 +200,17 @@ function responder(res, obj) {
   res.end(JSON.stringify(resto));
 }
 
+// Erro que ninguém previu ao atender um pedido: responde "erro" (se ainda der) e o serviço continua de pé.
+function falhou(res, e) {
+  console.error(new Date().toISOString(), 'ERRO ao atender pedido:', e && (e.stack || e));
+  if (res.headersSent) return res.destroy();
+  return responder(res, { http: 500, ok: false, erros: [{ descricao: 'erro no serviço de notas' }] });
+}
+
 const servidor = http.createServer((req, res) => {
-  const url = new URL(req.url, 'http://127.0.0.1');
+  let url;
+  // Endereço fora do padrão (ex.: "//"): antes isto derrubava o serviço inteiro.
+  try { url = new URL(req.url, 'http://127.0.0.1'); } catch (e) { return responder(res, { http: 400, ok: false, erros: [{ descricao: 'endereço inválido' }] }); }
   if (req.method === 'GET' && url.pathname === '/saude') {
     return responder(res, { ok: true, ambiente: AMBIENTE, serie: Number(emissorDe('CNPJ 1').serie),
       emissores: Object.fromEntries(Object.entries(EMISSORES).map(([nome, e]) => [nome, { serie: Number(e.serie) }])) });
@@ -209,12 +218,12 @@ const servidor = http.createServer((req, res) => {
   if (!autorizado(req)) return responder(res, { http: 401, ok: false, erros: [{ descricao: 'não autorizado' }] });
   const dps = url.pathname.match(/^\/dps\/([A-Za-z0-9]+)$/);
   const emissorPedido = url.searchParams.get('emissor') || 'CNPJ 1';
-  if (req.method === 'GET' && dps) return consultarDps(dps[1], emissorPedido).then((r) => responder(res, r));
+  if (req.method === 'GET' && dps) return consultarDps(dps[1], emissorPedido).then((r) => responder(res, r)).catch((e) => falhou(res, e));
   // Pelo número: quem ficou sem resposta na hora de emitir não chegou a receber o identificador.
   const porNumero = url.pathname.match(/^\/dps-numero\/([1-9]\d{0,14})$/);
   if (req.method === 'GET' && porNumero) {
     if (!emissorDe(emissorPedido)) return responder(res, { http: 400, ok: false, erros: [{ descricao: 'emissor desconhecido' }] });
-    return consultarDps(idDaDps(porNumero[1], emissorPedido), emissorPedido).then((r) => responder(res, r));
+    return consultarDps(idDaDps(porNumero[1], emissorPedido), emissorPedido).then((r) => responder(res, r)).catch((e) => falhou(res, e));
   }
   if (req.method !== 'POST' || url.pathname !== '/emitir') return responder(res, { http: 404, ok: false, erros: [{ descricao: 'rota inexistente' }] });
   const partes = [];
@@ -226,12 +235,28 @@ const servidor = http.createServer((req, res) => {
       if (tamanho > LIMITE_CORPO) throw new Error('grande');
       pedido = JSON.parse(Buffer.concat(partes).toString('utf8'));
     } catch (e) { return responder(res, { http: 400, ok: false, erros: [{ descricao: 'pedido inválido' }] }); }
-    return emitir(pedido).then((r) => responder(res, r)).catch((e) => responder(res, { http: 500, ok: false, erros: [{ descricao: e.message }] }));
+    return emitir(pedido).then((r) => responder(res, r)).catch((e) => {
+      console.error(new Date().toISOString(), 'ERRO ao emitir:', e && (e.stack || e));
+      if (res.headersSent) return res.destroy();
+      // Mesma resposta de antes (500 com o motivo): quem chamou consulta a DPS antes de tentar de novo.
+      return responder(res, { http: 500, ok: false, erros: [{ descricao: e.message }] });
+    });
   });
   return undefined;
 });
 
 if (require.main === module) {
+  // Rede de segurança (auditoria de 13/11/2026), só quando roda como serviço (os testes carregam este arquivo
+  // como módulo e não devem herdar isto): erro solto fica no arquivo de erros e o serviço continua atendendo.
+  process.on('uncaughtException', (e) => console.error(new Date().toISOString(), 'ERRO NÃO PREVISTO (segue ligado):', e && e.stack));
+  process.on('unhandledRejection', (e) => console.error(new Date().toISOString(), 'ERRO NÃO PREVISTO em promessa (segue ligado):', e && (e.stack || e)));
+  // Mesmo motivo do Airtable local: quem fecha a conexão reaproveitada é sempre o n8n, nunca este serviço.
+  servidor.keepAliveTimeout = 65000;
+  servidor.headersTimeout = 70000;
+  servidor.on('error', (e) => {
+    console.error(new Date().toISOString(), 'erro no servidor (porta ' + PORTA + '):', e && e.message);
+    if (!servidor.listening) process.exit(1);
+  });
   servidor.listen(PORTA, '127.0.0.1', () => console.log(new Date().toISOString(), `NFS-e local ouvindo em http://127.0.0.1:${PORTA} (ambiente: ${AMBIENTE})`));
 }
 module.exports = { montarDps, conferirPedido };

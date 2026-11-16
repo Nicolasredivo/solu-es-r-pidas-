@@ -22,7 +22,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const corpo = $input.first().json.body || {};\n\nconst email = String(corpo.email || '').trim().toLowerCase();\nconst codigo = String(corpo.codigo || '').trim();\nconst novaSenha = String(corpo.novaSenha || '');\n\nconst emailEscapado = email.replace(/'/g, \"\\\\'\");\n\nreturn [{\n  json: {\n    email,\n    codigo,\n    novaSenha,\n    formula: \"LOWER({Email}) = '\" + emailEscapado + \"'\"\n  }\n}];\n"
+        "jsCode": "const corpo = $input.first().json.body || {};\n\nconst email = String(corpo.email || '').trim().toLowerCase();\nconst codigo = String(corpo.codigo || '').trim();\nconst novaSenha = String(corpo.novaSenha || '');\n\nconst emailEscapado = email.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, \"\\\\'\");\n\nreturn [{\n  json: {\n    email,\n    codigo,\n    novaSenha,\n    formula: \"LOWER({Email}) = '\" + emailEscapado + \"'\"\n  }\n}];\n"
       },
       "id": "s0000000-0000-4000-8000-000000000003",
       "name": "Monta busca",
@@ -379,6 +379,8 @@
     }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
   }
 }

@@ -63,7 +63,11 @@ function confere(nome, cond, detalhe) {
     const emailEsc = String(usu.fields.Email || '').toLowerCase().replace(/'/g, "\\'");
     confere('LOWER({Email}) =', (await lista(CAD, 'Usuarios', f(`LOWER({Email}) = '${emailEsc}'`))).length === 1);
     confere('aspas escapadas', (await lista(CAD, 'Usuarios', f("LOWER({Email}) = 'o\\'brien@teste.com'"))).length === 0);
-    confere("{Chave} = 'principal'", (await lista(FIN, 'Config_Financeiro', f("{Chave} = 'principal'"))).length === 2);
+    // Antes esperava exatamente 2 (havia uma linha "principal" duplicada e vazia, apagada em 14/11/2026 a pedido do dono).
+    // O que importa é a fórmula achar as mesmas linhas que a lista inteira tem com essa chave, e existir a de verdade.
+    const configTodas = await lista(FIN, 'Config_Financeiro');
+    const configPrincipais = await lista(FIN, 'Config_Financeiro', f("{Chave} = 'principal'"));
+    confere("{Chave} = 'principal'", configPrincipais.length >= 1 && configPrincipais.length === configTodas.filter((r) => r.fields.Chave === 'principal').length);
     confere("{Situacao}='Em andamento'", Array.isArray(await lista(CAD, 'Visitas', f("{Situacao}='Em andamento'"))));
     confere('fórmula inválida = 422', (await api('GET', `/v0/${CAD}/Chamados?filterByFormula=` + encodeURIComponent("AND({Status}='x'"))).status === 422);
     confere('campo desconhecido = 422', (await api('GET', `/v0/${CAD}/Chamados?filterByFormula=` + encodeURIComponent("{Nao_Existe}='x'"))).status === 422);

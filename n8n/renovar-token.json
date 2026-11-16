@@ -22,7 +22,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const corpo = $input.first().json.body || {};\nconst tokenSessao = String(corpo.tokenSessao || '');\nconst tokenEscapado = tokenSessao.replace(/'/g, \"\\\\'\");\n\nreturn [{\n  json: {\n    tokenSessao,\n    formula: \"{Token} = '\" + tokenEscapado + \"'\"\n  }\n}];\n"
+        "jsCode": "const corpo = $input.first().json.body || {};\nconst tokenSessao = String(corpo.tokenSessao || '');\nconst tokenEscapado = tokenSessao.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, \"\\\\'\");\n\nreturn [{\n  json: {\n    tokenSessao,\n    formula: \"{Token} = '\" + tokenEscapado + \"'\"\n  }\n}];\n"
       },
       "id": "r0000000-0000-4000-8000-000000000003",
       "name": "Monta busca",
@@ -440,5 +440,8 @@
       ]
     }
   },
-  "settings": {}
+  "settings": {
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  }
 }
