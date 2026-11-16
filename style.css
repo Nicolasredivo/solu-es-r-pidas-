@@ -44,15 +44,6 @@ body {
   display: none !important;
 }
 
-/* Tela de entrada (senha) */
-.gate-view {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
 /* Barra superior */
 .topbar {
   position: sticky;
@@ -88,10 +79,14 @@ body {
   bottom: 0;
   width: var(--largura-menu);
   background: var(--card);
-  padding: 72px 12px 12px;
+  /* O topo, que antes ficava vazio, agora tem a marca (16/11/2026). */
+  padding: 14px 12px 12px;
   transform: translateX(-100%);
   transition: transform 0.2s ease;
-  z-index: 30;
+  /* Acima do balão de lembrete (52): no celular o menu aberto ficava por baixo dele, e o
+     balão tapava o "Sair" e a versão no pé do menu (auditoria de 14/11/2026). No computador
+     os dois nunca se encontram (menu à esquerda, balão embaixo à direita). */
+  z-index: 54;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -100,6 +95,61 @@ body {
 
 .sidebar.open {
   transform: translateX(0);
+}
+
+/* Marca no topo do menu: o logo SR num quadrinho branco + o nome. A altura acompanha a barra de cima. */
+.sidebar-marca {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 8px 16px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #262b47;
+}
+
+.sidebar-marca-simbolo {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 38px;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.sidebar-marca-simbolo img {
+  height: 26px;
+  width: auto;
+  display: block;
+}
+
+.sidebar-marca-texto {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+.sidebar-marca-texto strong {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+
+.sidebar-marca-texto strong em {
+  font-style: normal;
+  color: var(--accent);
+}
+
+.sidebar-marca-texto small {
+  margin-top: 3px;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 /* Ícone + nome em cada item: o ícone dá um ponto de apoio pro olho, e o
@@ -224,7 +274,8 @@ body {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 25;
+  /* Um degrau abaixo do menu e acima do balão de lembrete: o fundo escuro cobre o balão também. */
+  z-index: 53;
 }
 
 .sidebar-overlay.show {
@@ -261,6 +312,11 @@ body {
 
   .sidebar-overlay {
     display: none !important;
+  }
+
+  /* A marca já está no topo do menu, ao lado: o nome repetido na barra de cima sai (16/11/2026). */
+  .topbar-title {
+    visibility: hidden;
   }
 
   .main-content,
@@ -417,17 +473,6 @@ input[type="number"]:focus {
   font-weight: 500;
 }
 
-.config-box {
-  margin-top: 14px;
-  padding-top: 16px;
-  border-top: 1px solid #2c3153;
-}
-
-.config-acoes {
-  display: flex;
-  gap: 8px;
-}
-
 .botao-secundario {
   background: transparent;
   border: 1px solid #2c3153;
@@ -462,20 +507,6 @@ input[type="number"]:focus {
     color: var(--error);
     background: rgba(229, 72, 77, 0.08);
   }
-}
-
-.config-hint {
-  font-size: 0.8rem;
-  margin: 10px 0 0;
-  min-height: 1em;
-}
-
-.config-hint.ok {
-  color: var(--ok);
-}
-
-.config-hint.error {
-  color: var(--error);
 }
 
 /* Abas internas (Adicionar / Consultar) */
@@ -1792,17 +1823,6 @@ button.lembrete-item:hover {
   justify-content: center;
   color: var(--muted);
   font-size: 0.9rem;
-}
-
-/* Na tela antiga da senha: o caminho de volta pro login por e-mail. */
-.link-login {
-  display: block;
-  text-align: center;
-  text-decoration: none;
-}
-
-.link-login:hover {
-  color: var(--text);
 }
 
 .sessao-expirada #sessao-expirada-entrar {
@@ -4565,6 +4585,18 @@ div.lembrete-item:hover {
 .nf-acoes > .botao-link {
   width: auto;
   flex: 1 1 180px;
+}
+
+/* Celular: o botão principal (Ver PDF) ocupa a linha toda e os secundários (Baixar PDF, Copiar chave) dividem a
+   de baixo, em vez de três botões empilhados (16/11/2026). */
+@media (max-width: 600px) {
+  .nf-acoes > button:not(.botao-secundario) {
+    flex-basis: 100%;
+  }
+
+  .nf-acoes > .botao-secundario {
+    flex: 1 1 100px;
+  }
 }
 
 .botao-link {

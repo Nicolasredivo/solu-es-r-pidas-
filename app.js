@@ -1,21 +1,6 @@
-const form = document.getElementById("test-form");
-const passwordInput = document.getElementById("password");
-const testButton = document.getElementById("test-button");
-const statusBox = document.getElementById("status");
-
-const gateView = document.getElementById("gate-view");
 const appView = document.getElementById("app-view");
 
-const lembrarSenha = document.getElementById("lembrar-senha");
-const toggleConfig = document.getElementById("toggle-config");
-const configBox = document.getElementById("config-box");
-const n8nUrlInput = document.getElementById("n8n-url");
-const salvarUrlBotao = document.getElementById("salvar-url");
-const restaurarUrlBotao = document.getElementById("restaurar-url");
-const configHint = document.getElementById("config-hint");
-
 const CHAVE_URL = "n8n_base_url";
-const CHAVE_SENHA = "senha_salva";
 
 // Confirmação rápida e discreta, pra ações que já têm feedback óbvio na
 // tela (a lista atualiza, o formulário fecha) mas ainda merecem um "deu
@@ -83,21 +68,18 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.13i";
+const APP_VERSION = "2026.11.14a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
-// Dois jeitos de estar dentro do sistema:
-//   "login" -- entrou pela tela conta.html com e-mail e senha. Cada pedido
-//              leva o token de acesso (vale 30 min), renovado sozinho com o
-//              token de sessão (vale 60 dias) guardado neste aparelho.
-//   "senha" -- a senha de acesso única de antes, só por sistema.html#senha.
-//              Continua valendo até o dono autorizar tirar.
-// Em qualquer um dos dois, quem confere é o n8n (verificar-sessao), nunca a
-// tela.
+// Um jeito só de estar dentro do sistema: entrar pela tela conta.html com
+// e-mail e senha. Cada pedido leva o token de acesso (vale 30 min), renovado
+// sozinho com o token de sessão (vale 60 dias) guardado neste aparelho. Quem
+// confere é o n8n (verificar-sessao), nunca a tela.
+// A senha de acesso única de antes (sistema.html#senha) foi tirada em
+// 14/11/2026, a pedido do dono: a tela dela e o modo "senha" saíram daqui.
 const CHAVE_SESSAO = "sr_sessao";
 const RENOVAR_ANTES_MS = 60 * 1000;
-let modoAcesso = "login";
 let sessao = null;
 
 function lerSessao() {
@@ -166,7 +148,6 @@ function renovarAcesso() {
 }
 
 async function credenciais() {
-  if (modoAcesso === "senha") return { senha: passwordInput.value };
   if (!sessao) return {};
   // Renova um pouco antes de vencer, pra ação não ser recusada à toa.
   if (sessao.acessoExpiraEm - Date.now() < RENOVAR_ANTES_MS) await renovarAcesso();
@@ -218,7 +199,6 @@ async function fetchN8nDeFato(caminho, dados, jaRenovou) {
     throw err;
   }
 
-  if (modoAcesso !== "login") return resposta;
   const corpo = await resposta.clone().json().catch(() => null);
   // Os workflows de usuários respondem "sessaoExpirada" em vez de
   // "acessoNegado" -- os dois querem dizer token recusado.
@@ -1379,9 +1359,9 @@ function documentoValido(digitos) {
 }
 
 // Carrega os cadastros sem mexer na tela da Consulta -- usado pelas
-// sugestões do Adicionar (ver ligarSugestaoCampo), que precisam da mesma
-// lista mas não devem disparar "Carregando..."/erros na lista de baixo.
-// Se a Consulta já carregou antes, não busca de novo.
+// sugestões e buscas de cliente (Adicionar, Documentos, Notas, Arquivos), que
+// precisam da mesma lista mas não devem disparar "Carregando..."/erros na
+// lista de baixo. Se a Consulta já carregou antes, não busca de novo.
 async function garantirCadastrosCarregados() {
   if (listaCarregada) return;
   try {
@@ -1448,49 +1428,6 @@ function atualizaFiltrosCadastro() {
   preencherFiltroSelect(filtroContato, valoresDistintosCadastro("contato"), "Todos");
   preencherFiltroSelect(filtroAdministradora, valoresDistintosCadastro("administradora"), "Todas");
   preencherFiltroSelect(filtroEmpresaSindicos, valoresDistintosCadastro("empresaSindicos"), "Todas");
-}
-
-// Sugestão de valor já usado noutro cadastro, pro campo não ficar em branco
-// e a pessoa não digitar de novo o que já digitou pra outro cliente
-// (administradora, empresa de síndicos, e-mail e nome de contato costumam
-// se repetir bastante). `coletaValores()` decide QUAIS valores esse campo
-// específico sugere -- nunca mistura contato com e-mail, por exemplo,
-// porque cada chamada usa sua própria função de coleta.
-function ligarSugestaoCampo(input, listaEl, coletaValores) {
-  async function atualizar() {
-    await garantirCadastrosCarregados();
-    const termo = input.value.trim().toLowerCase();
-    const filtrados = coletaValores()
-      .filter((v) => v.toLowerCase() !== termo)
-      .filter((v) => !termo || v.toLowerCase().includes(termo))
-      .slice(0, 8);
-
-    listaEl.innerHTML = "";
-    if (!filtrados.length) {
-      listaEl.classList.add("hidden");
-      return;
-    }
-    filtrados.forEach((valor) => {
-      const item = document.createElement("button");
-      item.type = "button";
-      item.className = "sugestao-item";
-      item.textContent = valor;
-      // mousedown (não click) dispara antes do blur do campo, senão a lista
-      // já teria sumido quando o clique chegasse.
-      item.addEventListener("mousedown", (evento) => {
-        evento.preventDefault();
-        input.value = valor;
-        listaEl.classList.add("hidden");
-        input.focus();
-      });
-      listaEl.appendChild(item);
-    });
-    listaEl.classList.remove("hidden");
-  }
-
-  input.addEventListener("focus", atualizar);
-  input.addEventListener("input", atualizar);
-  input.addEventListener("blur", () => listaEl.classList.add("hidden"));
 }
 
 // ----- E-mails do financeiro / NF-e do cliente -----
@@ -3977,12 +3914,6 @@ function fluxoRealizado(quantosMeses) {
   });
 }
 
-function pintarValor(elemento, valor, quandoNegativoEBom) {
-  elemento.textContent = dinheiro(valor);
-  elemento.classList.toggle("valor-negativo", quandoNegativoEBom ? false : valor < 0);
-  elemento.classList.toggle("valor-positivo", quandoNegativoEBom ? false : valor > 0);
-}
-
 function desenharPainel() {
   const configurado = Boolean(configFin && configFin.dataSaldoInicial);
   document.getElementById("painel-configurar").classList.toggle("hidden", configurado);
@@ -4642,7 +4573,6 @@ const cartaoCampos = {
 };
 
 let cartoes = [];
-let pagamentosFatura = [];
 let cartaoEditando = "";
 
 ligarMascaraDinheiro(cartaoCampos.limite);
@@ -4947,13 +4877,6 @@ function faturasSemCartao() {
     .sort((a, b) => a.dia.localeCompare(b.dia));
 }
 
-function faturaJaPaga(cartaoId, dia) {
-  return pagamentosFatura.some(
-    (p) => p.status === "Enviado" && p.cartaoId === cartaoId
-      && String(p.vencimentoFatura || "").slice(0, 10) === dia
-  );
-}
-
 function desenharFaturas() {
   const grupos = [...faturasDosCartoes(), ...faturasSemCartao()];
   const bloco = document.getElementById("faturas-bloco");
@@ -5184,15 +5107,13 @@ function montarLinhaFatura(grupo) {
   return bloco;
 }
 
-// Depois de pagar uma fatura muda a despesa (virou paga) e o histórico de
-// pagamentos (que é a trava contra pagar duas vezes).
+// Depois de pagar uma fatura muda a despesa (virou paga). O histórico de
+// pagamentos (a trava contra pagar duas vezes) é conferido pelo servidor na
+// hora de pagar; a tela nunca usou essa lista, então não a busca mais
+// (auditoria de 13/11/2026: uma ida a menos ao servidor).
 async function recarregarAposFatura() {
-  const [resDespesas, resPagamentos] = await Promise.all([
-    pedirAoN8n("listar-despesas", {}),
-    pedirAoN8n("listar-pagamentos-fatura", {}),
-  ]);
+  const resDespesas = await pedirAoN8n("listar-despesas", {});
   if (resDespesas && resDespesas.ok) despesas = resDespesas.despesas || [];
-  if (resPagamentos && resPagamentos.ok) pagamentosFatura = resPagamentos.pagamentos || [];
   atualizarListasDeApoio();
   atualizarFiltroDeMeses();
   desenharDespesas();
@@ -5259,20 +5180,19 @@ async function carregarFinanceiro() {
 // contas fixas vencidas.
 async function segundaOndaDoFinanceiro() {
   try {
-    const [resFornecedores, resConferencias, resCadastros, resCartoes,
-           resPagamentosFatura, resGeracao] = await Promise.all([
+    const [resFornecedores, resConferencias, resCadastros, resCartoes, resGeracao] = await Promise.all([
       pedirAoN8n("listar-fornecedores", {}),
       pedirAoN8n("listar-conferencias", {}),
-      pedirAoN8n("listar-cadastros", {}),
+      // Cadastros já carregados nesta sessão (pela Consulta ou por uma busca de
+      // cliente) servem: não vai ao servidor de novo só para tê-los aqui.
+      listaCarregada ? null : pedirAoN8n("listar-cadastros", {}),
       pedirAoN8n("listar-cartoes", {}),
-      pedirAoN8n("listar-pagamentos-fatura", {}),
       pedirAoN8n("gerar-recorrentes", {}).catch(() => null),
     ]);
 
     fornecedores = (resFornecedores && resFornecedores.fornecedores) || [];
     conferencias = (resConferencias && resConferencias.conferencias) || [];
     cartoes = (resCartoes && resCartoes.cartoes) || [];
-    pagamentosFatura = (resPagamentosFatura && resPagamentosFatura.pagamentos) || [];
     desenharCartoes();
     atualizarListaDeCartoesNaDespesa();
     ligarNomesDosFornecedores();
@@ -5374,12 +5294,7 @@ document.querySelector('.sidebar-item[data-page="financeiro"]').addEventListener
   if (!financeiroCarregado) carregarFinanceiro();
 });
 
-// ----- Tela de entrada (senha) -----
-
-function showStatus(kind, message) {
-  statusBox.textContent = message;
-  statusBox.className = `status show ${kind}`;
-}
+// ----- Entrada no sistema -----
 
 // Backup: uma cópia de tudo, uma vez por dia.
 //
@@ -5415,52 +5330,9 @@ function backupDoDia() {
     });
 }
 
-async function entrar(senha) {
-  if (!baseUrlN8n()) {
-    showStatus("error", "Falta o endereço do n8n — toque em '⚙ Endereço do n8n' abaixo.");
-    return;
-  }
-
-  testButton.disabled = true;
-  showStatus("loading", "Conectando ao n8n...");
-
-  try {
-    // A senha vai pelo credenciais() do fetchN8n, que lê o mesmo campo.
-    passwordInput.value = senha;
-    const response = await fetchN8n("testar-conexao", {});
-
-    const data = await response.json().catch(() => null);
-
-    if (data && data.ok) {
-      if (lembrarSenha.checked) {
-        localStorage.setItem(CHAVE_SENHA, senha);
-      } else {
-        localStorage.removeItem(CHAVE_SENHA);
-      }
-
-      showStatus("ok", data.mensagem || "Conectado com sucesso!");
-      entrarNoApp();
-    } else {
-      // Senha recusada: não adianta manter a que estava guardada.
-      localStorage.removeItem(CHAVE_SENHA);
-      showStatus("error", (data && data.mensagem) || "Acesso negado. Confira a senha.");
-    }
-  } catch (err) {
-    showStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
-  } finally {
-    testButton.disabled = false;
-  }
-}
-
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
-  entrar(passwordInput.value);
-});
-
-// Daqui pra frente é igual pros dois jeitos de entrar.
+// Mostra o sistema (a sessão já foi conferida ou renovada).
 function entrarNoApp() {
   document.getElementById("entrando").classList.add("hidden");
-  gateView.classList.add("hidden");
   appView.classList.remove("hidden");
   mostrarUsuarioConectado();
   // Backup diário desligado por decisão do dono até chegar o SSD (27/10/2026):
@@ -5475,17 +5347,16 @@ function entrarNoApp() {
 }
 
 function mostrarUsuarioConectado() {
-  // "Usuários" só existe pra quem entrou por e-mail com acesso total: pela
-  // senha antiga não há conta pra confirmar a senha nas ações de lá.
-  const dono = modoAcesso === "login" && Boolean(sessao && sessao.usuario && sessao.usuario.papel === "Dono");
+  // "Usuários" só existe pra quem tem acesso total.
+  const dono = Boolean(sessao && sessao.usuario && sessao.usuario.papel === "Dono");
   document.getElementById("menu-usuarios").classList.toggle("hidden", !dono);
-  // Notas fiscais (aba de Documentos): o servidor só atende o Dono (ou a senha antiga, que é do dono).
+  // Notas fiscais (aba de Documentos): o servidor só atende o Dono.
   // Sem a aba das notas, a barra de abas inteira some: sobra só os PDFs.
-  document.getElementById("abas-doc").classList.toggle("hidden", modoAcesso === "login" && !dono);
+  document.getElementById("abas-doc").classList.toggle("hidden", !dono);
 
   const el = document.getElementById("usuario-conectado");
   const nome = sessao && sessao.usuario && String(sessao.usuario.nome || "").trim().split(/\s+/)[0];
-  if (modoAcesso !== "login" || !nome) {
+  if (!nome) {
     el.classList.add("hidden");
     return;
   }
@@ -5532,38 +5403,8 @@ function encerrarSessaoNoServidor(tokenSessao) {
   }
 }
 
-// ----- Ajuste do endereço do n8n -----
-
-function mostrarConfigHint(tipo, mensagem) {
-  configHint.textContent = mensagem;
-  configHint.className = `config-hint ${tipo}`;
-}
-
-toggleConfig.addEventListener("click", () => {
-  configBox.classList.toggle("hidden");
-});
-
-salvarUrlBotao.addEventListener("click", () => {
-  const valor = n8nUrlInput.value.trim().replace(/\/+$/, "");
-
-  if (!valor.startsWith("https://")) {
-    mostrarConfigHint("error", "O endereço precisa começar com https://");
-    return;
-  }
-
-  localStorage.setItem(CHAVE_URL, valor);
-  n8nUrlInput.value = valor;
-  mostrarConfigHint("ok", "Endereço salvo neste aparelho.");
-});
-
-restaurarUrlBotao.addEventListener("click", () => {
-  localStorage.removeItem(CHAVE_URL);
-  // Passa por baseUrlN8n() em vez de ler N8N_BASE_URL solto: era a última
-  // referência direta que sobrou, e sem config.js carregado ela estouraria
-  // ReferenceError bem aqui (mesmo caso já corrigido na revisão anterior).
-  n8nUrlInput.value = baseUrlN8n();
-  mostrarConfigHint("ok", "Voltou para o endereço padrão.");
-});
+// O endereço do servidor é ajustado na tela de Entrar (conta.html); a caixinha
+// que existia na tela antiga da senha saiu junto com ela (14/11/2026).
 
 // ----- Indicador de conexão -----
 
@@ -5776,12 +5617,6 @@ const HTML_ESCAPES = {
 
 function escapeHtml(texto) {
   return String(texto ?? "").replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
-}
-
-// YYYY-MM-DD a partir dos componentes LOCAIS do Date, não de toISOString()
-// (que é UTC e viraria o dia errado perto da meia-noite).
-function dataLocalISO(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 const chamadosStatusEl = document.getElementById("chamados-status");
@@ -6188,13 +6023,7 @@ editChamadoAnexosDocInput.addEventListener("change", () =>
 function formatarHoraIso(iso) {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
-function formatarDataChamado(dataStr) {
-  return new Date(`${dataStr}T00:00:00`).toLocaleDateString("pt-BR");
-}
-function nomeDiaSemana(dataStr) {
-  const nome = new Date(`${dataStr}T00:00:00`).toLocaleDateString("pt-BR", { weekday: "long" });
-  return nome.charAt(0).toUpperCase() + nome.slice(1);
-}
+
 // ----- criar chamado -----
 
 function limparFormularioChamado() {
@@ -8262,6 +8091,8 @@ function lembreteCalcularAtivos() {
       chave: `resumo:${hojeBrasilia}`,
       classe: "resumo",
       resumoDiario: true,
+      // Dia sem nenhum chamado: aviso sem nada a fazer (o balão começa recolhido, ver lembreteAplicarEstado).
+      vazio: !doDia.length,
       texto: doDia.length
         ? `Hoje: ${doDia.length} chamado${doDia.length > 1 ? "s" : ""} confirmado${doDia.length > 1 ? "s" : ""} na agenda — ${
             doDia.map((c) => `#${c.numero} às ${agHoraStr(agDeIso(c.reservadoInicio))}`).join(", ")
@@ -8273,14 +8104,23 @@ function lembreteCalcularAtivos() {
   return itens;
 }
 
+// Pedido do dono (16/11/2026): em dia sem chamado, o único aviso é "hoje não tem nada" e ele cobria o canto das
+// listas. Nesses dias o balão começa recolhido no sininho; tocar nele abre normalmente. Qualquer aviso de verdade
+// (chamado chegando, atrasado, resumo com chamados) continua abrindo o balão como antes.
+let lembreteAbertoAMao = false;
+const lembreteSoAvisoVazio = () => lembreteAtivos.length > 0 && lembreteAtivos.every((item) => item.vazio);
+
 function lembreteAplicarEstado() {
   const temItens = lembreteAtivos.length > 0;
-  lembreteBalaoEl.classList.toggle("hidden", !temItens || lembreteEstado !== "expandido");
-  lembretePillEl.classList.toggle("hidden", !temItens || lembreteEstado !== "minimizado");
+  const estado = lembreteEstado === "expandido" && lembreteSoAvisoVazio() && !lembreteAbertoAMao ? "minimizado" : lembreteEstado;
+  lembreteBalaoEl.classList.toggle("hidden", !temItens || estado !== "expandido");
+  lembretePillEl.classList.toggle("hidden", !temItens || estado !== "minimizado");
 }
 
 function lembreteDesenhar() {
-  lembretePillContagemEl.textContent = String(lembreteAtivos.length);
+  // Só o sininho quando não há nada a fazer: um "1" ali parecia um aviso pendente.
+  lembretePillContagemEl.textContent = lembreteSoAvisoVazio() ? "" : String(lembreteAtivos.length);
+  lembretePillContagemEl.classList.toggle("hidden", lembreteSoAvisoVazio());
   lembreteListaEl.innerHTML = "";
   lembreteAtivos.forEach((item) => {
     const el = document.createElement(item.chamado ? "div" : "p");
@@ -8360,6 +8200,7 @@ lembreteFecharBotao.addEventListener("click", () => {
 });
 
 lembretePillEl.addEventListener("click", () => {
+  lembreteAbertoAMao = true;
   lembreteEstado = "expandido";
   sessionStorage.removeItem(CHAVE_LEMBRETE_MINIMIZADO);
   lembreteAplicarEstado();
@@ -8654,12 +8495,9 @@ sairBotao.addEventListener("click", () => {
 
   descartarEdicaoDaConsulta();
 
-  // A senha e a sessão guardadas têm que ir embora, senão o app entraria
-  // sozinho de novo e o Sair não teria efeito nenhum. O endereço do n8n
-  // fica: é ajuste do aparelho, não da sessão.
-  localStorage.removeItem(CHAVE_SENHA);
-  passwordInput.value = "";
-  lembrarSenha.checked = false;
+  // A sessão guardada tem que ir embora, senão o app entraria sozinho de
+  // novo e o Sair não teria efeito nenhum. O endereço do n8n fica: é ajuste
+  // do aparelho, não da sessão.
   if (sessao) encerrarSessaoNoServidor(sessao.tokenSessao);
   apagarSessao();
 
@@ -8690,7 +8528,6 @@ sairBotao.addEventListener("click", () => {
   conferencias = [];
   retiradas = [];
   cartoes = [];
-  pagamentosFatura = [];
   configFin = null;
   financeiroCarregado = false;
   listaDespesasBox.innerHTML = "";
@@ -8747,6 +8584,7 @@ sairBotao.addEventListener("click", () => {
   lembreteAtivos = [];
   lembreteChavesVistas = new Set();
   lembreteEstado = "expandido";
+  lembreteAbertoAMao = false;
   sessionStorage.removeItem(CHAVE_LEMBRETE_MINIMIZADO);
   lembreteDesenhar();
 
@@ -8758,12 +8596,7 @@ sairBotao.addEventListener("click", () => {
   desarmarSaida();
   closeSidebar();
   appView.classList.add("hidden");
-  if (modoAcesso === "login") {
-    irParaLogin();
-    return;
-  }
-  gateView.classList.remove("hidden");
-  statusBox.className = "status";
+  irParaLogin();
 });
 
 // ----- Atendimento (fase 1: iniciar, acompanhar, concluir) -----
@@ -13257,7 +13090,43 @@ function nfAviso(titulo, texto) {
   return a;
 }
 
-// Resultado de uma nota emitida: número, chave e onde baixar o PDF.
+// PDF da nota (16/11/2026): o sistema guarda o PDF de cada nota emitida (gerado do XML do governo, no mesmo modelo
+// do "Download DANFS-e" do portal). "Ver PDF" abre numa aba; "Baixar PDF" baixa no computador e, no celular, abre o
+// compartilhar (WhatsApp, e-mail, salvar). Nota sem PDF (não deveria acontecer) continua com o link do portal.
+async function baixarPdfDaNota(pdf, botao) {
+  if (botao) botao.disabled = true;
+  try {
+    const resposta = await fetch(pdf.url, { cache: "no-store" });
+    if (!resposta.ok) throw new Error("HTTP " + resposta.status);
+    const blob = new Blob([await resposta.arrayBuffer()], { type: "application/pdf" });
+    if ((await entregarPdf(blob, pdf.nome || "NFS-e.pdf")) === "baixado") mostrarToast("PDF da nota baixado.");
+  } catch (err) {
+    mostrarToast("Não consegui baixar o PDF agora.", null, "erro");
+  } finally {
+    if (botao) botao.disabled = false;
+  }
+}
+
+function nfBotoesDaNota(acoes, nota, ambiente) {
+  const pdf = nota.pdf && nota.pdf.url ? nota.pdf : null;
+  if (pdf) {
+    acoes.append(nfBotao("Ver PDF", "", () => abrirPdfEmNovaAba(pdf.url)));
+    const baixar = nfBotao("Baixar PDF", "botao-secundario", () => baixarPdfDaNota(pdf, baixar));
+    acoes.append(baixar);
+  }
+  acoes.append(nfBotao("Copiar chave", "botao-secundario", () => copiarTexto(nota.chave, "Chave copiada.")));
+  if (!pdf && ambiente !== "Testes") {
+    const a = document.createElement("a");
+    a.href = nfPortal(nota.chave);
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.className = "botao-link";
+    a.textContent = "Abrir no portal (PDF)";
+    acoes.append(a);
+  }
+}
+
+// Resultado de uma nota emitida: número, chave e o PDF.
 function nfQuadroEmitida(nota, ambiente) {
   const q = document.createElement("div");
   q.className = "moldura nf-emitida";
@@ -13267,16 +13136,7 @@ function nfQuadroEmitida(nota, ambiente) {
   q.append(t, nfLinha("Chave de acesso", nota.chave, "nf-chave"), nfLinha("Valor", nfReais(nota.valor)));
   const acoes = document.createElement("div");
   acoes.className = "nf-acoes";
-  acoes.append(nfBotao("Copiar chave", "botao-secundario", () => copiarTexto(nota.chave, "Chave copiada.")));
-  if (ambiente !== "Testes") {
-    const a = document.createElement("a");
-    a.href = nfPortal(nota.chave);
-    a.target = "_blank";
-    a.rel = "noopener";
-    a.className = "botao-link";
-    a.textContent = "Abrir no portal (PDF)";
-    acoes.append(a);
-  }
+  nfBotoesDaNota(acoes, nota, ambiente);
   q.append(acoes);
   return q;
 }
@@ -13488,18 +13348,7 @@ async function carregarNotas() {
     }
     const acoes = document.createElement("div");
     acoes.className = "nf-acoes";
-    if (n.status === "Emitida" && n.chave) {
-      acoes.append(nfBotao("Copiar chave", "botao-secundario", () => copiarTexto(n.chave, "Chave copiada.")));
-      if (n.ambiente !== "Testes") {
-        const a = document.createElement("a");
-        a.href = nfPortal(n.chave);
-        a.target = "_blank";
-        a.rel = "noopener";
-        a.className = "botao-link";
-        a.textContent = "Abrir no portal (PDF)";
-        acoes.append(a);
-      }
-    }
+    if (n.status === "Emitida" && n.chave) nfBotoesDaNota(acoes, n, n.ambiente);
     if (n.status === "Sem resposta" || n.status === "Enviando") {
       const b = nfBotao("Conferir no governo", "", () => nfConferirNota(n.id, b));
       acoes.append(b);
@@ -13966,7 +13815,9 @@ function arqVisualizar(id) {
   if (!it) return;
   const titulo = `${it.titulo} · ${arqNomeDoCliente(arq.cliente)}`;
   let corpo;
-  if (it.nota) {
+  if (it.arquivo) {
+    corpo = '<div class="arq-vazio">Carregando o PDF...</div>';
+  } else if (it.nota) {
     const n = it.nota || {};
     corpo = `<div class="arq-nota"><div class="arq-nota-linha"><span>Cliente</span><strong>${escapeHtml(n.tomador || "—")}</strong></div>
       <div class="arq-nota-linha"><span>CPF/CNPJ</span><strong>${escapeHtml(formatarDocumento(n.documento || "") || "—")}</strong></div>
@@ -13976,8 +13827,6 @@ function arqVisualizar(id) {
       <div class="arq-nota-linha"><span>Emitida por</span><strong>${escapeHtml(it.emissor)}</strong></div>
       <div class="arq-nota-linha"><span>Descrição</span><strong class="arq-nota-desc">${escapeHtml(it.descricao || "—")}</strong></div>
       <div class="arq-nota-linha"><span>Chave de acesso</span><strong class="arq-chave">${escapeHtml(n.chave || "—")}</strong></div></div>`;
-  } else if (it.arquivo) {
-    corpo = '<div class="arq-vazio">Carregando o PDF...</div>';
   } else {
     corpo = '<div class="arq-vazio">Este registro não tem arquivo.</div>';
   }
@@ -13985,7 +13834,15 @@ function arqVisualizar(id) {
   const botoes = arqModal.querySelector(".arq-botoes");
   let linkPdf = null;
   const botao = (txt, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.textContent = txt; if (cls) b.className = cls; b.addEventListener("click", fn); botoes.append(b); };
-  if (it.nota) {
+  if (it.nota && it.arquivo) {
+    // Nota com PDF: o PDF aparece aqui mesmo; baixar e copiar a chave ficam à mão.
+    const n = it.nota || {};
+    botao("Baixar PDF", "", (e) => baixarPdfDaNota({ url: it.arquivo.url, nome: it.arquivo.nome }, e.currentTarget));
+    if (n.chave) botao("Copiar chave", "botao-secundario", () => copiarTexto(n.chave, "Chave copiada."));
+    linkPdf = document.createElement("a");
+    linkPdf.href = it.arquivo.url; linkPdf.target = "_blank"; linkPdf.rel = "noopener"; linkPdf.className = "botao-link"; linkPdf.textContent = "Abrir em outra aba";
+    botoes.append(linkPdf);
+  } else if (it.nota) {
     const n = it.nota || {};
     if (n.chave) botao("Copiar chave", "", () => copiarTexto(n.chave, "Chave copiada."));
     if (n.chave && n.ambiente !== "Testes") {
@@ -14128,9 +13985,33 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-// ----- Estado inicial da tela de entrada -----
-
-n8nUrlInput.value = baseUrlN8n();
+// ----- Rótulo ligado ao campo (acessibilidade, auditoria de 13/11/2026) -----
+//
+// Nos moldes (endereço, contato, edição do cadastro, linhas do Financeiro) o
+// rótulo vem logo antes do campo, mas sem "for", porque o mesmo molde se repete
+// na tela e um id fixo se repetiria. Resultado: o leitor de tela não dizia o
+// nome do campo, e tocar no rótulo não levava a ele. Aqui cada rótulo solto é
+// ligado ao campo que vem logo depois dele, com um id próprio, inclusive nos
+// blocos que nascem depois (clonados dos moldes).
+// Caixinha de marcar, opção e arquivo ficam de fora: tocar no texto passaria a
+// marcar/abrir, e isso mudaria o comportamento de hoje.
+const CAMPO_ROTULAVEL = "input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=hidden]), select, textarea";
+let rotulosLigados = 0;
+function ligarRotulos(raiz) {
+  raiz.querySelectorAll("label:not([for])").forEach((rotulo) => {
+    const campo = rotulo.nextElementSibling;
+    if (!campo || !campo.matches(CAMPO_ROTULAVEL) || rotulo.querySelector("input, select, textarea")) return;
+    if (!campo.id) campo.id = `campo-rotulado-${++rotulosLigados}`;
+    rotulo.htmlFor = campo.id;
+  });
+}
+ligarRotulos(document);
+new MutationObserver((mudancas) => {
+  mudancas.forEach((m) => m.addedNodes.forEach((no) => {
+    if (no.nodeType !== 1) return;
+    ligarRotulos(no.matches("label") && no.parentElement ? no.parentElement : no);
+  }));
+}).observe(document.body, { childList: true, subtree: true });
 
 // ----- Desfazer (↺) -----
 //
@@ -14170,7 +14051,7 @@ function campoDesfazivel(el) {
   if (el instanceof HTMLInputElement && /^(file|password|search|hidden|button|submit|reset|image|range|color|radio)$/.test(el.type)) return false;
   const nome = `${el.id} ${typeof el.className === "string" ? el.className : ""} ${el.getAttribute("aria-label") || ""}`;
   if (/busca|filtro|buscar/i.test(nome)) return false;
-  return !el.closest("dialog, #gate-view, [data-sem-desfazer]");
+  return !el.closest("dialog, [data-sem-desfazer]");
 }
 
 // Ainda dá para desfazer: o campo está na tela e liberado para edição.
@@ -14331,18 +14212,14 @@ document.addEventListener("click", (evento) => {
   atualizarBotaoDesfazer();
 }, true);
 
-// sistema.html#senha: a tela antiga, com a senha de acesso única -- fica até
-// o dono autorizar tirar. Qualquer outro jeito de abrir usa o login por
-// e-mail e senha (conta.html).
-if (window.location.hash === "#senha") {
-  modoAcesso = "senha";
-  gateView.classList.remove("hidden");
-  const senhaGuardada = localStorage.getItem(CHAVE_SENHA);
-  if (senhaGuardada) {
-    passwordInput.value = senhaGuardada;
-    lembrarSenha.checked = true;
-    entrar(senhaGuardada);
-  }
-} else {
-  iniciarComLogin();
+// A senha de acesso única antiga podia ficar guardada no aparelho, em texto
+// puro ("Lembrar neste aparelho"). Ela não vale mais nada: some daqui também.
+try {
+  localStorage.removeItem("senha_salva");
+} catch (e) {
+  /* sem acesso ao armazenamento: não há o que limpar */
 }
+
+// Toda abertura passa pelo login por e-mail e senha (conta.html). O endereço
+// antigo sistema.html#senha cai aqui também, e é levado para o Entrar.
+iniciarComLogin();

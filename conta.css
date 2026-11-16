@@ -124,12 +124,6 @@ body {
 .rodape-cartao a { color: var(--azul); font-weight: 600; text-decoration: none; }
 .rodape-cartao a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-/* Caminho antigo (senha de acesso única): discreto de propósito, some
-   quando o dono autorizar. */
-.rodape-antigo { margin: -12px 0 0; font-size: 0.8rem; }
-.rodape-antigo a { color: var(--tinta-fraca); text-underline-offset: 3px; }
-.rodape-antigo a:hover { color: var(--azul); }
-
 /* ---------- Endereço do servidor (provisório) ----------
    Discreto no pé da página: só se mexe nele quando o túnel troca de
    endereço. Sai quando o endereço do servidor for fixo. */
@@ -567,7 +561,6 @@ body {
 .olho:focus-visible,
 .marca:focus-visible,
 .rodape-cartao a:focus-visible,
-.rodape-antigo a:focus-visible,
 .servidor-abrir:focus-visible,
 .servidor-salvar:focus-visible {
   outline: 3px solid rgba(62, 143, 209, 0.55);

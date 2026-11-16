@@ -147,7 +147,6 @@
   const NUMERO_DO_PASSO = { email: 1, codigo: 2, senha: 3, sucesso: 4 };
   const passos = $("#passos");
   const rodape = $("#rodape-cartao");
-  const rodapeAntigo = $("#rodape-antigo");
 
   const estado = { fluxo: "criar", email: "", codigo: "", nome: "", precisaNome: false };
   const fluxo = () => FLUXOS[estado.fluxo];
@@ -173,7 +172,6 @@
     $("#rodape-link").textContent = link;
     $("#rodape-link").setAttribute("href", destino);
     rodape.hidden = nome === "sucesso" || nome === "jaAtiva";
-    rodapeAntigo.hidden = nome !== "entrar";
     // Sem endereço nenhum a tela inteira já é o campo do endereço: a
     // caixinha do pé da página seria repetida.
     $("#servidor").hidden = nome === "semServidor";

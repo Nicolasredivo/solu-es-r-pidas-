@@ -1,5 +1,5 @@
 // Sobe junto com o APP_VERSION do app.js a cada publicação.
-const CACHE_NAME = "solucoes-rapidas-2026.11.13i";
+const CACHE_NAME = "solucoes-rapidas-2026.11.14a";
 // "./" e "./index.html" são a landing institucional; "./sistema.html" é o
 // app de verdade (painel), que antes ocupava a raiz; "./conta.html" é a
 // entrada por e-mail e senha, criar conta e recuperar senha.
@@ -83,7 +83,10 @@ self.addEventListener("fetch", (event) => {
   // O .svg entra na lista porque o logo da landing está no APP_SHELL: sem ele
   // aqui, o arquivo era baixado e guardado na instalação e mesmo assim toda
   // visita ia buscar na rede -- e sem internet a marca do topo não aparecia.
-  if (event.request.method !== "GET" || !url.pathname.match(/\.(html|css|js|json|png|svg)$|\/$/)) {
+  // O .jpg entrou pelo mesmo motivo (auditoria de 13/11/2026): as duas imagens
+  // do PDF (logo e selo) estão no APP_SHELL, mas eram buscadas sempre na rede,
+  // então sem internet o "Gerar PDF" falhava ao carregar o logo.
+  if (event.request.method !== "GET" || !url.pathname.match(/\.(html|css|js|json|png|svg|jpg)$|\/$/)) {
     return;
   }
 

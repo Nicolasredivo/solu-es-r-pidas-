@@ -17,42 +17,8 @@
   <!-- Aparece só enquanto a sessão salva é renovada ao abrir (menos de 1s). -->
   <div id="entrando" class="entrando hidden" role="status">Entrando…</div>
 
-  <!-- Tela antiga da senha de acesso única: só em sistema.html#senha, até o
-       dono autorizar tirar. A entrada normal é conta.html (e-mail e senha). -->
-  <div id="gate-view" class="gate-view hidden">
-    <div class="card">
-      <h1>Soluções Rápidas</h1>
-      <p class="subtitle">Digite a senha para acessar</p>
-
-      <form id="test-form">
-        <label for="password">Senha de acesso</label>
-        <input type="password" id="password" placeholder="Digite a senha" required />
-
-        <label class="checkbox-linha">
-          <input type="checkbox" id="lembrar-senha" />
-          <span>Lembrar neste aparelho</span>
-        </label>
-
-        <button type="submit" id="test-button">Entrar</button>
-      </form>
-
-      <div id="status" class="status"></div>
-
-      <button type="button" id="toggle-config" class="link-button" title="Onde o app busca os dados. O endereço muda toda vez que o túnel é reiniciado.">⚙ Endereço do n8n</button>
-
-      <div id="config-box" class="config-box hidden">
-        <label for="n8n-url">Endereço do túnel (Cloudflare)</label>
-        <input type="text" id="n8n-url" placeholder="https://algo.trycloudflare.com" autocomplete="off" />
-        <div class="config-acoes">
-          <button type="button" id="salvar-url">Salvar</button>
-          <button type="button" id="restaurar-url" class="botao-secundario" title="Esquece o endereço salvo neste aparelho e volta ao que vem no código.">Restaurar padrão</button>
-        </div>
-        <p id="config-hint" class="config-hint"></p>
-      </div>
-
-      <a href="conta.html#entrar" class="link-button link-login">Entrar com e-mail e senha</a>
-    </div>
-  </div>
+  <!-- A entrada é sempre por conta.html (e-mail e senha). A tela antiga da
+       senha de acesso única saiu daqui em 14/11/2026. -->
 
   <div id="app-view" class="app-view hidden">
     <div class="topbar">
@@ -74,6 +40,12 @@
          .sidebar-texto. Os grupos (Cadastro, Chamados) têm uma seta que gira ao
          abrir, e os subitens ficam pendurados numa linha-guia. -->
     <nav id="sidebar" class="sidebar">
+      <!-- Marca no topo do menu (pedido do dono, 16/11/2026): o logo SR oficial num quadrinho branco, porque a
+           parte azul-escura do desenho some no fundo escuro do menu. -->
+      <div class="sidebar-marca">
+        <span class="sidebar-marca-simbolo"><img src="imagens/logo.png" alt="" width="397" height="247" /></span>
+        <span class="sidebar-marca-texto"><strong>Soluções <em>Rápidas</em></strong><small>Manutenção predial</small></span>
+      </div>
       <button type="button" class="sidebar-item active" data-page="inicio">
         <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/></svg>
         <span class="sidebar-texto">Início</span>
@@ -448,7 +420,7 @@
 
         <div id="subpage-consultar" class="subpage">
           <div class="busca-linha">
-            <input type="text" id="busca-cadastro" autocomplete="off"
+            <input type="text" id="busca-cadastro" autocomplete="off" aria-label="Buscar cadastro por nome, CPF/CNPJ ou contato"
                    placeholder="Buscar por nome, CPF/CNPJ ou contato" />
             <button type="button" id="recarregar-lista" class="botao-secundario" title="Busca a lista de novo no servidor.">Atualizar</button>
           </div>
@@ -473,7 +445,7 @@
             </div>
             <div class="filtro-item">
               <span class="filtro-rotulo">Status</span>
-              <select id="filtro-status">
+              <select id="filtro-status" aria-label="Filtrar por status">
                 <option value="">Todos</option>
                 <option value="Ativo">Ativo</option>
                 <option value="Inativo">Inativo</option>
@@ -482,19 +454,19 @@
             </div>
             <div class="filtro-item">
               <span class="filtro-rotulo">Contato</span>
-              <select id="filtro-contato">
+              <select id="filtro-contato" aria-label="Filtrar por contato">
                 <option value="">Todos</option>
               </select>
             </div>
             <div class="filtro-item">
               <span class="filtro-rotulo">Administradora</span>
-              <select id="filtro-administradora">
+              <select id="filtro-administradora" aria-label="Filtrar por administradora">
                 <option value="">Todas</option>
               </select>
             </div>
             <div class="filtro-item">
               <span class="filtro-rotulo">Empresa de síndicos</span>
-              <select id="filtro-empresa-sindicos">
+              <select id="filtro-empresa-sindicos" aria-label="Filtrar por empresa de síndicos">
                 <option value="">Todas</option>
               </select>
             </div>
@@ -1083,7 +1055,7 @@
           </form>
 
           <div class="busca-linha">
-            <input type="text" id="busca-despesa" autocomplete="off"
+            <input type="text" id="busca-despesa" autocomplete="off" aria-label="Buscar conta a pagar por descrição ou fornecedor"
                    placeholder="Buscar por descrição ou fornecedor" />
             <button type="button" id="recarregar-despesas" class="botao-secundario" title="Busca a lista de novo no servidor.">Atualizar</button>
           </div>
@@ -1300,7 +1272,7 @@
           </form>
 
           <div class="busca-linha">
-            <input type="text" id="busca-receita" autocomplete="off"
+            <input type="text" id="busca-receita" autocomplete="off" aria-label="Buscar conta a receber por descrição ou cliente"
                    placeholder="Buscar por descrição ou cliente" />
             <button type="button" id="recarregar-receitas" class="botao-secundario" title="Busca a lista de novo no servidor.">Atualizar</button>
           </div>
@@ -1958,7 +1930,7 @@
 
         <form id="form-documento" novalidate autocomplete="off">
           <label for="doc-cliente-busca">Puxar dados de um cliente</label>
-          <input type="text" id="doc-cliente-busca" placeholder="Buscar cliente cadastrado (opcional)" />
+          <input type="text" id="doc-cliente-busca" placeholder="Buscar cliente (opcional)" />
           <div id="doc-cliente-sugestao" class="sugestao-lista hidden"></div>
           <p id="doc-cliente-status" class="placeholder-text ct-ajuda">Preenche cliente, endereço e solicitante. Dá para mudar tudo depois.</p>
 
