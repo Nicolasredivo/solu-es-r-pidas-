@@ -71,12 +71,14 @@ body {
   font-weight: 600;
 }
 
-/* Botão "Voltar" do topo (16/11/2026): leva à tela anterior (página, aba, pasta). Some quando não há para onde voltar. */
+/* Botão "Voltar" (16/11/2026): leva à tela anterior (página, aba, pasta). Fica no alto do bloco da página aberta,
+   acima do título. Some quando não há para onde voltar. */
 .nav-voltar {
   width: auto;
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  margin: 0 0 12px;
   padding: 6px 12px 6px 8px;
   border-radius: 8px;
   background: transparent;

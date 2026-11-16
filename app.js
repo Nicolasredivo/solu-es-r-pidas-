@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.16f";
+const APP_VERSION = "2026.11.16g";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -14113,8 +14113,11 @@ function navFoto() {
 
 const navChave = (f) => JSON.stringify(f);
 
+// O botão mora no alto do bloco da página aberta, logo acima do título.
 function navAtualizarBotao() {
-  navBotaoVoltar.classList.toggle("hidden", !navPilha.length);
+  const pagina = [...document.querySelectorAll(".page")].find((p) => !p.classList.contains("hidden"));
+  if (pagina && navBotaoVoltar.parentElement !== pagina) pagina.prepend(navBotaoVoltar);
+  navBotaoVoltar.classList.toggle("hidden", !navPilha.length || !pagina);
 }
 
 function navConferir() {
