@@ -1960,10 +1960,21 @@
             <input type="text" id="doc-cliente" placeholder="Ex: Residencial Jardim das Flores" />
           </div>
 
+          <!-- Laudo para edifício ou para empresa, com o CNPJ do cliente opcional (16/11/2026). -->
           <div data-tipos="laudo">
-            <label for="doc-edificio">Nome do edifício</label>
+            <div class="grupo">
+              <label>O laudo é para</label>
+              <div class="opcoes" id="doc-laudo-local">
+                <button type="button" class="opcao active" data-valor="edificio">Edifício</button>
+                <button type="button" class="opcao" data-valor="empresa">Empresa</button>
+              </div>
+            </div>
+            <label for="doc-edificio" id="doc-edificio-rotulo">Nome do edifício</label>
             <input type="text" id="doc-edificio" placeholder="Ex: Jardim das Flores" />
-            <p class="placeholder-text ct-ajuda">Sem "Residencial": no laudo vira "no Edifício Jardim das Flores".</p>
+            <p class="placeholder-text ct-ajuda" id="doc-edificio-ajuda">Sem "Residencial": no laudo vira "no Edifício Jardim das Flores".</p>
+            <label for="doc-cnpj-cliente">CNPJ do cliente (opcional)</label>
+            <input type="text" id="doc-cnpj-cliente" inputmode="numeric" placeholder="Ex: 11.222.333/0001-81" />
+            <p class="placeholder-text ct-ajuda">Se preenchido, sai logo depois do nome: "…, CNPJ 11.222.333/0001-81, endereço …".</p>
           </div>
 
           <div data-tipos="orcamento recibo comunicado">

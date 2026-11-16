@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.16c";
+const APP_VERSION = "2026.11.16d";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -11173,6 +11173,7 @@ const docCampos = {
   referente: document.getElementById("doc-referente"),
   cliente: document.getElementById("doc-cliente"),
   edificio: document.getElementById("doc-edificio"),
+  cnpjCliente: document.getElementById("doc-cnpj-cliente"),
   solicitante: document.getElementById("doc-solicitante"),
   endereco: document.getElementById("doc-endereco"),
   data: document.getElementById("doc-data"),
@@ -11226,6 +11227,30 @@ function nomeDoEdificio(nome) {
   while (prefixo.test(texto)) texto = texto.replace(prefixo, "");
   return texto;
 }
+
+// Laudo para edifício ou para empresa (16/11/2026): muda só o rótulo e a ajuda do campo do nome; no PDF,
+// "no Edifício X" vira "na empresa X".
+const docLaudoLocal = document.getElementById("doc-laudo-local");
+function laudoParaEmpresa() {
+  return escolhaDoGrupo(docLaudoLocal) === "empresa";
+}
+function atualizarLaudoLocal() {
+  const empresa = laudoParaEmpresa();
+  document.getElementById("doc-edificio-rotulo").textContent = empresa ? "Nome da empresa" : "Nome do edifício";
+  document.getElementById("doc-edificio-ajuda").textContent = empresa
+    ? 'No laudo vira "na empresa Nome da Empresa S/A".'
+    : 'Sem "Residencial": no laudo vira "no Edifício Jardim das Flores".';
+  docCampos.edificio.placeholder = empresa ? "Ex: Empresa Exemplo S/A" : "Ex: Jardim das Flores";
+}
+function escolherLaudoLocal(valor) {
+  docLaudoLocal.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === valor));
+  atualizarLaudoLocal();
+}
+configurarGrupo(docLaudoLocal, atualizarLaudoLocal);
+docCampos.cnpjCliente.addEventListener("input", () => {
+  const d = docCampos.cnpjCliente.value.replace(/\D/g, "").slice(0, 14);
+  docCampos.cnpjCliente.value = d.length === 14 ? formatarCNPJ(d) : d;
+});
 
 function mostrarCamposDoTipo() {
   const tipo = tipoDocumento();
@@ -11335,7 +11360,13 @@ async function puxarClienteNoDocumento(id) {
   docCampos.cliente.value = nome;
   docClienteId = id;
   docClienteNomePuxado = nome;
-  docCampos.edificio.value = nomeDoEdificio(nome);
+  // Laudo: cliente "CNPJ - Empresa" vira laudo de empresa, com a razão social; os outros, edifício. O CNPJ do
+  // cliente (só CNPJ, nunca CPF) já vem preenchido. Dá para trocar tudo à mão depois.
+  const ehEmpresa = cliente.tipo === "CNPJ - Empresa";
+  escolherLaudoLocal(ehEmpresa ? "empresa" : "edificio");
+  docCampos.edificio.value = ehEmpresa ? nomeComIniciais(cliente.razaoSocial || cliente.nomeFantasia) : nomeDoEdificio(nome);
+  const docDigitos = String(cliente.documento || "").replace(/\D/g, "");
+  docCampos.cnpjCliente.value = docDigitos.length === 14 ? formatarCNPJ(docDigitos) : "";
   // O documento sai pelo CNPJ que atende o cliente (dá para trocar à mão depois).
   escolherEmissorDoDocumento(cliente.atendidoPor);
   docClienteBusca.value = "";
@@ -11441,7 +11472,9 @@ function dadosDoDocumento() {
     data: docCampos.data.value ? `${dia}/${mes}/${ano}` : "",
     referente: texto(docCampos.referente),
     cliente: texto(docCampos.cliente),
-    edificio: texto(docCampos.edificio),
+    edificio: laudoParaEmpresa() ? "" : texto(docCampos.edificio),
+    empresa: laudoParaEmpresa() ? texto(docCampos.edificio) : "",
+    cnpjCliente: texto(docCampos.cnpjCliente),
     solicitante: texto(docCampos.solicitante),
     endereco: texto(docCampos.endereco),
     valor: valorDoCampo(docCampos.valor),
@@ -11459,11 +11492,13 @@ const CAMPOS_DO_DOCUMENTO = {
   orcamento: [["cliente", "cliente"], ["solicitante", "solicitante"], ["endereco", "endereço"], ["data", "data"], ["condicoes", "condições de pagamento"]],
   recibo: [["referente", "referente a"], ["data", "data"], ["solicitante", "solicitante"], ["cliente", "cliente"], ["endereco", "endereço"], ["valor", "valor total"]],
   comunicado: [["data", "data"], ["solicitante", "solicitante"], ["endereco", "endereço"], ["cliente", "cliente"], ["responsavel", "responsável"]],
-  laudo: [["data", "data"], ["edificio", "nome do edifício"], ["endereco", "endereço"], ["responsavel", "responsável"]],
+  laudo: [["data", "data"], ["endereco", "endereço"], ["responsavel", "responsável"]],
 };
 
 function camposFaltando(tipo, dados) {
   const faltando = CAMPOS_DO_DOCUMENTO[tipo].filter(([chave]) => !dados[chave]).map(([, nome]) => nome);
+  if (tipo === "laudo" && !dados.edificio && !dados.empresa) faltando.splice(1, 0, laudoParaEmpresa() ? "nome da empresa" : "nome do edifício");
+  if (tipo === "laudo" && dados.cnpjCliente && !cnpjValido(dados.cnpjCliente.replace(/\D/g, ""))) faltando.push("CNPJ do cliente válido (ou deixe em branco)");
   if (tipo === "orcamento") {
     if (!dados.itens.length) faltando.push("pelo menos um item");
     else if (dados.itens.some((item) => !item.desc || !item.unit || !item.qtd)) faltando.push("descrição, quantidade e valor de cada item");
@@ -11565,11 +11600,11 @@ function pdfEmBase64(blob) {
 
 function resumoDoDocumento(tipo, dados) {
   const rotulo = ROTULO_TIPO_DOCUMENTO[tipo];
-  const quem = dados.cliente || dados.edificio || dados.solicitante;
+  const quem = dados.cliente || dados.edificio || dados.empresa || dados.solicitante;
   const titulo = [rotulo, quem].filter(Boolean).join(" · ");
   const itens = (dados.itens || []).map((i) => i.desc).filter(Boolean);
-  const descricao = { orcamento: itens.join("; "), recibo: dados.referente, comunicado: dados.obs || dados.endereco, laudo: [dados.edificio, dados.obs].filter(Boolean).join(" · ") }[tipo] || "";
-  const textoBusca = [dados.cliente, dados.edificio, dados.solicitante, dados.endereco, dados.referente, dados.condicoes, dados.obs, dados.responsavel, ...itens]
+  const descricao = { orcamento: itens.join("; "), recibo: dados.referente, comunicado: dados.obs || dados.endereco, laudo: [dados.edificio || dados.empresa, dados.obs].filter(Boolean).join(" · ") }[tipo] || "";
+  const textoBusca = [dados.cliente, dados.edificio, dados.empresa, dados.cnpjCliente, dados.solicitante, dados.endereco, dados.referente, dados.condicoes, dados.obs, dados.responsavel, ...itens]
     .filter(Boolean).join(" | ");
   const valor = tipo === "recibo" ? dados.valor : tipo === "orcamento" ? (dados.itens || []).reduce((soma, i) => soma + i.qtd * i.unit, 0) : 0;
   return { titulo, descricao, textoBusca, valor: valor > 0 ? valor.toFixed(2) : "" };
@@ -11582,7 +11617,7 @@ async function guardarCopiaDoDocumento(tipo, dados, blob, nomeArquivo) {
     const resumo = resumoDoDocumento(tipo, dados);
     const iso = docCampos.data.value;
     const r = await pedirAoN8n("arquivos", {
-      acao: "salvar", clienteId: docClienteId, clienteNome: dados.cliente || dados.edificio || "", tipo,
+      acao: "salvar", clienteId: docClienteId, clienteNome: dados.cliente || dados.edificio || dados.empresa || "", tipo,
       titulo: resumo.titulo, descricao: resumo.descricao, textoBusca: resumo.textoBusca, valor: resumo.valor,
       dataDocumento: iso, emissor: dados.emissor ? "CNPJ 2" : "CNPJ 1", hash: await impressaoDoPdf(blob),
       dadosJson: JSON.stringify({ ...dados, emissor: dados.emissor ? "CNPJ 2" : "CNPJ 1" }), nomeArquivo, arquivo: await pdfEmBase64(blob),
@@ -11641,6 +11676,7 @@ function limparDocumento() {
   docClienteId = "";
   docClienteNomePuxado = "";
   escolherEmissorDoDocumento("CNPJ 1");
+  escolherLaudoLocal("edificio");
   docClienteStatus.textContent = "Preenche cliente, endereço e solicitante. Dá para mudar tudo depois.";
   docItens.innerHTML = "";
   adicionarItemDocumento(false);

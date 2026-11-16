@@ -300,10 +300,13 @@
     const edificio = a.edificio || "..............................";
     const endereco = a.endereco || "....................................................................................";
     const opc = { tamanho, alturaLinha };
+    // Laudo para empresa e CNPJ do cliente (16/11/2026), igual ao gerar_documento.py da skill.
+    let local = a.empresa ? "na empresa " + a.empresa : "no Edifício " + edificio;
+    if (a.cnpjCliente) local += ", CNPJ " + a.cnpjCliente;
     let cur = paragrafoColorido(p, [
       ["Informamos que ", BLACK],
       ["foi realizada a limpeza dos reservatórios ", RED],
-      ["de água no dia " + data + ", no Edifício " + edificio + ", endereço " + endereco + ", "
+      ["de água no dia " + data + ", " + local + ", endereço " + endereco + ", "
         + "a limpeza do reservatório foi realizada em conformidade com o disposto no ", BLACK],
       ["Art. 77 do Decreto Estadual nº 1.846/2018", RED],
       [" de Santa Catarina.", BLACK],
@@ -336,7 +339,7 @@
     p.fonte("Helvetica-BoldOblique", 12);
     p.corTexto(ACCENT);
     p.textoCentro("Qualidade e compromisso com sua saúde.", W / 2, cur);
-    return nomeArquivo("laudo limpeza caixa", a.edificio);
+    return nomeArquivo("laudo limpeza caixa", a.empresa || a.edificio);
   }
 
   function gerarRecibo(p, a) {
