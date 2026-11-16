@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.16d";
+const APP_VERSION = "2026.11.16e";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -11174,6 +11174,7 @@ const docCampos = {
   cliente: document.getElementById("doc-cliente"),
   edificio: document.getElementById("doc-edificio"),
   cnpjCliente: document.getElementById("doc-cnpj-cliente"),
+  caixa: document.getElementById("doc-caixa"),
   solicitante: document.getElementById("doc-solicitante"),
   endereco: document.getElementById("doc-endereco"),
   data: document.getElementById("doc-data"),
@@ -11241,6 +11242,7 @@ function atualizarLaudoLocal() {
     ? 'No laudo vira "na empresa Nome da Empresa S/A".'
     : 'Sem "Residencial": no laudo vira "no Edifício Jardim das Flores".';
   docCampos.edificio.placeholder = empresa ? "Ex: Empresa Exemplo S/A" : "Ex: Jardim das Flores";
+  document.getElementById("doc-caixa-bloco").classList.toggle("hidden", !empresa);
 }
 function escolherLaudoLocal(valor) {
   docLaudoLocal.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === valor));
@@ -11475,6 +11477,8 @@ function dadosDoDocumento() {
     edificio: laudoParaEmpresa() ? "" : texto(docCampos.edificio),
     empresa: laudoParaEmpresa() ? texto(docCampos.edificio) : "",
     cnpjCliente: texto(docCampos.cnpjCliente),
+    // "da cozinha" (ou "cozinha": o "da" entra sozinho). Só vale no laudo de empresa.
+    caixa: laudoParaEmpresa() && texto(docCampos.caixa) ? (/^(da|do|de|das|dos)\s/i.test(texto(docCampos.caixa)) ? texto(docCampos.caixa) : "da " + texto(docCampos.caixa)) : "",
     solicitante: texto(docCampos.solicitante),
     endereco: texto(docCampos.endereco),
     valor: valorDoCampo(docCampos.valor),
@@ -11604,7 +11608,7 @@ function resumoDoDocumento(tipo, dados) {
   const titulo = [rotulo, quem].filter(Boolean).join(" · ");
   const itens = (dados.itens || []).map((i) => i.desc).filter(Boolean);
   const descricao = { orcamento: itens.join("; "), recibo: dados.referente, comunicado: dados.obs || dados.endereco, laudo: [dados.edificio || dados.empresa, dados.obs].filter(Boolean).join(" · ") }[tipo] || "";
-  const textoBusca = [dados.cliente, dados.edificio, dados.empresa, dados.cnpjCliente, dados.solicitante, dados.endereco, dados.referente, dados.condicoes, dados.obs, dados.responsavel, ...itens]
+  const textoBusca = [dados.cliente, dados.edificio, dados.empresa, dados.caixa ? "caixa " + dados.caixa : "", dados.cnpjCliente, dados.solicitante, dados.endereco, dados.referente, dados.condicoes, dados.obs, dados.responsavel, ...itens]
     .filter(Boolean).join(" | ");
   const valor = tipo === "recibo" ? dados.valor : tipo === "orcamento" ? (dados.itens || []).reduce((soma, i) => soma + i.qtd * i.unit, 0) : 0;
   return { titulo, descricao, textoBusca, valor: valor > 0 ? valor.toFixed(2) : "" };

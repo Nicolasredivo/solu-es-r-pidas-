@@ -1972,6 +1972,12 @@
             <label for="doc-edificio" id="doc-edificio-rotulo">Nome do edifício</label>
             <input type="text" id="doc-edificio" placeholder="Ex: Jardim das Flores" />
             <p class="placeholder-text ct-ajuda" id="doc-edificio-ajuda">Sem "Residencial": no laudo vira "no Edifício Jardim das Flores".</p>
+            <!-- Laudo de uma caixa só da empresa (16/11/2026): "limpeza da caixa d'água da cozinha da empresa X". -->
+            <div id="doc-caixa-bloco" class="hidden">
+              <label for="doc-caixa">Qual caixa (opcional)</label>
+              <input type="text" id="doc-caixa" placeholder="Ex: da cozinha" />
+              <p class="placeholder-text ct-ajuda">Vazio = todas as caixas. Preenchido: "foi realizada a limpeza da caixa d'água da cozinha da empresa …".</p>
+            </div>
             <label for="doc-cnpj-cliente">CNPJ do cliente (opcional)</label>
             <input type="text" id="doc-cnpj-cliente" inputmode="numeric" placeholder="Ex: 11.222.333/0001-81" />
             <p class="placeholder-text ct-ajuda">Se preenchido, sai logo depois do nome: "…, CNPJ 11.222.333/0001-81, endereço …".</p>

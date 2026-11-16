@@ -303,11 +303,14 @@
     // Laudo para empresa e CNPJ do cliente (16/11/2026), igual ao gerar_documento.py da skill.
     let local = a.empresa ? "na empresa " + a.empresa : "no Edifício " + edificio;
     if (a.cnpjCliente) local += ", CNPJ " + a.cnpjCliente;
-    let cur = paragrafoColorido(p, [
-      ["Informamos que ", BLACK],
-      ["foi realizada a limpeza dos reservatórios ", RED],
-      ["de água no dia " + data + ", " + local + ", endereço " + endereco + ", "
-        + "a limpeza do reservatório foi realizada em conformidade com o disposto no ", BLACK],
+    // "caixa" (16/11/2026): laudo de uma caixa só da empresa ("da cozinha"), igual ao "--caixa" da skill.
+    const inicio = a.caixa && a.empresa
+      ? [["foi realizada a limpeza da caixa d'água ", RED],
+        [a.caixa + " " + local.replace("na empresa ", "da empresa ") + ", no dia " + data + ", endereço " + endereco + ", ", BLACK]]
+      : [["foi realizada a limpeza dos reservatórios ", RED],
+        ["de água no dia " + data + ", " + local + ", endereço " + endereco + ", ", BLACK]];
+    let cur = paragrafoColorido(p, [["Informamos que ", BLACK], ...inicio,
+      ["a limpeza do reservatório foi realizada em conformidade com o disposto no ", BLACK],
       ["Art. 77 do Decreto Estadual nº 1.846/2018", RED],
       [" de Santa Catarina.", BLACK],
     ], tituloY - 1.0 * CM, opc);
@@ -339,7 +342,8 @@
     p.fonte("Helvetica-BoldOblique", 12);
     p.corTexto(ACCENT);
     p.textoCentro("Qualidade e compromisso com sua saúde.", W / 2, cur);
-    return nomeArquivo("laudo limpeza caixa", a.empresa || a.edificio);
+    const qualCaixa = a.caixa && a.empresa ? " " + a.caixa.replace(/^(da|do|de|das|dos)\s+/i, "") : "";
+    return nomeArquivo("laudo limpeza caixa" + qualCaixa, a.empresa || a.edificio);
   }
 
   function gerarRecibo(p, a) {
