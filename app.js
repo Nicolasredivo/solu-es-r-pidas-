@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.14a";
+const APP_VERSION = "2026.11.16a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -14006,6 +14006,19 @@ function ligarRotulos(raiz) {
   });
 }
 ligarRotulos(document);
+
+// Botão de copiar no nome de um campo (documento e nomes do cliente). Copia o que
+// está escrito no campo logo abaixo do nome; não destrava o cadastro, porque o
+// toque para editar ignora botões (e botão dentro do rótulo não foca o campo).
+document.addEventListener("click", (evento) => {
+  const botao = evento.target.closest && evento.target.closest(".campo-copiar");
+  if (!botao) return;
+  const rotulo = botao.closest("label");
+  const campo = rotulo && rotulo.nextElementSibling;
+  const valor = campo && "value" in campo ? String(campo.value).trim() : "";
+  if (valor) copiarTexto(valor, botao.dataset.aviso || "Copiado.");
+});
+
 new MutationObserver((mudancas) => {
   mudancas.forEach((m) => m.addedNodes.forEach((no) => {
     if (no.nodeType !== 1) return;

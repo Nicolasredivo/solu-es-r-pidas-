@@ -937,6 +937,46 @@ input[type="number"]:focus {
   stroke-linejoin: round;
 }
 
+/* Botão de copiar colado no nome do campo (CPF/CNPJ e nomes do cliente): no
+   nome sobra espaço, e assim nome comprido nunca é cortado pelo botão. Campo
+   vazio não mostra o botão. */
+label:has(.campo-copiar) {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+label:has(+ :placeholder-shown) .campo-copiar {
+  display: none;
+}
+
+.campo-copiar {
+  width: 24px;
+  height: 24px;
+  margin: -6px 0;
+  flex-shrink: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--muted);
+}
+
+.campo-copiar:hover {
+  color: var(--text);
+}
+
+.campo-copiar svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .emails-fin-tirar {
   width: 28px;
   height: 28px;
