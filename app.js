@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.16e";
+const APP_VERSION = "2026.11.16f";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -14008,10 +14008,19 @@ async function arqCarregarPdf(it, areaDoPdf, link) {
     if (arqModal.dataset.item !== it.id) { URL.revokeObjectURL(url); return; } // fechou ou trocou enquanto carregava
     arqBlobUrl = url;
     link.href = url;
-    areaDoPdf.innerHTML = `<iframe class="arq-pdf" src="${url}" title="${escapeHtml(it.titulo)}"></iframe>`;
+    areaDoPdf.innerHTML = `<iframe class="arq-pdf" src="${url}#view=FitH&navpanes=0" title="${escapeHtml(it.titulo)}"></iframe>`;
   } catch (err) {
     if (arqModal.dataset.item === it.id) areaDoPdf.innerHTML = '<div class="arq-vazio">Não consegui abrir o PDF aqui. Tente "Abrir em outra aba".</div>';
   }
+}
+
+// Nome do arquivo ao baixar: o título (que já diz o tipo e o cliente) + a data, sem caracteres que o Windows recusa.
+function arqNomeParaBaixar(it) {
+  const pasta = arqPasta(it.pasta);
+  const base = String(it.titulo || "").trim() || [pasta && pasta.nome, arqNomeDoCliente(arq.cliente)].filter(Boolean).join(" · ");
+  const data = nfData(it.data);
+  const nome = [base.replace(/\s*·\s*/g, " - "), data && !base.includes(data) ? data.replace(/\//g, "-") : ""].filter(Boolean).join(" - ");
+  return nome.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 150) + ".pdf";
 }
 
 function arqVisualizar(id) {
@@ -14034,7 +14043,7 @@ function arqVisualizar(id) {
   } else {
     corpo = '<div class="arq-vazio">Este registro não tem arquivo.</div>';
   }
-  arqModal.innerHTML = `<div class="arq-caixa"><header><div class="arq-tt">${escapeHtml(titulo)}</div><div class="arq-botoes"></div></header><div class="arq-corpo">${corpo}</div></div>`;
+  arqModal.innerHTML = `<div class="arq-caixa${it.arquivo ? " arq-caixa-pdf" : ""}"><header><div class="arq-tt">${escapeHtml(titulo)}</div><div class="arq-botoes"></div></header><div class="arq-corpo">${corpo}</div></div>`;
   const botoes = arqModal.querySelector(".arq-botoes");
   let linkPdf = null;
   const botao = (txt, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.textContent = txt; if (cls) b.className = cls; b.addEventListener("click", fn); botoes.append(b); };
@@ -14055,6 +14064,9 @@ function arqVisualizar(id) {
       botoes.append(a);
     }
   } else if (it.arquivo) {
+    // "Baixar PDF" com nome que diz o que é e de quem (16/11/2026, pedido do dono): o baixar do leitor do navegador
+    // usa o endereço temporário (um código) como nome. Ex.: "Laudo · Caixa da cozinha · Empresa X" → "Laudo - Caixa da cozinha - Empresa X - 14-11-2026.pdf".
+    botao("Baixar PDF", "", (e) => baixarPdfDaNota({ url: it.arquivo.url, nome: arqNomeParaBaixar(it) }, e.currentTarget));
     linkPdf = document.createElement("a");
     linkPdf.href = it.arquivo.url; linkPdf.target = "_blank"; linkPdf.rel = "noopener"; linkPdf.className = "botao-link"; linkPdf.textContent = "Abrir em outra aba";
     botoes.append(linkPdf);
@@ -14068,6 +14080,99 @@ function arqVisualizar(id) {
 arqModal.addEventListener("click", (e) => { if (e.target === arqModal) arqFecharModal(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !arqModal.classList.contains("hidden")) arqFecharModal(); });
 document.getElementById("aba-doc-arquivos").addEventListener("click", arqAbrirAba);
+
+// ----- Botão "Voltar" do topo (16/11/2026) -----
+//
+// Pedido do dono: voltar para onde estava antes, em qualquer página e aba (ex.: dos Laudos de um cliente para as
+// pastas dela). Cada "tela" é uma foto: a página aberta, as abas ativas dela e, em Documentos > Arquivos, a lista,
+// o cliente ou a pasta. Depois de cada toque, se a tela mudou, a anterior entra na pilha; "Voltar" tira da pilha
+// e refaz os mesmos toques (menu, abas), então os avisos de "salvar antes de sair?" continuam valendo.
+// Não mexe no voltar do celular (history), que segue fechando o menu e o cadastro aberto.
+const navBotaoVoltar = document.getElementById("nav-voltar");
+const navPilha = [];
+let navAtual = null;
+let navRestaurando = false;
+const NAV_ABAS = [["subtab", "subpage"], ["subtab-fin", "subfin"], ["subtab-doc", "subdoc"]];
+
+function navFoto() {
+  const pagina = [...document.querySelectorAll(".page")].find((p) => !p.classList.contains("hidden"));
+  if (!pagina) return null;
+  const abas = [];
+  for (const [classe, atributo] of NAV_ABAS) {
+    pagina.querySelectorAll(`.${classe}.active`).forEach((b) => {
+      const valor = b.dataset[atributo];
+      if (valor) abas.push(`.${classe}[data-${atributo}="${valor}"]`);
+    });
+  }
+  const arquivosAberto = pagina.id === "page-documentos" && !document.getElementById("subdoc-arquivos").classList.contains("hidden");
+  return {
+    pagina: pagina.id, abas,
+    arq: arquivosAberto ? { view: arq.view, cliente: arq.cliente ? arq.cliente.id : "", pasta: arq.view === "pasta" ? arq.pasta : "" } : null,
+  };
+}
+
+const navChave = (f) => JSON.stringify(f);
+
+function navAtualizarBotao() {
+  navBotaoVoltar.classList.toggle("hidden", !navPilha.length);
+}
+
+function navConferir() {
+  if (navRestaurando) return;
+  const agora = navFoto();
+  if (!agora) return;
+  if (navAtual && navChave(agora) !== navChave(navAtual)) {
+    navPilha.push(navAtual);
+    if (navPilha.length > 40) navPilha.shift();
+  }
+  navAtual = agora;
+  navAtualizarBotao();
+}
+
+// Depois de cada toque (e de cada tecla que aciona botão), confere se a tela mudou. A espera deixa terminar a troca.
+document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("#nav-voltar")) return; setTimeout(navConferir, 350); });
+
+const navEsperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function navVoltar() {
+  if (navRestaurando || !navPilha.length) return;
+  const alvo = navPilha.pop();
+  navRestaurando = true;
+  try {
+    const pagina = document.getElementById(alvo.pagina);
+    if (pagina && pagina.classList.contains("hidden")) {
+      const item = document.querySelector(`.sidebar-item[data-page="${alvo.pagina.replace(/^page-/, "")}"]`);
+      if (item) item.click();
+      await navEsperar(60);
+      // Ficou parado na pergunta "salvar antes de sair?": a tela anterior volta para a pilha e a pessoa decide.
+      if (pagina.classList.contains("hidden")) { navPilha.push(alvo); return; }
+    }
+    for (const seletor of alvo.abas) {
+      const aba = pagina.querySelector(seletor);
+      if (aba && !aba.classList.contains("active")) { aba.click(); await navEsperar(30); }
+    }
+    if (alvo.arq) {
+      const a = alvo.arq;
+      if (a.view === "lista") {
+        if (arq.view !== "lista") { arq.view = "lista"; arq.erro = ""; arqDesenhar(); arqCarregarResumo().then(arqDesenhar); }
+      } else {
+        if (!arq.cliente || arq.cliente.id !== a.cliente) await arqAbrirCliente(a.cliente);
+        if (a.view === "pasta") { arq.pasta = a.pasta; arq.f = arqFiltrosLimpos(); }
+        arq.view = a.view;
+        arqDesenhar();
+      }
+    }
+    window.scrollTo({ top: 0 });
+  } finally {
+    await navEsperar(400);
+    navAtual = navFoto();
+    navRestaurando = false;
+    navAtualizarBotao();
+  }
+}
+
+navBotaoVoltar.addEventListener("click", navVoltar);
+setTimeout(() => { navAtual = navFoto(); }, 1500);
 
 // ----- Aviso de e-mail e telefone com jeito de errado -----
 
