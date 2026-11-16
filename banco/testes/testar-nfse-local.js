@@ -105,6 +105,25 @@ const pedido = (extra) => ({
     confere('consulta de número não usado: não existe', nada.ok && !nada.existe, nada);
     confere('consulta com id inválido é recusada', (await pedir('/dps/abc')).status === 400);
 
+    // ---- cancelamento (16/11/2026): evento e101101, só no ambiente de testes ----
+    confere('saude: diz que sabe cancelar', saude.cancela === true, saude);
+    const canc = (extra) => pedir('/cancelar', { emissor: 'CNPJ 1', chave: n.chaveAcesso, motivo: 1, justificativa: 'Teste de cancelamento: erro na emissão.', ...extra });
+    confere('cancelar sem o token é recusado', (await pedir('/cancelar', { chave: n.chaveAcesso }, 'errado')).status === 401);
+    confere('cancelar: justificativa curta é recusada aqui', (await canc({ justificativa: 'curta' })).status === 400);
+    confere('cancelar: motivo fora da lista é recusado aqui', (await canc({ motivo: 3 })).status === 400);
+    confere('cancelar: chave inválida é recusada aqui', (await canc({ chave: '123' })).status === 400);
+    confere('cancelar: nota do CNPJ 1 não é cancelada pelo CNPJ 2', (await canc({ emissor: 'CNPJ 2' })).status === 400);
+    const idEvt = require('../nfse-local.js').montarCancelamento({ emissor: 'CNPJ 1', chave: n.chaveAcesso, motivo: 1, justificativa: 'Teste de cancelamento.' }, 'restrita').id;
+    confere('cancelar: Id do pedido com 59 caracteres (PRE + chave + 101101)', idEvt.length === 59 && idEvt === 'PRE' + n.chaveAcesso + '101101', idEvt);
+    const cOk = await canc();
+    confere('cancelar: o governo aceita e devolve o evento', cOk.status === 201 && cOk.ok && /<e101101>/.test(cOk.eventoXml) && cOk.eventoXml.includes(n.chaveAcesso), { ...cOk, eventoXml: String(cOk.eventoXml || '').slice(0, 120) });
+    const cDe = await canc();
+    confere('cancelar de novo: o governo responde E0840 (já cancelada)', cDe.status === 422 && cDe.erros.some((e) => e.codigo === 'E0840'), cDe);
+    const cDois = await pedir('/cancelar', { emissor: 'CNPJ 2', chave: e2.chaveAcesso, motivo: 2, justificativa: 'Serviço não prestado (teste do CNPJ 2).' });
+    confere('cancelar: CNPJ 2 cancela a nota dele', cDois.status === 201 && cDois.ok && cDois.eventoXml.includes(`<CNPJAutor>${cnpj2}</CNPJAutor>`), { ...cDois, eventoXml: String(cDois.eventoXml || '').slice(0, 120) });
+    const pedidoProd = require('../nfse-local.js').montarCancelamento({ emissor: 'CNPJ 1', chave: n.chaveAcesso, motivo: 1, justificativa: 'Teste de cancelamento.' }, 'producao').xml;
+    confere('cancelar: pedido de produção sai com tpAmb 1 (só montado, nunca enviado)', pedidoProd.includes('<tpAmb>1</tpAmb>'));
+
     // ---- produção: nada é enviado; só o XML montado e as travas do assinador ----
     const { montarDps } = require('../nfse-local.js');
     const REAL = 'C:/Users/rediv/nfse-notas-api/dps-1.enviada'; // a nota real aceita em 04/11/2026

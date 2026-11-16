@@ -188,6 +188,60 @@ async function consultarDps(id, emissor) {
   } catch (e) { return resposta; }
 }
 
+// ---------- Cancelamento (16/11/2026) ----------
+// Evento e101101 do leiaute 1.01: "PRE" + chave(50) + tipo do evento(6) = Id de 59 caracteres (o 1.01 tirou o
+// nPedRegEvento). Vai assinado, como a DPS, para POST /nfse/<chave>/eventos. Motivos do governo: 1 = erro na
+// emissão, 2 = serviço não prestado, 9 = outros; a justificativa tem de 15 a 255 caracteres.
+const MOTIVOS_CANCELAMENTO = { 1: 'Erro na emissão', 2: 'Serviço não prestado', 9: 'Outros' };
+const limparJustificativa = (v) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+
+function conferirCancelamento(p) {
+  const erros = [];
+  const em = emissorDe(p.emissor);
+  if (!em) erros.push('emissor desconhecido ou sem configuração neste servidor');
+  const chave = String(p.chave || '');
+  if (!/^\d{50}$/.test(chave)) erros.push('chave de acesso inválida');
+  // A chave leva o CNPJ de quem emitiu (posições 10 a 23): nota de um CNPJ nunca é cancelada pelo certificado do outro.
+  else if (em && chave.slice(9, 23) !== em.cnpj) erros.push('a chave não é deste emissor');
+  if (!MOTIVOS_CANCELAMENTO[p.motivo]) erros.push('motivo inválido (1, 2 ou 9)');
+  const j = limparJustificativa(p.justificativa);
+  if (j.length < 15 || j.length > 255) erros.push('a justificativa precisa ter de 15 a 255 caracteres');
+  return erros;
+}
+
+function montarCancelamento(p, ambiente = AMBIENTE) {
+  const em = emissorDe(p.emissor);
+  const id = 'PRE' + p.chave + '101101';
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><pedRegEvento versao="1.01" xmlns="${NS}"><infPedReg Id="${id}">`
+    + `<tpAmb>${ambiente === 'producao' ? 1 : 2}</tpAmb><verAplic>SolRapidas_1.0</verAplic><dhEvento>${agoraBrasilia().dhEmi}</dhEvento>`
+    + `<CNPJAutor>${em.cnpj}</CNPJAutor><chNFSe>${p.chave}</chNFSe>`
+    + `<e101101><xDesc>Cancelamento de NFS-e</xDesc><cMotivo>${Number(p.motivo)}</cMotivo><xMotivo>${escapar(limparJustificativa(p.justificativa))}</xMotivo></e101101>`
+    + '</infPedReg></pedRegEvento>';
+  return { id, xml };
+}
+
+async function cancelar(p) {
+  const erros = conferirCancelamento(p);
+  if (erros.length) return { http: 400, ok: false, erros: erros.map((d) => ({ descricao: d })) };
+  const { xml, id } = montarCancelamento(p);
+  const r = await falarComSefin({ metodo: 'POST', caminho: `/nfse/${p.chave}/eventos`, id, xml }, p.emissor);
+  // Sem resposta o cancelamento pode ter sido registrado: quem chamou confere no portal antes de tentar de novo.
+  if (r.falha) return { http: 502, ok: false, semResposta: true, erros: [{ descricao: r.falha }] };
+  let j = {};
+  try { j = JSON.parse(r.corpo); } catch (e) { /* resposta fora do padrão: cai no erro abaixo */ }
+  if (r.status === 201 || r.status === 200) {
+    let evento = '';
+    try { evento = j.eventoXmlGZipB64 ? zlib.gunzipSync(Buffer.from(j.eventoXmlGZipB64, 'base64')).toString('utf8') : ''; } catch (e) { /* fica sem o XML */ }
+    return { http: 201, ok: true, eventoXml: evento, dataHora: j.dataHoraProcessamento || '' };
+  }
+  const lista = [].concat(j.erros || j.Erros || j.erro || j.Erro || []);
+  return {
+    http: 422, ok: false, statusSefin: r.status,
+    erros: lista.length ? lista.map((e) => ({ codigo: e.Codigo || e.codigo, descricao: e.Descricao || e.descricao || JSON.stringify(e).slice(0, 300), complemento: e.Complemento || e.complemento }))
+      : [{ descricao: `resposta inesperada (HTTP ${r.status})${r.corpo ? ': ' + String(r.corpo).slice(0, 300) : ''}` }],
+  };
+}
+
 function autorizado(req) {
   const recebido = Buffer.from(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''));
   const esperado = Buffer.from(TOKEN);
@@ -212,7 +266,8 @@ const servidor = http.createServer((req, res) => {
   // Endereço fora do padrão (ex.: "//"): antes isto derrubava o serviço inteiro.
   try { url = new URL(req.url, 'http://127.0.0.1'); } catch (e) { return responder(res, { http: 400, ok: false, erros: [{ descricao: 'endereço inválido' }] }); }
   if (req.method === 'GET' && url.pathname === '/saude') {
-    return responder(res, { ok: true, ambiente: AMBIENTE, serie: Number(emissorDe('CNPJ 1').serie),
+    // "cancela": serviço que já sabe cancelar (16/11/2026); o fluxo só oferece o cancelamento quando ele diz que sim.
+    return responder(res, { ok: true, ambiente: AMBIENTE, serie: Number(emissorDe('CNPJ 1').serie), cancela: true,
       emissores: Object.fromEntries(Object.entries(EMISSORES).map(([nome, e]) => [nome, { serie: Number(e.serie) }])) });
   }
   if (!autorizado(req)) return responder(res, { http: 401, ok: false, erros: [{ descricao: 'não autorizado' }] });
@@ -225,7 +280,8 @@ const servidor = http.createServer((req, res) => {
     if (!emissorDe(emissorPedido)) return responder(res, { http: 400, ok: false, erros: [{ descricao: 'emissor desconhecido' }] });
     return consultarDps(idDaDps(porNumero[1], emissorPedido), emissorPedido).then((r) => responder(res, r)).catch((e) => falhou(res, e));
   }
-  if (req.method !== 'POST' || url.pathname !== '/emitir') return responder(res, { http: 404, ok: false, erros: [{ descricao: 'rota inexistente' }] });
+  const acoesPost = { '/emitir': emitir, '/cancelar': cancelar };
+  if (req.method !== 'POST' || !acoesPost[url.pathname]) return responder(res, { http: 404, ok: false, erros: [{ descricao: 'rota inexistente' }] });
   const partes = [];
   let tamanho = 0;
   req.on('data', (b) => { tamanho += b.length; if (tamanho <= LIMITE_CORPO) partes.push(b); });
@@ -235,8 +291,8 @@ const servidor = http.createServer((req, res) => {
       if (tamanho > LIMITE_CORPO) throw new Error('grande');
       pedido = JSON.parse(Buffer.concat(partes).toString('utf8'));
     } catch (e) { return responder(res, { http: 400, ok: false, erros: [{ descricao: 'pedido inválido' }] }); }
-    return emitir(pedido).then((r) => responder(res, r)).catch((e) => {
-      console.error(new Date().toISOString(), 'ERRO ao emitir:', e && (e.stack || e));
+    return acoesPost[url.pathname](pedido).then((r) => responder(res, r)).catch((e) => {
+      console.error(new Date().toISOString(), 'ERRO em ' + url.pathname + ':', e && (e.stack || e));
       if (res.headersSent) return res.destroy();
       // Mesma resposta de antes (500 com o motivo): quem chamou consulta a DPS antes de tentar de novo.
       return responder(res, { http: 500, ok: false, erros: [{ descricao: e.message }] });
@@ -259,4 +315,4 @@ if (require.main === module) {
   });
   servidor.listen(PORTA, '127.0.0.1', () => console.log(new Date().toISOString(), `NFS-e local ouvindo em http://127.0.0.1:${PORTA} (ambiente: ${AMBIENTE})`));
 }
-module.exports = { montarDps, conferirPedido };
+module.exports = { montarDps, conferirPedido, montarCancelamento, conferirCancelamento };

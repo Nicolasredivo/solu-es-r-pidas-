@@ -47,7 +47,9 @@ try {
   $leitor = New-Object IO.StreamReader([Console]::OpenStandardInput(), (New-Object Text.UTF8Encoding $false))
   $p = $leitor.ReadToEnd() | ConvertFrom-Json
   if ($p.cnpj -notmatch '^\d{14}$') { throw 'CNPJ invalido na configuracao' }
-  if ($p.caminho -notmatch '^/(nfse|dps)(/[A-Za-z0-9]+)?$') { throw 'caminho nao permitido' }
+  # /nfse/<chave>/eventos = pedido de evento (cancelamento, 16/11/2026); os outros sao emissao e consultas.
+  $evento = $p.caminho -match '^/nfse/\d{50}/eventos$'
+  if (-not $evento -and $p.caminho -notmatch '^/(nfse|dps)(/[A-Za-z0-9]+)?$') { throw 'caminho nao permitido' }
   if (@('restrita', 'producao') -cnotcontains $p.ambiente) { throw 'ambiente desconhecido' }
   $amb = $BASES[[string]$p.ambiente]
 
@@ -61,7 +63,8 @@ try {
 
   if ($p.metodo -eq 'POST') {
     if (-not $p.xml.Contains($amb.tpAmb)) { throw 'o XML nao e deste ambiente' }
-    $corpo = '{"dpsXmlGZipB64":"' + (Compactar (Assinar $p.xml $p.id $cert)) + '"}'
+    $campo = if ($evento) { 'pedidoRegistroEventoXmlGZipB64' } else { 'dpsXmlGZipB64' }
+    $corpo = '{"' + $campo + '":"' + (Compactar (Assinar $p.xml $p.id $cert)) + '"}'
     $bytes = [Text.Encoding]::UTF8.GetBytes($corpo)
     $req.ContentType = 'application/json'; $req.ContentLength = $bytes.Length
     $s = $req.GetRequestStream(); $s.Write($bytes, 0, $bytes.Length); $s.Close()

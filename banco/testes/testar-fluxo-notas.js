@@ -193,7 +193,7 @@ const SERV = 'Instalação de teste. TESTE SEM VALIDADE JURIDICA. Valor total = 
     const v1 = await appVelho(pedido({ acao: 'preparar' }));
     confere('trava: serviço antigo continua servindo o CNPJ 1', v1.ok === true && v1.emissor === 'CNPJ 1', v1);
     const eV = await appVelho(pedido({ acao: 'emitir', confirmar: '1', clienteId: cli2.id }));
-    confere('trava: serviço antigo não emite nota do CNPJ 2 e nada é gravado', eV.ok === false && eV.servicoFora === true && !(await lista(CAD, T)).some((n) => n.fields.Emissor === 'CNPJ 2'), eV);
+    confere('trava: serviço antigo não emite nota do CNPJ 2 e nada é gravado', eV.ok === false && eV.servicoFora === true && !(await lista(CAD, T)).some((n) => n.fields.Emissor === 'CNPJ 2' && n.fields.Ambiente === 'Testes'), eV);
     const m1 = await app(pedido({ acao: 'emitir', confirmar: '1', clienteId: cli2.id }));
     guardarNota(m1.nota && m1.nota.id);
     confere('CNPJ 2: nota aceita no ambiente de testes', m1.ok === true && m1.ambiente === 'Testes' && m1.nota && /^\d{50}$/.test(m1.nota.chave) && m1.nota.situacao === '107', m1);
@@ -239,6 +239,37 @@ const SERV = 'Instalação de teste. TESTE SEM VALIDADE JURIDICA. Valor total = 
       (numerosPorEmissor['CNPJ 1'] || []).length === 3 && (numerosPorEmissor['CNPJ 2'] || []).length === 2
       && Object.values(numerosPorEmissor).every((l) => new Set(l).size === l.length), numerosPorEmissor);
     console.log('       números das notas de teste:', JSON.stringify(numerosPorEmissor));
+
+    // ---- cancelar (16/11/2026): evento e101101 no ambiente de testes, nos dois CNPJs ----
+    const cancelar = (nota, extra) => app({ acao: 'cancelar', notaId: nota.nota.id, motivo: '1', justificativa: 'Teste de cancelamento pelo sistema.', confirmar: '1', ...extra });
+    confere('cancelar sem motivo é recusado', (await cancelar(dif, { motivo: '' })).ok === false);
+    confere('cancelar com motivo fora da lista é recusado', (await cancelar(dif, { motivo: '3' })).ok === false);
+    confere('cancelar com justificativa curta é recusado', (await cancelar(dif, { justificativa: 'curta demais' })).ok === false);
+    confere('cancelar com justificativa acima de 255 é recusado', (await cancelar(dif, { justificativa: 'x'.repeat(256) })).ok === false);
+    confere('cancelar sem confirmar é recusado', (await cancelar(dif, { confirmar: '' })).ok === false);
+    confere('cancelar nota real (produção) é recusado aqui, sem ir ao governo', (await app({ acao: 'cancelar', notaId: real.id, motivo: '1', justificativa: 'Teste de cancelamento pelo sistema.', confirmar: '1' })).ok === false);
+    confere('cancelar nota recusada é recusado', (await app({ acao: 'cancelar', notaId: rec.notaId, motivo: '1', justificativa: 'Teste de cancelamento pelo sistema.', confirmar: '1' })).ok === false);
+    const cx = await cancelar(dif);
+    confere('cancelar: o governo aceita e a resposta diz que foi cancelada', cx.ok === true && cx.cancelada === true && !cx.jaEstava, cx);
+    const regCx = (await local('GET', `/v0/${CAD}/${T}/${dif.nota.id}`)).fields;
+    confere('cancelar: linha fica Cancelada, com data, motivo e o evento do governo', regCx.Status === 'Cancelada' && Boolean(regCx.Cancelada_Em)
+      && regCx.Motivo_Cancelamento === 'Erro na emissão: Teste de cancelamento pelo sistema.' && /<e101101>/.test(regCx.Xml_Cancelamento || '') && String(regCx.Xml_Cancelamento).includes(dif.nota.chave), { ...regCx, Xml_Nota: undefined, Xml_Cancelamento: String(regCx.Xml_Cancelamento || '').slice(0, 80) });
+    confere('cancelar: a nota continua com o PDF', (regCx.Pdf_Nota || []).length === 1);
+    confere('cancelar de novo é recusado aqui (já cancelada)', (await cancelar(dif)).ok === false);
+    // Cancelada pelo portal: o sistema ainda acha que está emitida; o governo responde E0840 e o sistema só marca.
+    await local('PATCH', `/v0/${CAD}/${T}/${dif.nota.id}`, { fields: { Status: 'Emitida', Cancelada_Em: null, Motivo_Cancelamento: '', Xml_Cancelamento: '' } });
+    const ja = await cancelar(dif, { justificativa: 'Nota cancelada antes no portal do governo.' });
+    const regJa = (await local('GET', `/v0/${CAD}/${T}/${dif.nota.id}`)).fields;
+    confere('cancelada no portal: o sistema reconhece (E0840) e marca como Cancelada', ja.ok === true && ja.jaEstava === true && regJa.Status === 'Cancelada' && /já estava cancelada/.test(regJa.Motivo_Cancelamento), { ja, s: regJa.Status, m: regJa.Motivo_Cancelamento });
+    const cx2 = await cancelar(m2, { motivo: '2', justificativa: 'Serviço não prestado (teste do CNPJ 2).' });
+    const regCx2 = (await local('GET', `/v0/${CAD}/${T}/${m2.nota.id}`)).fields;
+    confere('CNPJ 2: cancela com o certificado do CNPJ 2', cx2.ok === true && regCx2.Status === 'Cancelada' && regCx2.Motivo_Cancelamento.startsWith('Serviço não prestado: ')
+      && String(regCx2.Xml_Cancelamento).includes(`<CNPJAutor>${cfg.emissores['CNPJ 2'].cnpj}</CNPJAutor>`), { cx2, s: regCx2.Status });
+    const lcx = await app({ acao: 'listar', clienteId: cli.id });
+    const naLista = lcx.notas.find((n) => n.id === dif.nota.id) || {};
+    confere('listar: a nota cancelada vem com status, data e motivo, sem o XML', naLista.status === 'Cancelada' && Boolean(naLista.canceladaEm) && /já estava cancelada/.test(naLista.motivoCancelamento) && !JSON.stringify(lcx).includes('<e101101'), naLista);
+    const pDepois = await app(pedido({ acao: 'preparar', descricao: SERV + ' Outra.' }));
+    confere('nota cancelada não conta como "nota igual hoje"', pDepois.ok === true && !pDepois.repetida, pDepois.repetida);
 
     // ---- listar filtra por cliente ----
     const lc = await app({ acao: 'listar', clienteId: cli.id });

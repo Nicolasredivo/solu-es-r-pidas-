@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.16b";
+const APP_VERSION = "2026.11.16c";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -13328,7 +13328,124 @@ async function nfConferirNota(id, botao) {
   carregarNotas();
 }
 
-const NF_ROTULOS = { Emitida: "Emitida", Recusada: "Recusada", "Sem resposta": "Sem resposta", Enviando: "Enviando" };
+const NF_ROTULOS = { Emitida: "Emitida", Recusada: "Recusada", "Sem resposta": "Sem resposta", Enviando: "Enviando", Cancelada: "Cancelada" };
+
+// ----- Cancelar nota (16/11/2026) -----
+// "Cancelar nota" em cada nota emitida abre, ali mesmo, o motivo que o governo pede (erro na emissão, serviço não
+// prestado ou outros) e a justificativa (15 a 255 caracteres, regra do governo). O fluxo assina o cancelamento com
+// o certificado do CNPJ que emitiu. A nota não some: fica na lista com o selo vermelho "Cancelada", a data e o motivo.
+// Nota já cancelada no portal: cancelar por aqui faz o governo avisar que já está, e o sistema só marca.
+const NF_ICONE_CANCELADA = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>';
+const NF_MOTIVOS = [
+  { valor: "1", texto: "Erro na emissão" },
+  { valor: "2", texto: "Serviço não prestado" },
+  { valor: "9", texto: "Outros" },
+];
+let nfCancelando = false;
+
+function nfSeloCancelada(texto) {
+  const selo = document.createElement("span");
+  selo.className = "nf-selo nf-selo-cancelada";
+  selo.innerHTML = NF_ICONE_CANCELADA;
+  selo.append(document.createTextNode(texto || "Cancelada"));
+  return selo;
+}
+
+function nfAbrirCancelamento(li, nota, botaoAbrir) {
+  document.querySelectorAll(".nf-cancelar").forEach((f) => f.remove());
+  document.querySelectorAll(".nf-botao-cancelar").forEach((b) => b.classList.remove("hidden"));
+  botaoAbrir.classList.add("hidden");
+  const caixa = document.createElement("div");
+  caixa.className = "moldura nf-cancelar";
+  const titulo = document.createElement("div");
+  titulo.className = "moldura-titulo";
+  titulo.textContent = `Cancelar a nota nº ${nota.numeroNota || "?"}` + (nota.ambiente === "Testes" ? " (teste)" : "");
+  const aviso = document.createElement("p");
+  aviso.className = "nf-cancelar-aviso";
+  aviso.textContent = "O cancelamento vai para o governo e não tem volta. A nota continua aqui, marcada como cancelada.";
+
+  const rotuloMotivo = document.createElement("label");
+  rotuloMotivo.textContent = "Motivo";
+  const grupo = document.createElement("div");
+  grupo.className = "opcoes nf-tipo-valor";
+  NF_MOTIVOS.forEach((m) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "opcao";
+    b.dataset.valor = m.valor;
+    b.textContent = m.texto;
+    grupo.append(b);
+  });
+
+  const idCampo = "nf-justificativa-" + nota.id;
+  const rotuloJust = document.createElement("label");
+  rotuloJust.htmlFor = idCampo;
+  rotuloJust.textContent = "Justificativa (vai para o governo)";
+  const campo = document.createElement("textarea");
+  campo.id = idCampo;
+  campo.rows = 2;
+  campo.maxLength = 255;
+  campo.placeholder = "Ex.: faltou o número do pedido de compra; será emitida outra nota no lugar.";
+  const contador = document.createElement("p");
+  contador.className = "placeholder-text nf-contador";
+  const contar = () => {
+    const n = campo.value.trim().replace(/\s+/g, " ").length;
+    contador.textContent = n < 15 ? `${n} de 255 caracteres (mínimo 15)` : `${n} de 255 caracteres`;
+  };
+  contar();
+  campo.addEventListener("input", () => { contar(); ajustarAlturaAuto(campo); });
+
+  const linha = document.createElement("label");
+  linha.className = "checkbox-linha";
+  const certeza = document.createElement("input");
+  certeza.type = "checkbox";
+  const s = document.createElement("span");
+  s.textContent = "Entendo que o cancelamento não tem volta";
+  linha.append(certeza, s);
+
+  const status = document.createElement("div");
+  status.className = "status";
+  status.setAttribute("role", "status");
+  const mostrar = (tipo, msg) => { status.textContent = msg; status.className = msg ? `status show ${tipo}` : "status"; };
+  configurarGrupo(grupo, () => mostrar("", ""));
+
+  const acoes = document.createElement("div");
+  acoes.className = "nf-acoes";
+  const fechar = () => { caixa.remove(); botaoAbrir.classList.remove("hidden"); };
+  const confirmar = nfBotao("Cancelar a nota", "botao-perigo-cheio", async () => {
+    if (nfCancelando) return;
+    const motivo = escolhaDoGrupo(grupo);
+    const justificativa = campo.value.trim().replace(/\s+/g, " ");
+    if (!motivo) return mostrar("error", "Escolha o motivo.");
+    if (justificativa.length < 15) return mostrar("error", "A justificativa precisa ter pelo menos 15 caracteres (regra do governo).");
+    if (!certeza.checked) return mostrar("error", 'Marque "Entendo que o cancelamento não tem volta".');
+    nfCancelando = true;
+    confirmar.disabled = true;
+    voltar.disabled = true;
+    mostrar("loading", "Enviando o cancelamento ao governo... não feche esta tela.");
+    let r;
+    try {
+      r = await pedirAoN8n("notas-fiscais", { acao: "cancelar", confirmar: "1", notaId: nota.id, motivo, justificativa });
+    } catch (err) {
+      r = { ok: false, mensagem: "A conexão caiu. Tente de novo: se o cancelamento já tiver sido registrado, o sistema reconhece." };
+    }
+    nfCancelando = false;
+    if (r && r.ok) {
+      mostrarToast(r.mensagem || "Nota cancelada.");
+      carregarNotas();
+      return;
+    }
+    confirmar.disabled = false;
+    voltar.disabled = false;
+    mostrar("error", (r && r.mensagem) || "O cancelamento não foi feito.");
+  });
+  const voltar = nfBotao("Voltar", "botao-secundario", fechar);
+  acoes.append(confirmar, voltar);
+  caixa.append(titulo, aviso, rotuloMotivo, grupo, rotuloJust, campo, contador, linha, acoes, status);
+  li.append(caixa);
+  ajustarAlturaAuto(campo);
+  caixa.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
 
 async function carregarNotas() {
   nfListaStatus.textContent = "Carregando...";
@@ -13351,14 +13468,20 @@ async function carregarNotas() {
   nfListaStatus.textContent = notas.length ? "" : "Nenhuma nota emitida pelo sistema ainda.";
   notas.forEach((n) => {
     const li = document.createElement("li");
-    li.className = "nf-item";
+    const cancelada = n.status === "Cancelada";
+    li.className = "nf-item" + (cancelada ? " nf-item-cancelada" : "");
     const topo = document.createElement("div");
     topo.className = "nf-item-topo";
     const numero = document.createElement("strong");
     numero.textContent = n.numeroNota ? `Nota nº ${n.numeroNota}` : `Pedido nº ${n.numeroDps}`;
-    const selo = document.createElement("span");
-    selo.className = "nf-selo nf-selo-" + String(n.status || "").toLowerCase().replace(/\s+/g, "-");
-    selo.textContent = (NF_ROTULOS[n.status] || n.status) + (n.ambiente === "Testes" ? " · teste" : "");
+    const rotulo = (NF_ROTULOS[n.status] || n.status) + (n.ambiente === "Testes" ? " · teste" : "");
+    let selo;
+    if (cancelada) selo = nfSeloCancelada(rotulo);
+    else {
+      selo = document.createElement("span");
+      selo.className = "nf-selo nf-selo-" + String(n.status || "").toLowerCase().replace(/\s+/g, "-");
+      selo.textContent = rotulo;
+    }
     const valor = document.createElement("span");
     valor.className = "nf-item-valor";
     valor.textContent = nfReais(Number(n.valor || 0));
@@ -13373,9 +13496,19 @@ async function carregarNotas() {
       e.textContent = n.erro;
       li.append(e);
     }
+    if (cancelada) {
+      const c = document.createElement("div");
+      c.className = "nf-item-cancelamento";
+      c.textContent = ["Cancelada" + (n.canceladaEm ? " em " + nfData(new Date(new Date(n.canceladaEm).getTime() - 3 * 3600 * 1000).toISOString()) : ""), n.motivoCancelamento].filter(Boolean).join(" · ");
+      li.append(c);
+    }
     const acoes = document.createElement("div");
     acoes.className = "nf-acoes";
-    if (n.status === "Emitida" && n.chave) nfBotoesDaNota(acoes, n, n.ambiente);
+    if ((n.status === "Emitida" || cancelada) && n.chave) nfBotoesDaNota(acoes, n, n.ambiente);
+    if (n.status === "Emitida" && n.chave) {
+      const b = nfBotao("Cancelar nota", "botao-secundario botao-perigo nf-botao-cancelar", () => nfAbrirCancelamento(li, n, b));
+      acoes.append(b);
+    }
     if (n.status === "Sem resposta" || n.status === "Enviando") {
       const b = nfBotao("Conferir no governo", "", () => nfConferirNota(n.id, b));
       acoes.append(b);
@@ -13571,8 +13704,10 @@ function arqRedesenharMantendoFoco(idCampo, desenhar) {
 function arqLinha(it, termos, mostrarPasta) {
   const p = arqPasta(it.pasta) || ARQ_PASTAS[0];
   const meta = [nfData(it.data), it.emissor].filter(Boolean).join(" · ");
-  return `<div class="arq-arquivo"><div class="arq-ic ${p.cls}">${arqIcone(p)}</div>
-    <div class="arq-texto"><div class="arq-titulo">${arqMarcar(it.titulo, termos)}${mostrarPasta ? `<span class="arq-pasta-tag">${p.nome}</span>` : ""}</div><div class="arq-meta">${escapeHtml(meta)}</div>
+  // Nota cancelada (16/11/2026): selo vermelho ao lado do título e o valor riscado.
+  const selo = it.cancelada ? `<span class="nf-selo nf-selo-cancelada">${NF_ICONE_CANCELADA}Cancelada</span>` : "";
+  return `<div class="arq-arquivo${it.cancelada ? " arq-cancelada" : ""}"><div class="arq-ic ${p.cls}">${arqIcone(p)}</div>
+    <div class="arq-texto"><div class="arq-titulo">${arqMarcar(it.titulo, termos)}${selo}${mostrarPasta ? `<span class="arq-pasta-tag">${p.nome}</span>` : ""}</div><div class="arq-meta">${escapeHtml(meta)}</div>
     ${it.descricao ? `<div class="arq-desc">${arqMarcar(it.descricao, termos)}</div>` : ""}</div>
     ${it.valor != null ? `<div class="arq-valor">${escapeHtml(nfReais(it.valor))}</div>` : ""}
     <div class="arq-acoes"><button type="button" data-arq-ver="${escapeHtml(it.id)}">Visualizar</button></div></div>`;
@@ -13652,8 +13787,10 @@ function arqDesenharPasta() {
       ${temValor ? `<div><label for="arq-f-vmin">Valor mínimo (R$)</label><input type="number" id="arq-f-vmin" inputmode="decimal" value="${f.vmin}" /></div>
       <div><label for="arq-f-vmax">Valor máximo (R$)</label><input type="number" id="arq-f-vmax" inputmode="decimal" value="${f.vmax}" /></div>` : ""}</div>` : ""}
     ${chips.length ? `<div class="arq-chips">${chips.map(([k, t]) => `<span class="arq-chip">${escapeHtml(t)} <b data-arq-x="${k}" role="button" aria-label="Tirar este filtro">×</b></span>`).join("")}<button type="button" class="arq-limpar" id="arq-f-limpar">limpar filtros</button></div>` : ""}`;
-  const soma = itens.reduce((s, i) => s + (i.valor || 0), 0);
-  html += `<div class="arq-conta">${itens.length} de ${arqPlural(base.length, "arquivo", "arquivos")}${itens.some((i) => i.valor != null) ? " · soma " + escapeHtml(nfReais(soma)) : ""}</div>`;
+  // Nota cancelada não entra na soma (16/11/2026).
+  const soma = itens.reduce((s, i) => s + (i.cancelada ? 0 : i.valor || 0), 0);
+  const canceladas = itens.filter((i) => i.cancelada).length;
+  html += `<div class="arq-conta">${itens.length} de ${arqPlural(base.length, "arquivo", "arquivos")}${itens.some((i) => i.valor != null) ? " · soma " + escapeHtml(nfReais(soma)) + (canceladas ? ` (sem ${arqPlural(canceladas, "cancelada", "canceladas")})` : "") : ""}</div>`;
   if (!itens.length) {
     html += `<div class="arq-vazio">${base.length ? 'Nenhum arquivo com esses filtros.<br><button type="button" class="arq-limpar" id="arq-f-limpar2">Limpar filtros</button>'
       : (p.id === "nfs" ? "Nenhuma nota emitida pelo sistema para este cliente ainda." : "Nada guardado nesta pasta ainda. Os PDFs gerados na aba PDFs, com este cliente escolhido na busca, aparecem aqui.")}</div>`;
@@ -13840,7 +13977,7 @@ async function arqCarregarPdf(it, areaDoPdf, link) {
 function arqVisualizar(id) {
   const it = arq.itens.find((i) => i.id === id);
   if (!it) return;
-  const titulo = `${it.titulo} · ${arqNomeDoCliente(arq.cliente)}`;
+  const titulo = `${it.titulo}${it.cancelada ? " (CANCELADA)" : ""} · ${arqNomeDoCliente(arq.cliente)}`;
   let corpo;
   if (it.arquivo) {
     corpo = '<div class="arq-vazio">Carregando o PDF...</div>';

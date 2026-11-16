@@ -328,7 +328,7 @@ create table "Notas_Fiscais" (
   "Serie" integer not null,
   "Numero_DPS" integer not null,
   "Id_DPS" text,
-  "Status" text not null,            -- Enviando | Emitida | Recusada | Sem resposta
+  "Status" text not null,            -- Enviando | Emitida | Recusada | Sem resposta | Cancelada
   "Chave_Acesso" text,
   "Numero_NFSe" text,
   "Situacao" text,                   -- cStat devolvido pelo governo (107 = NFS-e do MEI)
@@ -343,6 +343,10 @@ create table "Notas_Fiscais" (
   "Xml_Nota" text,
   "Pdf_Nota" jsonb not null default '[]',  -- PDF da nota (DANFSe) como anexo, gerado do XML (16/11/2026)
   "Emitida_Em" timestamptz,
+  -- Cancelamento (16/11/2026): pelo sistema (evento e101101 assinado com o A1) ou registrado depois de feito no portal.
+  "Cancelada_Em" timestamptz,
+  "Motivo_Cancelamento" text,               -- "Erro na emissão: <justificativa enviada ao governo>"
+  "Xml_Cancelamento" text,                  -- evento de cancelamento devolvido pelo governo (vazio se foi no portal)
   "Criado_Em" timestamptz not null default now()
 );
 create unique index on "Notas_Fiscais" ("Ambiente", "Emissor", "Serie", "Numero_DPS");

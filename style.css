@@ -4751,6 +4751,74 @@ div.lembrete-item:hover {
   color: var(--aviso);
 }
 
+/* Nota cancelada (16/11/2026): pedido do dono, um símbolo vermelho que destaque. Selo vermelho cheio com o
+   sinal de proibido, borda vermelha no cartão e o valor riscado (não conta mais). */
+.nf-selo-cancelada {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--error);
+  color: #fff;
+}
+
+.nf-selo-cancelada svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.nf-item-cancelada {
+  border-color: rgba(229, 72, 77, 0.55);
+  border-left: 4px solid var(--error);
+}
+
+.nf-item-cancelada .nf-item-valor,
+.arq-cancelada .arq-valor {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.nf-item-cancelamento {
+  margin-top: 6px;
+  color: var(--error);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.arq-titulo .nf-selo-cancelada {
+  margin-left: 8px;
+  vertical-align: 2px;
+  font-size: 0.75rem;
+}
+
+.nf-cancelar {
+  margin-top: 12px;
+  border: 1px solid rgba(229, 72, 77, 0.55);
+}
+
+.nf-cancelar .moldura-titulo {
+  color: var(--error);
+}
+
+.nf-cancelar-aviso {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.nf-cancelar textarea {
+  resize: none;
+  overflow: hidden;
+}
+
+.nf-cancelar .nf-contador {
+  margin: 4px 0 14px;
+}
+
 /* ----- Veículo (08/11/2026; visual novo em 12/11/2026) -----
    Pedido do dono: tudo tinha a mesma cara (moldura + nome + valor) e era
    difícil achar as coisas. Agora cada tipo de informação tem um desenho próprio:
