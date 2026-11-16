@@ -34,9 +34,10 @@ Quem executa as automações de verdade é o **n8n**, e o app é só a "tela".
 
 ## Estado atual do app
 
-- Tela de entrada com senha (conferida pelo n8n, não pela tela)
-- Opção "Lembrar neste aparelho" e ajuste do endereço do n8n pela própria tela
-  de entrada (salvo no aparelho, tem prioridade sobre `config.js`)
+- Entrada por e-mail e senha em `conta.html` (conferida pelo n8n, não pela tela). A senha de
+  acesso única antiga e a tela dela (`sistema.html#senha`) saíram em 14/11/2026
+- Ajuste do endereço do n8n pela tela de Entrar (`conta.html`; salvo no aparelho, tem
+  prioridade sobre `config.js`)
 - Depois de entrar: menu lateral (retrátil no celular, fixo no computador)
 - **Layout responsivo**: mesmas funcionalidades no celular e no computador, só
   o aproveitamento do espaço muda (ver "Padrão de layout" abaixo)
@@ -4656,6 +4657,8 @@ Clientes, locais e contatos ficaram intactos. O próximo chamado criado volta a 
 de propósito: ele serviu só para conferir a importação.
 ### Backup: decisão do dono (27/10/2026)
 
+- **(Mudou em 14/11/2026: o banco inteiro passou a ter backup automático nas duas nuvens; ver
+  "Auditoria geral" no fim. O que segue é o histórico da decisão de 27/10.)**
 - **Sem backup diário até chegar o SSD.** O `App - Backup de tudo` (22h + `fazer-backup`, que o app
   chamava ao abrir) foi **desligado**. O app só deixa de receber resposta, sem erro na tela
   (`backupDoDia` é silencioso).
@@ -5748,3 +5751,191 @@ aplicativo de nuvem sincroniza sozinho.
   carregada só ao gerar (se faltar, só o backup em Excel falha, o banco local liga normal).
 - **Teste:** `banco/testes/testar-backup-excel.js` (30 ok, dados fictícios, pasta temporária; inclui arquivo travado).
 - A planilha vazia "beckup clientes" (e o Apps Script que ficava dentro dela) foi para a lixeira do Drive a pedido do dono.
+
+## Auditoria geral do sistema (13 e 14/11/2026, versão 2026.11.14a)
+
+Pedido do dono: revisar tudo (app, banco local, fluxos do n8n, estrutura), corrigir e melhorar sem quebrar
+nada. Em 14/11 ele autorizou também: backup do banco inteiro, tirar a senha de acesso antiga e apagar a linha
+vazia da configuração do Financeiro. Sobre a pasta `.claude/worktrees/sr-image-visualization-de1648` (cópia
+do projeto feita por outra conversa em 08/11, ramo `claude/logo-sr-novo`, tudo já está no ramo de trabalho):
+**não apagar**, decisão dele.
+
+### O que foi conferido e estava certo
+
+- Testes de antes: 654 conferências, nenhuma falha. Depois de tudo: 678 conferências (24 arquivos, com o teste
+  novo do backup do banco), nenhuma falha.
+- Fluxos: os 65 webhooks exigem login, têm CORS restrito (menos `anexo`, de propósito), todo caminho
+  responde ao app e todo nó de código compila. Das 154 buscas no banco local, nenhuma corre risco real de
+  cortar a lista em 100 registros. Os ids e documentos que entram nas fórmulas são filtrados
+  (só letras e números / só dígitos).
+- Telas: as 132 montagens de HTML escapam os dados (`escapeHtml`/`realcar`); toda chamada ao servidor
+  trata falha; nenhum id repetido; todo botão tem `type`; toda imagem tem `alt`.
+- Banco (10 MB): sem órfãos nem duplicados, índices e chaves certos, autovacuum ligado, `fsync` ligado.
+- n8n: a poda do histórico (14 dias) funciona; as chaves do Asaas não aparecem nas execuções guardadas.
+- O "Veículo - Gasto do dia" falhou às 23h de 09 e 10/11 (o Airtable local não tinha sido reiniciado depois
+  da tabela `Geo_Enderecos`); voltou sozinho no dia 11 e não havia visita nesses dias.
+- Velocidade: a primeira abertura baixa ~215 KB (comprimido); depois tudo vem do cache do aparelho.
+
+### O que mudou no n8n (já valendo)
+
+- **Histórico sem senha.** 15 fluxos guardavam os dados de toda execução que deu certo; nos de conta isso
+  deixava a senha digitada e os tokens no histórico do n8n. Agora têm `saveDataSuccessExecution: none` e
+  `saveDataErrorExecution: all`: login, renovar-token, cadastro-iniciar/verificar/concluir, redefinir-senha,
+  solicitar-recuperacao, verificar-codigo, convidar-usuario, gerenciar-usuario, Checar conflito, Criar,
+  Editar, Listar e Reagendar chamado. O `executionOrder` de cada um ficou como estava (8 fluxos de conta
+  rodam na ordem antiga, sem a chave; mexer nisso pode mudar comportamento).
+- **Busca dos fluxos de conta.** O "Monta busca" de login, redefinir-senha, solicitar-recuperacao,
+  verificar-codigo e renovar-token escapava só a aspa do texto digitado; agora escapa a barra invertida
+  antes (como o cadastro-verificar já fazia). Não era explorável (a fórmula ficava inválida e o fluxo
+  recusava), mas dependia de sorte.
+- **Senha de acesso única antiga: não entra mais.** No `verificar-sessao`, a constante `SENHA_DE_ACESSO`
+  passou a guardar uma **chave interna aleatória** (48 caracteres), que ninguém digita. Ela não foi
+  apagada de vez porque `~/.claude/skills/cadastrar-cliente/scripts/cadastrar.js` (cadastro de cliente
+  pelo chat) lê esse valor pela API local do n8n para chamar o `salvar-entidade`. Uma tentativa de fazer
+  o script assinar um token próprio foi barrada pelo sistema de permissões do Claude: **não repetir**.
+  O arquivo `C:\Users\rediv\senha-app.txt` ficou com a senha velha, sem uso.
+- O fluxo `listar-pagamentos-fatura` continua ativo, mas o app não o chama mais (a tela nunca usou a lista;
+  a trava contra pagar duas vezes é do servidor).
+- Cópias dos fluxos, fora do repositório: `C:\Users\rediv\banco-solucoes\fluxos-antes-da-auditoria-2026-11-13`,
+  `fluxos-depois-da-auditoria-lote1` e `-lote2`. Para desfazer um fluxo: PUT da cópia de antes
+  (name/nodes/connections/settings) e `activate`.
+
+### O que mudou no servidor local (já valendo)
+
+- `banco/airtable-local.js`: conexão parada do banco que cai (`pool.on('error')`), erro solto
+  (`uncaughtException`/`unhandledRejection`) e falha ao ler um anexo ficam registrados e o servidor
+  **continua ligado** (antes o programa encerrava e o sistema parava até reabrir o atalho). Endereço
+  malformado vira 404. A conexão reaproveitada fica aberta 65 s (`keepAliveTimeout`), para o n8n ser sempre
+  quem fecha primeiro (evita "conexão encerrada" esporádico). Porta ocupada encerra o programa.
+- `banco/nfse-local.js`: um endereço malformado (ex.: `//`) derrubava o serviço; agora responde 400.
+  Consultas com `.catch`, mesma rede de segurança e `keepAliveTimeout` (só quando roda como serviço; os
+  testes carregam o arquivo como módulo).
+- `C:\Users\rediv\n8n-launcher\ligar-banco.ps1`: antes de religar, guarda o registro anterior de cada
+  serviço como `*.anterior.log` (antes era zerado e a pista de uma queda se perdia). Cópia de antes:
+  `ligar-banco.ps1.antes-da-auditoria-2026-11-13`.
+- `n8n/exportar.js` e `n8n/conferir-segredos.js`: passaram a ler todo `chave-*.txt`, `senha-*.txt` e
+  `token-*.txt` da pasta do usuário. A lista fixa de antes não tinha o `chave-asaas-cnpj2.txt`.
+- Linha vazia `recV4T0MA60rb5OjW` de `Config_Financeiro` apagada (só tinha `Chave: principal`). Cópia de
+  antes: `banco-solucoes\backups\solucoes-2026-11-14_antes-apagar-config-vazia.dump`. A resposta do
+  `listar-config` ficou idêntica.
+
+### Backup do banco inteiro (novo, 14/11/2026)
+
+- **O quê:** `banco/backup-banco.js` faz uma cópia completa do banco com o `pg_dump` (formato próprio do
+  PostgreSQL, ~74 KB hoje) e confere a cópia com o `pg_restore --list` antes de aceitá-la. Uma cópia com
+  defeito nunca troca uma boa. Os dados da tabela `Sessoes` não entram (são tokens de quem está logado).
+- **Quando:** 5 minutos depois de qualquer gravação pelo Airtable local (várias gravações viram uma cópia
+  só; login não conta), 2 minutos depois de ligar e de 6 em 6 horas. Falhou → tenta de novo em 15 min.
+  `POST 127.0.0.1:5690/backup-banco` faz uma agora; `GET` mostra como foi a última.
+- **Onde:** `C:\Users\rediv\banco-solucoes\backups\diario`, `C:\Users\rediv\OneDrive\Backup do sistema` e
+  `G:\Meu Drive\Backup do sistema` (o Drive é achado pela pasta "Meu Drive"/"My Drive" de qualquer disco).
+  Os anexos (`banco-solucoes\anexos`) vão só para `...\Backup do sistema\anexos` no Google Drive, que não
+  ocupa espaço no notebook; nada é apagado lá. Cada pasta de nuvem tem um `LEIA-ME.txt` para o dono.
+- **Guarda:** um arquivo por dia (`banco-AAAA-MM-DD.dump`; no mesmo dia a cópia nova troca a anterior), as
+  30 cópias mais novas e mais a primeira de cada mês por 12 meses.
+- **Teste:** `banco/testes/testar-backup-banco.js` (24 ok): copia para pastas temporárias, confere regras e
+  falhas e **restaura de verdade** num banco de rascunho (`teste_restauracao_backup`, criado e apagado no
+  teste), comparando a quantidade de linhas das 25 tabelas.
+- **Como restaurar** (com o administrador do banco, que está no `senha-banco.txt`):
+  1. fechar a janela "Servidor n8n" e encerrar o `node` do Airtable local;
+  2. no mesmo PC: `pg_restore -h 127.0.0.1 -p 5432 -U <administrador> -d solucoes --clean --if-exists
+     "<pasta>\banco-AAAA-MM-DD.dump"`;
+     num PC novo: instalar o PostgreSQL como na seção "Banco próprio no PC", criar os dois usuários do banco
+     (o administrador e o `n8n_app`), criar o banco `solucoes` vazio e rodar o `pg_restore` sem `--clean`;
+  3. copiar a pasta `anexos` do Google Drive para `C:\Users\rediv\banco-solucoes\anexos`;
+  4. religar pelo atalho. Todo mundo entra de novo (as sessões não vêm na cópia).
+- O backup em Excel dos cadastros (seção anterior) continua igual: é o que o dono lê no dia a dia.
+
+### O que mudou no app (versão 2026.11.14a)
+
+- **Tela antiga da senha: saiu.** `sistema.html` não tem mais o `gate-view`; o `app.js` perdeu o modo
+  "senha" (`modoAcesso`, `entrar()`, "Lembrar neste aparelho", a caixinha de endereço daquela tela) e
+  apaga do aparelho a senha antiga que podia estar guardada em texto puro (`senha_salva`).
+  `sistema.html#senha` cai no Entrar. `conta.html` perdeu o link "Entrar com a senha de acesso antiga".
+- **Código sem uso retirado:** `ligarSugestaoCampo`, `pintarValor`, `faturaJaPaga`, `dataLocalISO`,
+  `formatarDataChamado`, `nomeDiaSemana` e os estilos que só a tela antiga usava. `backupDoDia` ficou de
+  propósito (é o par do fluxo "App - Backup de tudo", desligado).
+- **Menos idas ao servidor no Financeiro:** não busca mais `listar-pagamentos-fatura` (ao abrir e depois
+  de pagar fatura) e não rebusca `listar-cadastros` quando a lista já está carregada.
+- **Rótulo ligado ao campo:** `ligarRotulos()` + um `MutationObserver` ligam cada `<label>` sem `for` ao
+  campo que vem logo depois dele (os moldes de endereço, contato e edição não podiam ter id fixo). O
+  leitor de tela passa a dizer o nome do campo e tocar no rótulo leva a ele. Caixinha, opção e arquivo
+  ficam de fora. Buscas e filtros ganharam `aria-label`.
+- **PDF sem internet:** o `service-worker.js` guardava o logo e o selo do PDF (`.jpg`) mas nunca os servia
+  do cache; agora serve.
+- **Menu do celular:** o balão de lembrete ficava por cima do menu aberto e tapava "Sair" e a versão. O
+  menu e o fundo escuro subiram para `z-index` 54 e 53 (o balão é 52).
+- Conferido num navegador de testes com usuário de teste (apagado no fim): as 13 páginas abrem, sem erro
+  novo no console, em 1366 px e em 390 px; Sair volta ao Entrar.
+
+### O que ficou de fora, de propósito
+
+- Reescrever o `app.js` em módulos ou trocar a ordem de execução dos fluxos antigos: mexida grande em
+  código que funciona e não tem teste de tela automático.
+- Limpeza automática de sessões vencidas: seria apagar linha do banco sem pedido (regra do dono). O
+  `renovar-token` já recusa sessão vencida.
+- Os fluxos de pagamento (PIX e boleto) não foram relidos linha a linha: estão cobertos pelos testes com
+  o Asaas simulado.
+
+### Dois testes ajustados no caminho
+
+- `testar-airtable-local.js` esperava exatamente 2 linhas "principal" em `Config_Financeiro` (contava com a
+  linha duplicada, que foi apagada). Agora compara com a lista inteira.
+- `testar-backup-excel.js` só passava em 13/11/2026: o nome da cópia diária vinha do relógio do PC, não do
+  instante informado. `banco/backup-excel.js` passou a usar o mesmo instante dos carimbos (em uso normal não
+  muda nada).
+
+## PDF da nota fiscal gerado pelo sistema (16/11/2026, versão 2026.11.14a)
+
+Pedido do dono: a nota emitida já tem que vir com o PDF, na lista de Notas fiscais e na pasta NFS-e de Arquivos,
+sem abrir o portal para baixar.
+
+- **Por que o sistema gera o PDF:** a API oficial do DANFSe segue desligada (`adn.nfse.gov.br/danfse/<chave>` respondeu
+  503 de novo em 16/11; desativada desde 03/08/2026), e o governo orienta quem emite por sistema a gerar o PDF (NT 008).
+  Baixar o "Download DANFS-e" do portal por programa foi tentado: a entrada por certificado funciona
+  (`certificado.nfse.gov.br/EmissorNacional/Certificado`), mas os downloads respondem 403 a quem não é navegador, e
+  insistir imitando um navegador foi barrado pelo sistema de permissões do Claude. **Não repetir esse caminho.**
+- **`banco/nfse-danfse.js`:** monta o DANFSe v2.0 a partir do XML da nota (o que o governo devolve ao emitir), com as
+  medidas tiradas do PDF oficial da nota 441: mesmas caixas, rótulos, fontes (Helvetica ≈ Arial), faixa cinza, logo
+  oficial da NFS-e (`imagens/nfse-logo.png`, tirado do PDF oficial com a máscara de transparência, sobre o cinza do
+  cabeçalho) e o QR Code com o mesmo endereço do oficial (`https://www.nfse.gov.br/ConsultaPublica?tpc=1&chave=<chave>`,
+  lido do QR oficial). Uma página A4, ~15 KB. Nota do ambiente de testes leva "AMBIENTE DE TESTES - SEM VALOR FISCAL".
+  Usa o jsPDF do próprio repositório (`vendor/`) e a biblioteca `qrcode` (instalada em
+  `C:\Users\rediv\banco-solucoes\modulos`, fora do OneDrive, como o exceljs). Os campos de IBS/CBS saem como no
+  oficial de hoje (vazios); quando o MEI passar a destacar IBS/CBS (2027), rever.
+- **Onde o PDF fica:** coluna nova `Notas_Fiscais."Pdf_Nota"` (anexo, mesmo esquema dos outros anexos: arquivo em
+  `banco-solucoes\anexos`, entregue pelo fluxo "App - Anexo"). Cópia do banco antes da coluna:
+  `banco-solucoes\backups\solucoes-2026-11-16_antes-pdf-da-nota.dump`.
+- **Quando é gerado:** o Airtable local gera sozinho quando uma nota é gravada com `Status` "Emitida", `Xml_Nota`
+  preenchido e `Pdf_Nota` vazio (emissão, conferência depois, qualquer caminho), e já devolve o registro com o PDF.
+  Falha ao gerar nunca vira erro da gravação da nota. `POST 127.0.0.1:5690/notas/gerar-pdfs` gera os que faltarem.
+  Nota que já tem PDF não é tocada.
+- **Notas 440 e 441** receberam os PDFs **oficiais** que o dono baixou do portal em 04/11 (`Downloads\NFSE`), conferidos
+  pela chave dentro do PDF.
+- **Fluxos:** "App - Notas fiscais" (Busca notas, Decide, Monta resposta) devolve `pdf: { nome, url, tamanho }` em cada
+  nota da lista e na resposta da emissão/conferência; "App - Arquivos" (Busca notas, Monta leitura) devolve `arquivo`
+  nas notas. Endereço completado com o do túnel, como nos outros anexos. Cópia de antes:
+  `banco-solucoes\fluxos-antes-pdf-nota-2026-11-16`.
+- **App:** cada nota emitida tem "Ver PDF", "Baixar PDF" (no celular abre o compartilhar) e "Copiar chave"; o link do
+  portal só aparece se faltar o PDF. Em Arquivos > NFS-e, "Visualizar" abre o próprio PDF, com "Baixar PDF" e "Copiar
+  chave". No celular, "Ver PDF" ocupa a linha e os outros dois dividem a de baixo.
+- **Testes:** `banco/testes/testar-nfse-danfse.js` (37, nota fictícia: dados, formatos, PDF de uma página, sem tomador,
+  ambiente de testes, 1100 caracteres, emoji); `testar-fluxo-notas.js` passou a conferir o PDF da nota emitida no
+  ambiente de testes e apaga os PDFs de teste no fim. Ampliado no mesmo dia (pergunta do dono): lê de dentro do PDF
+  de cada nota emitida no teste, nos dois CNPJs, o número da NFS-e (o mesmo do XML do governo e do sistema), a chave,
+  o número do pedido (DPS) e o CNPJ do prestador, e confere que nenhum número se repete (90 ok; notas de teste
+  33, 34 e 35 do CNPJ 1 e 15 e 16 do CNPJ 2, cada CNPJ com a sua numeração).
+
+### Outros pedidos da mesma rodada
+
+- **Logo no topo do menu:** o logo SR num quadrinho branco (a parte azul-escura some no fundo escuro) + "Soluções
+  Rápidas / Manutenção predial". No computador o nome repetido na barra de cima ficou escondido.
+- **Lembrete recolhido em dia sem chamado:** quando o único aviso é "hoje não tem nenhum chamado", o balão começa
+  recolhido no sininho, sem número; tocar abre. Avisos de verdade (chegando, atrasado, resumo com chamados) abrem como
+  antes.
+- **Ideia anotada para depois (página de anotações do dono):** tela Início como painel do dia (chamados de hoje,
+  atendimento em andamento, contas vencidas, atalhos).
+- **Acesso para editar o sistema conferido (o dono perguntou se eu perderia acesso ao tirar a senha antiga):** não
+  depende dela. Funcionam: chave da API do n8n, token do Airtable local, administrador do PostgreSQL, push no GitHub,
+  a conta de dono dele (1 ativa) e a chave interna do cadastro de cliente pelo chat. Se ele esquecer a senha, "Esqueci
+  minha senha" manda código por e-mail.
