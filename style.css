@@ -946,8 +946,28 @@ label:has(.campo-copiar) {
   gap: 2px;
 }
 
-label:has(+ :placeholder-shown) .campo-copiar {
+label:has(+ :placeholder-shown) .campo-copiar,
+.canal:has(.canal-valor:placeholder-shown) .campo-copiar {
   display: none;
+}
+
+/* CEP: só leitura sempre (é digitado no endereço completo), então parece texto
+   até quando o endereço está sendo editado. */
+.local-cep[readonly] {
+  background: transparent;
+  border-color: transparent;
+  padding: 0;
+  min-height: 0;
+  box-shadow: none;
+  cursor: default;
+}
+
+/* WhatsApp/e-mail lendo: o campo fica do tamanho do texto, com o copiar colado nele. */
+.detalhe.leitura .canal .canal-valor:disabled {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+  field-sizing: content;
 }
 
 .campo-copiar {
@@ -1425,8 +1445,9 @@ textarea:disabled::placeholder {
   color: white;
 }
 
-/* Bloco em modo leitura: os botões de mexer somem até destravar a edição */
-.somente-leitura button {
+/* Bloco em modo leitura: os botões de mexer somem até destravar a edição
+   (o de copiar fica: ele não mexe em nada). */
+.somente-leitura button:not(.campo-copiar) {
   display: none;
 }
 

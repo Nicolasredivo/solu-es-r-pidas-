@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.16a";
+const APP_VERSION = "2026.11.16b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -606,6 +606,13 @@ function renumerarLocais(caixa) {
   });
 }
 
+// "RUA X, 123, CEP 89201-700" → "89201-700". Sem "CEP" escrito, vale o último número no formato 00000-000.
+function cepDoEndereco(texto) {
+  const t = String(texto || "");
+  const m = t.match(/CEP\s*:?\s*(\d{2})\.?(\d{3})-?(\d{3})/i) || [...t.matchAll(/(\d{2})\.?(\d{3})-(\d{3})/g)].pop();
+  return m ? `${m[1]}${m[2]}-${m[3]}` : "";
+}
+
 function adicionarLocal(caixa, comFoco, dados) {
   const bloco = modeloLocal.content.firstElementChild.cloneNode(true);
 
@@ -628,7 +635,11 @@ function adicionarLocal(caixa, comFoco, dados) {
   // Endereço é uma informação só: o campo quebra linha para caber na tela, mas
   // Enter não deve virar quebra de linha guardada no Airtable.
   const campoEndereco = bloco.querySelector(".local-endereco");
-  campoEndereco.addEventListener("input", () => ajustarAlturaAuto(campoEndereco));
+  const campoCep = bloco.querySelector(".local-cep");
+  // CEP sozinho para copiar: sai do endereço completo e acompanha o que se digita nele.
+  const atualizarCep = () => { campoCep.value = cepDoEndereco(campoEndereco.value); };
+  atualizarCep();
+  campoEndereco.addEventListener("input", () => { ajustarAlturaAuto(campoEndereco); atualizarCep(); });
   campoEndereco.addEventListener("keydown", (evento) => {
     if (evento.key === "Enter") evento.preventDefault();
   });
@@ -682,6 +693,17 @@ function renumerarCanais(lista) {
   });
 }
 
+function botaoCopiar(aviso, rotulo) {
+  const botao = document.createElement("button");
+  botao.type = "button";
+  botao.className = "campo-copiar";
+  botao.dataset.aviso = aviso;
+  botao.title = "Copiar";
+  botao.setAttribute("aria-label", rotulo);
+  botao.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>';
+  return botao;
+}
+
 function adicionarCanal(lista, tipo, comFoco, valor) {
   const linha = modeloCanal.content.firstElementChild.cloneNode(true);
   const campo = linha.querySelector(".canal-valor");
@@ -699,6 +721,11 @@ function adicionarCanal(lista, tipo, comFoco, valor) {
 
   // O que vem do Airtable já tem o 55; na tela mostro formatado.
   if (valor) campo.value = tipo === "whatsapp" ? formatarTelefone(valor) : valor;
+
+  // Copiar cada WhatsApp/e-mail (pedido do dono, 16/11/2026).
+  linha.querySelector(".remover-canal").before(
+    botaoCopiar(tipo === "whatsapp" ? "WhatsApp copiado." : "E-mail copiado.", tipo === "whatsapp" ? "Copiar WhatsApp" : "Copiar e-mail")
+  );
 
   linha.querySelector(".remover-canal").addEventListener("click", () => {
     linha.remove();
@@ -14007,14 +14034,15 @@ function ligarRotulos(raiz) {
 }
 ligarRotulos(document);
 
-// Botão de copiar no nome de um campo (documento e nomes do cliente). Copia o que
-// está escrito no campo logo abaixo do nome; não destrava o cadastro, porque o
-// toque para editar ignora botões (e botão dentro do rótulo não foca o campo).
+// Botão de copiar no nome de um campo (documento, nomes, endereço do cliente) ou
+// ao lado de cada WhatsApp/e-mail. Copia o que está escrito no campo (o de logo
+// abaixo do nome, ou o da mesma linha); não destrava o cadastro, porque o toque
+// para editar ignora botões (e botão dentro do rótulo não foca o campo).
 document.addEventListener("click", (evento) => {
   const botao = evento.target.closest && evento.target.closest(".campo-copiar");
   if (!botao) return;
   const rotulo = botao.closest("label");
-  const campo = rotulo && rotulo.nextElementSibling;
+  const campo = rotulo ? rotulo.nextElementSibling : botao.parentElement.querySelector("input, textarea");
   const valor = campo && "value" in campo ? String(campo.value).trim() : "";
   if (valor) copiarTexto(valor, botao.dataset.aviso || "Copiado.");
 });

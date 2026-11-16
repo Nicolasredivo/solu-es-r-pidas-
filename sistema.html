@@ -338,14 +338,19 @@
               <label>Nome do local</label>
               <input type="text" class="local-nome" placeholder="Ex: Torre A, Matriz" />
 
-              <label>Endereço completo</label>
+              <label>Endereço completo<button type="button" class="campo-copiar" data-aviso="Endereço copiado." title="Copiar" aria-label="Copiar endereço"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg></button></label>
               <textarea class="local-endereco auto-altura" rows="1"
                         placeholder="Rua, número, complemento"></textarea>
 
-              <label>Bairro / Cidade</label>
+              <!-- CEP sozinho, para copiar só ele (pedido do dono, 16/11/2026). Vem do endereço
+                   completo, onde continua sendo digitado: aqui é só leitura. -->
+              <label>CEP<button type="button" class="campo-copiar" data-aviso="CEP copiado." title="Copiar" aria-label="Copiar CEP"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg></button></label>
+              <input type="text" class="local-cep" readonly tabindex="-1" placeholder="—" title="O CEP vem do endereço completo" />
+
+              <label>Bairro / Cidade<button type="button" class="campo-copiar" data-aviso="Bairro e cidade copiados." title="Copiar" aria-label="Copiar bairro e cidade"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg></button></label>
               <input type="text" class="local-bairro" />
 
-              <label>Observações de acesso</label>
+              <label>Observações de acesso<button type="button" class="campo-copiar" data-aviso="Observações copiadas." title="Copiar" aria-label="Copiar observações de acesso"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg></button></label>
               <textarea class="local-acesso" rows="2" placeholder="Ex: falar com o zelador"></textarea>
 
               <label class="rotulo-espacado">Status</label>
@@ -366,7 +371,7 @@
                 <button type="button" class="remover-contato link-button">Remover</button>
               </div>
 
-              <label>Nome</label>
+              <label>Nome<button type="button" class="campo-copiar" data-aviso="Nome copiado." title="Copiar" aria-label="Copiar nome do contato"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg></button></label>
               <input type="text" class="contato-nome" placeholder="Ex: Maria, do financeiro" autocomplete="off" />
               <div class="sugestao-lista hidden"></div>
               <!-- Onde a pessoa trabalha (campo Empresas do Cadastro de contatos): só leitura aqui. -->
