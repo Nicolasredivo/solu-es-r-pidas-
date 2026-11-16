@@ -341,6 +341,7 @@ create table "Notas_Fiscais" (
   "Competencia" date,
   "Erro" text,
   "Xml_Nota" text,
+  "Pdf_Nota" jsonb not null default '[]',  -- PDF da nota (DANFSe) como anexo, gerado do XML (16/11/2026)
   "Emitida_Em" timestamptz,
   "Criado_Em" timestamptz not null default now()
 );

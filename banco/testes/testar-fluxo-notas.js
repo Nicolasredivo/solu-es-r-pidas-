@@ -8,6 +8,27 @@ const t = require('./comum');
 const { CAD, local, lista, chamar, confere } = t;
 
 const T = 'Notas_Fiscais';
+const fs = require('fs');
+const PASTA_ANEXOS = 'C:/Users/rediv/banco-solucoes/anexos/';
+const pdfsDeTeste = [];
+// Texto de dentro de um PDF guardado (o jsPDF compacta cada página; aqui se descompacta para ler).
+const zlib = require('zlib');
+function textoDoPdf(attId) {
+  const b = fs.readFileSync(PASTA_ANEXOS + attId);
+  const s = b.toString('latin1');
+  let out = '';
+  const re = /stream\r?\n/g;
+  let m;
+  while ((m = re.exec(s))) {
+    const ini = m.index + m[0].length;
+    const fim = s.indexOf('endstream', ini);
+    if (fim < 0) break;
+    try { out += zlib.inflateSync(b.subarray(ini, fim), { finishFlush: zlib.constants.Z_SYNC_FLUSH }).toString('latin1'); } catch (e) { /* não compactado */ }
+    re.lastIndex = fim;
+  }
+  return out;
+}
+const formatarCnpj = (c) => String(c).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
 const PORTA_TESTE = 5699;
 const SERVICO = `http://127.0.0.1:${PORTA_TESTE}/saude`;
 const SERV = 'Instalação de teste. TESTE SEM VALIDADE JURIDICA. Valor total = R$ 1,00.';
@@ -114,6 +135,14 @@ const SERV = 'Instalação de teste. TESTE SEM VALIDADE JURIDICA. Valor total = 
     confere('emitir: linha registrada como Emitida, ambiente Testes', reg.fields.Status === 'Emitida' && reg.fields.Ambiente === 'Testes' && reg.fields.Chave_Acesso === n1.nota.chave, { ...reg.fields, Xml_Nota: undefined });
     confere('emitir: XML guardado, de teste', String(reg.fields.Xml_Nota).includes('<tpAmb>2</tpAmb>') && String(reg.fields.Xml_Nota).includes('TESTE NFSE CLIENTE FICTICIO'));
     confere('emitir: competência e valor', reg.fields.Valor === 1 && reg.fields.Competencia === t.hojeISO());
+    // PDF da nota (16/11/2026): gerado pelo banco local assim que a nota fica Emitida, e já vem na resposta.
+    const pdfReg = (reg.fields.Pdf_Nota || [])[0] || {};
+    confere('emitir: a nota já tem o PDF guardado', /^att[0-9a-f]{32}$/.test(pdfReg.id || '') && pdfReg.type === 'application/pdf' && pdfReg.size > 5000, reg.fields.Pdf_Nota);
+    confere('emitir: a resposta ao app traz o PDF', n1.nota.pdf && /\/webhook\/anexo\?id=att/.test(n1.nota.pdf.url) && /^NFS-e \d+ - TESTE NFSE CLIENTE FICTICIO\.pdf$/.test(n1.nota.pdf.nome), n1.nota.pdf);
+    const bytesPdf = pdfReg.id ? fs.readFileSync(PASTA_ANEXOS + pdfReg.id) : Buffer.alloc(0);
+    confere('emitir: o arquivo guardado é um PDF de uma página', bytesPdf.slice(0, 5).toString() === '%PDF-' && (bytesPdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length === 1);
+    const l1pdf = await app({ acao: 'listar', clienteId: cli.id });
+    confere('listar: a nota traz o PDF', l1pdf.notas.some((n) => n.id === n1.nota.id && n.pdf && n.pdf.url === n1.nota.pdf.url), l1pdf.notas.map((n) => n.pdf));
 
     // ---- não duplica ----
     const rep = await app(pedido({ acao: 'emitir', confirmar: '1' }));
@@ -188,11 +217,44 @@ const SERV = 'Instalação de teste. TESTE SEM VALIDADE JURIDICA. Valor total = 
     const ccV = await appVelho({ acao: 'conferir', notaId: m2.nota.id });
     confere('trava: conferir nota do CNPJ 2 com serviço antigo é recusado', ccV.ok === false, ccV);
 
+    // ---- PDF de cada nota emitida, nos dois CNPJs (16/11/2026) ----
+    // O número que aparece no PDF é o que o governo deu àquela nota (vem do XML devolvido na emissão), e o prestador
+    // é o CNPJ que emitiu. Lido de dentro de cada PDF guardado, nota por nota.
+    const numerosPorEmissor = {};
+    for (const x of [n1, n2, dif, m1, m2]) {
+      const r = (await local('GET', `/v0/${CAD}/${T}/${x.nota.id}`)).fields;
+      const em = r.Emissor || 'CNPJ 1';
+      const outro = em === 'CNPJ 1' ? 'CNPJ 2' : 'CNPJ 1';
+      const anexo = (r.Pdf_Nota || [])[0];
+      const txt = anexo ? textoDoPdf(anexo.id) : '';
+      const rotulo = `PDF ${em}, nota nº ${r.Numero_NFSe}`;
+      confere(`${rotulo}: o número é o que o governo deu (o mesmo do XML e do sistema)`,
+        Boolean(anexo) && /^\d+$/.test(r.Numero_NFSe || '') && String(r.Xml_Nota).includes(`<nNFSe>${r.Numero_NFSe}</nNFSe>`) && txt.includes(`(${r.Numero_NFSe}) Tj`), { numero: r.Numero_NFSe, temPdf: Boolean(anexo) });
+      confere(`${rotulo}: a chave e o rodapé são desta nota`, txt.includes(`(${r.Chave_Acesso}) Tj`) && txt.includes(`(${r.Numero_NFSe} / ${r.Chave_Acesso}) Tj`));
+      confere(`${rotulo}: o pedido (DPS) é o desta nota`, txt.includes(`(${r.Numero_DPS}) Tj`));
+      confere(`${rotulo}: o prestador é o ${em}, não o ${outro}`, txt.includes(`(${formatarCnpj(cfg.emissores[em].cnpj)}) Tj`) && !txt.includes(formatarCnpj(cfg.emissores[outro].cnpj)));
+      (numerosPorEmissor[em] = numerosPorEmissor[em] || []).push(r.Numero_NFSe);
+    }
+    confere('PDF: cada nota tem o seu próprio número, sem repetir, nos dois CNPJs',
+      (numerosPorEmissor['CNPJ 1'] || []).length === 3 && (numerosPorEmissor['CNPJ 2'] || []).length === 2
+      && Object.values(numerosPorEmissor).every((l) => new Set(l).size === l.length), numerosPorEmissor);
+    console.log('       números das notas de teste:', JSON.stringify(numerosPorEmissor));
+
     // ---- listar filtra por cliente ----
     const lc = await app({ acao: 'listar', clienteId: cli.id });
     confere('listar por cliente', lc.notas.length === 3 && lc.notas.every((n) => n.clienteId === cli.id) && lc.notas[0].numeroDps >= lc.notas[2].numeroDps, lc.notas.map((n) => n.numeroDps));
   } finally {
     serv.kill();
+    // Os PDFs das notas de teste saem junto com elas (o arquivo fica na pasta de anexos do PC).
+    for (const [tabela, id] of apagar) {
+      if (tabela !== T) continue;
+      const r = await local('GET', `/v0/${CAD}/${T}/${id}`).catch(() => null);
+      for (const a of (r && r.fields && r.fields.Pdf_Nota) || []) {
+        if (!/^att[0-9a-f]{32}$/.test(a.id)) continue;
+        pdfsDeTeste.push(a.id);
+        for (const f of [a.id, a.id + '.json']) { try { fs.unlinkSync(PASTA_ANEXOS + f); } catch (e) { /* já saiu */ } }
+      }
+    }
     for (const [tabela, id] of apagar) await local('DELETE', `/v0/${CAD}/${tabela}/${id}`).catch((e) => console.log('não apagou', tabela, id, e.message));
     await t.sairEApagarUsuarioDeTeste();
     await t.apagarCopias(copias);
@@ -200,6 +262,7 @@ const SERV = 'Instalação de teste. TESTE SEM VALIDADE JURIDICA. Valor total = 
 
   const depois = await t.contarTudo();
   confere('as quantidades voltaram ao que eram', JSON.stringify(depois) === JSON.stringify(antes), { antes, depois });
+  confere('os PDFs das notas de teste foram apagados', pdfsDeTeste.length > 0 && pdfsDeTeste.every((a) => !fs.existsSync(PASTA_ANEXOS + a)), pdfsDeTeste.length);
   confere('as notas reais não mudaram', JSON.stringify((await lista(CAD, T)).filter((n) => n.fields.Ambiente === 'Producao')) === reaisAntes);
   const erros = await t.errosDesde(inicio);
   confere('o n8n não registrou erro', erros.length === 0, erros);

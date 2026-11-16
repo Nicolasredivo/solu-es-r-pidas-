@@ -22,6 +22,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { gerarBackupExcel } = require('./backup-excel.js');
+const { fazerBackupDoBanco } = require('./backup-banco.js');
+const { gerarDanfse, nomeDoPdf } = require('./nfse-danfse.js');
 const { Pool, types } = require('C:/Users/rediv/AppData/Roaming/npm/node_modules/n8n/node_modules/pg');
 
 const PORTA = 5690;
@@ -36,6 +38,15 @@ const SENHA_DB = segredos.match(/^senha do n8n:\s*(\S+)/m)[1];
 const TOKEN = segredos.match(/^token do airtable local:\s*(\S+)/m)[1];
 
 const pool = new Pool({ host: '127.0.0.1', port: 5432, database: 'solucoes', user: 'n8n_app', password: SENHA_DB, max: 10 });
+
+// Rede de segurança (auditoria de 13/11/2026). Este servidor fica ligado por semanas e ninguém o religa sozinho:
+// um erro que ninguém previu não pode derrubá-lo, porque aí o sistema inteiro para até o dono reabrir o atalho.
+// - Conexão parada do banco que cai (banco reiniciado, PC que voltou de suspensão): sem este ouvinte o Node
+//   encerra o programa. A conexão ruim é descartada e a próxima consulta abre outra.
+pool.on('error', (e) => console.error(new Date().toISOString(), 'conexão parada com o banco caiu (segue ligado):', e && e.message));
+// - Qualquer outro erro solto: fica registrado no arquivo de erros e o servidor continua atendendo.
+process.on('uncaughtException', (e) => console.error(new Date().toISOString(), 'ERRO NÃO PREVISTO (segue ligado):', e && e.stack));
+process.on('unhandledRejection', (e) => console.error(new Date().toISOString(), 'ERRO NÃO PREVISTO em promessa (segue ligado):', e && (e.stack || e)));
 
 const BASES = {
   app6PyYmtFduIMp7B: {
@@ -594,19 +605,78 @@ async function subirAnexo(baseId, recordId, nomeCampo, corpo) {
   const campo = campoDa(ESQUEMA[tabela], nomeCampo);
   if (!campo || campo.tipo !== 'anexos') throw erro422('UNKNOWN_FIELD_NAME', `Unknown field name: "${nomeCampo}"`);
   if (!corpo || typeof corpo.file !== 'string' || !corpo.file) throw erro422('INVALID_REQUEST_UNKNOWN', 'Anexo sem arquivo');
-  const bytes = Buffer.from(corpo.file, 'base64');
+  return guardarArquivo(tabela, recordId, nomeCampo, Buffer.from(corpo.file, 'base64'), corpo.filename, corpo.contentType);
+}
+
+// Grava o arquivo na pasta de anexos e o acrescenta ao campo de anexos do registro. Com `soSeVazio`, só acrescenta
+// se o campo ainda estiver vazio (dois pedidos ao mesmo tempo não deixam o mesmo PDF duas vezes); se não couber,
+// apaga o arquivo que acabou de gravar e devolve null.
+async function guardarArquivo(tabela, recordId, nomeCampo, bytes, nome, tipo, soSeVazio) {
+  const campo = campoDa(ESQUEMA[tabela], nomeCampo);
   const attId = 'att' + crypto.randomBytes(16).toString('hex');
-  const filename = String(corpo.filename || 'arquivo').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').slice(0, 150);
+  const filename = String(nome || 'arquivo').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').slice(0, 150);
+  const type = String(tipo || 'application/octet-stream');
   fs.mkdirSync(PASTA_ANEXOS, { recursive: true });
   fs.writeFileSync(path.join(PASTA_ANEXOS, attId), bytes);
-  fs.writeFileSync(path.join(PASTA_ANEXOS, attId + '.json'), JSON.stringify({ filename, type: String(corpo.contentType || 'application/octet-stream'), size: bytes.length, tabela, recordId, campo: nomeCampo }));
+  fs.writeFileSync(path.join(PASTA_ANEXOS, attId + '.json'), JSON.stringify({ filename, type, size: bytes.length, tabela, recordId, campo: nomeCampo }));
   // Endereço relativo: o "App - Listar chamados" completa com o endereço do túnel.
-  const anexo = { id: attId, url: '/webhook/anexo?id=' + attId, filename, size: bytes.length, type: String(corpo.contentType || 'application/octet-stream') };
-  return emTransacao(async (cli) => {
-    await cli.query(`update "${tabela}" set "${campo.coluna}" = "${campo.coluna}" || $1::jsonb where id = $2`, [JSON.stringify([anexo]), recordId]);
+  const anexo = { id: attId, url: '/webhook/anexo?id=' + attId, filename, size: bytes.length, type };
+  const r = await emTransacao(async (cli) => {
+    const col = `"${campo.coluna}"`;
+    const mudou = await cli.query(`update "${tabela}" set ${col} = ${col} || $1::jsonb where id = $2` + (soSeVazio ? ` and ${col} = '[]'::jsonb` : ''), [JSON.stringify([anexo]), recordId]);
+    if (!mudou.rowCount) return null;
     const [reg] = await lerRegistros(cli, tabela, [recordId]);
     return { id: reg.id, createdTime: reg.createdTime, fields: { [nomeCampo]: reg.fields[nomeCampo] || [] } };
   });
+  if (!r) for (const f of [attId, attId + '.json']) { try { fs.unlinkSync(path.join(PASTA_ANEXOS, f)); } catch (e) { /* já saiu */ } }
+  return r;
+}
+
+// ---------- PDF da nota fiscal (16/11/2026) ----------
+// Nota que fica "Emitida" com o XML do governo ganha o PDF (DANFSe) gerado aqui (banco/nfse-danfse.js), guardado no
+// campo Pdf_Nota como anexo. Assim o PDF existe para toda nota emitida pelo sistema, venha ela da emissão, de uma
+// conferência depois ou de onde for, sem abrir o portal. Nota que já tem PDF (ex.: o oficial, baixado do portal)
+// não é tocada. Falha ao gerar não atrapalha a gravação da nota: fica registrada e `POST /notas/gerar-pdfs` refaz.
+async function pdfDasNotas(ids) {
+  if (!ids.length || !campoDa(ESQUEMA.Notas_Fiscais || { campos: {} }, 'Pdf_Nota')) return 0;
+  const cli = await pool.connect();
+  let regs;
+  try { regs = await lerRegistros(cli, 'Notas_Fiscais', ids); } finally { cli.release(); }
+  let feitos = 0;
+  for (const r of regs) {
+    const f = r.fields;
+    if (f.Status !== 'Emitida' || !f.Xml_Nota || (f.Pdf_Nota || []).length) continue;
+    try {
+      const pdf = gerarDanfse(f.Xml_Nota);
+      if (await guardarArquivo('Notas_Fiscais', r.id, 'Pdf_Nota', pdf, nomeDoPdf(f.Xml_Nota), 'application/pdf', true)) feitos++;
+    } catch (e) {
+      console.error(new Date().toISOString(), 'PDF da nota não gerado', r.id, e && e.message);
+    }
+  }
+  return feitos;
+}
+
+async function gerarPdfsQueFaltam() {
+  const ids = (await pool.query(`select id from "Notas_Fiscais" where "Status" = 'Emitida' and coalesce("Xml_Nota", '') <> '' and "Pdf_Nota" = '[]'::jsonb`)).rows.map((l) => l.id);
+  return { ok: true, pendentes: ids.length, gerados: await pdfDasNotas(ids) };
+}
+
+// Depois de gravar notas, gera o PDF das que acabaram de ficar emitidas e devolve os registros já com ele.
+// A nota já está gravada quando isto roda: qualquer falha aqui só deixa a nota sem PDF, nunca vira erro da gravação.
+async function depoisDeGravar(tabela, regs) {
+  if (tabela !== 'Notas_Fiscais') return regs;
+  try {
+    const ids = regs.filter(Boolean).map((r) => r.id);
+    if (!(await pdfDasNotas(ids))) return regs;
+    const cli = await pool.connect();
+    try {
+      const lidos = await lerRegistros(cli, tabela, ids);
+      return regs.map((r) => (r && lidos.find((l) => l.id === r.id)) || r);
+    } finally { cli.release(); }
+  } catch (e) {
+    console.error(new Date().toISOString(), 'PDF das notas: falha depois de gravar', e && e.message);
+    return regs;
+  }
 }
 
 function servirAnexo(res, attId) {
@@ -623,7 +693,10 @@ function servirAnexo(res, attId) {
     'X-Content-Type-Options': 'nosniff',
     'Content-Disposition': `${abreNaTela ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(meta.filename)}`,
   });
-  fs.createReadStream(arq).pipe(res);
+  // Arquivo que some ou trava no meio da leitura (antivírus, disco): encerra só esta entrega, sem erro solto.
+  fs.createReadStream(arq)
+    .on('error', (e) => { console.error(new Date().toISOString(), 'falha ao ler o anexo', attId, e && e.message); res.destroy(); })
+    .pipe(res);
 }
 
 // ---------- backup dos cadastros ----------
@@ -719,8 +792,12 @@ function responder(res, status, corpo) {
 }
 
 async function tratar(req, res) {
-  const url = new URL(req.url, 'http://127.0.0.1');
-  const partes = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+  let url, partes;
+  // Endereço fora do padrão (ex.: "//" ou "%" solto) é só um pedido errado: 404, sem virar "erro no banco".
+  try {
+    url = new URL(req.url, 'http://127.0.0.1');
+    partes = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+  } catch (e) { throw ApiNaoAchou(); }
   if (req.method === 'GET' && url.pathname === '/saude') {
     await pool.query('select 1');
     return responder(res, 200, { ok: true });
@@ -729,6 +806,11 @@ async function tratar(req, res) {
 
   if (partes[0] === 'anexos' && partes.length === 2 && req.method === 'GET') return servirAnexo(res, partes[1]);
   if (url.pathname === '/backup-cadastros' && req.method === 'POST') return responder(res, 200, await backupCadastros());
+  // Backup do banco inteiro: POST faz uma cópia agora (útil antes de uma mexida grande); GET diz como foi a última.
+  if (url.pathname === '/backup-banco' && req.method === 'POST') return responder(res, 200, await backupDoBancoAgora());
+  if (url.pathname === '/backup-banco' && req.method === 'GET') return responder(res, 200, ultimoBackupDoBanco || { ok: false, erro: 'nenhuma cópia feita desde que o servidor ligou' });
+  // Gera o PDF das notas emitidas que ainda estão sem (manutenção; a emissão normal já gera sozinha).
+  if (url.pathname === '/notas/gerar-pdfs' && req.method === 'POST') return responder(res, 200, await gerarPdfsQueFaltam());
   if (partes[0] !== 'v0' || partes.length < 3) throw ApiNaoAchou();
   const [, baseId, alvo, id, extra] = partes;
 
@@ -757,10 +839,10 @@ async function tratar(req, res) {
         const lidos = await lerRegistros(cli, tabela, ids);
         return ids.map((i) => lidos.find((r) => r.id === i));
       });
-      return responder(res, 200, { records: regs });
+      return responder(res, 200, { records: await depoisDeGravar(tabela, regs) });
     }
     const reg = await emTransacao(async (cli) => (await lerRegistros(cli, tabela, [await criar(cli, tabela, corpo.fields)]))[0]);
-    return responder(res, 200, reg);
+    return responder(res, 200, (await depoisDeGravar(tabela, [reg]))[0]);
   }
 
   if (req.method === 'PATCH' || req.method === 'PUT') {
@@ -769,7 +851,7 @@ async function tratar(req, res) {
     if (corpo.performUpsert) throw erro422('INVALID_REQUEST_UNKNOWN', 'performUpsert não é usado neste banco');
     if (id) {
       const reg = await emTransacao(async (cli) => { await alterar(cli, tabela, id, corpo.fields, destrutivo); return (await lerRegistros(cli, tabela, [id]))[0]; });
-      return responder(res, 200, reg);
+      return responder(res, 200, (await depoisDeGravar(tabela, [reg]))[0]);
     }
     if (!Array.isArray(corpo.records)) throw erro422('INVALID_REQUEST_MISSING_FIELDS', 'Could not find field "records" in the request body');
     const regs = await emTransacao(async (cli) => {
@@ -778,7 +860,7 @@ async function tratar(req, res) {
       const lidos = await lerRegistros(cli, tabela, ids);
       return ids.map((i) => lidos.find((r) => r.id === i));
     });
-    return responder(res, 200, { records: regs });
+    return responder(res, 200, { records: await depoisDeGravar(tabela, regs) });
   }
 
   if (req.method === 'DELETE') {
@@ -809,17 +891,64 @@ function agendarBackup(segundos = 10) {
 
 function mudouCadastro(req, res) {
   if (!['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method) || res.statusCode >= 300) return;
-  const partes = req.url.split('?')[0].split('/').filter(Boolean).map(decodeURIComponent);
-  if (partes[0] !== 'v0' || partes.length < 3) return;
   try {
+    const partes = req.url.split('?')[0].split('/').filter(Boolean).map(decodeURIComponent);
+    if (partes[0] !== 'v0' || partes.length < 3) return;
     if (TABELAS_DO_BACKUP_EXCEL.has(acharTabela(partes[1], partes[2]))) agendarBackup();
-  } catch (e) { /* tabela desconhecida: não é cadastro */ }
+  } catch (e) { /* endereço fora do padrão ou tabela desconhecida: não é cadastro */ }
+}
+
+// ---------- backup do banco inteiro (14/11/2026) ----------
+// Poucos minutos depois de qualquer gravação, e de 6 em 6 horas com o servidor ligado, sai uma cópia completa do
+// banco (banco/backup-banco.js) para o OneDrive e o Google Drive. Várias gravações seguidas viram uma cópia só.
+// Se falhar, tenta de novo mais tarde; nunca atrapalha quem está usando o sistema.
+let esperaBackupBanco = null;
+let backupBancoRodando = null;
+let refazerBackupBanco = false;
+let ultimoBackupDoBanco = null; // resumo da última tentativa (GET /backup-banco)
+
+function backupDoBancoAgora() {
+  if (backupBancoRodando) return backupBancoRodando; // já tem uma cópia em andamento: quem pediu espera a mesma
+  if (esperaBackupBanco) { clearTimeout(esperaBackupBanco); esperaBackupBanco = null; }
+  backupBancoRodando = fazerBackupDoBanco(SENHA_DB)
+    .catch((e) => ({ ok: false, erro: String(e && e.message), falhas: [], pastas: [] }))
+    .then((r) => {
+      ultimoBackupDoBanco = r;
+      backupBancoRodando = null;
+      if (r.ok) console.log(new Date().toISOString(), 'backup do banco:', r.arquivo, r.tamanho + ' bytes,', r.pastas.length + ' pasta(s)' + (r.falhas.length ? ', ' + r.falhas.length + ' com falha' : '') + (r.semGoogleDrive ? ', sem Google Drive montado' : ''));
+      else console.error(new Date().toISOString(), 'backup do banco falhou:', r.erro || JSON.stringify(r.falhas));
+      // Falhou tudo, ou alguma pasta (nuvem fora do ar): tenta de novo em 15 minutos. Gravação que chegou
+      // enquanto a cópia era feita: outra cópia daqui a pouco.
+      if (!r.ok || r.falhas.length) agendarBackupDoBanco(900);
+      else if (refazerBackupBanco) agendarBackupDoBanco();
+      refazerBackupBanco = false;
+      return r;
+    });
+  return backupBancoRodando;
+}
+
+function agendarBackupDoBanco(segundos = 300) {
+  if (backupBancoRodando) { refazerBackupBanco = true; return; }
+  if (esperaBackupBanco) return; // já marcada: as gravações seguintes entram na mesma cópia
+  esperaBackupBanco = setTimeout(() => { esperaBackupBanco = null; backupDoBancoAgora(); }, segundos * 1000);
+}
+
+// Qualquer gravação que deu certo (menos sessão de login, que não entra na cópia) marca uma cópia para daqui a 5 min.
+function mudouOBanco(req, res) {
+  if (!['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method) || res.statusCode >= 300) return;
+  try {
+    const partes = req.url.split('?')[0].split('/').filter(Boolean).map(decodeURIComponent);
+    if (partes[0] !== 'v0' || partes.length < 3) return;
+    if (partes.length === 5 || acharTabela(partes[1], partes[2]) !== 'Sessoes') agendarBackupDoBanco();
+  } catch (e) { /* endereço fora do padrão: não é gravação de dado */ }
 }
 
 const servidor = http.createServer((req, res) => {
   const t0 = Date.now();
   tratar(req, res)
     .catch((e) => {
+      // Resposta já começada (anexo sendo entregue): não dá para trocar por uma mensagem de erro; só registra.
+      if (res.headersSent) { console.error(new Date().toISOString(), 'ERRO depois de começar a responder', req.method, req.url.split('?')[0], e && e.stack); return res.destroy(); }
       if (e instanceof ErroApi) return responder(res, e.status, { error: { type: e.tipo, message: e.message } });
       if (e && e.code === '23503') return responder(res, 422, { error: { type: 'ROW_DOES_NOT_EXIST', message: 'Vínculo para registro que não existe' } });
       if (e && e.code === '23505') return responder(res, 422, { error: { type: 'DUPLICATE_VALUE', message: 'Já existe um registro com esse valor (' + (e.constraint || '') + ')' } });
@@ -829,13 +958,28 @@ const servidor = http.createServer((req, res) => {
     .finally(() => {
       console.log(new Date().toISOString(), req.method, req.url.split('?')[0], res.statusCode, (Date.now() - t0) + 'ms');
       mudouCadastro(req, res);
+      mudouOBanco(req, res);
     });
+});
+
+// O n8n reaproveita a conexão por até 5 s. Com o mesmo prazo dos dois lados, um pedido podia sair bem na hora em
+// que este servidor fechava a conexão, e o fluxo falhava com "conexão encerrada". Aqui a conexão fica aberta por
+// mais tempo: quem fecha primeiro é sempre o n8n.
+servidor.keepAliveTimeout = 65000;
+servidor.headersTimeout = 70000;
+// Porta ocupada (outro Airtable local já ligado): aqui sim o programa precisa encerrar, para não ficar um
+// processo vivo que não atende ninguém.
+servidor.on('error', (e) => {
+  console.error(new Date().toISOString(), 'erro no servidor (porta ' + PORTA + '):', e && e.message);
+  if (!servidor.listening) process.exit(1);
 });
 
 carregarEsquema()
   .then(() => servidor.listen(PORTA, '127.0.0.1', () => {
     console.log(new Date().toISOString(), `Airtable local ouvindo em http://127.0.0.1:${PORTA}`);
     agendarBackup(20); // ao ligar, confere e refaz o backup (cobre o que mudou com o servidor desligado)
+    agendarBackupDoBanco(120); // cópia completa do banco logo depois de ligar...
+    setInterval(() => agendarBackupDoBanco(5), 6 * 3600 * 1000); // ...e de 6 em 6 horas, mesmo sem gravação
   }))
   .catch((e) => { console.error('Não consegui ligar:', e); process.exit(1); });
 
