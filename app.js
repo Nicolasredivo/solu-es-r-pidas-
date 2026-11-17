@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.16g";
+const APP_VERSION = "2026.11.17a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -104,6 +104,7 @@ function apagarSessao() {
   sessao = null;
   try {
     localStorage.removeItem(CHAVE_SESSAO);
+    localStorage.removeItem("sr_painel_faturamento");
   } catch (e) {
     /* nada a fazer */
   }
@@ -1687,12 +1688,43 @@ limparFiltrosCadastroBotao.addEventListener("click", () => {
   desenharLista();
 });
 
+// Iniciais do cliente para o quadradinho da lista (visual v2, 17/11/2026): palavras genéricas do nome
+// ("Condomínio", "Residencial", "Edifício"...) não contam, para "CONDOMINIO JARDIM DAS FLORES" virar "JF".
+const PALAVRAS_GENERICAS = new Set(["condominio", "residencial", "edificio", "ed", "predio", "de", "da", "do", "das", "dos", "e",
+  "ltda", "me", "sa", "s/a", "eireli", "associacao", "empresa"]);
+
+function iniciaisDoNome(nome) {
+  const palavras = String(nome || "").trim().split(/\s+/).filter(Boolean);
+  const boas = palavras.filter((p) => !PALAVRAS_GENERICAS.has(normalizarTexto(p).replace(/\s+/g, "")) && /[\p{L}\d]/u.test(p));
+  const usar = boas.length ? boas : palavras;
+  if (!usar.length) return "?";
+  const letra = (p) => (p.match(/[\p{L}\d]/u) || ["?"])[0].toUpperCase();
+  return usar.length === 1 ? usar[0].replace(/[^\p{L}\d]/gu, "").slice(0, 2).toUpperCase() || "?" : letra(usar[0]) + letra(usar[1]);
+}
+
+// Cor fixa por cliente: o mesmo nome dá sempre a mesma cor (o olho acha o cliente pela cor também).
+function corDoNome(nome) {
+  let h = 0;
+  for (const ch of normalizarTexto(nome)) h = (h * 31 + ch.codePointAt(0)) % 360;
+  return h;
+}
+
 function atualizarResumo(linha, cadastro) {
   linha.querySelector(".cadastro-doc").textContent =
     formatarDocumento(cadastro.documento) || "(sem CPF/CNPJ)";
   linha.querySelector(".cadastro-razao").textContent = cadastro.razaoSocial || "(sem nome)";
   linha.querySelector(".cadastro-extra").textContent =
     [cadastro.nomeFantasia, cadastro.contato].filter(Boolean).join(" · ");
+  let avatar = linha.querySelector(".cadastro-avatar");
+  if (!avatar) {
+    avatar = document.createElement("span");
+    avatar.className = "cadastro-avatar";
+    avatar.setAttribute("aria-hidden", "true");
+    linha.querySelector(".cadastro-resumo").prepend(avatar);
+  }
+  const nome = cadastro.nomeFantasia || cadastro.razaoSocial || "";
+  avatar.textContent = iniciaisDoNome(nome);
+  avatar.style.setProperty("--av-h", String(corDoNome(nome)));
 }
 
 function montarLinha(cadastro) {
@@ -3942,6 +3974,7 @@ function fluxoRealizado(quantosMeses) {
 }
 
 function desenharPainel() {
+  painelDesenhar(); // o painel do Início mostra as contas a pagar: acompanha toda mudança do Financeiro
   const configurado = Boolean(configFin && configFin.dataSaldoInicial);
   document.getElementById("painel-configurar").classList.toggle("hidden", configurado);
   document.getElementById("painel-conteudo").classList.toggle("hidden", !configurado);
@@ -5380,6 +5413,7 @@ function mostrarUsuarioConectado() {
   // Notas fiscais (aba de Documentos): o servidor só atende o Dono.
   // Sem a aba das notas, a barra de abas inteira some: sobra só os PDFs.
   document.getElementById("abas-doc").classList.toggle("hidden", !dono);
+  desenharInicio(dono);
 
   const el = document.getElementById("usuario-conectado");
   const nome = sessao && sessao.usuario && String(sessao.usuario.nome || "").trim().split(/\s+/)[0];
@@ -5390,6 +5424,34 @@ function mostrarUsuarioConectado() {
   el.textContent = `Conectado como ${nome.charAt(0).toUpperCase()}${nome.slice(1)}`;
   el.classList.remove("hidden");
 }
+
+// ----- Início (visual v2, 16/11/2026) -----
+// Saudação com o nome de quem entrou, a data de hoje e atalhos para as telas mais usadas. Os atalhos só fazem
+// o mesmo toque do menu (e da aba, quando há): nenhuma regra nova. Notas fiscais e Arquivos só aparecem para
+// quem tem acesso total, igual às abas de Documentos. O painel com os dados do dia continua anotado para depois.
+function desenharInicio(dono) {
+  const hora = new Date().getHours();
+  const saudacao = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
+  const nome = sessao && sessao.usuario && String(sessao.usuario.nome || "").trim().split(/\s+/)[0];
+  document.getElementById("inicio-sauda").textContent = nome ? `${saudacao}, ${nome.charAt(0).toUpperCase()}${nome.slice(1)}` : saudacao;
+  document.getElementById("inicio-data").textContent = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  document.querySelectorAll(".inicio-atalho[data-so-dono]").forEach((b) => b.classList.toggle("hidden", !dono));
+  painelIniciar(dono);
+}
+
+document.querySelectorAll(".inicio-atalho").forEach((botao) => {
+  botao.addEventListener("click", () => {
+    const item = document.querySelector(`.sidebar-item[data-page="${botao.dataset.atalho}"]`);
+    if (!item) return;
+    item.click();
+    if (!botao.dataset.aba) return;
+    // A aba (Notas fiscais, Arquivos) é tocada logo depois de a página aparecer.
+    setTimeout(() => {
+      const aba = document.getElementById(botao.dataset.aba);
+      if (aba && !document.getElementById("page-documentos").classList.contains("hidden")) aba.click();
+    }, 60);
+  });
+});
 
 function irParaLogin() {
   window.location.replace("conta.html#entrar");
@@ -8005,10 +8067,12 @@ async function carregarChamados() {
     // Sem isto a falha de rede virava uma promessa rejeitada sem dono e a
     // tela ficava presa em "Carregando..." pra sempre, sem dizer o que houve.
     mostrarChamadosListaStatus("error", "Não foi possível falar com o n8n. Ele está ligado e o túnel ativo?");
+    painelChamadosChegaram("erro");
     return;
   }
   if (!dados || !dados.ok) {
     mostrarChamadosListaStatus("error", (dados && dados.mensagem) || "Não consegui carregar os chamados.");
+    painelChamadosChegaram("erro");
     return;
   }
   chamadosSemData = dados.semData || [];
@@ -8016,6 +8080,7 @@ async function carregarChamados() {
   desenharListaChamados();
   desenharAgenda();
   lembreteAtualizar();
+  painelChamadosChegaram("ok");
   mostrarChamadosListaStatus("neutral", "");
   // Quais estão sendo atendidos agora: depende dos chamados já carregados
   // (a visita só conta se o chamado estiver mesmo "Em andamento").
@@ -8713,6 +8778,7 @@ function atualizarFaixaAtendimento() {
 
 function atualizarAtendimentoNaTela() {
   atualizarFaixaAtendimento();
+  painelDesenhar();
   if (atendimentoNaTela()) desenharAtendimento();
 }
 
@@ -8731,6 +8797,7 @@ function redesenharDepoisDoAtendimento() {
   if (chamadosPaginaCarregada) agendaRedesenhar();
   lembreteAtualizar();
   atualizarFaixaAtendimento();
+  painelDesenhar();
 }
 
 async function iniciarAtendimento(c) {
@@ -11476,9 +11543,11 @@ function dadosDoDocumento() {
     cliente: texto(docCampos.cliente),
     edificio: laudoParaEmpresa() ? "" : texto(docCampos.edificio),
     empresa: laudoParaEmpresa() ? texto(docCampos.edificio) : "",
-    cnpjCliente: texto(docCampos.cnpjCliente),
+    // CNPJ do cliente e "qual caixa" só existem no laudo: fora dele ficam vazios (revisão de 16/11/2026: um CNPJ
+    // digitado num laudo ia junto no texto de busca de um recibo feito em seguida).
+    cnpjCliente: tipoDocumento() === "laudo" ? texto(docCampos.cnpjCliente) : "",
     // "da cozinha" (ou "cozinha": o "da" entra sozinho). Só vale no laudo de empresa.
-    caixa: laudoParaEmpresa() && texto(docCampos.caixa) ? (/^(da|do|de|das|dos)\s/i.test(texto(docCampos.caixa)) ? texto(docCampos.caixa) : "da " + texto(docCampos.caixa)) : "",
+    caixa: tipoDocumento() === "laudo" && laudoParaEmpresa() && texto(docCampos.caixa) ? (/^(da|do|de|das|dos)\s/i.test(texto(docCampos.caixa)) ? texto(docCampos.caixa) : "da " + texto(docCampos.caixa)) : "",
     solicitante: texto(docCampos.solicitante),
     endereco: texto(docCampos.endereco),
     valor: valorDoCampo(docCampos.valor),
@@ -13016,6 +13085,32 @@ let nfCliente = null; // { id, nome, documento }
 let nfAmbiente = "";
 let nfEnviando = false;
 
+// Conta que aparece nos dados de pagamento da descrição (16/11/2026). Cliente do CNPJ 1: sempre a do CNPJ 1.
+// Cliente do CNPJ 2: a nota sai pelo CNPJ 2 e o dono escolhe a conta; começa na do CNPJ 1, que é o que ele vem
+// usando ("futuramente vai mudar"). O texto da conta do CNPJ 2 é montado igual ao da emissão pelo chat, com os
+// dados da tabela Empresas_Emissoras (chegam junto com a lista de clientes).
+const nfPagamentoBloco = document.getElementById("nf-pagamento-bloco");
+const nfPagamentoGrupo = document.getElementById("nf-pagamento");
+
+function nfContaDoCnpj2() {
+  return !nfPagamentoBloco.classList.contains("hidden") && escolhaDoGrupo(nfPagamentoGrupo) === "CNPJ 2";
+}
+
+function nfPagamentoTexto() {
+  if (!nfContaDoCnpj2()) return NF_PAGAMENTO;
+  const e = empresasEmissoras.find((x) => x.codigo === "CNPJ 2");
+  if (!e || !String(e.conta || "").trim()) return "";
+  const pix = String(e.pix || "").trim();
+  return `Dados para pagamento - ${String(e.banco || "").toUpperCase()} - ${String(e.titular || "").toUpperCase()} Agência: ${e.agencia || ""} Conta: ${e.conta || ""}${pix ? ` ou chave PIX = ${pix}` : ""}`;
+}
+
+// Mostra (ou esconde) a escolha e volta para a conta do CNPJ 1.
+function nfMostrarPagamento(mostrar) {
+  nfPagamentoBloco.classList.toggle("hidden", !mostrar);
+  nfPagamentoGrupo.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === "CNPJ 1"));
+  nfAtualizarPrevia();
+}
+
 const nfReais = (v) => dinheiro(v).replace(/\s/g, " ");
 const nfData = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(iso || "") ? iso.slice(0, 10).split("-").reverse().join("/") : "");
 const nfPortal = (chave) => `https://www.nfse.gov.br/EmissorNacional/Notas/Visualizar/Index/${encodeURIComponent(chave)}`;
@@ -13038,7 +13133,7 @@ function nfDescricao() {
       valores = `Valor material = ${nfReais(material)}. Valor mão de obra = ${nfReais(total - material)}. Valor total = ${nfReais(total)}.`;
     } else valores = `Valor total = ${nfReais(total)}.`;
   }
-  return [frase, valores, NF_PAGAMENTO].filter(Boolean).join(" ");
+  return [frase, valores, nfPagamentoTexto()].filter(Boolean).join(" ");
 }
 
 function nfAtualizarPrevia() {
@@ -13066,6 +13161,7 @@ async function nfEscolherCliente(id) {
   document.getElementById("nf-cliente-nome").textContent = nfCliente.nome;
   document.getElementById("nf-cliente-doc").textContent = nfCliente.documento ? formatarDocumento(nfCliente.documento.replace(/\D/g, "")) : "Sem CPF/CNPJ no cadastro";
   document.getElementById("nf-cliente-escolhido").classList.remove("hidden");
+  nfMostrarPagamento(c.atendidoPor === "CNPJ 2");
   nfDesfazerConferencia();
   const bloco = document.getElementById("nf-obra-bloco");
   nfCampos.obra.innerHTML = "<option>Buscando endereços...</option>";
@@ -13090,6 +13186,7 @@ async function nfEscolherCliente(id) {
 
 function nfTirarCliente() {
   nfCliente = null;
+  nfMostrarPagamento(false);
   document.getElementById("nf-cliente-escolhido").classList.add("hidden");
   document.getElementById("nf-obra-bloco").classList.add("hidden");
   nfCampos.obra.innerHTML = "";
@@ -13113,6 +13210,10 @@ document.getElementById("nf-cliente-tirar").addEventListener("click", () => {
 });
 ligarMascaraDinheiro(nfCampos.valor);
 ligarMascaraDinheiro(nfCampos.material);
+configurarGrupo(nfPagamentoGrupo, () => {
+  nfAtualizarPrevia();
+  nfDesfazerConferencia();
+});
 configurarGrupo(nfTipoValor, () => {
   document.getElementById("nf-material-bloco").classList.toggle("hidden", escolhaDoGrupo(nfTipoValor) !== "separado");
   nfAtualizarPrevia();
@@ -13166,7 +13267,7 @@ async function baixarPdfDaNota(pdf, botao) {
     const resposta = await fetch(pdf.url, { cache: "no-store" });
     if (!resposta.ok) throw new Error("HTTP " + resposta.status);
     const blob = new Blob([await resposta.arrayBuffer()], { type: "application/pdf" });
-    if ((await entregarPdf(blob, pdf.nome || "NFS-e.pdf")) === "baixado") mostrarToast("PDF da nota baixado.");
+    if ((await entregarPdf(blob, pdf.nome || "NFS-e.pdf")) === "baixado") mostrarToast("PDF baixado.");
   } catch (err) {
     mostrarToast("Não consegui baixar o PDF agora.", null, "erro");
   } finally {
@@ -13219,6 +13320,7 @@ async function nfConferir(evento) {
   else if (!nfCampos.servico.value.trim()) erro = "Escreva o serviço feito.";
   else if (!(total > 0)) erro = "Falta o valor total.";
   else if (escolhaDoGrupo(nfTipoValor) === "separado" && !(material > 0 && material < total)) erro = "O material precisa ser maior que zero e menor que o total.";
+  else if (nfContaDoCnpj2() && !nfPagamentoTexto()) erro = "Não achei os dados da conta do CNPJ 2. Escolha a conta do CNPJ 1 ou confira o cadastro da empresa.";
   else if (descricao.length > NF_LIMITE) erro = `A descrição passou de ${NF_LIMITE} caracteres: encurte o serviço.`;
   if (erro) {
     nfMostrarStatus("error", erro);
@@ -13330,6 +13432,8 @@ async function nfEmitir(pedido, tela) {
     nfConferencia.append(outra);
     if (r.avisoRegistro) nfConferencia.append(nfAviso("Atenção", r.avisoRegistro));
     mostrarToast(`Nota nº ${r.nota.numeroNota} emitida.`);
+    painelCarregarNotas();
+    painelCarregarFaturamento(true);
     return;
   }
   tela.voltar.disabled = false;
@@ -13353,6 +13457,58 @@ function nfLimparFormulario() {
   document.getElementById("nf-material-bloco").classList.add("hidden");
   ajustarAlturaAuto(nfCampos.servico);
   nfAtualizarPrevia();
+}
+
+// ----- Emitir outra igual (16/11/2026) -----
+// O dono pede muito "emite outra igual, só muda tal coisa". O botão em cada nota da lista preenche o formulário
+// com o cliente, o serviço e os valores dela; nada é enviado: ele ajusta, confere e emite como sempre.
+// A descrição guardada é "<serviço> <valores> <dados de pagamento>": aqui ela é separada de volta nessas partes.
+function nfSepararDescricao(descricao) {
+  const texto = String(descricao || "").replace(/\s+/g, " ").trim();
+  const iPagamento = texto.indexOf("Dados para pagamento - ");
+  let corpo = (iPagamento >= 0 ? texto.slice(0, iPagamento) : texto).trim();
+  const pagamento = iPagamento >= 0 ? texto.slice(iPagamento).trim() : "";
+  const numero = (s) => Number(String(s).replace(/\./g, "").replace(",", "."));
+  const reais = "R\\$\\s*[\\d.]+,\\d{2}";
+  const separado = corpo.match(new RegExp(`\\s*Valor material = R\\$\\s*([\\d.]+,\\d{2})\\.\\s*Valor mão de obra = ${reais}\\.\\s*Valor total = ${reais}\\.?$`));
+  const incluso = corpo.match(new RegExp(`\\s*Materiais incluídos no valor\\.\\s*Valor total = ${reais}\\.?$`));
+  const soTotal = corpo.match(new RegExp(`\\s*Valor total = ${reais}\\.?$`));
+  let tipo = "total";
+  let material = 0;
+  if (separado) {
+    tipo = "separado";
+    material = numero(separado[1]);
+    corpo = corpo.slice(0, separado.index);
+  } else if (incluso) {
+    tipo = "incluso";
+    corpo = corpo.slice(0, incluso.index);
+  } else if (soTotal) corpo = corpo.slice(0, soTotal.index);
+  return { servico: corpo.trim(), tipo, material, outraConta: Boolean(pagamento) && pagamento !== NF_PAGAMENTO };
+}
+
+async function nfRepetirNota(n) {
+  if (nfEnviando) return;
+  await garantirCadastrosCarregados();
+  if (!cadastros.some((c) => c.id === n.clienteId)) {
+    mostrarToast("O cliente desta nota não está mais no cadastro.", null, "erro");
+    return;
+  }
+  const partes = nfSepararDescricao(n.descricao);
+  await nfEscolherCliente(n.clienteId);
+  nfCampos.servico.value = partes.servico;
+  porValorNoCampo(nfCampos.valor, Number(n.valor || 0));
+  nfTipoValor.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === partes.tipo));
+  document.getElementById("nf-material-bloco").classList.toggle("hidden", partes.tipo !== "separado");
+  porValorNoCampo(nfCampos.material, partes.tipo === "separado" ? partes.material : 0);
+  // A nota original usou a conta do CNPJ 2: a escolha (que só existe para cliente do CNPJ 2) acompanha.
+  if (partes.outraConta && !nfPagamentoBloco.classList.contains("hidden")) {
+    nfPagamentoGrupo.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === "CNPJ 2"));
+  }
+  ajustarAlturaAuto(nfCampos.servico);
+  nfAtualizarPrevia();
+  nfDesfazerConferencia();
+  formNota.scrollIntoView({ behavior: "smooth", block: "start" });
+  mostrarToast(`Formulário preenchido com a nota nº ${n.numeroNota || "?"}. Ajuste o que mudou e confira antes de emitir.`);
 }
 
 async function nfConferirNota(id, botao) {
@@ -13473,6 +13629,8 @@ function nfAbrirCancelamento(li, nota, botaoAbrir) {
     if (r && r.ok) {
       mostrarToast(r.mensagem || "Nota cancelada.");
       carregarNotas();
+      painelCarregarNotas();
+      painelCarregarFaturamento(true);
       return;
     }
     confirmar.disabled = false;
@@ -13545,6 +13703,9 @@ async function carregarNotas() {
     const acoes = document.createElement("div");
     acoes.className = "nf-acoes";
     if ((n.status === "Emitida" || cancelada) && n.chave) nfBotoesDaNota(acoes, n, n.ambiente);
+    if ((n.status === "Emitida" || cancelada) && n.clienteId) {
+      acoes.append(nfBotao("Emitir outra igual", "botao-secundario", () => nfRepetirNota(n)));
+    }
     if (n.status === "Emitida" && n.chave) {
       const b = nfBotao("Cancelar nota", "botao-secundario botao-perigo nf-botao-cancelar", () => nfAbrirCancelamento(li, n, b));
       acoes.append(b);
@@ -14545,6 +14706,850 @@ try {
 } catch (e) {
   /* sem acesso ao armazenamento: não há o que limpar */
 }
+
+// =====================================================================================================
+// PAINEL DO INÍCIO E BUSCA RÁPIDA (rodada 2 do visual, 16/11/2026)
+//
+// Pedido do dono: "dá pra colocar mais coisa" no Início e "novas funções que ajudem". O que entrou:
+//  - Painel do dia: quatro números-chave e cinco cartões (hoje na agenda, limite do MEI, contas a pagar,
+//    faturamento por mês e últimas notas). Só LÊ o que o sistema já tem: nada aqui grava dado.
+//  - Limite do MEI: a soma do ano de cada CNPJ vem do governo, pelo fluxo "App - Notas fiscais" (ação
+//    "faturamento"; ver banco/nfse-local.js). A última resposta fica guardada no aparelho para o painel
+//    abrir na hora, e é apagada ao sair.
+//  - Busca rápida (Ctrl+K ou a lupa): cliente, chamado, nota, tela ou ação, de qualquer lugar. Escolher um
+//    cliente mostra o que dá para fazer com ele (abrir cadastro, emitir nota, gerar documento, arquivos).
+//  - Selos no menu: chamados de hoje (Agenda) e contas vencidas (Financeiro).
+// Tudo o que navega faz o MESMO toque do menu e das abas (painelIr): "salvar antes de sair?" e o botão
+// Voltar continuam valendo. Cada cartão só é redesenhado quando o conteúdo dele muda.
+// =====================================================================================================
+
+const CHAVE_PAINEL_FAT = "sr_painel_faturamento";
+const PAINEL_VALIDADE_MS = 3 * 60 * 1000;
+const PAINEL_MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const PAINEL_MESES_LONGOS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+const PAINEL_IC = {
+  agenda: '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  medidor: '<path d="M4.5 16a8 8 0 1 1 15 0"/><path d="m12 13 3.5-4"/><circle cx="12" cy="13" r="1"/>',
+  contas: '<path d="M4 7.5h14.5a1.5 1.5 0 0 1 1.5 1.5v9.5a1.5 1.5 0 0 1-1.5 1.5H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M4 7.5 15.5 4v3.5"/><path d="M15.5 13.75h1.5"/>',
+  barras: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
+  nota: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+  certo: '<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.8 2.8L16 9.5"/>',
+  mais: '<path d="M12 5v14M5 12h14"/>',
+  cliente: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.7-3.6 3.4-5.8 7-5.8s6.3 2.2 7 5.8"/>',
+  chamado: '<rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3H9z"/><path d="M9 11.5h6M9 15.5h4"/>',
+  documento: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
+  pasta: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  copiar: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+  seta: '<path d="m9 6 6 6-6 6"/>',
+  atualizar: '<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20v-4h-4"/>',
+};
+const painelSvg = (nome) => `<svg viewBox="0 0 24 24" aria-hidden="true">${PAINEL_IC[nome] || ""}</svg>`;
+
+const painelInicio = {
+  dono: false,
+  chamados: "", // "" = ainda carregando | "ok" | "erro"
+  fat: null, // { ano, ambiente, emissores, quando }: a última soma do governo
+  fatAviso: "",
+  fatCarregando: false,
+  fatMes: -1, // mês escolhido no gráfico (-1 = o mês de hoje)
+  notas: null,
+  notasAviso: "",
+  despesas: null, // cópia própria enquanto o Financeiro não foi aberto (depois valem as listas dele)
+  recebimentos: null,
+  finAviso: "",
+  finCarregando: false,
+  carregadoEm: 0,
+};
+
+// Vai para uma tela (e uma aba dela) fazendo o mesmo toque do menu. Devolve false se a tela não abriu
+// (parou na pergunta "salvar antes de sair?"): quem chamou não continua.
+function painelIr(pagina, seletorAba) {
+  const item = document.querySelector(`.sidebar-item[data-page="${pagina}"]`);
+  const alvo = document.getElementById(`page-${pagina}`);
+  if (!item || !alvo) return false;
+  item.click();
+  if (alvo.classList.contains("hidden")) return false;
+  if (seletorAba) {
+    const aba = document.querySelector(seletorAba);
+    if (aba && !aba.classList.contains("active")) aba.click();
+  }
+  window.scrollTo({ top: 0 });
+  return true;
+}
+
+function painelAcao(nome) {
+  if (nome === "novo-chamado") painelIr("chamados", '#page-chamados .subtab[data-subpage="ch-criar"]');
+  else if (nome === "novo-cliente") painelIr("cadastro", '#page-cadastro .subtab[data-subpage="adicionar"]');
+  else if (nome === "novo-documento") painelIr("documentos", '.subtab-doc[data-subdoc="pdfs"]');
+  else if (nome === "emitir-nota" && painelIr("documentos", "#aba-doc-notas")) setTimeout(() => nfCampos.busca.focus(), 150);
+}
+
+// "há 5 min", "há 2 h", "em 14/11": de quando é a última leitura no governo.
+function painelHa(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!iso || !isFinite(ms)) return "";
+  const min = Math.floor(ms / 60000);
+  if (min < 2) return "agora mesmo";
+  if (min < 60) return `há ${min} min`;
+  if (min < 24 * 60) return `há ${Math.floor(min / 60)} h`;
+  return `em ${new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
+}
+
+const painelNumero = (v) => Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const painelMilhar = (v) => (v >= 1000 ? `${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}k` : String(Math.round(v)));
+
+// ---- de onde vêm os dados ----
+
+async function painelCarregarFinanceiro() {
+  if (financeiroCarregado || painelInicio.finCarregando) return;
+  painelInicio.finCarregando = true;
+  try {
+    const [resDespesas, resReceber] = await Promise.all([pedirAoN8n("listar-despesas", {}), pedirAoN8n("listar-recebimentos", {})]);
+    if (resDespesas && resDespesas.ok) {
+      painelInicio.despesas = resDespesas.despesas || [];
+      painelInicio.finAviso = "";
+    } else painelInicio.finAviso = (resDespesas && resDespesas.mensagem) || "Não consegui carregar as contas.";
+    if (resReceber && resReceber.ok) painelInicio.recebimentos = resReceber.recebimentos || [];
+  } catch (err) {
+    painelInicio.finAviso = "Sem conexão com o servidor para carregar as contas.";
+  }
+  painelInicio.finCarregando = false;
+  painelDesenhar();
+}
+
+async function painelCarregarNotas() {
+  try {
+    const r = await pedirAoN8n("notas-fiscais", { acao: "listar" });
+    if (r && r.ok) {
+      painelInicio.notas = (r.notas || []).filter((n) => r.ambiente === "Testes" || n.ambiente !== "Testes");
+      painelInicio.notasAviso = "";
+    } else painelInicio.notasAviso = (r && r.mensagem) || "Não consegui carregar as notas.";
+  } catch (err) {
+    painelInicio.notasAviso = "Sem conexão com o servidor para carregar as notas.";
+  }
+  painelDesenhar();
+}
+
+// A soma do ano vem do governo (só leitura). "atualizar" pede uma leitura nova agora; sem ele, o serviço
+// responde o que leu na última meia hora.
+async function painelCarregarFaturamento(atualizar) {
+  if (painelInicio.fatCarregando) return;
+  painelInicio.fatCarregando = true;
+  painelDesenhar();
+  try {
+    const r = await pedirAoN8n("notas-fiscais", { acao: "faturamento", ...(atualizar ? { atualizar: "1" } : {}) });
+    if (r && r.ok && r.emissores) {
+      painelInicio.fat = { ano: r.ano, ambiente: r.ambiente || "", emissores: r.emissores, quando: Date.now() };
+      painelInicio.fatAviso = "";
+      try {
+        localStorage.setItem(CHAVE_PAINEL_FAT, JSON.stringify(painelInicio.fat));
+      } catch (e) {
+        /* sem onde guardar: só não abre na hora da próxima vez */
+      }
+    } else painelInicio.fatAviso = (r && r.mensagem) || "Não consegui somar o faturamento agora.";
+  } catch (err) {
+    painelInicio.fatAviso = "Sem conexão com o servidor para atualizar o faturamento.";
+  }
+  painelInicio.fatCarregando = false;
+  painelDesenhar();
+}
+
+function painelCarregar(forcar) {
+  if (!painelInicio.dono) return;
+  if (!forcar && Date.now() - painelInicio.carregadoEm < PAINEL_VALIDADE_MS) return;
+  painelInicio.carregadoEm = Date.now();
+  painelCarregarFinanceiro();
+  painelCarregarNotas();
+  painelCarregarFaturamento(false);
+}
+
+// Chamado pelo carregarChamados quando a lista chega ("ok") ou quando não deu ("erro").
+function painelChamadosChegaram(estado) {
+  painelInicio.chamados = estado;
+  painelDesenhar();
+}
+
+// Chamado pelo desenharInicio, quando a pessoa entra no sistema.
+function painelIniciar(dono) {
+  painelInicio.dono = dono;
+  try {
+    const guardado = JSON.parse(localStorage.getItem(CHAVE_PAINEL_FAT) || "null");
+    if (dono && guardado && guardado.emissores) painelInicio.fat = guardado;
+  } catch (e) {
+    /* guardado ilegível: busca de novo */
+  }
+  painelDesenhar();
+  painelCarregar(true);
+}
+
+// ---- contas feitas em cima dos dados ----
+
+function painelDados() {
+  const agora = agAgora();
+  const hojeStr = agDataStr(agDia(agora));
+  const diaDe = (c) => agDataStr(agDia(agDeIso(c.reservadoInicio)));
+  const porHora = (a, b) => agDeIso(a.reservadoInicio) - agDeIso(b.reservadoInicio);
+  const comData = chamadosComData.filter((c) => c.reservadoInicio && c.status !== "Cancelado");
+  const emAndamento = atendimentosValidos();
+  const idsEmAndamento = new Set(emAndamento.map((v) => v.chamadoId));
+  const doDia = comData.filter((c) => diaDe(c) === hojeStr && !idsEmAndamento.has(c.id)).sort(porHora);
+  const proximos = comData.filter((c) => diaDe(c) > hojeStr && c.status !== "Concluído").sort(porHora).slice(0, 3);
+  const semData = chamadosSemData.filter((c) => c.status !== "Cancelado" && c.status !== "Concluído").length;
+
+  // Contas: as listas do Financeiro quando ele já foi aberto (mais novas); senão, a cópia do painel.
+  const listaDespesas = financeiroCarregado ? despesas : painelInicio.despesas;
+  const listaReceber = financeiroCarregado ? recebimentos : painelInicio.recebimentos;
+  let contas = null;
+  if (listaDespesas) {
+    const hoje = hojeISO();
+    const limite = new Date();
+    limite.setDate(limite.getDate() + 7);
+    const em7 = `${limite.getFullYear()}-${String(limite.getMonth() + 1).padStart(2, "0")}-${String(limite.getDate()).padStart(2, "0")}`;
+    const venc = (d) => String(d.vencimento).slice(0, 10);
+    const soma = (lista) => lista.reduce((s, d) => s + Number(d.valor || 0), 0);
+    const abertas = listaDespesas.filter((d) => d.status !== "Pago" && d.vencimento);
+    const vencidas = abertas.filter((d) => venc(d) < hoje);
+    const deHoje = abertas.filter((d) => venc(d) === hoje);
+    const semana = abertas.filter((d) => venc(d) > hoje && venc(d) <= em7);
+    const pendentes = (listaReceber || []).filter((r) => r.status === "Pendente");
+    contas = {
+      vencidas, deHoje, semana,
+      totalVencidas: soma(vencidas), totalHoje: soma(deHoje), totalSemana: soma(semana),
+      proximas: [...vencidas, ...deHoje, ...semana].sort((a, b) => venc(a).localeCompare(venc(b))).slice(0, 5),
+      receber: { total: soma(pendentes), quantas: pendentes.length, atrasadas: pendentes.filter(receitaAtrasada).length },
+    };
+  }
+
+  // Faturamento: soma dos CNPJs por mês e a conta do limite de cada um.
+  let fat = null;
+  if (painelInicio.fat && painelInicio.fat.emissores) {
+    const ano = Number(painelInicio.fat.ano);
+    const hoje = new Date();
+    const mesAtual = hoje.getFullYear() === ano ? hoje.getMonth() : 11;
+    const emissores = Object.entries(painelInicio.fat.emissores).map(([nome, e]) => {
+      const porMes = Array.isArray(e.porMes) ? e.porMes : Array(12).fill(0);
+      const total = Number(e.total || 0);
+      const limite = Number(e.limite || 0);
+      // Ritmo: média dos três últimos meses fechados. O mês de hoje conta como se fosse chegar nessa média.
+      const fechados = porMes.slice(Math.max(0, mesAtual - 3), mesAtual);
+      const media = fechados.length ? fechados.reduce((s, v) => s + v, 0) / fechados.length : 0;
+      const projecao = total + Math.max(0, media - porMes[mesAtual]) + media * (11 - mesAtual);
+      const usado = limite > 0 ? total / limite : 0;
+      return {
+        nome, total, limite, porMes, usado, media, projecao,
+        notasPorMes: Array.isArray(e.notasPorMes) ? e.notasPorMes : Array(12).fill(0),
+        notas: Number(e.notas || 0), canceladas: Number(e.canceladas || 0),
+        sobra: limite - total, sincronizadoEm: e.sincronizadoEm || "", erro: e.erro || "",
+        nivel: usado >= 0.9 ? "perigo" : usado >= 0.7 ? "aviso" : "ok",
+      };
+    });
+    const totais = PAINEL_MESES.map((_, m) => emissores.reduce((s, e) => s + Number(e.porMes[m] || 0), 0));
+    fat = { ano, mesAtual, emissores, totais, totalAno: totais.reduce((s, v) => s + v, 0), ambiente: painelInicio.fat.ambiente || "" };
+  }
+
+  const notas = painelInicio.notas ? painelInicio.notas.filter((n) => n.status === "Emitida" || n.status === "Cancelada") : null;
+  return { hojeStr, doDia, proximos, semData, emAndamento, contas, fat, notas };
+}
+
+// Só mexe na tela quando o conteúdo do cartão mudou: redesenhar igual reiniciaria as animações à toa.
+function painelPor(id, html) {
+  const el = document.getElementById(id);
+  if (!el || el.dataset.conteudo === html) return false;
+  el.dataset.conteudo = html;
+  el.innerHTML = html;
+  return true;
+}
+
+const painelCab = (icone, titulo, extra) =>
+  `<header class="painel-cab"><span class="painel-ic">${painelSvg(icone)}</span><h2>${escapeHtml(titulo)}</h2>${extra || ""}</header>`;
+const painelLink = (texto, pagina, aba) =>
+  `<button type="button" class="painel-link" data-ir="${pagina}"${aba ? ` data-aba="${escapeHtml(aba)}"` : ""}>${escapeHtml(texto)}${painelSvg("seta")}</button>`;
+const painelEsqueleto = (linhas) => `<div class="painel-esqueleto">${'<span class="esqueleto"></span>'.repeat(linhas)}</div>`;
+const painelVazio = (icone, texto, extra) => `<div class="painel-vazio">${painelSvg(icone)}<p>${escapeHtml(texto)}</p>${extra || ""}</div>`;
+
+// ---- números-chave ----
+
+function painelDesenharKpis(d) {
+  const kpi = (k) => `<button type="button" class="kpi" style="--cor: ${k.cor}" data-ir="${k.ir}"${k.aba ? ` data-aba="${escapeHtml(k.aba)}"` : ""}>
+      <span class="kpi-rotulo">${escapeHtml(k.rotulo)}</span>
+      ${k.carregando ? '<span class="esqueleto kpi-esqueleto"></span>'
+    : `<strong class="kpi-valor"${k.contar !== undefined ? ` data-contar="${k.contar}"${k.moeda ? ' data-moeda="1"' : ""}` : ""}>${
+      k.moeda && k.contar !== undefined ? `<span class="kpi-moeda">R$</span><span class="kpi-num">${escapeHtml(painelNumero(k.contar))}</span>` : `<span class="kpi-num">${escapeHtml(k.valor)}</span>`}</strong>`}
+      <span class="kpi-nota${k.classe ? " " + k.classe : ""}">${escapeHtml(k.nota || "")}</span>
+    </button>`;
+
+  const pendentesHoje = d.doDia.filter((c) => c.status !== "Concluído").length + d.emAndamento.length;
+  const itens = [{
+    rotulo: "Chamados hoje", cor: "34, 211, 238", ir: "agenda",
+    carregando: !painelInicio.chamados, valor: painelInicio.chamados === "erro" ? "—" : String(pendentesHoje),
+    contar: painelInicio.chamados === "ok" ? pendentesHoje : undefined,
+    nota: painelInicio.chamados === "erro" ? "não carregou" : d.emAndamento.length ? `${d.emAndamento.length} em atendimento agora`
+      : d.semData ? `${d.semData} aguardando data` : "nenhum aguardando data",
+  }];
+
+  if (painelInicio.dono) {
+    const c = d.contas;
+    const aPagar = c ? c.totalVencidas + c.totalHoje + c.totalSemana : 0;
+    itens.push({
+      // O número grande é o que precisa ser pago já: as vencidas mais as que vencem até daqui a 7 dias.
+      rotulo: "Contas a pagar", cor: "52, 211, 153", ir: "financeiro", aba: '.subtab-fin[data-subfin="despesas"]',
+      carregando: !c && !painelInicio.finAviso, valor: c ? dinheiro(aPagar) : "—", contar: c ? aPagar : undefined, moeda: true,
+      nota: !c ? painelInicio.finAviso || "" : [
+        c.vencidas.length ? `${c.vencidas.length} vencida${c.vencidas.length > 1 ? "s" : ""}` : "",
+        c.deHoje.length + c.semana.length ? `${c.deHoje.length + c.semana.length} até 7 dias` : "",
+      ].filter(Boolean).join(" · ") || "nada vencendo",
+      classe: c && c.vencidas.length ? "kpi-perigo" : "",
+    });
+
+    const f = d.fat;
+    const semFat = !f && !painelInicio.fatCarregando;
+    const notasMes = f ? f.emissores.reduce((s, e) => s + Number(e.notasPorMes[f.mesAtual] || 0), 0) : 0;
+    itens.push({
+      rotulo: f ? `Faturado em ${PAINEL_MESES_LONGOS[f.mesAtual].toLowerCase()}` : "Faturado no mês", cor: "129, 140, 248",
+      ir: "documentos", aba: "#aba-doc-notas",
+      carregando: !f && painelInicio.fatCarregando, valor: f ? dinheiro(f.totais[f.mesAtual]) : "—",
+      contar: f ? f.totais[f.mesAtual] : undefined, moeda: true,
+      nota: f ? `${notasMes} nota${notasMes === 1 ? "" : "s"} emitida${notasMes === 1 ? "" : "s"}` : semFat ? "veja o cartão do MEI" : "",
+    });
+    const e1 = f && f.emissores[0];
+    itens.push({
+      rotulo: e1 ? `Cabe no MEI · ${e1.nome}` : "Cabe no MEI", cor: e1 && e1.nivel === "perigo" ? "229, 72, 77" : e1 && e1.nivel === "aviso" ? "245, 166, 35" : "52, 211, 153",
+      ir: "inicio",
+      carregando: !f && painelInicio.fatCarregando, valor: e1 ? dinheiro(Math.max(0, e1.sobra)) : "—",
+      contar: e1 ? Math.max(0, e1.sobra) : undefined, moeda: true,
+      nota: e1 ? `${Math.round(e1.usado * 100)}% do limite usado` : semFat ? "veja o cartão do MEI" : "",
+      classe: e1 && e1.nivel === "perigo" ? "kpi-perigo" : e1 && e1.nivel === "aviso" ? "kpi-aviso" : "",
+    });
+  }
+
+  if (painelPor("painel-kpis", itens.map(kpi).join(""))) painelAnimarNumeros(document.getElementById("painel-kpis"));
+}
+
+// Os números sobem de zero até o valor (meio segundo). O texto final já está na tela antes: se o aparelho
+// pediu menos movimento, ou a aba não está à vista, nada se mexe e o valor certo continua lá.
+function painelAnimarNumeros(raiz) {
+  if (document.visibilityState !== "visible" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  raiz.querySelectorAll("[data-contar]").forEach((el) => {
+    const alvo = Number(el.dataset.contar);
+    if (!isFinite(alvo) || alvo <= 0) return;
+    const num = el.querySelector(".kpi-num");
+    if (!num) return;
+    const final = num.textContent;
+    const moeda = el.dataset.moeda === "1";
+    const inicio = performance.now();
+    const passo = (agora) => {
+      const p = Math.min(1, (agora - inicio) / 600);
+      const v = alvo * (1 - Math.pow(1 - p, 3));
+      num.textContent = p >= 1 ? final : moeda ? painelNumero(v) : String(Math.round(v));
+      if (p < 1) requestAnimationFrame(passo);
+    };
+    requestAnimationFrame(passo);
+  });
+}
+
+// ---- hoje na agenda ----
+
+function painelDesenharHoje(d) {
+  let corpo;
+  if (!painelInicio.chamados) corpo = painelEsqueleto(3);
+  else if (painelInicio.chamados === "erro") corpo = painelVazio("agenda", "Não consegui carregar os chamados. O servidor está ligado?");
+  else {
+    const linhas = [];
+    d.emAndamento.forEach((v) => {
+      const c = chamadoPorId(v.chamadoId);
+      if (!c) return;
+      linhas.push(`<li class="hoje-item hoje-andamento" data-ir="atendimento" tabindex="0" role="button">
+          <span class="hoje-hora">agora</span>
+          <div class="hoje-texto"><strong>#${escapeHtml(String(c.numero))} ${escapeHtml(c.clienteNome || "Sem nome")}</strong>
+            <span>Em atendimento há <span data-tempo-desde="${escapeHtml(v.inicioReal || "")}">${escapeHtml(tempoDecorrido(v.inicioReal))}</span></span></div>
+          <span class="chamado-status-badge chamado-status-andamento">Em andamento</span>
+        </li>`);
+    });
+    d.doDia.forEach((c) => {
+      linhas.push(`<li class="hoje-item${c.status === "Concluído" ? " hoje-feito" : ""}" data-chamado="${escapeHtml(c.id)}" tabindex="0" role="button">
+          <span class="hoje-hora">${escapeHtml(agHoraStr(agDeIso(c.reservadoInicio)))}</span>
+          <div class="hoje-texto"><strong>#${escapeHtml(String(c.numero))} ${escapeHtml(c.clienteNome || "Sem nome")}</strong>
+            <span>${escapeHtml(c.enderecoCopia || c.descricaoSolicitacao || "")}</span></div>
+          <span class="chamado-status-badge ${statusClasseChamado(c.status)}">${escapeHtml(c.status)}</span>
+          ${podeIniciarAtendimento(c) ? `<button type="button" class="hoje-iniciar" data-iniciar="${escapeHtml(c.id)}">▶ Iniciar</button>` : ""}
+        </li>`);
+    });
+    corpo = linhas.length ? `<ul class="hoje-lista">${linhas.join("")}</ul>`
+      : painelVazio("certo", "Nenhum chamado marcado para hoje.", '<button type="button" class="botao-secundario painel-vazio-botao" data-acao="novo-chamado">+ Novo chamado</button>');
+    const rodape = [];
+    if (d.proximos.length) {
+      rodape.push(`<div class="hoje-proximos"><span class="painel-sub">Próximos</span>${d.proximos.map((c) => {
+        const ini = agDeIso(c.reservadoInicio);
+        return `<button type="button" class="hoje-prox" data-chamado="${escapeHtml(c.id)}"><b>${escapeHtml(agFmt(ini, { weekday: "short", day: "2-digit", month: "2-digit" }))} · ${escapeHtml(agHoraStr(ini))}</b> #${escapeHtml(String(c.numero))} ${escapeHtml(c.clienteNome || "Sem nome")}</button>`;
+      }).join("")}</div>`);
+    }
+    if (d.semData) rodape.push(`<button type="button" class="painel-link painel-link-solto" data-ir="agenda">${d.semData} chamado${d.semData > 1 ? "s" : ""} aguardando data${painelSvg("seta")}</button>`);
+    corpo += rodape.join("");
+  }
+  painelPor("painel-hoje", painelCab("agenda", "Hoje na agenda", painelLink("Ver agenda", "agenda")) + corpo);
+}
+
+// ---- limite do MEI ----
+
+function painelTextoDoRitmo(e) {
+  if (!(e.media > 0)) return "Ainda sem histórico para estimar o fim do ano.";
+  const redondo = dinheiro(Math.round(e.projecao / 100) * 100).replace(/,00$/, "");
+  if (e.projecao > e.limite) return `No ritmo dos últimos meses, fecha o ano em ≈ ${redondo}: acima do limite.`;
+  if (e.projecao > e.limite * 0.9) return `No ritmo dos últimos meses, fecha o ano em ≈ ${redondo}: bem perto do limite.`;
+  return `No ritmo dos últimos meses, fecha o ano em ≈ ${redondo}.`;
+}
+
+function painelDesenharMei(d) {
+  const f = d.fat;
+  let corpo;
+  if (!f) {
+    corpo = painelInicio.fatCarregando ? painelEsqueleto(3)
+      : painelVazio("medidor", painelInicio.fatAviso || "Ainda não somei o faturamento do ano.",
+        '<button type="button" class="botao-secundario painel-vazio-botao" data-fat-atualizar>Tentar agora</button>');
+  } else {
+    const C = 2 * Math.PI * 50;
+    const selo = { ok: "dentro do limite", aviso: "atenção", perigo: "no limite" };
+    corpo = f.emissores.map((e) => {
+      const pct = Math.round(e.usado * 100);
+      return `<div class="mei-item mei-${e.nivel}">
+          <svg class="mei-anel" viewBox="0 0 120 120" role="img" aria-label="${pct}% do limite usado">
+            <circle class="mei-trilho" cx="60" cy="60" r="50"/>
+            <circle class="mei-arco" cx="60" cy="60" r="50" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${(C * (1 - Math.min(1, e.usado))).toFixed(2)}" transform="rotate(-90 60 60)"/>
+            <text x="60" y="60" class="mei-pct">${pct}%</text><text x="60" y="78" class="mei-pct-rotulo">usado</text>
+          </svg>
+          <div class="mei-dados">
+            <div class="mei-nome">${escapeHtml(e.nome)}<span class="mei-selo">${selo[e.nivel]}</span></div>
+            <div class="mei-usado"><strong>${escapeHtml(dinheiro(e.total))}</strong> de ${escapeHtml(dinheiro(e.limite).replace(/,00$/, ""))}</div>
+            <div class="mei-cabe">${e.sobra >= 0 ? `Cabem <strong>${escapeHtml(dinheiro(e.sobra))}</strong> até dezembro` : `Passou <strong>${escapeHtml(dinheiro(-e.sobra))}</strong> do limite`}</div>
+            <div class="mei-ritmo">${escapeHtml(painelTextoDoRitmo(e))}</div>
+          </div>
+        </div>`;
+    }).join("");
+    const notas = f.emissores.reduce((s, e) => s + e.notas, 0);
+    const canceladas = f.emissores.reduce((s, e) => s + e.canceladas, 0);
+    const quando = f.emissores.map((e) => e.sincronizadoEm).filter(Boolean).sort()[0] || "";
+    const erro = painelInicio.fatAviso || (f.emissores.find((e) => e.erro) || {}).erro || "";
+    corpo += `<footer class="painel-rodape">
+        <span>${notas} nota${notas === 1 ? "" : "s"} em ${f.ano}${canceladas ? ` · ${canceladas} cancelada${canceladas > 1 ? "s" : ""} (não conta${canceladas > 1 ? "m" : ""})` : ""}${quando ? ` · lido no governo ${escapeHtml(painelHa(quando))}` : ""}${f.ambiente === "restrita" ? " · AMBIENTE DE TESTES" : ""}</span>
+        <button type="button" class="painel-atualizar${painelInicio.fatCarregando ? " girando" : ""}" data-fat-atualizar title="Ler de novo no governo"${painelInicio.fatCarregando ? " disabled" : ""}>${painelSvg("atualizar")}Atualizar</button>
+      </footer>${erro ? `<p class="painel-aviso">${escapeHtml(erro)}</p>` : ""}`;
+  }
+  painelPor("painel-mei", painelCab("medidor", "Limite do MEI", f ? `<span class="painel-etiqueta">${f.ano}</span>` : "") + corpo);
+}
+
+// ---- faturamento por mês ----
+
+function painelDesenharFat(d) {
+  const f = d.fat;
+  let corpo;
+  if (!f) corpo = painelInicio.fatCarregando ? painelEsqueleto(4) : painelVazio("barras", "O gráfico aparece quando a soma do ano chegar (veja o cartão do MEI).");
+  else {
+    const maior = Math.max(...f.totais, 1);
+    const sel = painelInicio.fatMes >= 0 ? painelInicio.fatMes : f.mesAtual;
+    const colunas = f.totais.map((total, m) => `<button type="button" class="fat-col${m === f.mesAtual ? " fat-atual" : ""}${m === sel ? " fat-sel" : ""}${m > f.mesAtual ? " fat-futuro" : ""}" data-fat-mes="${m}" aria-label="${PAINEL_MESES_LONGOS[m]}: ${escapeHtml(dinheiro(total))}">
+          <span class="fat-area"><span class="fat-valor">${total ? escapeHtml(painelMilhar(total)) : ""}</span><span class="fat-pilha" style="height: ${total ? Math.max(3, (total / maior) * 86).toFixed(1) : 0}%">${
+  f.emissores.map((e, i) => (e.porMes[m] ? `<i class="fat-b${i + 1}" style="flex-grow: ${e.porMes[m]}"></i>` : "")).join("")}</span></span>
+          <span class="fat-mes">${PAINEL_MESES[m]}</span>
+        </button>`).join("");
+    const partes = f.emissores.filter((e) => e.porMes[sel]).map((e) => `${e.nome} ${dinheiro(e.porMes[sel])} (${e.notasPorMes[sel]} nota${e.notasPorMes[sel] === 1 ? "" : "s"})`);
+    const mesesContados = f.mesAtual + 1;
+    corpo = `<div class="fat-barras">${colunas}</div>
+      <p class="fat-detalhe"><strong>${PAINEL_MESES_LONGOS[sel]}: ${escapeHtml(dinheiro(f.totais[sel]))}</strong>${partes.length ? ` · ${escapeHtml(partes.join(" · "))}` : sel > f.mesAtual ? " · ainda não chegou" : " · nenhuma nota"}</p>
+      <footer class="painel-rodape"><span class="fat-legenda">${f.emissores.map((e, i) => `<i class="fat-b${i + 1}"></i>${escapeHtml(e.nome)}`).join("")}</span>
+        <span>Total de ${f.ano}: <strong>${escapeHtml(dinheiro(f.totalAno))}</strong> · média de ${escapeHtml(dinheiro(f.totalAno / mesesContados))} por mês</span></footer>`;
+  }
+  painelPor("painel-fat", painelCab("barras", "Faturamento por mês", f ? '<span class="painel-etiqueta">notas emitidas</span>' : "") + corpo);
+}
+
+// ---- contas a pagar ----
+
+function painelDesenharContas(d) {
+  const c = d.contas;
+  let corpo;
+  if (!c) corpo = painelInicio.finAviso ? painelVazio("contas", painelInicio.finAviso) : painelEsqueleto(3);
+  else {
+    const num = (n, rotulo, total, classe) => `<div class="contas-num${classe && n ? " " + classe : ""}"><strong>${n}</strong><span>${rotulo}</span><small>${n ? escapeHtml(dinheiro(total)) : "—"}</small></div>`;
+    corpo = `<div class="contas-resumo">${num(c.vencidas.length, c.vencidas.length === 1 ? "vencida" : "vencidas", c.totalVencidas, "contas-perigo")}${
+      num(c.deHoje.length, "vence hoje", c.totalHoje, "contas-aviso")}${num(c.semana.length, "em 7 dias", c.totalSemana, "")}</div>`;
+    const hoje = hojeISO();
+    corpo += c.proximas.length
+      ? `<ul class="contas-lista">${c.proximas.map((x) => {
+        const v = String(x.vencimento).slice(0, 10);
+        return `<li><span class="contas-data${v < hoje ? " contas-vencida" : v === hoje ? " contas-hoje" : ""}">${escapeHtml(dataBonita(v).slice(0, 5))}</span><span class="contas-desc">${escapeHtml(x.descricao || "Conta sem descrição")}</span><strong>${escapeHtml(dinheiro(x.valor))}</strong></li>`;
+      }).join("")}</ul>`
+      : painelVazio("certo", "Nada vencido nem vencendo nos próximos 7 dias.");
+    if (c.receber.quantas) {
+      corpo += `<p class="contas-receber">A receber: <strong>${escapeHtml(dinheiro(c.receber.total))}</strong> em ${c.receber.quantas} conta${c.receber.quantas > 1 ? "s" : ""}${
+        c.receber.atrasadas ? ` · <span class="contas-atraso">${c.receber.atrasadas} atrasada${c.receber.atrasadas > 1 ? "s" : ""}</span>` : ""}</p>`;
+    }
+  }
+  painelPor("painel-contas", painelCab("contas", "Contas a pagar", painelLink("Ver contas", "financeiro", '.subtab-fin[data-subfin="despesas"]')) + corpo);
+}
+
+// ---- últimas notas ----
+
+function painelDesenharNotas(d) {
+  let corpo;
+  if (!d.notas) corpo = painelInicio.notasAviso ? painelVazio("nota", painelInicio.notasAviso) : painelEsqueleto(3);
+  else if (!d.notas.length) corpo = painelVazio("nota", "Nenhuma nota emitida pelo sistema ainda.", '<button type="button" class="botao-secundario painel-vazio-botao" data-acao="emitir-nota">Emitir a primeira</button>');
+  else {
+    corpo = `<ul class="pn-lista">${d.notas.slice(0, 5).map((n) => {
+      const cancelada = n.status === "Cancelada";
+      const pdf = n.pdf && n.pdf.url ? n.pdf.url : "";
+      return `<li class="pn-item${cancelada ? " pn-cancelada" : ""}">
+          <span class="pn-num">nº ${escapeHtml(String(n.numeroNota || "?"))}</span>
+          <span class="pn-quem"><b>${escapeHtml(n.tomadorNome || "Sem nome")}</b><small>${escapeHtml([nfData(n.competencia), n.emissor].filter(Boolean).join(" · "))}</small></span>
+          ${cancelada ? `<span class="nf-selo nf-selo-cancelada">${NF_ICONE_CANCELADA}Cancelada</span>` : ""}
+          <strong class="pn-valor">${escapeHtml(nfReais(Number(n.valor || 0)))}</strong>
+          ${pdf ? `<button type="button" class="pn-pdf" data-pdf="${escapeHtml(pdf)}" title="Ver o PDF da nota">PDF</button>` : ""}
+        </li>`;
+    }).join("")}</ul>`;
+  }
+  painelPor("painel-notas", painelCab("nota", "Últimas notas fiscais", painelLink("Ver notas", "documentos", "#aba-doc-notas")) + corpo);
+}
+
+// ---- selos do menu ----
+
+function painelSelosDoMenu(d) {
+  const selo = (id, n) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = n ? String(n) : "";
+    el.classList.toggle("hidden", !n);
+  };
+  selo("menu-agenda-contagem", painelInicio.chamados === "ok" ? d.doDia.filter((c) => c.status !== "Concluído").length : 0);
+  selo("menu-financeiro-contagem", d.contas ? d.contas.vencidas.length : 0);
+}
+
+function painelDesenhar() {
+  if (!document.getElementById("painel-kpis")) return;
+  const dono = painelInicio.dono;
+  document.querySelectorAll("#page-inicio [data-so-dono]").forEach((b) => b.classList.toggle("hidden", !dono));
+  // Quem não tem acesso total não recebe os cartões de dinheiro e de notas (o servidor também não entrega).
+  ["painel-mei", "painel-contas", "painel-fat", "painel-notas"].forEach((id) => document.getElementById(id).classList.toggle("hidden", !dono));
+  const d = painelDados();
+  painelDesenharKpis(d);
+  painelDesenharHoje(d);
+  if (dono) {
+    painelDesenharMei(d);
+    painelDesenharContas(d);
+    painelDesenharFat(d);
+    painelDesenharNotas(d);
+  }
+  painelSelosDoMenu(d);
+}
+
+// ---- toques dentro do Início ----
+
+const paginaInicio = document.getElementById("page-inicio");
+
+function painelAbrirChamado(id) {
+  const c = chamadoPorId(id);
+  if (!c) return;
+  if (painelIr("agenda")) agendaPularPara(c);
+}
+
+paginaInicio.addEventListener("click", (evento) => {
+  const alvo = (seletor) => evento.target.closest && evento.target.closest(seletor);
+  const iniciar = alvo("[data-iniciar]");
+  if (iniciar) {
+    const c = chamadoPorId(iniciar.dataset.iniciar);
+    if (c) iniciarAtendimento(c);
+    return;
+  }
+  const pdf = alvo("[data-pdf]");
+  if (pdf) return void abrirPdfEmNovaAba(pdf.dataset.pdf);
+  if (alvo("[data-fat-atualizar]")) return void painelCarregarFaturamento(true);
+  const mes = alvo("[data-fat-mes]");
+  if (mes) {
+    painelInicio.fatMes = Number(mes.dataset.fatMes);
+    return void painelDesenhar();
+  }
+  const acao = alvo("[data-acao]");
+  if (acao) return void painelAcao(acao.dataset.acao);
+  const chamado = alvo("[data-chamado]");
+  if (chamado) return void painelAbrirChamado(chamado.dataset.chamado);
+  const ir = alvo("[data-ir]");
+  if (ir && ir.dataset.ir !== "inicio") painelIr(ir.dataset.ir, ir.dataset.aba || "");
+  else if (ir) document.getElementById("painel-mei").scrollIntoView({ behavior: "smooth", block: "center" });
+});
+
+// Linha da lista de hoje também abre pelo teclado (Enter), como um botão.
+paginaInicio.addEventListener("keydown", (evento) => {
+  if (evento.key !== "Enter" || !evento.target.matches || !evento.target.matches(".hoje-item")) return;
+  evento.target.click();
+});
+
+// Voltar ao Início redesenha (o relógio andou) e busca de novo se o que está na tela já tem alguns minutos.
+document.querySelector('.sidebar-item[data-page="inicio"]').addEventListener("click", () => {
+  painelDesenhar();
+  painelCarregar(false);
+});
+
+// Luz que acompanha o mouse nos cartões (só em computador): dá a sensação de que o cartão "responde".
+if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+  paginaInicio.addEventListener("pointermove", (evento) => {
+    const cartao = evento.target.closest && evento.target.closest(".kpi, .painel-cartao, .inicio-atalho, .painel-acao");
+    if (!cartao) return;
+    const r = cartao.getBoundingClientRect();
+    cartao.style.setProperty("--mx", `${Math.round(evento.clientX - r.left)}px`);
+    cartao.style.setProperty("--my", `${Math.round(evento.clientY - r.top)}px`);
+  });
+}
+
+// ----- Busca rápida (Ctrl+K) -----
+
+const buscaRapida = { aberta: false, itens: [], indice: 0, cliente: null, focoAntes: null };
+const buscaRapidaEl = document.getElementById("busca-rapida");
+const buscaRapidaCampo = document.getElementById("busca-rapida-campo");
+const buscaRapidaLista = document.getElementById("busca-rapida-lista");
+const buscaRapidaContexto = document.getElementById("busca-rapida-contexto");
+
+const BUSCA_TELAS = [
+  { nome: "Início", chaves: "painel home", pagina: "inicio" },
+  { nome: "Clientes", chaves: "cadastro consultar", pagina: "cadastro", aba: '#page-cadastro .subtab[data-subpage="consultar"]' },
+  { nome: "Contatos", chaves: "cadastro sindico zelador", pagina: "contatos" },
+  { nome: "Administradoras", chaves: "cadastro", pagina: "administradoras" },
+  { nome: "Sindicatura", chaves: "cadastro sindicos", pagina: "sindicatura" },
+  { nome: "E-mails", chaves: "cadastro email", pagina: "emails" },
+  { nome: "Financeiro · Painel", chaves: "caixa saldo", pagina: "financeiro", aba: '.subtab-fin[data-subfin="painel"]' },
+  { nome: "Financeiro · A pagar", chaves: "contas despesas vencidas", pagina: "financeiro", aba: '.subtab-fin[data-subfin="despesas"]' },
+  { nome: "Financeiro · A receber", chaves: "contas recebimentos", pagina: "financeiro", aba: '.subtab-fin[data-subfin="receber"]' },
+  { nome: "Financeiro · Contas fixas", chaves: "recorrentes mensais", pagina: "financeiro", aba: '.subtab-fin[data-subfin="fixas"]' },
+  { nome: "Chamados", chaves: "consultar servicos", pagina: "chamados", aba: '#page-chamados .subtab[data-subpage="ch-consultar"]' },
+  { nome: "Agenda", chaves: "calendario horarios", pagina: "agenda" },
+  { nome: "Atendimento", chaves: "servico em andamento visita", pagina: "atendimento" },
+  { nome: "Documentos · PDFs", chaves: "orcamento recibo laudo comunicado", pagina: "documentos", aba: '.subtab-doc[data-subdoc="pdfs"]' },
+  { nome: "Notas fiscais", chaves: "nf nfse emitir", pagina: "documentos", aba: "#aba-doc-notas", dono: true },
+  { nome: "Arquivos", chaves: "pastas pdf guardados", pagina: "documentos", aba: "#aba-doc-arquivos", dono: true },
+  { nome: "Veículo", chaves: "carro pneus combustivel", pagina: "veiculo" },
+  { nome: "Usuários", chaves: "acessos convites", pagina: "usuarios", dono: true },
+];
+const BUSCA_ACOES = [
+  { nome: "Novo chamado", chaves: "criar abrir servico", acao: "novo-chamado", ic: "mais", cor: "251, 191, 36" },
+  { nome: "Novo cliente", chaves: "cadastrar adicionar", acao: "novo-cliente", ic: "mais", cor: "192, 132, 252" },
+  { nome: "Emitir nota fiscal", chaves: "nf nfse nota", acao: "emitir-nota", ic: "nota", cor: "129, 140, 248", dono: true },
+  { nome: "Gerar documento", chaves: "pdf orcamento recibo laudo comunicado", detalhe: "Orçamento, recibo, laudo ou comunicado", acao: "novo-documento", ic: "documento", cor: "129, 140, 248" },
+];
+
+// Ícone e cor de cada tela são os do próprio menu (lidos da tela: não há uma segunda lista para manter igual).
+function buscaIconeDaTela(pagina) {
+  const item = document.querySelector(`.sidebar-item[data-page="${pagina}"]`);
+  if (!item) return { ic: "", cor: "91, 141, 239" };
+  const desenho = item.querySelector(".sidebar-icone") || (item.closest(".sidebar-grupo") || document).querySelector(".sidebar-grupo-cabecalho .sidebar-icone");
+  return { ic: desenho ? desenho.innerHTML : "", cor: getComputedStyle(item).getPropertyValue("--sec-rgb").trim() || "91, 141, 239" };
+}
+
+function buscaAcoesDoCliente(c) {
+  const doc = String(c.documento || "");
+  return [
+    { titulo: "Abrir o cadastro", detalhe: "Dados, endereços e contatos", ic: PAINEL_IC.cliente, cor: "192, 132, 252", executar: () => buscaAbrirCadastro(c) },
+    painelInicio.dono && { titulo: "Emitir nota fiscal", detalhe: `Sai pelo ${c.atendidoPor === "CNPJ 2" ? "CNPJ 2" : "CNPJ 1"}`, ic: PAINEL_IC.nota, cor: "129, 140, 248",
+      executar: () => { if (painelIr("documentos", "#aba-doc-notas")) nfEscolherCliente(c.id); } },
+    { titulo: "Gerar documento (PDF)", detalhe: "Orçamento, recibo, laudo ou comunicado", ic: PAINEL_IC.documento, cor: "129, 140, 248",
+      executar: () => { if (painelIr("documentos", '.subtab-doc[data-subdoc="pdfs"]')) puxarClienteNoDocumento(c.id); } },
+    painelInicio.dono && { titulo: "Ver os arquivos", detalhe: "Notas, laudos, recibos e orçamentos guardados", ic: PAINEL_IC.pasta, cor: "129, 140, 248",
+      executar: () => { if (painelIr("documentos", "#aba-doc-arquivos")) setTimeout(() => arqAbrirCliente(c.id), 60); } },
+    doc && { titulo: `Copiar o ${doc.length === 11 ? "CPF" : "CNPJ"}`, detalhe: formatarDocumento(doc), ic: PAINEL_IC.copiar, cor: "148, 163, 184",
+      executar: () => copiarTexto(formatarDocumento(doc), `${doc.length === 11 ? "CPF" : "CNPJ"} copiado.`) },
+  ].filter(Boolean);
+}
+
+// Abre o cadastro do cliente na Consulta: filtra a lista pelo documento (ou pelo nome) e toca na linha dele.
+async function buscaAbrirCadastro(c) {
+  if (!painelIr("cadastro", '#page-cadastro .subtab[data-subpage="consultar"]')) return;
+  await garantirCadastrosCarregados();
+  for (let i = 0; i < 40 && !listaCarregada; i += 1) await new Promise((ok) => setTimeout(ok, 150));
+  buscaInput.value = c.documento ? formatarDocumento(c.documento) : c.razaoSocial || c.nomeFantasia || "";
+  const abrir = () => {
+    desenharLista();
+    const linha = listaBox.querySelector(".cadastro");
+    if (linha && !linha.classList.contains("aberto")) linha.querySelector(".cadastro-resumo").click();
+  };
+  abrir();
+  // Se a Consulta ainda estava chegando do servidor, ela se redesenha fechada: abre de novo, uma vez.
+  setTimeout(() => {
+    if (!document.getElementById("page-cadastro").classList.contains("hidden") && !listaBox.querySelector(".cadastro.aberto")) abrir();
+  }, 1500);
+}
+
+function buscaMontar() {
+  const termo = normalizarTexto(buscaRapidaCampo.value);
+  const digitos = buscaRapidaCampo.value.replace(/\D/g, "");
+  const dono = painelInicio.dono;
+  const grupos = [];
+  const casa = (texto) => !termo || normalizarTexto(texto).includes(termo);
+
+  if (buscaRapida.cliente) {
+    grupos.push({ titulo: "O que fazer com este cliente", itens: buscaAcoesDoCliente(buscaRapida.cliente).filter((a) => casa(`${a.titulo} ${a.detalhe}`)) });
+  } else {
+    const acoes = BUSCA_ACOES.filter((a) => (dono || !a.dono) && casa(`${a.nome} ${a.chaves}`))
+      .map((a) => ({ titulo: a.nome, detalhe: a.detalhe || "", ic: PAINEL_IC[a.ic], cor: a.cor, executar: () => painelAcao(a.acao) }));
+    if (acoes.length) grupos.push({ titulo: "Ações", itens: acoes });
+
+    // "#12" procura só chamado; número solto procura chamado e nota com exatamente esse número.
+    const soChamado = /^\s*#\d+\s*$/.test(buscaRapidaCampo.value);
+    if (termo) {
+      const clientes = soChamado ? [] : cadastros.filter((c) => normalizarTexto([c.razaoSocial, c.nomeFantasia, c.contato].filter(Boolean).join(" ")).includes(termo)
+        || (digitos.length >= 3 && String(c.documento || "").includes(digitos))).slice(0, 7)
+        .map((c) => ({
+          titulo: c.nomeFantasia || c.razaoSocial || "Cliente sem nome",
+          detalhe: [c.razaoSocial && c.razaoSocial !== c.nomeFantasia ? c.razaoSocial : "", c.documento ? formatarDocumento(c.documento) : "", c.atendidoPor === "CNPJ 2" ? "CNPJ 2" : ""].filter(Boolean).join(" · "),
+          ic: PAINEL_IC.cliente, cor: "192, 132, 252", segue: true,
+          executar: () => { buscaRapida.cliente = c; buscaRapidaCampo.value = ""; buscaAtualizar(); },
+        }));
+      if (clientes.length) grupos.push({ titulo: "Clientes", itens: clientes });
+
+      const numero = (buscaRapidaCampo.value.match(/^\s*#?(\d{1,6})\s*$/) || [])[1];
+      const chamadosAchados = [...chamadosComData, ...chamadosSemData].filter((c) => (numero ? String(c.numero) === numero
+        : normalizarTexto([c.clienteNome, c.enderecoCopia, c.descricaoSolicitacao].filter(Boolean).join(" ")).includes(termo))).slice(0, 5)
+        .map((c) => ({
+          titulo: `Chamado #${c.numero} · ${c.clienteNome || "Sem nome"}`,
+          detalhe: [c.status, c.reservadoInicio ? `${agFmt(agDeIso(c.reservadoInicio), { day: "2-digit", month: "2-digit" })} às ${agHoraStr(agDeIso(c.reservadoInicio))}` : "sem data", c.enderecoCopia].filter(Boolean).join(" · "),
+          ic: PAINEL_IC.chamado, cor: "251, 191, 36",
+          executar: () => { if (c.reservadoInicio) { if (painelIr("agenda")) agendaPularPara(c); } else painelIr("chamados", '#page-chamados .subtab[data-subpage="ch-consultar"]'); },
+        }));
+      if (chamadosAchados.length) grupos.push({ titulo: "Chamados", itens: chamadosAchados });
+
+      const notasAchadas = dono && painelInicio.notas && !soChamado ? painelInicio.notas.filter((n) => n.numeroNota && (numero ? String(n.numeroNota) === numero
+        : normalizarTexto(n.tomadorNome || "").includes(termo))).slice(0, 4)
+        .map((n) => ({
+          titulo: `Nota nº ${n.numeroNota} · ${n.tomadorNome || "Sem nome"}`,
+          detalhe: [n.status, nfData(n.competencia), nfReais(Number(n.valor || 0)), n.emissor].filter(Boolean).join(" · "),
+          ic: PAINEL_IC.nota, cor: "129, 140, 248",
+          executar: () => { if (n.pdf && n.pdf.url) abrirPdfEmNovaAba(n.pdf.url); else painelIr("documentos", "#aba-doc-notas"); },
+        })) : [];
+      if (notasAchadas.length) grupos.push({ titulo: "Notas fiscais", itens: notasAchadas });
+    }
+
+    const telas = BUSCA_TELAS.filter((t) => (dono || !t.dono) && casa(`${t.nome} ${t.chaves}`))
+      .map((t) => ({ titulo: t.nome, detalhe: "", ...buscaIconeDaTela(t.pagina), executar: () => painelIr(t.pagina, t.aba || "") }));
+    if (telas.length) grupos.push({ titulo: "Ir para", itens: telas });
+  }
+  return grupos;
+}
+
+function buscaAtualizar() {
+  const grupos = buscaMontar();
+  buscaRapida.itens = grupos.flatMap((g) => g.itens);
+  buscaRapida.indice = Math.min(buscaRapida.indice, Math.max(0, buscaRapida.itens.length - 1));
+  const c = buscaRapida.cliente;
+  buscaRapidaContexto.textContent = c ? c.nomeFantasia || c.razaoSocial || "Cliente" : "";
+  buscaRapidaContexto.classList.toggle("hidden", !c);
+  buscaRapidaCampo.placeholder = c ? "O que fazer? (Backspace volta)" : "Buscar cliente, chamado, nota, tela ou ação…";
+  let n = 0;
+  buscaRapidaLista.innerHTML = buscaRapida.itens.length
+    ? grupos.map((g) => (g.itens.length ? `<div class="busca-grupo">${escapeHtml(g.titulo)}</div>${g.itens.map((item) => {
+      const i = n++;
+      return `<button type="button" class="busca-item${i === buscaRapida.indice ? " ativo" : ""}" data-busca-i="${i}" role="option" aria-selected="${i === buscaRapida.indice}" style="--cor: ${item.cor || "91, 141, 239"}">
+          <span class="busca-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${item.ic || ""}</svg></span>
+          <span class="busca-texto"><b>${escapeHtml(item.titulo)}</b>${item.detalhe ? `<small>${escapeHtml(item.detalhe)}</small>` : ""}</span>
+          ${item.segue ? painelSvg("seta") : ""}
+        </button>`;
+    }).join("")}` : "")).join("")
+    : `<div class="busca-nada">Nada encontrado para “${escapeHtml(buscaRapidaCampo.value.trim())}”.</div>`;
+}
+
+function buscaMarcar(indice) {
+  if (!buscaRapida.itens.length) return;
+  buscaRapida.indice = (indice + buscaRapida.itens.length) % buscaRapida.itens.length;
+  buscaRapidaLista.querySelectorAll(".busca-item").forEach((el) => {
+    const ativo = Number(el.dataset.buscaI) === buscaRapida.indice;
+    el.classList.toggle("ativo", ativo);
+    el.setAttribute("aria-selected", String(ativo));
+    if (ativo) el.scrollIntoView({ block: "nearest" });
+  });
+}
+
+function buscaExecutar(indice) {
+  const item = buscaRapida.itens[indice];
+  if (!item) return;
+  // O item de cliente devolve true: a janela continua aberta, agora com as ações dele.
+  if (item.segue) {
+    buscaRapida.indice = 0;
+    item.executar();
+    return;
+  }
+  buscaFechar();
+  item.executar();
+}
+
+function buscaAbrir() {
+  if (buscaRapida.aberta || appView.classList.contains("hidden") || document.querySelector("dialog[open]")) return;
+  buscaRapida.aberta = true;
+  buscaRapida.cliente = null;
+  buscaRapida.indice = 0;
+  buscaRapida.focoAntes = document.activeElement;
+  buscaRapidaCampo.value = "";
+  buscaRapidaEl.classList.remove("hidden");
+  buscaAtualizar();
+  buscaRapidaCampo.focus();
+  // A lista de clientes pode ainda não ter vindo nesta sessão: busca e refaz o resultado quando chegar.
+  garantirCadastrosCarregados().then(() => { if (buscaRapida.aberta) buscaAtualizar(); }).catch(() => {});
+}
+
+function buscaFechar() {
+  if (!buscaRapida.aberta) return;
+  buscaRapida.aberta = false;
+  buscaRapidaEl.classList.add("hidden");
+  const antes = buscaRapida.focoAntes;
+  buscaRapida.focoAntes = null;
+  if (antes && typeof antes.focus === "function" && document.contains(antes)) antes.focus({ preventScroll: true });
+}
+
+buscaRapidaCampo.addEventListener("input", () => {
+  buscaRapida.indice = 0;
+  buscaAtualizar();
+});
+buscaRapidaLista.addEventListener("click", (evento) => {
+  const item = evento.target.closest && evento.target.closest("[data-busca-i]");
+  if (item) buscaExecutar(Number(item.dataset.buscaI));
+});
+buscaRapidaLista.addEventListener("pointermove", (evento) => {
+  const item = evento.target.closest && evento.target.closest("[data-busca-i]");
+  if (item && Number(item.dataset.buscaI) !== buscaRapida.indice) buscaMarcar(Number(item.dataset.buscaI));
+});
+buscaRapidaEl.addEventListener("click", (evento) => {
+  if (evento.target === buscaRapidaEl) buscaFechar();
+});
+document.querySelectorAll("[data-abrir-busca]").forEach((botao) => botao.addEventListener("click", buscaAbrir));
+
+// Na fase de captura: com a busca aberta, as teclas são dela (Esc não fecha outra janela por baixo).
+document.addEventListener("keydown", (evento) => {
+  if ((evento.ctrlKey || evento.metaKey) && !evento.altKey && !evento.shiftKey && evento.key.toLowerCase() === "k") {
+    evento.preventDefault();
+    evento.stopPropagation();
+    if (buscaRapida.aberta) buscaFechar();
+    else buscaAbrir();
+    return;
+  }
+  if (!buscaRapida.aberta) return;
+  if (evento.key === "Escape") {
+    evento.preventDefault();
+    evento.stopPropagation();
+    if (buscaRapida.cliente) {
+      buscaRapida.cliente = null;
+      buscaRapida.indice = 0;
+      buscaAtualizar();
+    } else buscaFechar();
+  } else if (evento.key === "ArrowDown" || evento.key === "ArrowUp") {
+    evento.preventDefault();
+    buscaMarcar(buscaRapida.indice + (evento.key === "ArrowDown" ? 1 : -1));
+  } else if (evento.key === "Enter") {
+    evento.preventDefault();
+    evento.stopPropagation();
+    buscaExecutar(buscaRapida.indice);
+  } else if (evento.key === "Backspace" && buscaRapida.cliente && !buscaRapidaCampo.value) {
+    evento.preventDefault();
+    buscaRapida.cliente = null;
+    buscaRapida.indice = 0;
+    buscaAtualizar();
+  } else if (evento.key === "Tab") {
+    // O foco não sai da janela enquanto ela está aberta.
+    evento.preventDefault();
+    buscaMarcar(buscaRapida.indice + (evento.shiftKey ? -1 : 1));
+  }
+}, true);
 
 // Toda abertura passa pelo login por e-mail e senha (conta.html). O endereço
 // antigo sistema.html#senha cai aqui também, e é levado para o Entrar.

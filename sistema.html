@@ -24,6 +24,10 @@
     <div class="topbar">
       <button type="button" id="menu-button" class="menu-button" aria-label="Abrir menu" aria-expanded="false">☰</button>
       <span class="topbar-title">Soluções Rápidas</span>
+      <!-- Busca rápida (16/11/2026): abre de qualquer tela, por aqui ou com Ctrl+K. -->
+      <button type="button" class="busca-gatilho busca-gatilho-topo" id="topbar-buscar" data-abrir-busca aria-label="Buscar cliente, chamado ou tela">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Buscar</span><kbd>Ctrl K</kbd>
+      </button>
       <span id="conexao" class="conexao" title="Conexão com o n8n">
         <span class="conexao-ponto"></span>
         <span class="conexao-texto">conectado</span>
@@ -39,6 +43,26 @@
     <button type="button" id="nav-voltar" class="nav-voltar hidden" aria-label="Voltar para a tela anterior">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>Voltar</span>
     </button>
+
+    <!-- Busca rápida (16/11/2026): uma caixa só para achar cliente, chamado, nota, tela ou ação, de qualquer
+         lugar. Escolher um cliente mostra o que dá para fazer com ele (abrir cadastro, emitir nota, gerar
+         documento, ver arquivos). Montada pelo app.js. -->
+    <div id="busca-rapida" class="busca-rapida hidden" role="dialog" aria-modal="true" aria-label="Busca rápida">
+      <div class="busca-caixa">
+        <div class="busca-topo">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <span id="busca-rapida-contexto" class="busca-contexto hidden"></span>
+          <input type="text" id="busca-rapida-campo" placeholder="Buscar cliente, chamado, nota, tela ou ação…" autocomplete="off" spellcheck="false" />
+          <kbd>Esc</kbd>
+        </div>
+        <div class="busca-resultados" id="busca-rapida-lista" role="listbox"></div>
+        <div class="busca-rodape">
+          <span><kbd>↑</kbd><kbd>↓</kbd> escolher</span>
+          <span><kbd>Enter</kbd> abrir</span>
+          <span><kbd>Esc</kbd> fechar</span>
+        </div>
+      </div>
+    </div>
 
     <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
@@ -73,6 +97,7 @@
       <button type="button" class="sidebar-item" data-page="financeiro">
         <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h14.5a1.5 1.5 0 0 1 1.5 1.5v9.5a1.5 1.5 0 0 1-1.5 1.5H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M4 7.5 15.5 4v3.5"/><path d="M15.5 13.75h1.5"/></svg>
         <span class="sidebar-texto">Financeiro</span>
+        <span id="menu-financeiro-contagem" class="menu-contagem menu-contagem-perigo hidden" title="Contas vencidas"></span>
       </button>
       <!-- Chamados: uma página só, com as abas Consultar e Criar chamado (08/11/2026). -->
       <button type="button" class="sidebar-item" data-page="chamados">
@@ -82,6 +107,7 @@
       <button type="button" class="sidebar-item" data-page="agenda">
         <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
         <span class="sidebar-texto">Agenda</span>
+        <span id="menu-agenda-contagem" class="menu-contagem menu-contagem-agenda hidden" title="Chamados de hoje"></span>
       </button>
       <button type="button" class="sidebar-item" data-page="atendimento" id="menu-atendimento">
         <svg class="sidebar-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 3.5a4.5 4.5 0 0 0-4.2 6.1L4 16.9A2.1 2.1 0 0 0 7 19.9l7.3-7.3a4.5 4.5 0 0 0 6.1-4.2l-2.9 2.9-2.4-.6-.6-2.4z"/></svg>
@@ -115,8 +141,78 @@
     <main class="main-content">
       <div id="page-inicio" class="card page">
         <h1>Início</h1>
-        <p class="subtitle">Conectado com sucesso ✅</p>
-        <p class="placeholder-text">Em breve, mais opções aparecem aqui.</p>
+        <!-- Início = painel do dia (16/11/2026, pedido do dono: "dá pra colocar mais coisa"). De cima para baixo:
+             saudação + busca rápida, ações de um toque, quatro números-chave, e os cartões (hoje na agenda, limite
+             do MEI, contas a pagar, faturamento por mês, últimas notas). Tudo é desenhado pelo app.js (painel do
+             Início) com o que o sistema já sabe; nada aqui grava dado. Os atalhos de baixo só fazem o toque do menu. -->
+        <div class="inicio-hero">
+          <div class="inicio-hero-texto">
+            <p class="inicio-sauda" id="inicio-sauda">Bem-vindo</p>
+            <p class="inicio-data" id="inicio-data"></p>
+          </div>
+          <button type="button" class="busca-gatilho" data-abrir-busca>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Buscar cliente, chamado ou tela</span><kbd>Ctrl K</kbd>
+          </button>
+        </div>
+
+        <div class="painel-acoes">
+          <button type="button" class="painel-acao" data-acao="novo-chamado" style="--cor: 251, 191, 36"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Novo chamado</button>
+          <button type="button" class="painel-acao" data-acao="novo-cliente" style="--cor: 192, 132, 252"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="8" r="3.5"/><path d="M3.5 20c.6-3.6 3.2-5.8 6.5-5.8 1.2 0 2.3.3 3.2.8"/><path d="M18 14v6M15 17h6"/></svg>Novo cliente</button>
+          <button type="button" class="painel-acao" data-acao="emitir-nota" data-so-dono style="--cor: 129, 140, 248"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>Emitir nota</button>
+          <button type="button" class="painel-acao" data-acao="novo-documento" style="--cor: 129, 140, 248"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 17h5"/></svg>Gerar documento</button>
+        </div>
+
+        <div class="painel-kpis" id="painel-kpis"></div>
+
+        <!-- Duas colunas independentes (cada cartão tem a altura do seu conteúdo, sem vão embaixo do mais baixo);
+             no celular viram uma só. -->
+        <div class="painel-grade" id="painel-grade">
+          <div class="painel-coluna">
+            <section class="painel-cartao" id="painel-hoje" style="--cor: 34, 211, 238"></section>
+            <section class="painel-cartao" id="painel-contas" style="--cor: 52, 211, 153"></section>
+          </div>
+          <div class="painel-coluna">
+            <section class="painel-cartao" id="painel-mei" style="--cor: 129, 140, 248"></section>
+            <section class="painel-cartao" id="painel-fat" style="--cor: 129, 140, 248"></section>
+          </div>
+          <section class="painel-cartao painel-largo" id="painel-notas" style="--cor: 129, 140, 248"></section>
+        </div>
+
+        <p class="inicio-rotulo">Ir direto para</p>
+        <div class="inicio-atalhos">
+          <button type="button" class="inicio-atalho" data-atalho="agenda" style="--cor: 34, 211, 238">
+            <span class="inicio-atalho-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></span>
+            <span>Agenda<small>Os chamados de cada dia</small></span>
+          </button>
+          <button type="button" class="inicio-atalho" data-atalho="chamados" style="--cor: 251, 191, 36">
+            <span class="inicio-atalho-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 3h6v3H9z"/><path d="M9 11.5h6M9 15.5h4"/></svg></span>
+            <span>Chamados<small>Criar e consultar</small></span>
+          </button>
+          <button type="button" class="inicio-atalho" data-atalho="atendimento" style="--cor: 251, 113, 133">
+            <span class="inicio-atalho-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 3.5a4.5 4.5 0 0 0-4.2 6.1L4 16.9A2.1 2.1 0 0 0 7 19.9l7.3-7.3a4.5 4.5 0 0 0 6.1-4.2l-2.9 2.9-2.4-.6-.6-2.4z"/></svg></span>
+            <span>Atendimento<small>O serviço em andamento</small></span>
+          </button>
+          <button type="button" class="inicio-atalho" data-atalho="cadastro" style="--cor: 192, 132, 252">
+            <span class="inicio-atalho-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.8 6.5-5.8s5.9 2.2 6.5 5.8"/><path d="M15.5 5.2a3.5 3.5 0 0 1 0 6.6"/><path d="M18 14.6c1.9.7 3.1 2.6 3.5 5.4"/></svg></span>
+            <span>Clientes<small>Cadastro e contatos</small></span>
+          </button>
+          <button type="button" class="inicio-atalho" data-atalho="financeiro" style="--cor: 52, 211, 153">
+            <span class="inicio-atalho-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h14.5a1.5 1.5 0 0 1 1.5 1.5v9.5a1.5 1.5 0 0 1-1.5 1.5H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M4 7.5 15.5 4v3.5"/><path d="M15.5 13.75h1.5"/></svg></span>
+            <span>Financeiro<small>Contas e recebimentos</small></span>
+          </button>
+          <button type="button" class="inicio-atalho" data-atalho="documentos" style="--cor: 129, 140, 248">
+            <span class="inicio-atalho-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 17h5"/></svg></span>
+            <span>Documentos<small>Orçamento, recibo e laudo</small></span>
+          </button>
+          <button type="button" class="inicio-atalho" data-atalho="documentos" data-aba="aba-doc-notas" data-so-dono style="--cor: 129, 140, 248">
+            <span class="inicio-atalho-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></span>
+            <span>Notas fiscais<small>Emitir e consultar</small></span>
+          </button>
+          <button type="button" class="inicio-atalho" data-atalho="documentos" data-aba="aba-doc-arquivos" data-so-dono style="--cor: 129, 140, 248">
+            <span class="inicio-atalho-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+            <span>Arquivos<small>As pastas de cada cliente</small></span>
+          </button>
+        </div>
       </div>
 
       <!-- Cadastro de contatos: pessoas (síndico, zelador, gerente...), com ou
@@ -2075,6 +2171,17 @@
           <div id="nf-obra-bloco" class="hidden">
             <label for="nf-obra">Endereço da obra</label>
             <select id="nf-obra"></select>
+          </div>
+
+          <!-- Cliente do CNPJ 2: a nota sai pelo CNPJ 2, e aqui se escolhe de qual conta são os dados de pagamento
+               que vão na descrição (16/11/2026). Começa na conta do CNPJ 1, que é o que o dono vem usando. -->
+          <div id="nf-pagamento-bloco" class="grupo hidden">
+            <label>Dados para pagamento na nota</label>
+            <div class="opcoes" id="nf-pagamento">
+              <button type="button" class="opcao active" data-valor="CNPJ 1">Conta do CNPJ 1</button>
+              <button type="button" class="opcao" data-valor="CNPJ 2">Conta do CNPJ 2</button>
+            </div>
+            <p class="doc-hint">Este cliente é atendido pelo CNPJ 2: a nota sai por ele. Aqui você escolhe a conta que aparece para o cliente pagar.</p>
           </div>
 
           <label for="nf-servico">Serviço feito</label>
