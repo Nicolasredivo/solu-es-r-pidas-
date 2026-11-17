@@ -3,6 +3,8 @@
 # Entrada: { "cnpj", "ambiente": "restrita"|"producao", "metodo": "POST"|"GET", "caminho": "/nfse", "id": "DPS...", "xml": "..." }
 # Saida:   { "status": 201, "corpo": "..." } ou { "falha": "motivo" }
 # O envio so sai se o tpAmb do XML for o do ambiente pedido: nota de teste nunca vai para producao, nem o contrario.
+# Com "servico": "adn" (16/11/2026) le a fila de documentos do proprio CNPJ no Ambiente de Dados Nacional
+# (caminho "/contribuintes/DFe/<numero>"), so com GET: e de onde sai a soma do ano para o medidor do limite do MEI.
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Add-Type -AssemblyName System.Security
@@ -10,6 +12,10 @@ Add-Type -AssemblyName System.Security
 $BASES = @{
   restrita = @{ url = 'https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional'; tpAmb = '<tpAmb>2</tpAmb>' }
   producao = @{ url = 'https://sefin.nfse.gov.br/SefinNacional'; tpAmb = '<tpAmb>1</tpAmb>' }
+}
+$BASES_ADN = @{
+  restrita = 'https://adn.producaorestrita.nfse.gov.br'
+  producao = 'https://adn.nfse.gov.br'
 }
 
 function Responder($obj) {
@@ -47,17 +53,27 @@ try {
   $leitor = New-Object IO.StreamReader([Console]::OpenStandardInput(), (New-Object Text.UTF8Encoding $false))
   $p = $leitor.ReadToEnd() | ConvertFrom-Json
   if ($p.cnpj -notmatch '^\d{14}$') { throw 'CNPJ invalido na configuracao' }
-  # /nfse/<chave>/eventos = pedido de evento (cancelamento, 16/11/2026); os outros sao emissao e consultas.
-  $evento = $p.caminho -match '^/nfse/\d{50}/eventos$'
-  if (-not $evento -and $p.caminho -notmatch '^/(nfse|dps)(/[A-Za-z0-9]+)?$') { throw 'caminho nao permitido' }
   if (@('restrita', 'producao') -cnotcontains $p.ambiente) { throw 'ambiente desconhecido' }
   $amb = $BASES[[string]$p.ambiente]
+  # "servico": "adn" = leitura das notas do proprio CNPJ no Ambiente de Dados Nacional (medidor do limite do MEI,
+  # 16/11/2026). So GET, so a lista de documentos, e o endereco e montado aqui (nunca vem de fora).
+  $adn = $p.servico -eq 'adn'
+  # /nfse/<chave>/eventos = pedido de evento (cancelamento, 16/11/2026); os outros sao emissao e consultas.
+  $evento = (-not $adn) -and ($p.caminho -match '^/nfse/\d{50}/eventos$')
+  if ($adn) {
+    if ($p.metodo -ne 'GET') { throw 'o ADN e so para leitura' }
+    if ($p.caminho -notmatch '^/contribuintes/DFe/\d{1,15}$') { throw 'caminho nao permitido' }
+    $url = $BASES_ADN[[string]$p.ambiente] + $p.caminho + '?cnpjConsulta=' + $p.cnpj + '&lote=true'
+  } else {
+    if (-not $evento -and $p.caminho -notmatch '^/(nfse|dps)(/[A-Za-z0-9]+)?$') { throw 'caminho nao permitido' }
+    $url = $amb.url + $p.caminho
+  }
 
   $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -like "*$($p.cnpj)*" -and $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date) } |
     Sort-Object NotAfter -Descending | Select-Object -First 1
   if (-not $cert) { throw 'certificado da empresa nao encontrado ou vencido' }
 
-  $req = [Net.HttpWebRequest]::Create($amb.url + $p.caminho)
+  $req = [Net.HttpWebRequest]::Create($url)
   $req.Method = $p.metodo; $req.Timeout = 60000; $req.Accept = 'application/json'
   $req.ClientCertificates.Add($cert) | Out-Null
 

@@ -34,7 +34,9 @@ const SERVICO = `http://127.0.0.1:${PORTA_TESTE}/saude`;
 const SERV = 'Instalação de teste. TESTE SEM VALIDADE JURIDICA. Valor total = R$ 1,00.';
 
 (async () => {
-  const serv = spawn('node', [path.join(__dirname, '..', 'nfse-local.js')], { env: { ...process.env, NFSE_PORTA: String(PORTA_TESTE), NFSE_AMBIENTE: 'restrita' }, windowsHide: true });
+  // O que o medidor do MEI guarda (a fila já lida) vai para uma pasta temporária: o teste não mexe na de verdade.
+  const pastaFaturamento = fs.mkdtempSync(path.join(require('os').tmpdir(), 'nfse-faturamento-teste-'));
+  const serv = spawn('node', [path.join(__dirname, '..', 'nfse-local.js')], { env: { ...process.env, NFSE_PORTA: String(PORTA_TESTE), NFSE_AMBIENTE: 'restrita', NFSE_PASTA_FATURAMENTO: pastaFaturamento }, windowsHide: true });
   const copias = [];
   let saude = null;
   for (let i = 0; i < 30 && !saude; i++) {
@@ -271,11 +273,24 @@ const SERV = 'Instalação de teste. TESTE SEM VALIDADE JURIDICA. Valor total = 
     const pDepois = await app(pedido({ acao: 'preparar', descricao: SERV + ' Outra.' }));
     confere('nota cancelada não conta como "nota igual hoje"', pDepois.ok === true && !pDepois.repetida, pDepois.repetida);
 
+    // ---- faturamento do ano (medidor do limite do MEI, 16/11/2026): só leitura, pelo serviço de notas ----
+    const fat = await app({ acao: 'faturamento' });
+    const fat1 = (fat.emissores || {})['CNPJ 1'] || {};
+    const fat2 = (fat.emissores || {})['CNPJ 2'] || {};
+    confere('faturamento: o fluxo devolve a soma do ano dos dois CNPJs, mês a mês', fat.ok === true && fat.ambiente === 'restrita' && fat.ano === new Date().getFullYear()
+      && (fat1.porMes || []).length === 12 && (fat2.porMes || []).length === 12 && fat1.limite === 81000 && fat1.notas >= 1 && fat2.notas >= 1, { ...fat, emissores: { a: fat1.total, b: fat2.total } });
+    confere('faturamento: a resposta não leva XML nem chave de nota', !/<NFSe|<infNFSe|\d{50}/.test(JSON.stringify(fat)));
+    const fatDeNovo = await app({ acao: 'faturamento', atualizar: '1' });
+    confere('faturamento: "atualizar" lê de novo no governo', fatDeNovo.ok === true && fatDeNovo.emissores['CNPJ 1'].sincronizadoEm >= fat1.sincronizadoEm, { antes: fat1.sincronizadoEm, depois: fatDeNovo.emissores && fatDeNovo.emissores['CNPJ 1'].sincronizadoEm });
+    const fatVelho = await appVelho({ acao: 'faturamento' });
+    confere('faturamento: serviço antigo (sem a função) avisa para reabrir o atalho, sem erro', fatVelho.ok === false && fatVelho.servicoVelho === true && /Servidor n8n/.test(fatVelho.mensagem), fatVelho);
+
     // ---- listar filtra por cliente ----
     const lc = await app({ acao: 'listar', clienteId: cli.id });
     confere('listar por cliente', lc.notas.length === 3 && lc.notas.every((n) => n.clienteId === cli.id) && lc.notas[0].numeroDps >= lc.notas[2].numeroDps, lc.notas.map((n) => n.numeroDps));
   } finally {
     serv.kill();
+    fs.rmSync(pastaFaturamento, { recursive: true, force: true });
     // Os PDFs das notas de teste saem junto com elas (o arquivo fica na pasta de anexos do PC).
     for (const [tabela, id] of apagar) {
       if (tabela !== T) continue;

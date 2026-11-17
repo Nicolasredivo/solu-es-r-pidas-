@@ -242,6 +242,132 @@ async function cancelar(p) {
   };
 }
 
+// ---------- Faturamento do ano: o medidor do limite do MEI (16/11/2026) ----------
+// Soma as notas de cada CNPJ direto no Ambiente de Dados Nacional (ADN), que tem TODAS as notas do CNPJ: as
+// emitidas por este sistema e as feitas no portal. É só leitura (GET), com o mesmo certificado da emissão.
+// O ADN entrega os documentos em fila, numerados (NSU), 50 por vez: nota emitida e evento (cancelamento) são
+// documentos separados. Para não reler a fila inteira a cada vez, o que já foi lido fica guardado em
+// C:\Users\rediv\banco-solucoes\nfse-faturamento (um arquivo por CNPJ e ambiente, fora do repositório): cada
+// leitura continua do último número visto. Quem pede "/faturamento" recebe o que está guardado se a última
+// leitura tem menos de meia hora (ou pede "atualizar=1" para ler de novo agora).
+// O limite anual de cada emissor vem de "limiteAnual" no nfse-config.json (MEI aberto no meio do ano tem limite
+// proporcional); sem isso vale o limite cheio do MEI.
+const PASTA_FATURAMENTO = process.env.NFSE_PASTA_FATURAMENTO || 'C:/Users/rediv/banco-solucoes/nfse-faturamento';
+const LIMITE_MEI = 81000;
+const FAT_VALIDADE_MS = 30 * 60 * 1000;
+const FAT_MAX_PAGINAS = 60; // 3.000 documentos por leitura: sobra para anos de notas de um MEI
+const FAT_CANCELAMENTOS = /<e(101101|105102|105104|305101)>/; // cancelamento, por substituição, por análise fiscal, de ofício
+const fatEmCurso = {}; // emissor -> leitura em andamento (uma por vez; quem chega junto espera a mesma)
+
+const fatArquivo = (emissor) => path.join(PASTA_FATURAMENTO, `${emissorDe(emissor).cnpj}-${AMBIENTE}.json`);
+
+function fatLer(emissor) {
+  try {
+    const d = JSON.parse(fs.readFileSync(fatArquivo(emissor), 'utf8'));
+    if (d && typeof d.notas === 'object' && typeof d.canceladas === 'object') return d;
+  } catch (e) { /* ainda não existe (ou veio quebrado): começa do zero */ }
+  return { ultimoNsu: 0, notas: {}, canceladas: {}, sincronizadoEm: '' };
+}
+
+// Grava num arquivo ao lado e troca de uma vez: queda de luz no meio não deixa o arquivo pela metade.
+function fatGravar(emissor, dados) {
+  fs.mkdirSync(PASTA_FATURAMENTO, { recursive: true });
+  const arq = fatArquivo(emissor);
+  fs.writeFileSync(arq + '.novo', JSON.stringify(dados));
+  fs.renameSync(arq + '.novo', arq);
+}
+
+// Um documento da fila: nota emitida pelo próprio CNPJ entra em "notas" (data de emissão e valor do serviço);
+// evento de cancelamento marca a chave em "canceladas". Nota recebida de outro emissor e os outros eventos não contam.
+function fatProcessar(dados, doc, cnpj) {
+  let xml = '';
+  try { xml = zlib.gunzipSync(Buffer.from(String(doc.ArquivoXml || ''), 'base64')).toString('utf8'); } catch (e) { return; }
+  if (FAT_CANCELAMENTOS.test(xml)) {
+    const chave = (xml.match(/<chNFSe>(\d{50})<\/chNFSe>/) || [])[1];
+    if (chave) dados.canceladas[chave] = true;
+    return;
+  }
+  if (!/<infNFSe[\s>]/.test(xml)) return;
+  if ((xml.match(/<emit>\s*<CNPJ>(\d{14})<\/CNPJ>/) || [])[1] !== cnpj) return;
+  const chave = /^\d{50}$/.test(String(doc.ChaveAcesso || '')) ? String(doc.ChaveAcesso) : (xml.match(/<infNFSe[^>]*Id="NFS(\d{50})"/) || [])[1];
+  const emissao = tag(xml, 'dhEmi').slice(0, 10);
+  const valor = Number(tag(xml, 'vServ'));
+  if (!chave || !/^\d{4}-\d{2}-\d{2}$/.test(emissao) || !isFinite(valor)) return;
+  dados.notas[chave] = { e: emissao, v: valor };
+}
+
+async function fatSincronizar(emissor) {
+  const cnpj = emissorDe(emissor).cnpj;
+  const dados = fatLer(emissor);
+  let nsu = Number(dados.ultimoNsu) || 0;
+  for (let pagina = 0; pagina < FAT_MAX_PAGINAS; pagina++) {
+    const r = await falarComSefin({ servico: 'adn', metodo: 'GET', caminho: '/contribuintes/DFe/' + (nsu + 1) }, emissor);
+    if (r.falha) throw new Error(r.falha);
+    let j = {};
+    try { j = JSON.parse(r.corpo); } catch (e) { /* cai no erro abaixo */ }
+    const lote = Array.isArray(j.LoteDFe) ? j.LoteDFe : [];
+    // Fim da fila: o ADN responde 404 "nenhum documento localizado" (é o normal, não um erro).
+    if (r.status === 404 || (r.status === 200 && !lote.length)) break;
+    if (r.status !== 200) throw new Error(`resposta inesperada do ADN (HTTP ${r.status})`);
+    let maior = nsu;
+    for (const doc of lote) {
+      maior = Math.max(maior, Number(doc.NSU) || 0);
+      fatProcessar(dados, doc, cnpj);
+    }
+    if (maior <= nsu) break; // a fila não andou: para, em vez de pedir o mesmo trecho para sempre
+    nsu = maior;
+    dados.ultimoNsu = nsu;
+    fatGravar(emissor, dados); // cada trecho lido já fica guardado: uma falha adiante não perde o que veio
+    await new Promise((ok) => setTimeout(ok, 400)); // sem pressa: o serviço do governo é compartilhado
+  }
+  dados.sincronizadoEm = new Date().toISOString();
+  fatGravar(emissor, dados);
+  return dados;
+}
+
+const centavos = (v) => Math.round(v * 100) / 100;
+
+function fatResumo(dados, ano) {
+  const porMes = Array(12).fill(0);
+  const notasPorMes = Array(12).fill(0);
+  let total = 0, notas = 0, canceladas = 0, totalCanceladas = 0;
+  for (const [chave, n] of Object.entries(dados.notas)) {
+    if (String(n.e).slice(0, 4) !== ano) continue;
+    if (dados.canceladas[chave]) { canceladas++; totalCanceladas += n.v; continue; }
+    const mes = Number(String(n.e).slice(5, 7)) - 1;
+    porMes[mes] += n.v;
+    notasPorMes[mes]++;
+    total += n.v;
+    notas++;
+  }
+  return { total: centavos(total), notas, canceladas, totalCanceladas: centavos(totalCanceladas), porMes: porMes.map(centavos), notasPorMes };
+}
+
+async function faturamento(parametros) {
+  const anoPedido = parametros.get('ano') || '';
+  const ano = /^20\d{2}$/.test(anoPedido) ? anoPedido : new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 4);
+  const atualizar = parametros.get('atualizar') === '1';
+  const emissores = {};
+  for (const nome of Object.keys(EMISSORES)) {
+    let dados = fatLer(nome);
+    let erro = '';
+    const vencido = !dados.sincronizadoEm || Date.now() - new Date(dados.sincronizadoEm).getTime() > FAT_VALIDADE_MS;
+    if (atualizar || vencido) {
+      try {
+        if (!fatEmCurso[nome]) fatEmCurso[nome] = fatSincronizar(nome).finally(() => { delete fatEmCurso[nome]; });
+        dados = await fatEmCurso[nome];
+      } catch (e) {
+        // O governo fora do ar não apaga o que já se sabe: responde o guardado e diz que não conseguiu atualizar.
+        erro = String((e && e.message) || e).slice(0, 300);
+        dados = fatLer(nome);
+      }
+    }
+    const limite = Number(emissorDe(nome).limiteAnual) > 0 ? Number(emissorDe(nome).limiteAnual) : LIMITE_MEI;
+    emissores[nome] = { ...fatResumo(dados, ano), limite, sincronizadoEm: dados.sincronizadoEm || '', erro };
+  }
+  return { http: 200, ok: true, ano: Number(ano), ambiente: AMBIENTE, emissores };
+}
+
 function autorizado(req) {
   const recebido = Buffer.from(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''));
   const esperado = Buffer.from(TOKEN);
@@ -266,11 +392,13 @@ const servidor = http.createServer((req, res) => {
   // Endereço fora do padrão (ex.: "//"): antes isto derrubava o serviço inteiro.
   try { url = new URL(req.url, 'http://127.0.0.1'); } catch (e) { return responder(res, { http: 400, ok: false, erros: [{ descricao: 'endereço inválido' }] }); }
   if (req.method === 'GET' && url.pathname === '/saude') {
-    // "cancela": serviço que já sabe cancelar (16/11/2026); o fluxo só oferece o cancelamento quando ele diz que sim.
-    return responder(res, { ok: true, ambiente: AMBIENTE, serie: Number(emissorDe('CNPJ 1').serie), cancela: true,
+    // "cancela" e "faturamento": o que este serviço já sabe fazer (16/11/2026); o fluxo só oferece o cancelamento
+    // e o medidor do MEI quando ele diz que sim (serviço antigo, ainda não reaberto pelo atalho, não diz).
+    return responder(res, { ok: true, ambiente: AMBIENTE, serie: Number(emissorDe('CNPJ 1').serie), cancela: true, faturamento: true,
       emissores: Object.fromEntries(Object.entries(EMISSORES).map(([nome, e]) => [nome, { serie: Number(e.serie) }])) });
   }
   if (!autorizado(req)) return responder(res, { http: 401, ok: false, erros: [{ descricao: 'não autorizado' }] });
+  if (req.method === 'GET' && url.pathname === '/faturamento') return faturamento(url.searchParams).then((r) => responder(res, r)).catch((e) => falhou(res, e));
   const dps = url.pathname.match(/^\/dps\/([A-Za-z0-9]+)$/);
   const emissorPedido = url.searchParams.get('emissor') || 'CNPJ 1';
   if (req.method === 'GET' && dps) return consultarDps(dps[1], emissorPedido).then((r) => responder(res, r)).catch((e) => falhou(res, e));
@@ -315,4 +443,4 @@ if (require.main === module) {
   });
   servidor.listen(PORTA, '127.0.0.1', () => console.log(new Date().toISOString(), `NFS-e local ouvindo em http://127.0.0.1:${PORTA} (ambiente: ${AMBIENTE})`));
 }
-module.exports = { montarDps, conferirPedido, montarCancelamento, conferirCancelamento };
+module.exports = { montarDps, conferirPedido, montarCancelamento, conferirCancelamento, fatProcessar, fatResumo };

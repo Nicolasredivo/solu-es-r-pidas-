@@ -33,7 +33,9 @@ const pedido = (extra) => ({
 });
 
 (async () => {
-  const serv = spawn('node', [path.join(__dirname, '..', 'nfse-local.js')], { env: { ...process.env, NFSE_PORTA: String(PORTA), NFSE_AMBIENTE: 'restrita' }, windowsHide: true });
+  // O que o medidor do MEI guarda (a fila já lida) vai para uma pasta temporária: o teste não mexe na de verdade.
+  const pastaFaturamento = fs.mkdtempSync(path.join(require('os').tmpdir(), 'nfse-faturamento-teste-'));
+  const serv = spawn('node', [path.join(__dirname, '..', 'nfse-local.js')], { env: { ...process.env, NFSE_PORTA: String(PORTA), NFSE_AMBIENTE: 'restrita', NFSE_PASTA_FATURAMENTO: pastaFaturamento }, windowsHide: true });
   try {
     for (let i = 0; i < 30; i++) {
       try { if ((await fetch(BASE + '/saude')).ok) break; } catch (e) { /* ainda ligando */ }
@@ -124,6 +126,44 @@ const pedido = (extra) => ({
     const pedidoProd = require('../nfse-local.js').montarCancelamento({ emissor: 'CNPJ 1', chave: n.chaveAcesso, motivo: 1, justificativa: 'Teste de cancelamento.' }, 'producao').xml;
     confere('cancelar: pedido de produção sai com tpAmb 1 (só montado, nunca enviado)', pedidoProd.includes('<tpAmb>1</tpAmb>'));
 
+    // ---- faturamento do ano (medidor do limite do MEI, 16/11/2026): leitura da fila do ADN, no ambiente de testes ----
+    confere('saude: diz que sabe somar o faturamento', saude.faturamento === true, saude);
+    confere('faturamento sem o token é recusado', (await pedir('/faturamento', null, 'errado')).status === 401);
+    const t1 = Date.now();
+    const f1 = await pedir('/faturamento');
+    const ms1 = Date.now() - t1;
+    const e1 = (f1.emissores || {})['CNPJ 1'] || {};
+    const e2f = (f1.emissores || {})['CNPJ 2'] || {};
+    const soma = (lista) => Math.round((lista || []).reduce((s, v) => s + v, 0) * 100) / 100;
+    confere('faturamento: responde com os dois CNPJs e o ano de hoje', f1.ok === true && f1.ambiente === 'restrita' && f1.ano === new Date().getFullYear() && Boolean(e1.porMes) && Boolean(e2f.porMes), { ...f1, emissores: undefined });
+    confere('faturamento: doze meses, e o total é a soma deles', e1.porMes.length === 12 && e1.notasPorMes.length === 12 && soma(e1.porMes) === e1.total && e1.notasPorMes.reduce((s, v) => s + v, 0) === e1.notas, e1);
+    confere('faturamento: achou notas de teste e descontou as canceladas (CNPJ 1)', e1.notas >= 1 && e1.canceladas >= 1 && e1.totalCanceladas > 0 && !e1.erro, e1);
+    confere('faturamento: o CNPJ 2 tem a conta dele, separada', e2f.notas >= 1 && soma(e2f.porMes) === e2f.total && !e2f.erro, e2f);
+    confere('faturamento: limite do MEI em cada emissor', e1.limite === 81000 && e2f.limite === 81000, { a: e1.limite, b: e2f.limite });
+    confere('faturamento: guardou a fila lida fora do repositório, um arquivo por CNPJ', fs.readdirSync(pastaFaturamento).filter((f) => /^\d{14}-restrita\.json$/.test(f)).length === 2, fs.readdirSync(pastaFaturamento).length);
+    const t2 = Date.now();
+    const f2 = await pedir('/faturamento');
+    const ms2 = Date.now() - t2;
+    confere(`faturamento: a segunda consulta vem do guardado (${ms1} ms → ${ms2} ms) e é igual`, ms2 < 1000 && JSON.stringify(f2.emissores) === JSON.stringify(f1.emissores), { ms1, ms2 });
+    const f3 = await pedir('/faturamento?atualizar=1&ano=2019');
+    confere('faturamento: "atualizar" lê de novo, e ano sem nota dá zero', f3.ok === true && f3.ano === 2019 && f3.emissores['CNPJ 1'].total === 0 && f3.emissores['CNPJ 1'].notas === 0 && f3.emissores['CNPJ 1'].sincronizadoEm >= f1.emissores['CNPJ 1'].sincronizadoEm, f3);
+    // Contas feitas à mão, sem governo: cancelada não soma, outro ano não entra, cada nota cai no seu mês.
+    const { fatResumo, fatProcessar } = require('../nfse-local.js');
+    const resumo = fatResumo({ notas: { a: { e: '2026-01-10', v: 100.1 }, b: { e: '2026-01-20', v: 200.2 }, c: { e: '2026-11-05', v: 50 }, d: { e: '2025-12-31', v: 999 }, x: { e: '2026-03-03', v: 70 } }, canceladas: { x: true } }, '2026');
+    confere('faturamento (conta): soma por mês, sem a cancelada e sem o outro ano', resumo.total === 350.3 && resumo.notas === 3 && resumo.porMes[0] === 300.3 && resumo.porMes[10] === 50 && resumo.porMes[2] === 0 && resumo.canceladas === 1 && resumo.totalCanceladas === 70, resumo);
+    const emGzip = (texto) => require('zlib').gzipSync(Buffer.from(texto, 'utf8')).toString('base64');
+    const chaveA = '4'.repeat(50), chaveB = '5'.repeat(50);
+    const fila = { notas: {}, canceladas: {} };
+    const notaXml = (emitente, valor) => `<NFSe><infNFSe Id="NFS${chaveA}"><emit><CNPJ>${emitente}</CNPJ></emit><DPS><infDPS><dhEmi>2026-11-16T10:00:00-03:00</dhEmi><valores><vServPrest><vServ>${valor}</vServ></vServPrest></valores></infDPS></DPS></infNFSe></NFSe>`;
+    fatProcessar(fila, { NSU: 1, ChaveAcesso: chaveA, ArquivoXml: emGzip(notaXml('11222333000181', '123.45')) }, '11222333000181');
+    fatProcessar(fila, { NSU: 2, ChaveAcesso: chaveB, ArquivoXml: emGzip(notaXml('99999999000191', '999.00')) }, '11222333000181');
+    fatProcessar(fila, { NSU: 3, ChaveAcesso: chaveB, ArquivoXml: emGzip(`<evento><infEvento><pedRegEvento><infPedReg><chNFSe>${chaveA}</chNFSe><e101101><xDesc>Cancelamento de NFS-e</xDesc></e101101></infPedReg></pedRegEvento></infEvento></evento>`) }, '11222333000181');
+    fatProcessar(fila, { NSU: 4, ChaveAcesso: chaveB, ArquivoXml: 'isto não é gzip' }, '11222333000181');
+    confere('faturamento (fila): guarda a nota própria, ignora a recebida de outro CNPJ e marca o cancelamento', JSON.stringify(fila.notas) === JSON.stringify({ [chaveA]: { e: '2026-11-16', v: 123.45 } }) && fila.canceladas[chaveA] === true && Object.keys(fila.canceladas).length === 1, fila);
+    const assinadorAdn = (entrada) => JSON.parse(spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, '..', 'nfse-assinar.ps1')], { input: JSON.stringify({ cnpj: '11222333000181', ambiente: 'restrita', servico: 'adn', ...entrada }) }).stdout.toString('utf8')).falha || '';
+    confere('assinador: o ADN é só leitura (POST recusado)', /so para leitura/.test(assinadorAdn({ metodo: 'POST', caminho: '/contribuintes/DFe/1', xml: '<x/>' })));
+    confere('assinador: o ADN só aceita o caminho da fila de documentos', /caminho nao permitido/.test(assinadorAdn({ metodo: 'GET', caminho: '/contribuintes/DFe/1/../../outra' })) && /caminho nao permitido/.test(assinadorAdn({ metodo: 'GET', caminho: '/nfse' })));
+
     // ---- produção: nada é enviado; só o XML montado e as travas do assinador ----
     const { montarDps } = require('../nfse-local.js');
     const REAL = 'C:/Users/rediv/nfse-notas-api/dps-1.enviada'; // a nota real aceita em 04/11/2026
@@ -145,6 +185,7 @@ const pedido = (extra) => ({
     confere('assinador: "Producao" com maiúscula é recusado', /ambiente desconhecido/.test(trava({ ambiente: 'Producao', xml: '<x/>' })));
   } finally {
     serv.kill();
+    fs.rmSync(pastaFaturamento, { recursive: true, force: true });
   }
   console.log(`\n${ok} ok, ${falhas} falha(s).`);
   process.exitCode = falhas ? 1 : 0;
