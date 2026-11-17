@@ -5939,3 +5939,78 @@ sem abrir o portal para baixar.
   depende dela. Funcionam: chave da API do n8n, token do Airtable local, administrador do PostgreSQL, push no GitHub,
   a conta de dono dele (1 ativa) e a chave interna do cadastro de cliente pelo chat. Se ele esquecer a senha, "Esqueci
   minha senha" manda código por e-mail.
+
+## Cancelar NFS-e pelo sistema (16/11/2026, versão 2026.11.16c)
+
+- **Serviço de notas (`banco/nfse-local.js`):** rota `POST /cancelar` monta o evento e101101 do leiaute 1.01 (Id =
+  "PRE" + chave(50) + "101101", 59 caracteres, sem `nPedRegEvento`), assinado como a DPS, e manda para
+  `POST /nfse/<chave>/eventos` com o corpo `pedidoRegistroEventoXmlGZipB64`. Motivos do governo: 1 erro na emissão,
+  2 serviço não prestado, 9 outros; justificativa de 15 a 255 caracteres. A chave leva o CNPJ do emissor (posições
+  10 a 23): nota de um CNPJ nunca é cancelada pelo certificado do outro.
+- **E0840 = a nota já tem cancelamento** (feito no portal, por exemplo): o fluxo só marca a nota como "Cancelada". Foi
+  assim com a 442.
+- **Banco:** colunas `Cancelada_Em`, `Motivo_Cancelamento`, `Xml_Cancelamento` em `Notas_Fiscais`; `Status` ganhou
+  "Cancelada". Coluna nova só aparece no Airtable local depois de reabrir o atalho: antes disso, um `fields[]` com
+  coluna nova quebra a listagem (aconteceu e foi desfeito na hora).
+- **App:** "Cancelar nota" em cada nota emitida (motivo, justificativa, "entendo que não tem volta"); nota cancelada
+  com selo vermelho ⊘, borda vermelha, valor riscado, data e motivo; em Arquivos fica na pasta, marcada e fora da soma.
+- **Chat:** `node nota.js cancelar <nº> <CNPJ> <1|2|9> <texto>` (scratchpad `nfse-chat`), só com o "sim" do dono.
+- **Testes:** `testar-nfse-local.js` e `testar-fluxo-notas.js` cancelam notas de teste nos dois CNPJs (ambiente de testes).
+
+## Laudo para empresa, botão Voltar, visualizador e downloads (16/11/2026, versões 2026.11.16d a g)
+
+- **Laudo:** botões "Edifício / Empresa" (empresa: "na empresa X"), campo "CNPJ do cliente" (", CNPJ ..." depois do
+  nome) e, em empresa, "Qual caixa" ("limpeza da caixa d'água da cozinha da empresa X"). Igual nos dois geradores:
+  `pdf-documentos.js` e o `gerar_documento.py` da skill (`--empresa`, `--cnpj-cliente`, `--caixa`). Cliente cadastrado
+  como "CNPJ - Empresa" já abre o laudo como empresa. PDF gerado pelo chat vai para a pasta do cliente pelo script
+  `guardar-na-pasta.js` da skill (o do app já ia sozinho).
+- **Botão "Voltar"** no alto do bloco de cada página: depois de cada toque, se a tela mudou (página, abas ativas e, em
+  Arquivos, lista/cliente/pasta), a anterior entra numa pilha (até 40); "Voltar" refaz os mesmos toques, então o
+  "salvar antes de sair?" continua valendo. Não mexe no voltar do celular.
+- **Visualizador de PDF** de Arquivos quase em tela cheia, abrindo na largura da página; botão "Baixar PDF" que salva
+  com nome claro ("Laudo - <cliente> - 14-11-2026.pdf"), porque o baixar do leitor do navegador usa o endereço
+  temporário como nome.
+
+## Visual v2 e painel do Início (16 e 17/11/2026, versões 2026.11.16h e 2026.11.17a)
+
+Pedido do dono: visual mais caprichado no sistema todo, sem estragar nada, e funções novas que ajudem de verdade.
+**Cópias de antes:** `C:\Users\rediv\banco-solucoes\copias-visual-2026-11-16` (rodada 1) e a subpasta
+`rodada-2-antes` (rodada 2), com app.js, style.css, sistema.html e os arquivos do serviço de notas.
+
+- **Como o estilo foi feito:** as três cores-base escritas à mão em 97 lugares viraram variáveis (`--borda`,
+  `--borda-suave`, `--campo`) e todo o visual novo fica num bloco no fim do `style.css` ("VISUAL V2" e "RODADA 2"),
+  só de aparência. Onde podia brigar com estilo antigo, a regra fica em `:where()`.
+- **Sistema todo:** fundo com profundidade, barra de cima "de vidro", cada área do menu com uma cor (o mesmo ícone e
+  cor no quadradinho ao lado do título da página), botões e abas com degradê, páginas que entram suaves, janelas com
+  fundo desfocado, rodinha no "carregando", anel azul no campo em edição (o painel de testes não deixa o campo ganhar
+  foco de verdade; a regra foi conferida), barras de rolagem escuras, e respeito ao "menos movimento" do aparelho.
+  Lista de clientes com quadradinho de iniciais numa cor fixa por cliente (`iniciaisDoNome`, `corDoNome`).
+- **Início = painel do dia** (app.js, "PAINEL DO INÍCIO E BUSCA RÁPIDA"): saudação + data, busca, ações de um toque
+  (novo chamado, novo cliente, emitir nota, gerar documento), quatro números-chave (chamados de hoje, contas a pagar
+  vencidas + 7 dias, faturado no mês, quanto ainda cabe no MEI) e cartões: hoje na agenda (com "▶ Iniciar"), limite do
+  MEI (um anel por CNPJ, verde/amarelo a partir de 70%/vermelho a partir de 90%, com a projeção do ano pela média dos
+  3 últimos meses fechados), contas a pagar, faturamento por mês (barras com os dois CNPJs; tocar num mês mostra o
+  detalhe) e últimas notas. Só LÊ dados: nada ali grava. Quem não é Dono vê só os chamados. Cada cartão só é
+  redesenhado quando o conteúdo muda; os números sobem de zero ao aparecer.
+- **Medidor do limite do MEI:** `GET 127.0.0.1:5691/faturamento` (serviço de notas) soma as notas do ano de cada CNPJ
+  direto no Ambiente de Dados Nacional (`/contribuintes/DFe/<NSU>`, só leitura, pelo `nfse-assinar.ps1` com
+  `"servico": "adn"`), desconta as canceladas (e101101, e105102, e105104, e305101) e guarda a fila já lida em
+  `C:\Users\rediv\banco-solucoes\nfse-faturamento` (um arquivo por CNPJ e ambiente): cada leitura continua do último
+  número visto; o guardado vale meia hora; `atualizar=1` lê de novo. Limite: `limiteAnual` do emissor no
+  `nfse-config.json`, senão R$ 81.000. Fluxo "App - Notas fiscais", ação `faturamento` (serviço antigo responde
+  "reabra o atalho"). A última soma fica no aparelho (`sr_painel_faturamento`) e sai ao "Sair". A primeira leitura
+  real (16/11, os dois CNPJs, ~15 s) bateu com a soma feita à mão no mesmo dia. Valores não vão para cá: o
+  repositório é público.
+- **Busca rápida (Ctrl+K ou a lupa):** clientes (nome, contato, CPF/CNPJ), chamados ("#12" ou texto), notas (número ou
+  cliente), telas e ações. Escolher um cliente abre "o que fazer": abrir o cadastro, emitir nota, gerar documento, ver
+  arquivos, copiar o CNPJ. Setas, Enter, Esc e Backspace (volta da lista do cliente).
+- **Selos no menu:** chamados de hoje na Agenda (ciano) e contas vencidas no Financeiro (vermelho).
+- **Nota fiscal:** cliente do CNPJ 2 mostra "Dados para pagamento na nota: Conta do CNPJ 1 / Conta do CNPJ 2" (começa
+  na do CNPJ 1, como o dono vem pedindo; a do CNPJ 2 vem de `Empresas_Emissoras`). "Emitir outra igual" em cada nota
+  da lista preenche o formulário com cliente, serviço, valores e conta da nota (`nfSepararDescricao`); nada é enviado
+  sem conferir.
+- **Revisão das novidades (16/11):** corrigidos o CNPJ/caixa do laudo indo para a busca de outros PDFs e o aviso
+  "PDF da nota baixado" ao baixar laudo; ficaram como estão a piscada ao voltar para uma pasta de Arquivos e o
+  Voltar não ver troca de tela feita sem toque.
+- **Testes:** `testar-nfse-local.js` 66 ok (faturamento no ambiente de testes, contas sem governo, fila com nota de
+  outro CNPJ e cancelamento, assinador recusando POST e caminho fora da fila); `testar-fluxo-notas.js` 109 ok.
