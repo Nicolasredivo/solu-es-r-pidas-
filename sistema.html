@@ -326,11 +326,14 @@
             <label for="nome-fantasia">Nome fantasia / Identificador</label>
             <input type="text" id="nome-fantasia" />
 
-            <div class="grupo campo-destaque">
+            <!-- Chave "Nota fiscal / Apenas recibo" (pedido do dono, 18/11/2026): começa em nota fiscal. -->
+            <div class="campo-destaque">
               <label>Exigência fiscal</label>
-              <div class="opcoes" id="grupo-exigencia">
-                <button type="button" class="opcao" data-valor="Exige Nota Fiscal">Nota fiscal</button>
-                <button type="button" class="opcao" data-valor="Apenas Recibo">Apenas recibo</button>
+              <div class="chave-linha">
+                <button type="button" id="exigencia-novo" class="chave chave-fiscal" role="switch" aria-checked="true" aria-label="Exige nota fiscal">
+                  <span class="chave-bolinha" aria-hidden="true"></span>
+                </button>
+                <span class="chave-estado">Exige nota fiscal</span>
               </div>
             </div>
 
@@ -640,13 +643,15 @@
                 <option>CPF - Pessoa Física</option>
               </select>
 
+              <!-- Chave "Nota fiscal / Apenas recibo" (18/11/2026): funciona fora da edição; pergunta antes e grava na hora. -->
               <div class="campo-destaque">
               <label>Exigência fiscal</label>
-              <select class="d-exigencia" disabled>
-                <option value="">—</option>
-                <option>Exige Nota Fiscal</option>
-                <option>Apenas Recibo</option>
-              </select>
+              <div class="chave-linha">
+                <button type="button" class="chave chave-fiscal d-exigencia" role="switch" aria-checked="true" aria-label="Exige nota fiscal">
+                  <span class="chave-bolinha" aria-hidden="true"></span>
+                </button>
+                <span class="chave-estado">Exige nota fiscal</span>
+              </div>
               </div>
 
               <!-- Qual dos dois CNPJs (MEIs) atende este cliente (08/11/2026). -->

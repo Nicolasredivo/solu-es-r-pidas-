@@ -6093,3 +6093,18 @@ só guarda a escolha; nenhum fluxo gera boleto ainda (a geração pelo Asaas é 
   com a página em segundo plano não chegou no teste).
 - **Testes:** `banco/testes/testar-gera-boleto.js` (19 ok; precisa do Airtable local reiniciado depois da
   coluna nova); `testar-backup-excel.js` 31 ok; `testar-atendido-por.js` 12 ok; `testar-asaas-por-cnpj.js` 27 ok.
+
+## Chave "Nota fiscal / Apenas recibo" no cliente (18/11/2026)
+
+Pedido do dono: a exigência fiscal do cliente virou chave liga/desliga, na mesma lógica da de boletos.
+
+- **Banco:** nada novo. Usa o campo que já existia, `Entidades_Cadastradas.Exigencia_Fiscal` ("Exige Nota
+  Fiscal" | "Apenas Recibo"). Os 45 clientes continuaram como estavam (todos "Exige Nota Fiscal").
+- **Chave:** ligada = "Exige nota fiscal", desligada = "Apenas recibo" (classe `chave-fiscal`; o
+  `pintarChave` escolhe os textos por ela).
+- **Cliente novo:** a chave substituiu os dois botões; começa em nota fiscal e troca com um toque, sem pergunta.
+- **Cliente que já existe:** o select saiu da edição. Tocar na chave abre o mesmo "Tem certeza?" dos boletos
+  (`#dialogo-boleto`) e grava na hora só esse campo pelo fluxo novo **"App - Exigencia fiscal"**
+  (`/webhook/exigencia-fiscal`, `{id, exigencia: "nota"|"recibo"}`; recusa valor ou código inválido e cliente
+  que não existe). O Salvar do cadastro manda o valor guardado (`cadastro.exigenciaFiscal`), então não desfaz.
+- **Teste:** `banco/testes/testar-exigencia-fiscal.js` (13 ok).

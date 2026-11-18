@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.18a";
+const APP_VERSION = "2026.11.18b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -488,29 +488,34 @@ function escolhaDoGrupo(container) {
 }
 
 const grupoTipo = document.getElementById("grupo-tipo");
-const grupoExigencia = document.getElementById("grupo-exigencia");
 const grupoStatus = document.getElementById("grupo-status");
 const grupoAtendidoPor = document.getElementById("grupo-atendido-por");
 
 configurarGrupo(grupoTipo, (botao) => mostrarDica("ok", `CNPJ válido · ${botao.textContent}`));
-configurarGrupo(grupoExigencia);
 configurarGrupo(grupoAtendidoPor);
 configurarGrupo(grupoStatus);
 
 // Chave liga/desliga (pedido do dono, 18/11/2026). Só pinta: quem grava decide fora.
+// A chave fiscal (classe chave-fiscal) diz nota fiscal / apenas recibo; as outras, boletos.
 function pintarChave(botao, ligada) {
   botao.setAttribute("aria-checked", ligada ? "true" : "false");
   const linha = botao.closest(".chave-linha");
   if (!linha) return;
   linha.classList.toggle("ligada", ligada);
   const estado = linha.querySelector(".chave-estado");
-  if (estado) estado.textContent = ligada ? "Gera boletos" : "Não gera boletos";
+  const textos = botao.classList.contains("chave-fiscal")
+    ? ["Exige nota fiscal", "Apenas recibo"]
+    : ["Gera boletos", "Não gera boletos"];
+  if (estado) estado.textContent = ligada ? textos[0] : textos[1];
 }
 const chaveLigada = (botao) => botao.getAttribute("aria-checked") === "true";
 
-// Cliente novo: escolhe à vontade (sem pergunta) e vai junto ao salvar; começa desligada.
+// Cliente novo: escolhe à vontade (sem pergunta) e vai junto ao salvar. Boleto começa desligado;
+// a exigência fiscal começa em nota fiscal (todos os clientes de hoje são assim).
 const chaveBoletoNovo = document.getElementById("gera-boleto-novo");
 chaveBoletoNovo.closest(".chave-linha").addEventListener("click", () => pintarChave(chaveBoletoNovo, !chaveLigada(chaveBoletoNovo)));
+const chaveExigenciaNovo = document.getElementById("exigencia-novo");
+chaveExigenciaNovo.closest(".chave-linha").addEventListener("click", () => pintarChave(chaveExigenciaNovo, !chaveLigada(chaveExigenciaNovo)));
 
 // "Tem certeza?" da chave num cliente que já existe. Resolve com a resposta do servidor quando
 // gravou, ou null se a pessoa voltou. Erro fica na janela, para tentar de novo.
@@ -1233,7 +1238,7 @@ let documentoAtual = "";
 function limparFormulario() {
   [razaoSocialInput, nomeFantasiaInput, emailsInput, whatsappCnpjInput, administradoraInput,
    empresaSindicosInput, observacoesInput].forEach((campo) => (campo.value = ""));
-  grupoExigencia.querySelectorAll(".opcao").forEach((b) => b.classList.remove("active"));
+  pintarChave(chaveExigenciaNovo, true);
   // Cliente novo começa no CNPJ 1 (o de sempre); trocar é um toque.
   grupoAtendidoPor.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === "CNPJ 1"));
   // Cliente novo começa sem gerar boleto (pedido do dono, 18/11/2026).
@@ -1367,7 +1372,7 @@ formEntidade.addEventListener("submit", async (event) => {
       tipo,
       razaoSocial: razaoSocialInput.value.trim(),
       nomeFantasia: nomeFantasiaInput.value.trim(),
-      exigenciaFiscal: escolhaDoGrupo(grupoExigencia),
+      exigenciaFiscal: chaveLigada(chaveExigenciaNovo) ? "Exige Nota Fiscal" : "Apenas Recibo",
       atendidoPor: escolhaDoGrupo(grupoAtendidoPor) || "CNPJ 1",
       geraBoleto: chaveLigada(chaveBoletoNovo) ? "sim" : "nao",
       emails: emailsInput.value.trim(),
@@ -1885,7 +1890,6 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
     razaoSocial: bloco.querySelector(".d-razao"),
     nomeFantasia: bloco.querySelector(".d-fantasia"),
     tipo: bloco.querySelector(".d-tipo"),
-    exigenciaFiscal: bloco.querySelector(".d-exigencia"),
     atendidoPor: bloco.querySelector(".d-atendido-por"),
     emails: bloco.querySelector(".d-emails"),
     whatsappCnpj: bloco.querySelector(".d-whatsapp-cnpj"),
@@ -1908,7 +1912,6 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
     campos.razaoSocial.value = cadastro.razaoSocial;
     campos.nomeFantasia.value = cadastro.nomeFantasia;
     campos.tipo.value = cadastro.tipo;
-    campos.exigenciaFiscal.value = cadastro.exigenciaFiscal;
     campos.atendidoPor.value = cadastro.atendidoPor === "CNPJ 2" ? "CNPJ 2" : "CNPJ 1";
     campos.emails.value = cadastro.emails;
     campos.whatsappCnpj.value = formatarTelefone(cadastro.whatsappCnpj);
@@ -1948,6 +1951,25 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
     cadastro.geraBoleto = resposta.geraBoleto === true;
     resumo.geraBoleto = cadastro.geraBoleto;
     pintarChave(chaveBoleto, cadastro.geraBoleto);
+    mostrarToast(resposta.mensagem || "Escolha salva.");
+  });
+
+  // Chave "Nota fiscal / Apenas recibo" (18/11/2026): mesma lógica da de boletos. O Salvar do
+  // cadastro manda o valor guardado aqui, então nunca desfaz a escolha.
+  const chaveExigencia = bloco.querySelector(".d-exigencia");
+  pintarChave(chaveExigencia, cadastro.exigenciaFiscal !== "Apenas Recibo");
+  chaveExigencia.closest(".chave-linha").addEventListener("click", async () => {
+    if (dialogoBoleto.open) return;
+    const nota = !chaveLigada(chaveExigencia);
+    const nome = cadastro.nomeFantasia || cadastro.razaoSocial || "este cliente";
+    const resposta = await perguntarBoleto({
+      texto: nota ? `Passar ${nome} para NOTA FISCAL?` : `Passar ${nome} para APENAS RECIBO?`,
+      botao: nota ? "Sim, nota fiscal" : "Sim, apenas recibo",
+      executar: () => pedirAoN8n("exigencia-fiscal", { id: cadastro.id, exigencia: nota ? "nota" : "recibo" }),
+    });
+    if (!resposta) return;
+    cadastro.exigenciaFiscal = resposta.exigenciaFiscal || cadastro.exigenciaFiscal;
+    pintarChave(chaveExigencia, cadastro.exigenciaFiscal !== "Apenas Recibo");
     mostrarToast(resposta.mensagem || "Escolha salva.");
   });
 
@@ -2129,7 +2151,7 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
         razaoSocial: campos.razaoSocial.value.trim(),
         nomeFantasia: campos.nomeFantasia.value.trim(),
         tipo: campos.tipo.value,
-        exigenciaFiscal: campos.exigenciaFiscal.value,
+        exigenciaFiscal: cadastro.exigenciaFiscal,
         atendidoPor: campos.atendidoPor.value,
         emails: campos.emails.value.trim(),
         whatsappCnpj: normalizarTelefone(campos.whatsappCnpj.value),
