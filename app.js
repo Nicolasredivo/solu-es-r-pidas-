@@ -105,6 +105,7 @@ function apagarSessao() {
   try {
     localStorage.removeItem(CHAVE_SESSAO);
     localStorage.removeItem("sr_painel_faturamento");
+    localStorage.removeItem("sr_busca_recentes");
   } catch (e) {
     /* nada a fazer */
   }
@@ -15490,6 +15491,30 @@ async function buscaAbrirCadastro(c) {
   }, 1500);
 }
 
+// Pesquisas recentes (17/11/2026, pedido do dono): as 3 últimas que levaram a abrir algo, a mais nova primeiro,
+// sem repetir (a mesma pesquisa, mesmo com outra caixa ou acento, sobe para o topo). Ficam só neste aparelho e
+// saem ao "Sair". Tocar numa delas escreve a pesquisa de novo no campo.
+const CHAVE_BUSCA_RECENTES = "sr_busca_recentes";
+const BUSCA_MAX_RECENTES = 3;
+
+function buscaRecentes() {
+  try {
+    const lista = JSON.parse(localStorage.getItem(CHAVE_BUSCA_RECENTES) || "[]");
+    return Array.isArray(lista) ? lista.filter((t) => typeof t === "string" && t.trim()).slice(0, BUSCA_MAX_RECENTES) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function buscaGuardarRecente(texto) {
+  const limpo = String(texto || "").replace(/\s+/g, " ").trim().slice(0, 80);
+  if (!limpo) return;
+  const lista = [limpo, ...buscaRecentes().filter((t) => normalizarTexto(t) !== normalizarTexto(limpo))].slice(0, BUSCA_MAX_RECENTES);
+  try { localStorage.setItem(CHAVE_BUSCA_RECENTES, JSON.stringify(lista)); } catch (e) { /* sem espaço ou bloqueado: segue sem histórico */ }
+}
+
+const BUSCA_IC_RELOGIO = '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>';
+
 function buscaMontar() {
   const termo = normalizarTexto(buscaRapidaCampo.value);
   const digitos = buscaRapidaCampo.value.replace(/\D/g, "");
@@ -15500,6 +15525,13 @@ function buscaMontar() {
   if (buscaRapida.cliente) {
     grupos.push({ titulo: "O que fazer com este cliente", itens: buscaAcoesDoCliente(buscaRapida.cliente).filter((a) => casa(`${a.titulo} ${a.detalhe}`)) });
   } else {
+    if (!termo) {
+      const recentes = buscaRecentes().map((t) => ({
+        titulo: t, detalhe: "", ic: BUSCA_IC_RELOGIO, cor: "148, 163, 184", segue: true, recente: true,
+        executar: () => { buscaRapidaCampo.value = t; buscaAtualizar(); },
+      }));
+      if (recentes.length) grupos.push({ titulo: "Recentes", itens: recentes });
+    }
     const acoes = BUSCA_ACOES.filter((a) => (dono || !a.dono) && casa(`${a.nome} ${a.chaves}`))
       .map((a) => ({ titulo: a.nome, detalhe: a.detalhe || "", ic: PAINEL_IC[a.ic], cor: a.cor, executar: () => painelAcao(a.acao) }));
     if (acoes.length) grupos.push({ titulo: "Ações", itens: acoes });
@@ -15581,6 +15613,9 @@ function buscaMarcar(indice) {
 function buscaExecutar(indice) {
   const item = buscaRapida.itens[indice];
   if (!item) return;
+  // Guarda o que foi digitado quando leva a algum lugar (no cliente, o texto que achou o cliente; dentro das ações
+  // de um cliente o campo só filtra as ações e não conta).
+  if (!item.recente && !buscaRapida.cliente) buscaGuardarRecente(buscaRapidaCampo.value);
   // O item de cliente devolve true: a janela continua aberta, agora com as ações dele.
   if (item.segue) {
     buscaRapida.indice = 0;

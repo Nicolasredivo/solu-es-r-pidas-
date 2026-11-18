@@ -6062,3 +6062,12 @@ se cancelam pela página de notas.
   na tela com um cliente de teste, que depois foi apagado.
 - Os dois orçamentos do primeiro caso receberam o `id` do par no `Dados_Json` para o "Desfazer" funcionar neles.
 
+## Busca rápida: pesquisas recentes (17/11/2026, versão 2026.11.17c)
+Pedido do dono: com o campo vazio, a busca (Ctrl+K ou lupa) mostra no topo o grupo **Recentes** com as 3 últimas
+pesquisas, sem repetir.
+- **O que é guardado:** o texto digitado quando ele leva a abrir algo (tela, ação, chamado, nota ou cliente). O texto
+  que só filtra as ações de um cliente não conta.
+- **Sem repetir:** a mesma pesquisa com outra caixa, acento ou espaços sobe para o topo, em vez de entrar de novo.
+- **Tocar numa recente** escreve o texto de novo no campo e mostra os resultados.
+- **Onde fica:** `localStorage` `sr_busca_recentes`, só neste aparelho; sai no "Sair" (`apagarSessao`).
+  - Funções: `buscaRecentes`, `buscaGuardarRecente`, mais o grupo no `buscaMontar` e a gravação no `buscaExecutar`.
