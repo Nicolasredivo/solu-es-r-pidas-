@@ -6014,3 +6014,22 @@ Pedido do dono: visual mais caprichado no sistema todo, sem estragar nada, e fun
   Voltar não ver troca de tela feita sem toque.
 - **Testes:** `testar-nfse-local.js` 66 ok (faturamento no ambiente de testes, contas sem governo, fila com nota de
   outro CNPJ e cancelamento, assinador recusando POST e caminho fora da fila); `testar-fluxo-notas.js` 109 ok.
+
+## Documento substituído na pasta Arquivos (17/11/2026, versão 2026.11.17b)
+Pedido do dono: um orçamento teve o valor mudado depois do serviço, e o sistema tinha que mostrar que o antigo foi
+trocado pelo novo.
+- **Onde fica a ligação:** no `Dados_Json` de cada PDF em `Arquivos_Cliente`. Não houve coluna nova nem reinício.
+  - O antigo guarda `substituidoPor: { data: 'AAAA-MM-DD', titulo, motivo }`.
+  - O novo guarda `substitui: { ... }`.
+- **Fluxo `App - Arquivos`:** a leitura de um cliente passa a pedir o `Dados_Json` e devolve `substituidoPor` e
+  `substitui`, só com data, título e motivo curtos. O resumo continua sem ele.
+- **App (`arqLinha`):**
+  - O antigo mostra o selo âmbar **Substituído** no começo da linha "pelo de dd/mm · motivo", com o valor riscado.
+    O selo saiu do fim do título porque títulos compridos o escondiam.
+  - O novo mostra, em verde, "Substitui o de dd/mm · motivo".
+  - A soma da pasta não conta o substituído e avisa "(sem N substituído)".
+  - O visualizador mostra "(SUBSTITUÍDO)" no título.
+- **Como marcar:** por enquanto só pelo chat, gravando os dois PDFs pela ação `salvar` com esses campos no
+  `dadosJson`. O app ainda não tem botão "substituir".
+- **Primeiro caso:** orçamento de uma empresa, o de 04/11 trocado pelo revisado de 17/11 (a troca de uma boia entrou
+  depois). O antigo entrou como `importado`.

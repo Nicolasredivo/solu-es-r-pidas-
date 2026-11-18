@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.17a";
+const APP_VERSION = "2026.11.17b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -13907,8 +13907,14 @@ function arqLinha(it, termos, mostrarPasta) {
   const meta = [nfData(it.data), it.emissor].filter(Boolean).join(" · ");
   // Nota cancelada (16/11/2026): selo vermelho ao lado do título e o valor riscado.
   const selo = it.cancelada ? `<span class="nf-selo nf-selo-cancelada">${NF_ICONE_CANCELADA}Cancelada</span>` : "";
-  return `<div class="arq-arquivo${it.cancelada ? " arq-cancelada" : ""}"><div class="arq-ic ${p.cls}">${arqIcone(p)}</div>
+  // Documento trocado por outro (17/11/2026): o antigo fica na pasta com selo "Substituído" (no começo da linha de
+  // baixo, para não sumir no fim de um título comprido), valor riscado e fora da soma; o novo diz qual substitui.
+  const sub = it.substituidoPor || it.substitui;
+  const troca = sub ? (it.substituidoPor ? `<span class="nf-selo nf-selo-substituido">Substituído</span> pelo de ` : "Substitui o de ")
+    + escapeHtml(nfData(sub.data) + (sub.motivo ? " · " + sub.motivo : "")) : "";
+  return `<div class="arq-arquivo${it.cancelada ? " arq-cancelada" : ""}${it.substituidoPor ? " arq-substituido" : ""}"><div class="arq-ic ${p.cls}">${arqIcone(p)}</div>
     <div class="arq-texto"><div class="arq-titulo">${arqMarcar(it.titulo, termos)}${selo}${mostrarPasta ? `<span class="arq-pasta-tag">${p.nome}</span>` : ""}</div><div class="arq-meta">${escapeHtml(meta)}</div>
+    ${troca ? `<div class="arq-troca${it.substituidoPor ? " arq-troca-antigo" : ""}">${troca}</div>` : ""}
     ${it.descricao ? `<div class="arq-desc">${arqMarcar(it.descricao, termos)}</div>` : ""}</div>
     ${it.valor != null ? `<div class="arq-valor">${escapeHtml(nfReais(it.valor))}</div>` : ""}
     <div class="arq-acoes"><button type="button" data-arq-ver="${escapeHtml(it.id)}">Visualizar</button></div></div>`;
@@ -13988,10 +13994,12 @@ function arqDesenharPasta() {
       ${temValor ? `<div><label for="arq-f-vmin">Valor mínimo (R$)</label><input type="number" id="arq-f-vmin" inputmode="decimal" value="${f.vmin}" /></div>
       <div><label for="arq-f-vmax">Valor máximo (R$)</label><input type="number" id="arq-f-vmax" inputmode="decimal" value="${f.vmax}" /></div>` : ""}</div>` : ""}
     ${chips.length ? `<div class="arq-chips">${chips.map(([k, t]) => `<span class="arq-chip">${escapeHtml(t)} <b data-arq-x="${k}" role="button" aria-label="Tirar este filtro">×</b></span>`).join("")}<button type="button" class="arq-limpar" id="arq-f-limpar">limpar filtros</button></div>` : ""}`;
-  // Nota cancelada não entra na soma (16/11/2026).
-  const soma = itens.reduce((s, i) => s + (i.cancelada ? 0 : i.valor || 0), 0);
+  // Nota cancelada e documento substituído não entram na soma (16 e 17/11/2026).
+  const soma = itens.reduce((s, i) => s + (i.cancelada || i.substituidoPor ? 0 : i.valor || 0), 0);
   const canceladas = itens.filter((i) => i.cancelada).length;
-  html += `<div class="arq-conta">${itens.length} de ${arqPlural(base.length, "arquivo", "arquivos")}${itens.some((i) => i.valor != null) ? " · soma " + escapeHtml(nfReais(soma)) + (canceladas ? ` (sem ${arqPlural(canceladas, "cancelada", "canceladas")})` : "") : ""}</div>`;
+  const substituidos = itens.filter((i) => !i.cancelada && i.substituidoPor && i.valor != null).length;
+  const fora = [canceladas ? arqPlural(canceladas, "cancelada", "canceladas") : "", substituidos ? arqPlural(substituidos, "substituído", "substituídos") : ""].filter(Boolean).join(" e ");
+  html += `<div class="arq-conta">${itens.length} de ${arqPlural(base.length, "arquivo", "arquivos")}${itens.some((i) => i.valor != null) ? " · soma " + escapeHtml(nfReais(soma)) + (fora ? ` (sem ${fora})` : "") : ""}</div>`;
   if (!itens.length) {
     html += `<div class="arq-vazio">${base.length ? 'Nenhum arquivo com esses filtros.<br><button type="button" class="arq-limpar" id="arq-f-limpar2">Limpar filtros</button>'
       : (p.id === "nfs" ? "Nenhuma nota emitida pelo sistema para este cliente ainda." : "Nada guardado nesta pasta ainda. Os PDFs gerados na aba PDFs, com este cliente escolhido na busca, aparecem aqui.")}</div>`;
@@ -14187,7 +14195,7 @@ function arqNomeParaBaixar(it) {
 function arqVisualizar(id) {
   const it = arq.itens.find((i) => i.id === id);
   if (!it) return;
-  const titulo = `${it.titulo}${it.cancelada ? " (CANCELADA)" : ""} · ${arqNomeDoCliente(arq.cliente)}`;
+  const titulo = `${it.titulo}${it.cancelada ? " (CANCELADA)" : it.substituidoPor ? " (SUBSTITUÍDO)" : ""} · ${arqNomeDoCliente(arq.cliente)}`;
   let corpo;
   if (it.arquivo) {
     corpo = '<div class="arq-vazio">Carregando o PDF...</div>';

@@ -4847,6 +4847,39 @@ div.lembrete-item:hover {
   font-size: 0.75rem;
 }
 
+.arq-troca .nf-selo-substituido {
+  margin-right: 2px;
+  padding: 1px 8px;
+  font-size: 0.72rem;
+}
+
+/* Documento substituído por outro (17/11/2026): selo âmbar, valor riscado (sai da soma) e uma linha dizendo
+   qual o substitui. O novo mostra a mesma linha, em verde, dizendo qual ele substitui. */
+.nf-selo-substituido {
+  background: var(--aviso);
+  color: #1a1300;
+}
+
+.arq-substituido .arq-valor {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.arq-substituido .arq-titulo {
+  color: var(--muted);
+}
+
+.arq-troca {
+  margin-top: 3px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ok);
+}
+
+.arq-troca-antigo {
+  color: var(--aviso);
+}
+
 .nf-cancelar {
   margin-top: 12px;
   border: 1px solid rgba(229, 72, 77, 0.55);
