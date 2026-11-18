@@ -105,7 +105,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "// Tudo chega como texto (o app manda formulário simples).\nconst corpo = $('Recebe pedido do app').first().json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst ACOES = ['salvar', 'resumo', 'cliente'];\nconst acao = ACOES.includes(texto(corpo.acao)) ? texto(corpo.acao) : '';\nlet erro = acao ? '' : 'Ação inválida.';\n\n// Por enquanto só os PDFs gerados no app; \"servico\" e \"relatorio_tecnico\" entram quando forem definidos.\nconst TIPOS = ['nfs', 'orcamento', 'recibo', 'comunicado', 'laudo'];\nconst ORIGENS = ['gerado', 'importado'];\nconst origem = texto(corpo.origem) || 'gerado';\nconst clienteId = texto(corpo.clienteId);\nconst tipo = texto(corpo.tipo);\nconst titulo = texto(corpo.titulo).replace(/\\s+/g, ' ').slice(0, 200);\nconst descricao = texto(corpo.descricao).replace(/\\s+/g, ' ').slice(0, 500);\nconst textoBusca = texto(corpo.textoBusca).slice(0, 20000);\nconst clienteNome = texto(corpo.clienteNome).replace(/\\s+/g, ' ').slice(0, 200);\nconst dataDocumento = texto(corpo.dataDocumento);\nconst emissor = texto(corpo.emissor) === 'CNPJ 2' ? 'CNPJ 2' : 'CNPJ 1';\nconst hash = texto(corpo.hash).toLowerCase();\nconst dadosJson = texto(corpo.dadosJson).slice(0, 100000);\n\n// Valor em reais: vazio = sem valor (comunicado e laudo não têm). Aceita 290 / 290,5 / 1.290,50 / 290.50.\nlet bruto = texto(corpo.valor).replace(/\\s+/g, '').replace(/^R\\$/i, '');\nif (bruto.includes(',')) bruto = bruto.replace(/\\./g, '').replace(',', '.');\nlet valor = null;\nif (bruto) {\n  if (/^\\d{1,9}(\\.\\d{1,2})?$/.test(bruto)) valor = Number(bruto);\n  else if (!erro) erro = 'Valor inválido.';\n}\n\n// PDF em base64, até uns 8 MB.\nlet arquivo = texto(corpo.arquivo).replace(/^data:[^,]*,/, '');\nlet nomeArquivo = texto(corpo.nomeArquivo).replace(/[\\\\/:*?\"<>|\\x00-\\x1f]/g, '_').slice(0, 150) || 'documento.pdf';\nif (!/\\.pdf$/i.test(nomeArquivo)) nomeArquivo += '.pdf';\n\nif (!erro && !/^rec[A-Za-z0-9]{14}$/.test(clienteId) && acao !== 'resumo') erro = 'Escolha um cliente do cadastro.';\nif (!erro && acao === 'salvar') {\n  if (!TIPOS.includes(tipo)) erro = 'Tipo de documento inválido.';\n  else if (!ORIGENS.includes(origem)) erro = 'Origem inválida.';\n  else if (!titulo) erro = 'Falta o título do documento.';\n  else if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(dataDocumento)) erro = 'Data do documento inválida.';\n  else if (hash && !/^[0-9a-f]{64}$/.test(hash)) erro = 'Identificação do arquivo inválida.';\n  else if (!arquivo || !/^[A-Za-z0-9+/=]+$/.test(arquivo)) erro = 'Arquivo inválido.';\n  else if (!arquivo.startsWith('JVBERi0')) erro = 'O arquivo precisa ser um PDF.';\n  else if (arquivo.length > 11 * 1024 * 1024) erro = 'O PDF passa de 8 MB.';\n}\nreturn [{ json: { acao, origem, clienteId, tipo, titulo, descricao, textoBusca, clienteNome, dataDocumento, valor, emissor, hash, dadosJson, arquivo, nomeArquivo, erro } }];"
+        "jsCode": "// Tudo chega como texto (o app manda formulário simples).\nconst corpo = $('Recebe pedido do app').first().json.body || {};\nconst texto = (v) => String(v ?? '').trim();\nconst ACOES = ['salvar', 'resumo', 'cliente', 'substituir', 'desfazer'];\nconst acao = ACOES.includes(texto(corpo.acao)) ? texto(corpo.acao) : '';\nlet erro = acao ? '' : 'Ação inválida.';\n\n// Por enquanto só os PDFs gerados no app; \"servico\" e \"relatorio_tecnico\" entram quando forem definidos.\nconst TIPOS = ['nfs', 'orcamento', 'recibo', 'comunicado', 'laudo'];\nconst ORIGENS = ['gerado', 'importado'];\nconst origem = texto(corpo.origem) || 'gerado';\nconst clienteId = texto(corpo.clienteId);\nconst tipo = texto(corpo.tipo);\nconst titulo = texto(corpo.titulo).replace(/\\s+/g, ' ').slice(0, 200);\nconst descricao = texto(corpo.descricao).replace(/\\s+/g, ' ').slice(0, 500);\nconst textoBusca = texto(corpo.textoBusca).slice(0, 20000);\nconst clienteNome = texto(corpo.clienteNome).replace(/\\s+/g, ' ').slice(0, 200);\nconst dataDocumento = texto(corpo.dataDocumento);\nconst emissor = texto(corpo.emissor) === 'CNPJ 2' ? 'CNPJ 2' : 'CNPJ 1';\nconst hash = texto(corpo.hash).toLowerCase();\nconst dadosJson = texto(corpo.dadosJson).slice(0, 100000);\n\n// Valor em reais: vazio = sem valor (comunicado e laudo não têm). Aceita 290 / 290,5 / 1.290,50 / 290.50.\nlet bruto = texto(corpo.valor).replace(/\\s+/g, '').replace(/^R\\$/i, '');\nif (bruto.includes(',')) bruto = bruto.replace(/\\./g, '').replace(',', '.');\nlet valor = null;\nif (bruto) {\n  if (/^\\d{1,9}(\\.\\d{1,2})?$/.test(bruto)) valor = Number(bruto);\n  else if (!erro) erro = 'Valor inválido.';\n}\n\n// PDF em base64, até uns 8 MB.\nlet arquivo = texto(corpo.arquivo).replace(/^data:[^,]*,/, '');\nlet nomeArquivo = texto(corpo.nomeArquivo).replace(/[\\\\/:*?\"<>|\\x00-\\x1f]/g, '_').slice(0, 150) || 'documento.pdf';\nif (!/\\.pdf$/i.test(nomeArquivo)) nomeArquivo += '.pdf';\n\nif (!erro && !/^rec[A-Za-z0-9]{14}$/.test(clienteId) && acao !== 'resumo') erro = 'Escolha um cliente do cadastro.';\nif (!erro && acao === 'salvar') {\n  if (!TIPOS.includes(tipo)) erro = 'Tipo de documento inválido.';\n  else if (!ORIGENS.includes(origem)) erro = 'Origem inválida.';\n  else if (!titulo) erro = 'Falta o título do documento.';\n  else if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(dataDocumento)) erro = 'Data do documento inválida.';\n  else if (hash && !/^[0-9a-f]{64}$/.test(hash)) erro = 'Identificação do arquivo inválida.';\n  else if (!arquivo || !/^[A-Za-z0-9+/=]+$/.test(arquivo)) erro = 'Arquivo inválido.';\n  else if (!arquivo.startsWith('JVBERi0')) erro = 'O arquivo precisa ser um PDF.';\n  else if (arquivo.length > 11 * 1024 * 1024) erro = 'O PDF passa de 8 MB.';\n}\n// Troca de documento (17/11/2026): \"substituir\" liga o antigo ao novo; \"desfazer\" tira a ligação.\nconst antigoId = texto(corpo.antigoId);\nconst novoId = texto(corpo.novoId);\nconst motivo = texto(corpo.motivo).replace(/\\s+/g, ' ').slice(0, 200);\nif (!erro && (acao === 'substituir' || acao === 'desfazer')) {\n  if (!/^rec[A-Za-z0-9]{14}$/.test(antigoId) || !/^rec[A-Za-z0-9]{14}$/.test(novoId)) erro = 'Escolha os dois documentos.';\n  else if (antigoId === novoId) erro = 'O documento novo precisa ser outro.';\n}\nreturn [{ json: { acao, origem, clienteId, tipo, titulo, descricao, textoBusca, clienteNome, dataDocumento, valor, emissor, hash, dadosJson, arquivo, nomeArquivo, antigoId, novoId, motivo, erro } }];"
       }
     },
     {
@@ -324,7 +324,7 @@
         20
       ],
       "parameters": {
-        "jsCode": "const e = $('Le entrada').first().json;\nconst cab = $('Recebe pedido do app').first().json.headers || {};\n// Anexo guardado no PC vem com endereço relativo (/webhook/anexo...): completa com o endereço por onde o app\n// chegou (o túnel), senão o PDF não abre no celular.\nconst origem = String(cab['x-forwarded-proto'] || 'http').split(',')[0].trim() + '://' + (cab['x-forwarded-host'] || cab.host || 'localhost:5678');\nconst urlAnexo = (u) => (String(u || '').startsWith('/') ? origem + u : u);\nconst lista = (no) => { try { return $(no).all().map((i) => i.json).filter((j) => j && j.id && j.fields); } catch (err) { return []; } };\nconst falhou = (no) => { try { return $(no).all().some((i) => i.json && i.json.error); } catch (err) { return false; } };\nif (falhou('Busca arquivos') || falhou('Busca notas')) return [{ json: { ok: false, mensagem: 'Não foi possível falar com o banco agora. Tente de novo em instantes.' } }];\n\n// NFS-e: em produção só aparecem as notas de verdade; no ambiente de testes, só as de teste (igual à página de notas).\nlet saude = {};\ntry { saude = $('Status do servico').first().json || {}; } catch (err) { saude = {}; }\nconst ambiente = saude.ok === true && saude.ambiente === 'restrita' ? 'Testes' : 'Producao';\n\n// Troca de documento (17/11/2026): no Dados_Json, \"substituidoPor\" (no antigo) e \"substitui\" (no novo), cada um com\n// { data: 'AAAA-MM-DD', titulo, motivo }. Só data, título e motivo curtos vão para o app.\nconst troca = (v) => (v && typeof v === 'object' && /^\\d{4}-\\d{2}-\\d{2}$/.test(String(v.data || ''))\n  ? { data: String(v.data), titulo: String(v.titulo || '').slice(0, 200), motivo: String(v.motivo || '').slice(0, 200) } : null);\nconst arquivos = lista('Busca arquivos').map((r) => {\n  const f = r.fields;\n  let dados = {};\n  try { dados = JSON.parse(f.Dados_Json || '{}') || {}; } catch (err) { dados = {}; }\n  const anexo = (f.Arquivo || [])[0] || null;\n  return { id: r.id, clienteId: f.Cliente_Ref || '', pasta: f.Tipo, titulo: f.Titulo || '', descricao: f.Descricao || '', data: f.Data_Documento || '',\n    valor: typeof f.Valor === 'number' ? f.Valor : null, emissor: f.Emissor || 'CNPJ 1',\n    texto: e.acao === 'cliente' ? String(f.Texto_Busca || '').slice(0, 4000) : '',\n    substituidoPor: troca(dados.substituidoPor), substitui: troca(dados.substitui),\n    arquivo: anexo ? { nome: anexo.filename, url: urlAnexo(anexo.url), tamanho: anexo.size || 0 } : null };\n});\n// Nota cancelada (16/11/2026) continua na pasta, marcada como cancelada.\nconst notas = lista('Busca notas').filter((r) => (r.fields.Status === 'Emitida' || r.fields.Status === 'Cancelada') && r.fields.Ambiente === ambiente).map((r) => {\n  const f = r.fields;\n  return { id: r.id, clienteId: f.Cliente_Ref || '', pasta: 'nfs', titulo: f.Numero_NFSe ? 'Nota nº ' + f.Numero_NFSe : 'Nota (pedido nº ' + f.Numero_DPS + ')',\n    descricao: f.Descricao || '', data: f.Competencia || '', valor: typeof f.Valor === 'number' ? f.Valor : null, emissor: f.Emissor || 'CNPJ 1',\n    cancelada: f.Status === 'Cancelada',\n    texto: e.acao === 'cliente' ? [f.Tomador_Nome, f.Obra, f.Descricao, f.Chave_Acesso].filter(Boolean).join(' | ').slice(0, 4000) : '',\n    // O PDF da nota (16/11/2026) abre como os outros arquivos da pasta.\n    arquivo: (f.Pdf_Nota || [])[0] ? { nome: f.Pdf_Nota[0].filename, url: urlAnexo(f.Pdf_Nota[0].url), tamanho: f.Pdf_Nota[0].size || 0 } : null,\n    nota: { chave: f.Chave_Acesso || '', numero: f.Numero_NFSe || '', tomador: f.Tomador_Nome || '', documento: f.Tomador_Documento || '', obra: f.Obra || '', ambiente: f.Ambiente } };\n});\nconst todos = arquivos.concat(notas);\n\nif (e.acao === 'resumo') {\n  const porCliente = {};\n  for (const it of todos) {\n    if (!it.clienteId) continue;\n    const c = (porCliente[it.clienteId] = porCliente[it.clienteId] || { total: 0, pastas: {} });\n    c.total++;\n    c.pastas[it.pasta] = (c.pastas[it.pasta] || 0) + 1;\n  }\n  return [{ json: { ok: true, ambiente, clientes: porCliente } }];\n}\nconst doCliente = todos.filter((it) => it.clienteId === e.clienteId).sort((a, b) => String(b.data).localeCompare(String(a.data)));\nreturn [{ json: { ok: true, ambiente, itens: doCliente } }];"
+        "jsCode": "const e = $('Le entrada').first().json;\nconst cab = $('Recebe pedido do app').first().json.headers || {};\n// Anexo guardado no PC vem com endereço relativo (/webhook/anexo...): completa com o endereço por onde o app\n// chegou (o túnel), senão o PDF não abre no celular.\nconst origem = String(cab['x-forwarded-proto'] || 'http').split(',')[0].trim() + '://' + (cab['x-forwarded-host'] || cab.host || 'localhost:5678');\nconst urlAnexo = (u) => (String(u || '').startsWith('/') ? origem + u : u);\nconst lista = (no) => { try { return $(no).all().map((i) => i.json).filter((j) => j && j.id && j.fields); } catch (err) { return []; } };\nconst falhou = (no) => { try { return $(no).all().some((i) => i.json && i.json.error); } catch (err) { return false; } };\nif (falhou('Busca arquivos') || falhou('Busca notas')) return [{ json: { ok: false, mensagem: 'Não foi possível falar com o banco agora. Tente de novo em instantes.' } }];\n\n// NFS-e: em produção só aparecem as notas de verdade; no ambiente de testes, só as de teste (igual à página de notas).\nlet saude = {};\ntry { saude = $('Status do servico').first().json || {}; } catch (err) { saude = {}; }\nconst ambiente = saude.ok === true && saude.ambiente === 'restrita' ? 'Testes' : 'Producao';\n\n// Troca de documento (17/11/2026): no Dados_Json, \"substituidoPor\" (no antigo) e \"substitui\" (no novo), cada um com\n// { data: 'AAAA-MM-DD', titulo, motivo }. Só data, título e motivo curtos vão para o app.\nconst troca = (v) => (v && typeof v === 'object' && /^\\d{4}-\\d{2}-\\d{2}$/.test(String(v.data || ''))\n  ? { id: /^rec[A-Za-z0-9]{14}$/.test(String(v.id || '')) ? String(v.id) : '', data: String(v.data), titulo: String(v.titulo || '').slice(0, 200), motivo: String(v.motivo || '').slice(0, 200) } : null);\nconst arquivos = lista('Busca arquivos').map((r) => {\n  const f = r.fields;\n  let dados = {};\n  try { dados = JSON.parse(f.Dados_Json || '{}') || {}; } catch (err) { dados = {}; }\n  const anexo = (f.Arquivo || [])[0] || null;\n  return { id: r.id, clienteId: f.Cliente_Ref || '', pasta: f.Tipo, titulo: f.Titulo || '', descricao: f.Descricao || '', data: f.Data_Documento || '',\n    valor: typeof f.Valor === 'number' ? f.Valor : null, emissor: f.Emissor || 'CNPJ 1',\n    texto: e.acao === 'cliente' ? String(f.Texto_Busca || '').slice(0, 4000) : '',\n    substituidoPor: troca(dados.substituidoPor), substitui: troca(dados.substitui),\n    arquivo: anexo ? { nome: anexo.filename, url: urlAnexo(anexo.url), tamanho: anexo.size || 0 } : null };\n});\n// Nota cancelada (16/11/2026) continua na pasta, marcada como cancelada.\nconst notas = lista('Busca notas').filter((r) => (r.fields.Status === 'Emitida' || r.fields.Status === 'Cancelada') && r.fields.Ambiente === ambiente).map((r) => {\n  const f = r.fields;\n  return { id: r.id, clienteId: f.Cliente_Ref || '', pasta: 'nfs', titulo: f.Numero_NFSe ? 'Nota nº ' + f.Numero_NFSe : 'Nota (pedido nº ' + f.Numero_DPS + ')',\n    descricao: f.Descricao || '', data: f.Competencia || '', valor: typeof f.Valor === 'number' ? f.Valor : null, emissor: f.Emissor || 'CNPJ 1',\n    cancelada: f.Status === 'Cancelada',\n    texto: e.acao === 'cliente' ? [f.Tomador_Nome, f.Obra, f.Descricao, f.Chave_Acesso].filter(Boolean).join(' | ').slice(0, 4000) : '',\n    // O PDF da nota (16/11/2026) abre como os outros arquivos da pasta.\n    arquivo: (f.Pdf_Nota || [])[0] ? { nome: f.Pdf_Nota[0].filename, url: urlAnexo(f.Pdf_Nota[0].url), tamanho: f.Pdf_Nota[0].size || 0 } : null,\n    nota: { chave: f.Chave_Acesso || '', numero: f.Numero_NFSe || '', tomador: f.Tomador_Nome || '', documento: f.Tomador_Documento || '', obra: f.Obra || '', ambiente: f.Ambiente } };\n});\nconst todos = arquivos.concat(notas);\n\nif (e.acao === 'resumo') {\n  const porCliente = {};\n  for (const it of todos) {\n    if (!it.clienteId) continue;\n    const c = (porCliente[it.clienteId] = porCliente[it.clienteId] || { total: 0, pastas: {} });\n    c.total++;\n    c.pastas[it.pasta] = (c.pastas[it.pasta] || 0) + 1;\n  }\n  return [{ json: { ok: true, ambiente, clientes: porCliente } }];\n}\nconst doCliente = todos.filter((it) => it.clienteId === e.clienteId).sort((a, b) => String(b.data).localeCompare(String(a.data)));\nreturn [{ json: { ok: true, ambiente, itens: doCliente } }];"
       }
     },
     {
@@ -525,6 +525,171 @@
         "responseBody": "={{ JSON.stringify($json) }}",
         "options": {}
       }
+    },
+    {
+      "id": "450d00fb-ec59-402d-a742-10314db00f3f",
+      "name": "É troca?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        700
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6c187f53-a0d0-43e7-93f7-72649bc371a0",
+              "leftValue": "={{ (['substituir', 'desfazer'].includes($('Le entrada').first().json.acao)) ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "746a3bfb-c139-493b-9f39-1d6f26958838",
+      "name": "Busca troca",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        700
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        },
+        "method": "GET",
+        "url": "={{ 'http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblArquivosClie01?fields%5B%5D=Cliente_Ref&fields%5B%5D=Tipo&fields%5B%5D=Titulo&fields%5B%5D=Data_Documento&fields%5B%5D=Valor&fields%5B%5D=Dados_Json&filterByFormula=' + encodeURIComponent(\"AND({Cliente_Ref}='\" + $('Le entrada').first().json.clienteId + \"', OR(RECORD_ID()='\" + $('Le entrada').first().json.antigoId + \"', RECORD_ID()='\" + $('Le entrada').first().json.novoId + \"'))\") }}"
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "70d7f749-69ef-421c-8d2d-5aef252ab263",
+      "name": "Monta troca",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1430,
+        700
+      ],
+      "parameters": {
+        "jsCode": "// Regras da troca (17/11/2026). O antigo ganha \"substituidoPor\" e o novo \"substitui\" no Dados_Json; desfazer tira\n// os dois. Só documentos do mesmo cliente e da mesma pasta; nota fiscal não entra (tem o cancelamento próprio).\nconst e = $('Le entrada').first().json;\nconst http = $input.first().json || {};\nconst responder = (resposta) => [{ json: { proximo: 'responder', resposta } }];\nif (http.error || !Array.isArray(http.records)) return responder({ ok: false, mensagem: 'Não foi possível falar com o banco agora. Tente de novo em instantes.' });\nconst achar = (id) => http.records.find((r) => r.id === id && r.fields && r.fields.Cliente_Ref === e.clienteId);\nconst antigo = achar(e.antigoId);\nconst novo = achar(e.novoId);\nif (!antigo || !novo) return responder({ ok: false, mensagem: 'Não achei os dois documentos na pasta deste cliente. Atualize a tela e tente de novo.' });\nconst ler = (r) => {\n  const t = r.fields.Dados_Json;\n  if (!t) return {};\n  try { const d = JSON.parse(t); return d && typeof d === 'object' && !Array.isArray(d) ? d : null; } catch (err) { return null; }\n};\nconst dA = ler(antigo);\nconst dN = ler(novo);\nif (!dA || !dN) return responder({ ok: false, mensagem: 'Os dados guardados de um dos documentos estão num formato que o app não altera. Peça pelo chat.' });\nconst reais = (v) => (typeof v === 'number' ? ' · R$ ' + v.toFixed(2).replace('.', ',').replace(/\\B(?=(\\d{3})+(?!\\d))/g, '.') : '');\nconst data = (r) => String(r.fields.Data_Documento || '').slice(0, 10);\nconst resumo = (r) => (String(r.fields.Titulo || 'Documento') + reais(r.fields.Valor)).slice(0, 200);\nconst hoje = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);\n\nif (e.acao === 'substituir') {\n  if (antigo.fields.Tipo !== novo.fields.Tipo) return responder({ ok: false, mensagem: 'Só dá para substituir por um documento da mesma pasta.' });\n  if (dA.substituidoPor) return responder({ ok: false, mensagem: 'Este documento já foi substituído. Desfaça a troca antes de escolher outro.' });\n  if (dN.substituidoPor) return responder({ ok: false, mensagem: 'O documento escolhido também já foi substituído. Escolha o mais recente.' });\n  if (dN.substitui) return responder({ ok: false, mensagem: 'O documento escolhido já substitui outro. Escolha outro ou desfaça aquela troca.' });\n  dA.substituidoPor = { id: novo.id, data: data(novo), titulo: resumo(novo), motivo: e.motivo, em: hoje };\n  dN.substitui = { id: antigo.id, data: data(antigo), titulo: resumo(antigo), motivo: e.motivo, em: hoje };\n} else {\n  const sp = dA.substituidoPor;\n  if (!sp || (sp.id && sp.id !== novo.id)) return responder({ ok: false, mensagem: 'Este documento não está marcado como substituído por esse. Atualize a tela.' });\n  delete dA.substituidoPor;\n  if (dN.substitui && (!dN.substitui.id || dN.substitui.id === antigo.id)) delete dN.substitui;\n}\nreturn [{ json: { proximo: 'gravar', corpo: { records: [\n  { id: antigo.id, fields: { Dados_Json: JSON.stringify(dA) } },\n  { id: novo.id, fields: { Dados_Json: JSON.stringify(dN) } },\n] } } }];\n"
+      }
+    },
+    {
+      "id": "d3ee66ce-36e5-4c29-be10-c64224112dc3",
+      "name": "Vai gravar troca?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        700
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0d3f46aa-b318-476e-ae03-0b816ea539fd",
+              "leftValue": "={{ $json.proximo === 'gravar' ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "476871e4-f21d-4c7e-87f1-ca4eb5321464",
+      "name": "Grava troca",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        700
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000
+        },
+        "method": "PATCH",
+        "url": "http://127.0.0.1:5690/v0/app6PyYmtFduIMp7B/tblArquivosClie01",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "4c55aa79-4c67-4a77-a233-7464bf776346",
+      "name": "Monta resposta da troca",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        640
+      ],
+      "parameters": {
+        "jsCode": "const e = $('Le entrada').first().json;\nreturn [{ json: { ok: true, mensagem: e.acao === 'desfazer' ? 'Troca desfeita: os dois documentos voltaram ao normal.' : 'Pronto: o documento antigo ficou marcado como substituído.' } }];\n"
+      }
+    },
+    {
+      "id": "b5a7a88e-1969-4510-9bc5-0b7aa6f61a2b",
+      "name": "Monta falha da troca",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        780
+      ],
+      "parameters": {
+        "jsCode": "// O banco grava os dois juntos ou nenhum: se deu erro, nada mudou.\nreturn [{ json: { ok: false, mensagem: 'Não consegui gravar a troca agora. Nada foi mudado; tente de novo.' } }];\n"
+      }
     }
   ],
   "connections": {
@@ -619,7 +784,7 @@
         ],
         [
           {
-            "node": "Busca duplicado",
+            "node": "É troca?",
             "type": "main",
             "index": 0
           }
@@ -824,6 +989,104 @@
       ]
     },
     "Monta falha": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É troca?": {
+      "main": [
+        [
+          {
+            "node": "Busca troca",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Busca duplicado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca troca": {
+      "main": [
+        [
+          {
+            "node": "Monta troca",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta troca": {
+      "main": [
+        [
+          {
+            "node": "Vai gravar troca?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vai gravar troca?": {
+      "main": [
+        [
+          {
+            "node": "Grava troca",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta resposta direta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava troca": {
+      "main": [
+        [
+          {
+            "node": "Monta resposta da troca",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta falha da troca",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta da troca": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta falha da troca": {
       "main": [
         [
           {

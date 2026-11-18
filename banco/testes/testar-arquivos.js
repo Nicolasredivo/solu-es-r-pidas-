@@ -136,6 +136,45 @@ const hashDe = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
     const lerProd = await appProd({ acao: 'cliente', clienteId: cliA.id });
     confere('em produção, cliente A só tem os 4 arquivos', lerProd.itens.length === 4 && lerProd.itens.every((i) => i.pasta !== 'nfs'), lerProd.itens.map((i) => i.pasta));
 
+    // ---- substituir um documento por outro e desfazer (17/11/2026) ----
+    const novoOrc = async (texto, data, valor) => {
+      const pdf = pdfDe(texto);
+      const r = await app(base({ titulo: 'Orçamento · ' + texto, valor, dataDocumento: data, hash: hashDe(pdf), arquivo: pdf.toString('base64'), dadosJson: '{"b":2}' }));
+      guardarAnexos(r.id && await local('GET', `/v0/${CAD}/${T}/${r.id}`));
+      return r;
+    };
+    const rNovo = await novoOrc('revisado', '2026-11-20', '1.500,00');
+    const rTerc = await novoOrc('terceiro', '2026-11-25', '1.600,00');
+    const dadosDe = async (id) => JSON.parse((await local('GET', `/v0/${CAD}/${T}/${id}`)).fields.Dados_Json || '{}');
+    const troca = (acao, antigoId, novoId, motivo) => app({ acao, clienteId: cliA.id, antigoId, novoId, motivo: motivo || '' });
+    const recusaTroca = async (nome, r, rx) => confere(`troca recusada: ${nome}`, r.ok === false && (!rx || rx.test(r.mensagem)), r);
+    await recusaTroca('sem o documento novo', await troca('substituir', r1.id, ''), /Escolha/);
+    await recusaTroca('o mesmo documento', await troca('substituir', r1.id, r1.id), /outro/);
+    await recusaTroca('pastas diferentes', await troca('substituir', r1.id, r4.id), /mesma pasta/);
+    await recusaTroca('documento de outro cliente', await troca('substituir', r1.id, r3.id), /Não achei/);
+    await recusaTroca('cliente errado', await app({ acao: 'substituir', clienteId: cliB.id, antigoId: r1.id, novoId: rNovo.id }), /Não achei/);
+    confere('troca recusada não mexe nos dados', JSON.stringify(await dadosDe(r1.id)) === '{"a":1}');
+    const tr = await troca('substituir', r1.id, rNovo.id, '  valor   revisto  ');
+    confere('substituir: ok', tr.ok === true && /substituído/.test(tr.mensagem), tr);
+    const dA = await dadosDe(r1.id), dN = await dadosDe(rNovo.id);
+    confere('substituir: o antigo guarda o novo (id, data, motivo) e mantém os dados de antes',
+      dA.a === 1 && dA.substituidoPor.id === rNovo.id && dA.substituidoPor.data === '2026-11-20' && dA.substituidoPor.motivo === 'valor revisto' && /R\$ 1\.500,00/.test(dA.substituidoPor.titulo), dA);
+    confere('substituir: o novo guarda o antigo', dN.b === 2 && dN.substitui.id === r1.id && dN.substitui.data === '2026-11-13' && /R\$ 1\.290,50/.test(dN.substitui.titulo), dN);
+    const lerT = await app({ acao: 'cliente', clienteId: cliA.id });
+    const itA = lerT.itens.find((i) => i.id === r1.id), itN = lerT.itens.find((i) => i.id === rNovo.id);
+    confere('leitura: a troca chega ao app com o id do par', itA.substituidoPor && itA.substituidoPor.id === rNovo.id && !itA.substitui && itN.substitui && itN.substitui.id === r1.id && !itN.substituidoPor, { itA, itN });
+    await recusaTroca('já substituído', await troca('substituir', r1.id, rTerc.id), /já foi substituído/);
+    await recusaTroca('o novo escolhido já foi substituído', await troca('substituir', rTerc.id, r1.id), /também já foi substituído/);
+    await recusaTroca('o novo escolhido já substitui outro', await troca('substituir', rTerc.id, rNovo.id), /já substitui outro/);
+    await recusaTroca('desfazer com o par errado', await troca('desfazer', r1.id, rTerc.id), /não está marcado/);
+    await recusaTroca('desfazer o que não foi trocado', await troca('desfazer', rTerc.id, rNovo.id), /não está marcado/);
+    const tr2 = await troca('substituir', rNovo.id, rTerc.id, 'segunda revisão');
+    confere('em cadeia: o revisado também pode ser substituído', tr2.ok === true && (await dadosDe(rNovo.id)).substitui.id === r1.id && (await dadosDe(rNovo.id)).substituidoPor.id === rTerc.id, tr2);
+    const d1 = await troca('desfazer', rNovo.id, rTerc.id);
+    const d2 = await troca('desfazer', r1.id, rNovo.id);
+    confere('desfazer: ok', d1.ok === true && d2.ok === true && /desfeita/.test(d2.mensagem), { d1, d2 });
+    confere('desfazer: os três voltam aos dados de antes', JSON.stringify(await dadosDe(r1.id)) === '{"a":1}' && JSON.stringify(await dadosDe(rNovo.id)) === '{"b":2}' && JSON.stringify(await dadosDe(rTerc.id)) === '{"b":2}');
+
     // ---- importar documento antigo (etapa 5): origem "importado" e PDF de nota feita fora do sistema ----
     const cliC = await local('POST', `/v0/${CAD}/Entidades_Cadastradas`, { fields: { Razao_Social_Nome: 'TESTE ARQUIVOS CLIENTE C', Status: 'Ativo' } });
     apagar.unshift(['Entidades_Cadastradas', cliC.id]);

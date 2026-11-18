@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.17b";
+const APP_VERSION = "2026.11.17c";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -13917,7 +13917,21 @@ function arqLinha(it, termos, mostrarPasta) {
     ${troca ? `<div class="arq-troca${it.substituidoPor ? " arq-troca-antigo" : ""}">${troca}</div>` : ""}
     ${it.descricao ? `<div class="arq-desc">${arqMarcar(it.descricao, termos)}</div>` : ""}</div>
     ${it.valor != null ? `<div class="arq-valor">${escapeHtml(nfReais(it.valor))}</div>` : ""}
-    <div class="arq-acoes"><button type="button" data-arq-ver="${escapeHtml(it.id)}">Visualizar</button></div></div>`;
+    <div class="arq-acoes"><button type="button" data-arq-ver="${escapeHtml(it.id)}">Visualizar</button>${arqBotaoTroca(it)}</div></div>`;
+}
+
+// Botão da troca (17/11/2026): "Substituir" em qualquer PDF guardado que ainda vale; "Desfazer troca" no que já foi
+// substituído. Nota fiscal do sistema não tem (ela se cancela pela página de notas).
+function arqBotaoTroca(it) {
+  if (it.nota || it.cancelada) return "";
+  if (it.substituidoPor) return it.substituidoPor.id ? `<button type="button" class="botao-secundario" data-arq-desfazer="${escapeHtml(it.id)}">Desfazer troca</button>` : "";
+  return `<button type="button" class="botao-secundario" data-arq-sub="${escapeHtml(it.id)}">Substituir</button>`;
+}
+
+function arqLigarBotoesDaLista() {
+  arqTela.querySelectorAll("[data-arq-ver]").forEach((b) => b.addEventListener("click", () => arqVisualizar(b.dataset.arqVer)));
+  arqTela.querySelectorAll("[data-arq-sub]").forEach((b) => b.addEventListener("click", () => arqAbrirSubstituicao(b.dataset.arqSub)));
+  arqTela.querySelectorAll("[data-arq-desfazer]").forEach((b) => b.addEventListener("click", () => arqAbrirDesfazerTroca(b.dataset.arqDesfazer)));
 }
 
 function arqDesenharCliente() {
@@ -13955,7 +13969,7 @@ function arqDesenharCliente() {
     arq.view = "pasta";
     arqDesenhar();
   }));
-  arqTela.querySelectorAll("[data-arq-ver]").forEach((b) => b.addEventListener("click", () => arqVisualizar(b.dataset.arqVer)));
+  arqLigarBotoesDaLista();
 }
 
 const ARQ_PERIODOS = [["tudo", "Todo o período"], ["hoje", "Hoje"], ["7", "Últimos 7 dias"], ["mes", "Este mês"], ["ant", "Mês passado"], ["ano", "Este ano"], ["custom", "Escolher datas…"]];
@@ -14031,7 +14045,7 @@ function arqDesenharPasta() {
     if (k === "v") { f.vmin = ""; f.vmax = ""; }
     refazer();
   }));
-  arqTela.querySelectorAll("[data-arq-ver]").forEach((b) => b.addEventListener("click", () => arqVisualizar(b.dataset.arqVer)));
+  arqLigarBotoesDaLista();
 }
 
 function arqLigarCliques() {
@@ -14135,6 +14149,101 @@ async function arqAtualizarCliente() {
     if (r && r.ok) arq.itens = r.itens || [];
   } catch (err) { /* fica com a lista de antes */ }
   arqDesenhar();
+}
+
+// ---- substituir um documento por outro (17/11/2026) ----
+//
+// Ex.: orçamento que mudou de valor depois do serviço. O novo precisa já estar na pasta (gerado na aba PDFs com
+// o cliente escolhido, ou trazido por "+ Adicionar arquivo"). O antigo continua guardado, com o selo "Substituído",
+// e sai da soma. O fluxo grava a ligação nos dois documentos juntos; "Desfazer troca" tira.
+
+function arqResumoDoItem(it) {
+  return [nfData(it.data), it.valor != null ? nfReais(it.valor) : ""].filter(Boolean).join(" · ");
+}
+
+function arqAbrirSubstituicao(id) {
+  const antigo = arq.itens.find((i) => i.id === id);
+  if (!antigo) return;
+  const p = arqPasta(antigo.pasta) || ARQ_PASTAS[0];
+  // Quem pode entrar no lugar: outro documento da mesma pasta que ainda vale e não substitui nenhum outro. Os mais
+  // recentes primeiro; já vem marcado o mais recente que for da mesma data ou depois.
+  const opcoes = arq.itens.filter((i) => i.id !== antigo.id && i.pasta === antigo.pasta && !i.nota && !i.cancelada && !i.substituidoPor && !i.substitui)
+    .sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  const marcado = opcoes.find((i) => String(i.data) >= String(antigo.data)) || null;
+  const lista = opcoes.map((i) => `<label class="arq-escolha"><input type="radio" name="arq-s-novo" value="${escapeHtml(i.id)}"${marcado && marcado.id === i.id ? " checked" : ""} />
+      <span><b>${escapeHtml(i.titulo)}</b><small>${escapeHtml(arqResumoDoItem(i))}</small>${i.descricao ? `<small>${escapeHtml(i.descricao)}</small>` : ""}</span></label>`).join("");
+  arqModal.innerHTML = `<div class="arq-caixa arq-caixa-troca"><header><div class="arq-tt">Substituir documento</div></header>
+    <form class="arq-form" id="arq-s-form" novalidate autocomplete="off">
+      <div class="arq-troca-sai"><span class="nf-selo nf-selo-substituido">Sai</span><div><b>${escapeHtml(antigo.titulo)}</b><small>${escapeHtml(arqResumoDoItem(antigo))}</small></div></div>
+      ${opcoes.length ? `<div><span class="arq-rotulo" id="arq-s-rotulo">Fica no lugar</span><div class="arq-escolhas" role="radiogroup" aria-labelledby="arq-s-rotulo">${lista}</div></div>
+      <div><label for="arq-s-motivo">Motivo (opcional, aparece na pasta)</label><input type="text" id="arq-s-motivo" maxlength="200" placeholder="Ex.: valor revisto depois do serviço" /></div>
+      <p class="arq-form-aviso">O antigo continua guardado na pasta, com o selo "Substituído", e deixa de contar na soma. Dá para desfazer depois.</p>`
+      : `<p class="arq-form-aviso">Ainda não há outro documento na pasta ${escapeHtml(p.nome)} deste cliente para ficar no lugar. Gere o novo na aba PDFs (com este cliente escolhido na busca) ou traga o PDF por "+ Adicionar arquivo", e depois toque em Substituir de novo.</p>`}
+      <p class="status" id="arq-s-status" role="status"></p>
+      <div class="arq-form-acoes">${opcoes.length ? '<button type="submit" id="arq-s-ok">Substituir</button>' : ""}<button type="button" class="botao-secundario" id="arq-s-cancelar">${opcoes.length ? "Cancelar" : "Fechar"}</button></div>
+    </form></div>`;
+  arqModal.dataset.item = "troca";
+  arqModal.classList.remove("hidden");
+  const el = (x) => document.getElementById(x);
+  el("arq-s-cancelar").addEventListener("click", arqFecharModal);
+  const status = (tipo, msg) => { el("arq-s-status").textContent = msg; el("arq-s-status").className = msg ? `status show ${tipo}` : "status"; };
+  el("arq-s-form").addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    if (!opcoes.length) return;
+    const escolhido = arqModal.querySelector('input[name="arq-s-novo"]:checked');
+    if (!escolhido) { status("error", "Escolha o documento que fica no lugar."); return; }
+    const botao = el("arq-s-ok");
+    botao.disabled = true;
+    status("neutral", "Gravando...");
+    try {
+      const r = await pedirAoN8n("arquivos", { acao: "substituir", clienteId: arq.cliente.id, antigoId: antigo.id, novoId: escolhido.value, motivo: el("arq-s-motivo").value.trim() });
+      if (r && r.ok) {
+        arqFecharModal();
+        mostrarToast(r.mensagem || "Documento substituído.");
+        await arqAtualizarCliente();
+        return;
+      }
+      status("error", (r && r.mensagem) || "Não consegui gravar a troca.");
+    } catch (err) {
+      status("error", "Não consegui falar com o servidor. Tente de novo em instantes.");
+    }
+    botao.disabled = false;
+  });
+}
+
+function arqAbrirDesfazerTroca(id) {
+  const antigo = arq.itens.find((i) => i.id === id);
+  if (!antigo || !antigo.substituidoPor || !antigo.substituidoPor.id) return;
+  const novo = arq.itens.find((i) => i.id === antigo.substituidoPor.id);
+  arqModal.innerHTML = `<div class="arq-caixa arq-caixa-troca"><header><div class="arq-tt">Desfazer a troca?</div></header>
+    <div class="arq-form">
+      <p class="arq-form-aviso">O de ${escapeHtml(nfData(antigo.data))} volta a valer e a contar na soma${novo ? `, e o de ${escapeHtml(nfData(novo.data))} deixa de dizer que o substitui` : ""}. Os dois PDFs continuam na pasta.</p>
+      <p class="status" id="arq-d-status" role="status"></p>
+      <div class="arq-form-acoes"><button type="button" id="arq-d-ok">Desfazer troca</button><button type="button" class="botao-secundario" id="arq-d-cancelar">Cancelar</button></div>
+    </div></div>`;
+  arqModal.dataset.item = "troca";
+  arqModal.classList.remove("hidden");
+  const el = (x) => document.getElementById(x);
+  el("arq-d-cancelar").addEventListener("click", arqFecharModal);
+  el("arq-d-ok").addEventListener("click", async () => {
+    const botao = el("arq-d-ok");
+    const status = (tipo, msg) => { el("arq-d-status").textContent = msg; el("arq-d-status").className = `status show ${tipo}`; };
+    botao.disabled = true;
+    status("neutral", "Gravando...");
+    try {
+      const r = await pedirAoN8n("arquivos", { acao: "desfazer", clienteId: arq.cliente.id, antigoId: antigo.id, novoId: antigo.substituidoPor.id });
+      if (r && r.ok) {
+        arqFecharModal();
+        mostrarToast(r.mensagem || "Troca desfeita.");
+        await arqAtualizarCliente();
+        return;
+      }
+      status("error", (r && r.mensagem) || "Não consegui desfazer a troca.");
+    } catch (err) {
+      status("error", "Não consegui falar com o servidor. Tente de novo em instantes.");
+    }
+    botao.disabled = false;
+  });
 }
 
 // ---- visualizar ----

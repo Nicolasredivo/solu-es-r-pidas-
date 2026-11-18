@@ -4880,6 +4880,33 @@ div.lembrete-item:hover {
   color: var(--aviso);
 }
 
+/* Botão Substituir (17/11/2026): fica ao lado do Visualizar; a janela mostra o que sai (âmbar) e a lista do que
+   pode ficar no lugar, com o escolhido destacado. */
+.arq-acoes { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.arq-caixa-troca { width: min(560px, 100%); }
+.arq-caixa-troca .arq-form { overflow: auto; }
+.arq-troca-sai {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid rgba(245, 166, 35, 0.45); background: rgba(245, 166, 35, 0.08);
+}
+.arq-troca-sai .nf-selo-substituido { flex: none; margin-top: 2px; font-size: 0.72rem; padding: 1px 8px; }
+.arq-troca-sai b, .arq-escolha b { display: block; overflow-wrap: anywhere; }
+.arq-troca-sai small, .arq-escolha small { display: block; color: var(--muted); font-size: 0.8rem; margin-top: 2px; overflow-wrap: anywhere; }
+.arq-rotulo { font-size: 0.8rem; color: var(--muted); display: block; margin: 0 0 4px 2px; }
+.arq-escolhas { display: grid; gap: 8px; max-height: 40vh; overflow: auto; }
+.arq-form .arq-escolha {
+  display: flex; gap: 10px; align-items: flex-start; margin: 0; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--borda-suave); cursor: pointer; color: var(--text, inherit); font-size: 0.92rem;
+}
+.arq-form .arq-escolha input { width: auto; flex: none; margin-top: 3px; accent-color: var(--ok); }
+.arq-escolha:has(input:checked) { border-color: var(--ok); background: rgba(62, 207, 142, 0.08); }
+@media (max-width: 600px) {
+  .arq-arquivo .arq-acoes button { width: auto; flex: 1; }
+  /* No celular o texto usa a largura toda e o valor desce para a linha de baixo (antes ficava espremido). */
+  .arq-arquivo .arq-texto { flex-basis: calc(100% - 52px); }
+  .arq-arquivo .arq-valor { margin-left: 50px; }
+}
+
 .nf-cancelar {
   margin-top: 12px;
   border: 1px solid rgba(229, 72, 77, 0.55);

@@ -6029,7 +6029,36 @@ trocado pelo novo.
   - O novo mostra, em verde, "Substitui o de dd/mm · motivo".
   - A soma da pasta não conta o substituído e avisa "(sem N substituído)".
   - O visualizador mostra "(SUBSTITUÍDO)" no título.
-- **Como marcar:** por enquanto só pelo chat, gravando os dois PDFs pela ação `salvar` com esses campos no
-  `dadosJson`. O app ainda não tem botão "substituir".
+- **Como marcar:** pelo botão **Substituir** (versão 2026.11.17c, logo abaixo). Pelo chat também dá: grava os
+  dois PDFs pela ação `salvar` com esses campos no `dadosJson`, sempre com o `id` do par.
 - **Primeiro caso:** orçamento de uma empresa, o de 04/11 trocado pelo revisado de 17/11 (a troca de uma boia entrou
   depois). O antigo entrou como `importado`.
+
+## Botão "Substituir" na pasta Arquivos (17/11/2026, versão 2026.11.17c)
+Pedido do dono, logo depois da marca de substituído. Cada PDF guardado que ainda vale ganha **Substituir**, ao lado
+de Visualizar. O que já foi substituído ganha **Desfazer troca**. Notas fiscais do sistema não têm o botão, porque
+se cancelam pela página de notas.
+- **Janela "Substituir documento":**
+  - em cima, o que sai (âmbar);
+  - embaixo, "Fica no lugar": lista de outros documentos da mesma pasta que ainda valem e não substituem nenhum
+    outro. Vem marcado o mais recente que seja da mesma data ou depois;
+  - campo "Motivo" opcional, que aparece na pasta.
+  - Sem opção na pasta, a janela explica: gerar o novo na aba PDFs ou trazer por "+ Adicionar arquivo".
+- **Desfazer troca:** pede confirmação e tira a ligação dos dois.
+- **Fluxo `App - Arquivos`:** ações `substituir` e `desfazer` (`antigoId`, `novoId`, `motivo`).
+  - Nós novos: "É troca?" → "Busca troca" (só os dois registros, do cliente) → "Monta troca" (regras) →
+    "Vai gravar troca?" → "Grava troca".
+  - "Grava troca" é um PATCH de dois registros, que o banco grava juntos ou nenhum.
+  - Regras (recusa):
+    - outra pasta;
+    - antigo já substituído;
+    - novo já substituído ou que já substitui outro;
+    - par errado ao desfazer;
+    - `Dados_Json` que não é objeto.
+  - Em cadeia vale: o revisado pode ser substituído depois.
+  - A leitura passa a mandar o `id` do par.
+- **Celular:** os dois botões dividem a linha, e o valor desce para baixo do texto, que antes ficava espremido.
+- **Testes:** `testar-arquivos.js` com 69 ok (17 novos da troca, no cliente de teste). Também foi testado clicando
+  na tela com um cliente de teste, que depois foi apagado.
+- Os dois orçamentos do primeiro caso receberam o `id` do par no `Dados_Json` para o "Desfazer" funcionar neles.
+
