@@ -110,6 +110,7 @@ function montar(atuais, apagados) {
       txt(f.Razao_Social_Nome), txt(f.Nome_Fantasia_Identificador), cnpjCpf(f.CPF_CNPJ), txt(f.Tipo_Documento), txt(f.Exigencia_Fiscal),
       txt(f.Atendido_Por) || 'CNPJ 1', txt(f.Status), txt(f.Administradora), txt(f.Empresa_Sindicos), lista(f.Emails_Financeiro_NFE),
       telefone(f.WhatsApp_CNPJ), txt(f.Observacoes), resumoLocais(c.id), resumoContatos(c.id), txt(f.Asaas_Conta) || '', txt(f.Asaas_Customer_Id),
+      f.Gera_Boleto === true ? 'Sim' : 'Não', // chave "Gera boletos" (18/11/2026)
       quando(c.createdTime),
     ] });
   });
@@ -153,8 +154,8 @@ function montar(atuais, apagados) {
 
 const DEF = {
   clientes: { nome: 'Clientes', cab: ['Cliente', 'Nome fantasia', 'CPF / CNPJ', 'Tipo', 'Exigência fiscal', 'Atendido por', 'Situação', 'Administradora', 'Empresa dos síndicos',
-    'E-mails (financeiro / nota)', 'WhatsApp do CNPJ', 'Observações', 'Endereços de atendimento', 'Contatos', 'Cobrança (Asaas): conta', 'Cobrança (Asaas): código do cliente', 'Cadastrado em'],
-    larg: [34, 24, 20, 18, 18, 12, 11, 22, 26, 38, 20, 34, 52, 52, 14, 24, 17], neg: [0] },
+    'E-mails (financeiro / nota)', 'WhatsApp do CNPJ', 'Observações', 'Endereços de atendimento', 'Contatos', 'Cobrança (Asaas): conta', 'Cobrança (Asaas): código do cliente', 'Gera boletos', 'Cadastrado em'],
+    larg: [34, 24, 20, 18, 18, 12, 11, 22, 26, 38, 20, 34, 52, 52, 14, 24, 12, 17], neg: [0] },
   enderecos: { nome: 'Endereços', cab: ['Cliente', 'Local', 'Endereço', 'Bairro / Cidade', 'Como entrar (observações de acesso)', 'Situação', 'Observações', 'Cadastrado em', 'ID do cliente (sistema)'],
     larg: [34, 22, 44, 30, 36, 11, 30, 17, 20], neg: [0] },
   contatos: { nome: 'Contatos', cab: ['Cliente(s)', 'Contato', 'Cargo / função', 'Empresa', 'E-mails', 'WhatsApps', 'Situação', 'Observações', 'Cadastrado em', 'ID do(s) cliente(s) (sistema)'],

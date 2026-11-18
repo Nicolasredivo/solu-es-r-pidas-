@@ -343,6 +343,15 @@
               </div>
             </div>
 
+            <!-- Chave liga/desliga "Gera boletos" (pedido do dono, 18/11/2026): começa desligada. -->
+            <label>Boletos</label>
+            <div class="chave-linha">
+              <button type="button" id="gera-boleto-novo" class="chave" role="switch" aria-checked="false" aria-label="Gera boletos">
+                <span class="chave-bolinha" aria-hidden="true"></span>
+              </button>
+              <span class="chave-estado">Não gera boletos</span>
+            </div>
+
             <label for="whatsapp-cnpj">WhatsApp vinculado ao CNPJ</label>
             <input type="text" id="whatsapp-cnpj" inputmode="tel" />
             </div>
@@ -646,6 +655,15 @@
                 <option value="CNPJ 1">CNPJ 1</option>
                 <option value="CNPJ 2">CNPJ 2</option>
               </select>
+
+              <!-- Chave "Gera boletos" (18/11/2026): funciona fora da edição; pergunta antes e grava na hora. -->
+              <label>Boletos</label>
+              <div class="chave-linha">
+                <button type="button" class="chave d-gera-boleto" role="switch" aria-checked="false" aria-label="Gera boletos">
+                  <span class="chave-bolinha" aria-hidden="true"></span>
+                </button>
+                <span class="chave-estado">Não gera boletos</span>
+              </div>
 
               <label>WhatsApp vinculado ao CNPJ</label>
               <input type="text" class="d-whatsapp-cnpj" disabled />
@@ -2604,6 +2622,17 @@
       <button type="button" data-escolha="salvar">Salvar</button>
       <button type="button" class="botao-secundario botao-perigo" data-escolha="descartar">Não salvar</button>
       <button type="button" class="botao-secundario" data-escolha="voltar">Continuar editando</button>
+    </div>
+  </dialog>
+
+  <!-- "Tem certeza?" da chave Gera boletos do cliente (18/11/2026). -->
+  <dialog id="dialogo-boleto" class="dialogo" aria-labelledby="dialogo-boleto-titulo">
+    <h2 id="dialogo-boleto-titulo" class="dialogo-titulo">Tem certeza?</h2>
+    <p id="dialogo-boleto-texto" class="dialogo-texto"></p>
+    <p id="dialogo-boleto-erro" class="doc-hint error" role="alert"></p>
+    <div class="dialogo-botoes">
+      <button type="button" id="dialogo-boleto-voltar" class="botao-secundario">Voltar</button>
+      <button type="button" id="dialogo-boleto-ok">Sim, mudar</button>
     </div>
   </dialog>
 

@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.17c";
+const APP_VERSION = "2026.11.18a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -496,6 +496,71 @@ configurarGrupo(grupoTipo, (botao) => mostrarDica("ok", `CNPJ válido · ${botao
 configurarGrupo(grupoExigencia);
 configurarGrupo(grupoAtendidoPor);
 configurarGrupo(grupoStatus);
+
+// Chave liga/desliga (pedido do dono, 18/11/2026). Só pinta: quem grava decide fora.
+function pintarChave(botao, ligada) {
+  botao.setAttribute("aria-checked", ligada ? "true" : "false");
+  const linha = botao.closest(".chave-linha");
+  if (!linha) return;
+  linha.classList.toggle("ligada", ligada);
+  const estado = linha.querySelector(".chave-estado");
+  if (estado) estado.textContent = ligada ? "Gera boletos" : "Não gera boletos";
+}
+const chaveLigada = (botao) => botao.getAttribute("aria-checked") === "true";
+
+// Cliente novo: escolhe à vontade (sem pergunta) e vai junto ao salvar; começa desligada.
+const chaveBoletoNovo = document.getElementById("gera-boleto-novo");
+chaveBoletoNovo.closest(".chave-linha").addEventListener("click", () => pintarChave(chaveBoletoNovo, !chaveLigada(chaveBoletoNovo)));
+
+// "Tem certeza?" da chave num cliente que já existe. Resolve com a resposta do servidor quando
+// gravou, ou null se a pessoa voltou. Erro fica na janela, para tentar de novo.
+const dialogoBoleto = document.getElementById("dialogo-boleto");
+const dialogoBoletoOk = document.getElementById("dialogo-boleto-ok");
+const dialogoBoletoErro = document.getElementById("dialogo-boleto-erro");
+let dialogoBoletoPedido = null;
+
+function perguntarBoleto({ texto, botao, executar }) {
+  document.getElementById("dialogo-boleto-texto").textContent = texto;
+  dialogoBoletoOk.textContent = botao;
+  dialogoBoletoOk.disabled = false;
+  dialogoBoletoErro.textContent = "";
+  return new Promise((resolver) => {
+    dialogoBoletoPedido = { executar, resolver, botao, resposta: null };
+    dialogoBoleto.showModal();
+    document.getElementById("dialogo-boleto-voltar").focus();
+  });
+}
+
+// Fechar por qualquer caminho (Voltar, Esc, depois de gravar) entrega o resultado uma vez só. Entrega
+// na hora, sem esperar o evento "close" (que é assíncrono e, com a página em segundo plano, pode atrasar).
+function terminarDialogoBoleto() {
+  const pedido = dialogoBoletoPedido;
+  dialogoBoletoPedido = null;
+  if (dialogoBoleto.open) dialogoBoleto.close();
+  if (pedido) pedido.resolver(pedido.resposta);
+}
+dialogoBoleto.addEventListener("close", terminarDialogoBoleto);
+document.getElementById("dialogo-boleto-voltar").addEventListener("click", terminarDialogoBoleto);
+dialogoBoletoOk.addEventListener("click", async () => {
+  const pedido = dialogoBoletoPedido;
+  if (!pedido || dialogoBoletoOk.disabled) return;
+  dialogoBoletoOk.disabled = true;
+  dialogoBoletoOk.textContent = "Gravando...";
+  dialogoBoletoErro.textContent = "";
+  try {
+    const resposta = await pedido.executar();
+    if (resposta && resposta.ok) {
+      pedido.resposta = resposta;
+      terminarDialogoBoleto();
+      return;
+    }
+    dialogoBoletoErro.textContent = (resposta && resposta.mensagem) || "Não consegui gravar. Nada mudou.";
+  } catch (err) {
+    dialogoBoletoErro.textContent = "Não foi possível falar com o n8n. Nada mudou.";
+  }
+  dialogoBoletoOk.disabled = false;
+  dialogoBoletoOk.textContent = pedido.botao;
+});
 
 function esconderFormulario() {
   formEntidade.classList.add("hidden");
@@ -1171,6 +1236,8 @@ function limparFormulario() {
   grupoExigencia.querySelectorAll(".opcao").forEach((b) => b.classList.remove("active"));
   // Cliente novo começa no CNPJ 1 (o de sempre); trocar é um toque.
   grupoAtendidoPor.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === "CNPJ 1"));
+  // Cliente novo começa sem gerar boleto (pedido do dono, 18/11/2026).
+  pintarChave(chaveBoletoNovo, false);
   reiniciarLocais(locaisBox);
   reiniciarContatos(contatosBox);
   desarmarCancelamento();
@@ -1302,6 +1369,7 @@ formEntidade.addEventListener("submit", async (event) => {
       nomeFantasia: nomeFantasiaInput.value.trim(),
       exigenciaFiscal: escolhaDoGrupo(grupoExigencia),
       atendidoPor: escolhaDoGrupo(grupoAtendidoPor) || "CNPJ 1",
+      geraBoleto: chaveLigada(chaveBoletoNovo) ? "sim" : "nao",
       emails: emailsInput.value.trim(),
       whatsappCnpj: normalizarTelefone(whatsappCnpjInput.value),
       administradora: administradoraInput.value.trim(),
@@ -1862,6 +1930,27 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
     ligarEmailsFinanceiro(campos.emails, bloco.querySelector(".emails-fin")),
   ];
   preencher();
+
+  // Chave "Gera boletos" (18/11/2026): fora da edição de propósito. Pergunta "Tem certeza?" e grava
+  // só ela, na hora; o Salvar do cadastro não mexe nela.
+  const chaveBoleto = bloco.querySelector(".d-gera-boleto");
+  pintarChave(chaveBoleto, cadastro.geraBoleto === true);
+  chaveBoleto.closest(".chave-linha").addEventListener("click", async () => {
+    if (dialogoBoleto.open) return;
+    const ligar = !chaveLigada(chaveBoleto);
+    const nome = cadastro.nomeFantasia || cadastro.razaoSocial || "este cliente";
+    const resposta = await perguntarBoleto({
+      texto: ligar ? `Passar a GERAR boletos para ${nome}?` : `Parar de gerar boletos para ${nome}?`,
+      botao: ligar ? "Sim, gerar boletos" : "Sim, não gerar",
+      executar: () => pedirAoN8n("gera-boleto", { id: cadastro.id, geraBoleto: ligar ? "sim" : "nao" }),
+    });
+    if (!resposta) return;
+    cadastro.geraBoleto = resposta.geraBoleto === true;
+    resumo.geraBoleto = cadastro.geraBoleto;
+    pintarChave(chaveBoleto, cadastro.geraBoleto);
+    mostrarToast(resposta.mensagem || "Escolha salva.");
+  });
+
   [cadastroAdministradoras, cadastroSindicaturas].forEach((cad, i) => {
     if (!cad.carregadas()) cad.buscar().then(camposDeCadastro[i].atualizar).catch(() => {});
   });
@@ -1987,7 +2076,7 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
   bloco.addEventListener("click", (evento) => {
     if (bloco.classList.contains("editando")) return;
     const alvo = evento.target;
-    if (alvo.closest("button, a, .detalhe-acoes, .d-contatos-escolha, .sugestao-lista, .contato-novo-pergunta")) return;
+    if (alvo.closest("button, a, .detalhe-acoes, .d-contatos-escolha, .sugestao-lista, .contato-novo-pergunta, .chave-linha")) return;
     const vazio = alvo.closest(".vazio-leitura");
     const zona = vazio ? null : alvo.closest(".moldura, .local, .contato");
     if (!vazio && !zona) return;

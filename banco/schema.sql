@@ -37,6 +37,7 @@ create table "Entidades_Cadastradas" (
   "Asaas_Customer_Id" text,
   "Atendido_Por" text default 'CNPJ 1' check ("Atendido_Por" in ('CNPJ 1', 'CNPJ 2')),  -- 08/11/2026
   "Asaas_Conta" text check ("Asaas_Conta" in ('CNPJ 1', 'CNPJ 2')),  -- em qual Asaas está o Asaas_Customer_Id
+  "Gera_Boleto" boolean not null default false,  -- 18/11/2026: chave "Gera boletos" do cliente (os 45 de antes ficaram false)
   "Criado_Em" timestamptz not null default now()
 );
 create index on "Entidades_Cadastradas" ("CPF_CNPJ");

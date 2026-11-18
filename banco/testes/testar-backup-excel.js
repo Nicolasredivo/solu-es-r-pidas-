@@ -30,7 +30,7 @@ const linhasDe = (ws) => { const o = []; ws.eachRow((r, n) => { if (n > 1) o.pus
   const gerar = (atuais, apagados, agora, extra) => gerarBackupExcel(atuais, apagados || {}, { pastas: [pasta], estado, agora, ...extra });
 
   const A = cliente('recAAAAAAAAAAAAAA', 'RESIDENCIAL ALFA');
-  const B = cliente('recBBBBBBBBBBBBBB', 'EDIFICIO BETA', { Administradora: 'Adm Teste', Atendido_Por: 'CNPJ 2' });
+  const B = cliente('recBBBBBBBBBBBBBB', 'EDIFICIO BETA', { Administradora: 'Adm Teste', Atendido_Por: 'CNPJ 2', Gera_Boleto: true });
   const dados1 = { Entidades_Cadastradas: [B, A], Locais_Atendimento: [local('recLLLLLLLLLLLLL1', A.id, 'Endereço do CNPJ', 'RUA X, 10'), local('recLLLLLLLLLLLLL2', B.id, 'Endereço do CNPJ', 'RUA Y, 20')],
     Contatos_Solicitantes: [contato('recCCCCCCCCCCCCC1', [A.id, B.id], 'Maria Teste')] };
 
@@ -44,6 +44,7 @@ const linhasDe = (ws) => { const o = []; ws.eachRow((r, n) => { if (n > 1) o.pus
   confere('clientes em ordem de nome, uma linha cada', linhasCl.length === 2 && linhasCl[0][0] === 'EDIFICIO BETA' && linhasCl[1][0] === 'RESIDENCIAL ALFA', linhasCl.map((l) => l[0]));
   confere('CNPJ e telefone formatados', linhasCl[0][2] === '11.222.333/0001-81' && linhasCl[0][10] === '+55 (47) 3801-7621', { cnpj: linhasCl[0][2], fone: linhasCl[0][10] });
   confere('"Atendido por" (padrão CNPJ 1) e administradora', linhasCl[0][5] === 'CNPJ 2' && linhasCl[1][5] === 'CNPJ 1' && linhasCl[0][7] === 'Adm Teste', linhasCl.map((l) => [l[5], l[7]]));
+  confere('"Gera boletos" (padrão Não)', linhasCl[0][16] === 'Sim' && linhasCl[1][16] === 'Não', linhasCl.map((l) => l[16]));
   confere('e-mails em linhas separadas', linhasCl[0][9] === 'a@exemplo.invalid\nb@exemplo.invalid', linhasCl[0][9]);
   confere('resumo de endereços e contatos na linha do cliente', /RUA Y, 20/.test(linhasCl[0][12]) && /Maria Teste · \(Síndico\) · c@exemplo.invalid · \+55 \(47\) 99610-4320/.test(linhasCl[0][13]), [linhasCl[0][12], linhasCl[0][13]]);
   confere('contato ligado a dois clientes aparece nos dois', /Maria Teste/.test(linhasCl[0][13]) && /Maria Teste/.test(linhasCl[1][13]));
@@ -52,7 +53,7 @@ const linhasDe = (ws) => { const o = []; ws.eachRow((r, n) => { if (n > 1) o.pus
   const en = linhasDe(wb.getWorksheet('Endereços'));
   confere('aba Endereços: um por linha, com o nome do cliente', en.length === 2 && en[0][0] === 'EDIFICIO BETA' && en[0][2] === 'RUA Y, 20', en.map((l) => [l[0], l[2]]));
   confere('cabeçalho congelado e com filtro', cl.views[0].state === 'frozen' && cl.views[0].ySplit === 1 && Boolean(cl.autoFilter));
-  const horaA = linhasCl[1][17], horaB = linhasCl[0][17];
+  const horaA = linhasCl[1][18], horaB = linhasCl[0][18];
   confere('"Atualizado em" preenchido', /^13\/11\/2026 12:00$/.test(horaA) && horaA === horaB, [horaA, horaB]);
 
   // ---- nada mudou: não regrava ----
@@ -66,7 +67,7 @@ const linhasDe = (ws) => { const o = []; ws.eachRow((r, n) => { if (n > 1) o.pus
   r = await gerar({ ...dados1, Entidades_Cadastradas: [B, A2] }, {}, '2026-11-13T17:00:00.000Z');
   wb = await ler(arquivo); linhasCl = linhasDe(wb.getWorksheet('Clientes'));
   confere('mudou um cliente: regravou', r.ok && r.mudou && !r.pulou, r);
-  confere('só a linha que mudou ganha "Atualizado em" novo', linhasCl[1][17] === '13/11/2026 14:00' && linhasCl[0][17] === '13/11/2026 12:00', [linhasCl[1][17], linhasCl[0][17]]);
+  confere('só a linha que mudou ganha "Atualizado em" novo', linhasCl[1][18] === '13/11/2026 14:00' && linhasCl[0][18] === '13/11/2026 12:00', [linhasCl[1][18], linhasCl[0][18]]);
   confere('a observação nova aparece, sem duplicar o cliente', linhasCl.length === 2 && linhasCl[1][11] === 'Portaria muda às 18h', linhasCl.map((l) => l[0]));
   confere('as outras abas não mudaram de hora', linhasDe(wb.getWorksheet('Endereços')).every((l) => l[7 + 1] === '13/11/2026 12:00' || true) && linhasDe(wb.getWorksheet('Endereços')).every((l) => l[9] === '13/11/2026 12:00'), linhasDe(wb.getWorksheet('Endereços')).map((l) => l[9]));
 
@@ -76,7 +77,7 @@ const linhasDe = (ws) => { const o = []; ws.eachRow((r, n) => { if (n > 1) o.pus
   wb = await ler(arquivo); linhasCl = linhasDe(wb.getWorksheet('Clientes'));
   confere('cliente novo entra no lugar certo (ordem de nome)', linhasCl.map((l) => l[0]).join('|') === 'CONDOMINIO GAMA|EDIFICIO BETA|RESIDENCIAL ALFA', linhasCl.map((l) => l[0]));
   confere('ids sem repetição nas abas', ['Clientes', 'Endereços', 'Contatos'].every((n) => { const ids = linhasDe(wb.getWorksheet(n)).map((l) => l[l.length - 1]); return new Set(ids).size === ids.length; }));
-  confere('cliente novo com hora própria, os outros mantêm a deles', linhasCl[0][17] === '13/11/2026 15:00' && linhasCl[2][17] === '13/11/2026 14:00', linhasCl.map((l) => l[17]));
+  confere('cliente novo com hora própria, os outros mantêm a deles', linhasCl[0][18] === '13/11/2026 15:00' && linhasCl[2][18] === '13/11/2026 14:00', linhasCl.map((l) => l[18]));
 
   // ---- cliente apagado do sistema: sai das abas e vai para "Apagados" ----
   const apag = { Entidades_Cadastradas: [{ ...C, apagadoNoSistemaEm: '2026-11-13T19:00:00.000Z' }] };
@@ -85,7 +86,7 @@ const linhasDe = (ws) => { const o = []; ws.eachRow((r, n) => { if (n > 1) o.pus
   const ap = linhasDe(wb.getWorksheet('Apagados'));
   confere('apagado some da aba Clientes', linhasCl.length === 2 && !linhasCl.some((l) => l[0] === 'CONDOMINIO GAMA'), linhasCl.map((l) => l[0]));
   confere('apagado fica guardado na aba Apagados, com a data', ap.length === 1 && ap[0][0] === 'Cliente' && ap[0][1] === 'CONDOMINIO GAMA' && ap[0][3] === '13/11/2026 16:00', ap);
-  confere('os que continuam não mudaram de hora', linhasCl[1][17] === '13/11/2026 14:00' && linhasCl[0][17] === '13/11/2026 12:00');
+  confere('os que continuam não mudaram de hora', linhasCl[1][18] === '13/11/2026 14:00' && linhasCl[0][18] === '13/11/2026 12:00');
 
   // ---- cópia diária: mantém só os últimos 30 dias ----
   const hist = path.join(pasta, 'Historico');

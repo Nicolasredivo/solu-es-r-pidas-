@@ -6071,3 +6071,25 @@ pesquisas, sem repetir.
 - **Tocar numa recente** escreve o texto de novo no campo e mostra os resultados.
 - **Onde fica:** `localStorage` `sr_busca_recentes`, só neste aparelho; sai no "Sair" (`apagarSessao`).
   - Funções: `buscaRecentes`, `buscaGuardarRecente`, mais o grupo no `buscaMontar` e a gravação no `buscaExecutar`.
+
+## Chave "Gera boletos" no cliente (18/11/2026)
+
+Pedido do dono: cada cliente tem uma chave liga/desliga dizendo se gera boletos ou não. Por enquanto ela
+só guarda a escolha; nenhum fluxo gera boleto ainda (a geração pelo Asaas é passo futuro e vai ler esta chave).
+
+- **Banco:** `Entidades_Cadastradas.Gera_Boleto` (boolean, `not null default false`). Os 45 clientes que já
+  existiam ficaram desligados. Backup antes: `backups\manual\antes-gera-boleto-2026-11-18.dump`. O Airtable
+  local devolve o campo só quando está ligado (como a caixa de seleção do Airtable).
+- **Cliente novo:** chave "Boletos" logo abaixo de "Atendido por", começa desligada e troca com um toque
+  (sem pergunta). Vai como `geraBoleto: "sim" | "nao"`; o "App - Salvar entidade" só manda o campo quando é
+  "sim" (app antigo, sem o campo, cria desligado).
+- **Cliente que já existe:** a chave fica fora da edição de propósito. Tocar abre "Tem certeza?" (Voltar /
+  "Sim, gerar boletos" ou "Sim, não gerar") e grava na hora só esse campo pelo fluxo novo
+  **"App - Gera boleto"** (`/webhook/gera-boleto`, `{id, geraBoleto: "sim"|"nao"}`; recusa valor ou código
+  inválido e cliente que não existe). O Salvar do cadastro ("App - Atualizar cadastro") não mexe nela.
+- **Leitura:** "App - Detalhe do cadastro" e "App - Listar cadastros" devolvem `geraBoleto` (true/false).
+- **Backup em Excel:** coluna "Gera boletos" (Sim/Não) antes de "Cadastrado em".
+- **Janela:** `#dialogo-boleto`; a resposta é entregue na hora ao fechar (não espera o evento "close", que
+  com a página em segundo plano não chegou no teste).
+- **Testes:** `banco/testes/testar-gera-boleto.js` (19 ok; precisa do Airtable local reiniciado depois da
+  coluna nova); `testar-backup-excel.js` 31 ok; `testar-atendido-por.js` 12 ok; `testar-asaas-por-cnpj.js` 27 ok.
