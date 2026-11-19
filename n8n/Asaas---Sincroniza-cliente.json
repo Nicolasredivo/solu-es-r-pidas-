@@ -148,11 +148,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1320,
+        2860,
         -260
       ],
       "parameters": {
-        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\nconst d = $('Decide').first().json;\nconst r = $input.first().json || {};\nconst erro = r.error ? motivo(r) : '';\nreturn [{ json: { ok: !erro, acao: 'atualizar', id: d.idAtual, conta: d.de, info: '',\n  aviso: erro ? 'O Asaas do ' + d.de + ' não aceitou a atualização (' + erro + ').' : '' } }];"
+        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\nconst d = $('Decide').first().json;\nconst r = $('Atualiza no Asaas').first().json || {};\nconst erro = r.error ? motivo(r) : '';\n// Avisos ligados nesta edição (cliente ganhou e-mail): conta na mensagem; se falhou, pede para ligar à mão.\nconst p = $('Pede notificacoes da edicao').first().json || {};\nconst falhas = p.ligou ? $input.all().map((i) => i.json || {}).filter((j) => j.error).length : 0;\nconst semAvisos = p.erroLigar || falhas ? 'Não consegui ligar o aviso por e-mail no Asaas do ' + d.de + '; ligue à mão.' : '';\nreturn [{ json: { ok: !erro, acao: 'atualizar', id: d.idAtual, conta: d.de,\n  info: p.ligou && !semAvisos ? 'Aviso por e-mail ligado no Asaas (o cliente passou a ter e-mail).' : '',\n  aviso: erro ? 'O Asaas do ' + d.de + ' não aceitou a atualização (' + erro + ').' : semAvisos } }];"
       }
     },
     {
@@ -325,7 +325,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\n// Se o cliente já existe no Asaas de destino (mesmo CPF/CNPJ), reaproveita em vez de duplicar.\nconst d = $('Decide').first().json;\nconst r = $input.first().json || {};\nif (r.error) return [{ json: { pular: true, motivoBusca: motivo(r) } }];\nconst lista = Array.isArray(r.data) ? r.data.filter((c) => c && c.id && !c.deleted) : [];\nconst achado = lista.find((c) => c.externalReference === d.entidadeId) || lista[0] || null;\n// Mesmas regras de sempre ao entrar no Asaas: notificações desligadas para o cliente.\nconst corpo = { ...d.payload, notificationDisabled: true, externalReference: d.entidadeId };\nreturn [{ json: achado\n  ? { conta: d.destino, metodo: 'PUT', url: A + '/customers/' + encodeURIComponent(achado.id), corpo, reaproveitado: true }\n  : { conta: d.destino, metodo: 'POST', url: A + '/customers', corpo } }];"
+        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\n// Se o cliente já existe no Asaas de destino (mesmo CPF/CNPJ), reaproveita em vez de duplicar.\nconst d = $('Decide').first().json;\nconst r = $input.first().json || {};\nif (r.error) return [{ json: { pular: true, motivoBusca: motivo(r) } }];\nconst lista = Array.isArray(r.data) ? r.data.filter((c) => c && c.id && !c.deleted) : [];\nconst achado = lista.find((c) => c.externalReference === d.entidadeId) || lista[0] || null;\n// Avisos ao entrar no Asaas (19/11/2026): cliente com e-mail recebe SÓ e-mail (o resto fica desligado em\n// \"Monta ajustes de notificacao\"); sem e-mail, tudo desligado, como antes.\nconst temEmail = !!String((d.payload || {}).email || '').trim();\nconst corpo = { ...d.payload, notificationDisabled: !temEmail, externalReference: d.entidadeId };\nreturn [{ json: achado\n  ? { conta: d.destino, metodo: 'PUT', url: A + '/customers/' + encodeURIComponent(achado.id), corpo, reaproveitado: true }\n  : { conta: d.destino, metodo: 'POST', url: A + '/customers', corpo } }];"
       }
     },
     {
@@ -389,7 +389,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "// Pedido do dono (09/11/2026): TODOS os canais desmarcados em todos os eventos (e-mail,\n// SMS, WhatsApp, ligação), além do notificationDisabled. Nada sai para o cliente.\nconst DESEJADO = [{\"event\":\"PAYMENT_CREATED\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_UPDATED\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_DUEDATE_WARNING\",\"offset\":10,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_DUEDATE_WARNING\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"SEND_LINHA_DIGITAVEL\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_OVERDUE\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_OVERDUE\",\"offset\":7,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_RECEIVED\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false}];\nconst n = $('Pede notificacoes').first().json;\nif (!n.novoId) return [{ json: { pular: true } }];\nconst lista = ($input.first().json || {}).data || [];\nconst itens = [];\nfor (const alvo of DESEJADO) {\n  const atual = lista.find((x) => x.event === alvo.event && x.scheduleOffset === alvo.offset);\n  if (!atual) continue;\n  itens.push({ json: { conta: n.conta, metodo: 'PUT', url: 'https://api.asaas.com/v3/notifications/' + encodeURIComponent(atual.id), corpo: {\n    emailEnabledForCustomer: alvo.email, smsEnabledForCustomer: alvo.sms,\n    whatsappEnabledForCustomer: alvo.whatsapp, phoneCallEnabledForCustomer: alvo.ligacao,\n  } } });\n}\nreturn itens.length ? itens : [{ json: { pular: true } }];"
+        "jsCode": "// Pedido do dono (19/11/2026): SÓ E-MAIL para o cliente em todos os eventos; SMS, WhatsApp, ligação e avisos\n// para o dono desligados. Cliente sem e-mail: tudo desligado (o Asaas recusa e-mail sem endereço).\n// (Antes, de 09/11 a 19/11/2026, tudo ficava desligado.)\nconst DESEJADO = [{\"event\":\"PAYMENT_CREATED\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_UPDATED\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_DUEDATE_WARNING\",\"offset\":10,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_DUEDATE_WARNING\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"SEND_LINHA_DIGITAVEL\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_OVERDUE\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_OVERDUE\",\"offset\":7,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false},{\"event\":\"PAYMENT_RECEIVED\",\"offset\":0,\"email\":false,\"sms\":false,\"whatsapp\":false,\"ligacao\":false}];\nconst n = $('Pede notificacoes').first().json;\nconst temEmail = !!String((($('Decide').first().json || {}).payload || {}).email || '').trim();\nif (!n.novoId) return [{ json: { pular: true } }];\nconst lista = ($input.first().json || {}).data || [];\nconst itens = [];\nfor (const alvo of DESEJADO) {\n  const atual = lista.find((x) => x.event === alvo.event && x.scheduleOffset === alvo.offset);\n  if (!atual) continue;\n  itens.push({ json: { conta: n.conta, metodo: 'PUT', url: 'https://api.asaas.com/v3/notifications/' + encodeURIComponent(atual.id), corpo: {\n    enabled: temEmail, emailEnabledForCustomer: temEmail, smsEnabledForCustomer: false,\n    whatsappEnabledForCustomer: false, phoneCallEnabledForCustomer: false,\n    emailEnabledForProvider: false, smsEnabledForProvider: false,\n  } } });\n}\nreturn itens.length ? itens : [{ json: { pular: true } }];"
       }
     },
     {
@@ -455,6 +455,134 @@
       "parameters": {
         "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\nconst d = $('Decide').first().json;\nconst n = $('Pede notificacoes').first().json;\nconst r = $input.first().json || {};\nif (!n.novoId) {\n  const aviso = 'O Asaas do ' + d.destino + ' não aceitou o cliente (' + n.erro + ').'\n    + (d.acao === 'mover' ? ' Ele continua no Asaas do ' + d.de + '; salve o cliente de novo mais tarde.' : ' Salve o cliente de novo mais tarde para tentar outra vez.');\n  return [{ json: { ok: false, acao: d.acao, id: d.idAtual, conta: d.de || null, info: '', aviso } }];\n}\nif (d.acao === 'mover') {\n  const erro = r.error ? motivo(r) : '';\n  return [{ json: { ok: !erro, acao: 'mover', id: n.novoId, conta: d.destino,\n    info: 'Cliente passou do Asaas do ' + d.de + ' para o do ' + d.destino + '.',\n    aviso: erro ? 'Não consegui tirar o cliente do Asaas do ' + d.de + ' (' + erro + '); tire de lá à mão.' : '' } }];\n}\nreturn [{ json: { ok: true, acao: 'criar', id: n.novoId, conta: d.destino, info: '', aviso: '' } }];"
       }
+    },
+    {
+      "id": "d9ed09a9-ae09-43f2-be9c-0e7c649a1daf",
+      "name": "Pede cliente atual",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -460
+      ],
+      "parameters": {
+        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\n// Edição (19/11/2026): lê como o cliente está no Asaas antes de atualizar, para saber se já tinha e-mail.\nconst d = $('Decide').first().json;\nreturn [{ json: { conta: d.de, metodo: 'GET', url: A + '/customers/' + encodeURIComponent(d.idAtual) } }];"
+      }
+    },
+    {
+      "id": "bd8513e6-e0bb-4152-be86-173aeac3054f",
+      "name": "Le cliente atual",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        -460
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "21ad4054-5efe-46c4-8104-fda3526ea4a4",
+      "name": "Ve se liga avisos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        -260
+      ],
+      "parameters": {
+        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\n// Cliente que no Asaas NÃO tinha e-mail e agora tem: liga os avisos (só e-mail, ajustado a seguir).\n// Quem já tinha e-mail não muda (o dono pode ter mexido à mão no Asaas). Leitura com erro: não mexe.\nconst d = $('Decide').first().json;\nconst antes = $('Le cliente atual').first().json || {};\nconst upd = $('Atualiza no Asaas').first().json || {};\nconst tinhaEmail = antes.error ? true : !!String(antes.email || '').trim();\nconst temEmail = !!String((d.payload || {}).email || '').trim();\nconst liga = !upd.error && !tinhaEmail && temEmail;\nreturn [{ json: { conta: d.de, metodo: 'POST', url: A + '/customers/' + encodeURIComponent(d.idAtual), corpo: { notificationDisabled: false }, pular: !liga, liga } }];"
+      }
+    },
+    {
+      "id": "b164448b-deb8-449e-8acc-d63c4e693946",
+      "name": "Liga avisos no Asaas",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1760,
+        -260
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "4dcb190a-e4c5-444e-9980-4268a79e1582",
+      "name": "Pede notificacoes da edicao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        -260
+      ],
+      "parameters": {
+        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\nconst d = $('Decide').first().json;\nconst v = $('Ve se liga avisos').first().json;\nconst r = $input.first().json || {};\nconst ok = v.liga && !r.error;\nreturn [{ json: { conta: v.conta, metodo: 'GET', url: A + '/customers/' + encodeURIComponent(d.idAtual) + '/notifications', pular: !ok, ligou: ok, erroLigar: v.liga && r.error ? motivo(r) : '' } }];"
+      }
+    },
+    {
+      "id": "408dc9fa-6ddc-40e7-b910-4365a0c77214",
+      "name": "Le notificacoes da edicao",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2200,
+        -260
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a6801e48-c909-42d1-bbf6-13fa85104a7f",
+      "name": "Monta so email da edicao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        -260
+      ],
+      "parameters": {
+        "jsCode": "const A = 'https://api.asaas.com/v3';\n// Motivo legível de um erro do Asaas (o n8n põe a resposta dentro de error.message).\nconst motivo = (r) => {\n  const m = String((r && r.error && (r.error.description || r.error.message)) || 'erro desconhecido');\n  const d = m.match(/\"description\"\\s*:\\s*\"([^\"]+)\"/);\n  return (d ? d[1] : m).slice(0, 200);\n};\n// SÓ e-mail para o cliente em todos os eventos; SMS, WhatsApp, ligação e avisos para o dono desligados.\nconst p = $('Pede notificacoes da edicao').first().json;\nif (p.pular) return [{ json: { pular: true } }];\nconst lista = ($input.first().json || {}).data || [];\nconst itens = lista.filter((x) => x && x.id).map((x) => ({ json: { conta: p.conta, metodo: 'PUT', url: A + '/notifications/' + encodeURIComponent(x.id), corpo: {\n  enabled: true, emailEnabledForCustomer: true, smsEnabledForCustomer: false, whatsappEnabledForCustomer: false,\n  phoneCallEnabledForCustomer: false, emailEnabledForProvider: false, smsEnabledForProvider: false } } }));\nreturn itens.length ? itens : [{ json: { pular: true, semLista: true } }];"
+      }
+    },
+    {
+      "id": "baefd68a-5804-41b4-8b23-8ffbc1c3dec6",
+      "name": "Ajusta notificacoes da edicao",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2640,
+        -260
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
     }
   ],
   "connections": {
@@ -502,7 +630,7 @@
       "main": [
         [
           {
-            "node": "Pede atualizacao",
+            "node": "Pede cliente atual",
             "type": "main",
             "index": 0
           }
@@ -531,7 +659,7 @@
       "main": [
         [
           {
-            "node": "Fim atualizado",
+            "node": "Ve se liga avisos",
             "type": "main",
             "index": 0
           }
@@ -711,6 +839,94 @@
         [
           {
             "node": "Fim",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pede cliente atual": {
+      "main": [
+        [
+          {
+            "node": "Le cliente atual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le cliente atual": {
+      "main": [
+        [
+          {
+            "node": "Pede atualizacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ve se liga avisos": {
+      "main": [
+        [
+          {
+            "node": "Liga avisos no Asaas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Liga avisos no Asaas": {
+      "main": [
+        [
+          {
+            "node": "Pede notificacoes da edicao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pede notificacoes da edicao": {
+      "main": [
+        [
+          {
+            "node": "Le notificacoes da edicao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le notificacoes da edicao": {
+      "main": [
+        [
+          {
+            "node": "Monta so email da edicao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta so email da edicao": {
+      "main": [
+        [
+          {
+            "node": "Ajusta notificacoes da edicao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ajusta notificacoes da edicao": {
+      "main": [
+        [
+          {
+            "node": "Fim atualizado",
             "type": "main",
             "index": 0
           }

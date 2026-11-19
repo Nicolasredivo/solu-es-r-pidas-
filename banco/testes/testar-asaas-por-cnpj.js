@@ -1,5 +1,5 @@
 // Cliente no Asaas do CNPJ certo (08/11/2026): cliente do CNPJ 1 no Asaas do CNPJ 1, do CNPJ 2 no do
-// CNPJ 2; trocar o "Atendido por" move o cliente (cria no novo com notificações desligadas e tira do
+// CNPJ 2; trocar o "Atendido por" move o cliente (cria no novo só com aviso por e-mail, desde 19/11/2026, e tira do
 // antigo), mas nunca tira de um Asaas onde ele tem cobrança em aberto.
 // O Asaas é um SIMULADOR (fluxo temporário): nada sai daqui. Só cliente e usuário de teste, apagados no fim.
 // Uso: node banco/testes/testar-asaas-por-cnpj.js
@@ -29,6 +29,8 @@ const SIMULADOR = `return $input.all().map((i) => {
     return { json: { id: 'cus_sim_' + tag + '_' + Math.random().toString(36).slice(2, 8) } };
   }
   if (m === 'PUT' && /^\\/customers\\/[^/?]+$/.test(c)) return { json: { id: decodeURIComponent(c.split('/')[2]) } };
+  if (m === 'POST' && /^\\/customers\\/[^/?]+$/.test(c)) return { json: { id: decodeURIComponent(c.split('/')[2]), notificationDisabled: false } };
+  if (m === 'GET' && /^\\/customers\\/[^/?]+$/.test(c)) { const id = decodeURIComponent(c.split('/')[2]); return { json: { id, email: id.includes('SEMEMAIL') ? '' : 'antigo@exemplo.invalid' } }; }
   if (m === 'GET' && /^\\/customers\\/[^/]+\\/notifications$/.test(c)) return { json: { data: [
     { id: 'not_a', event: 'PAYMENT_CREATED', scheduleOffset: 0 }, { id: 'not_b', event: 'PAYMENT_OVERDUE', scheduleOffset: 7 }, { id: 'not_c', event: 'PAYMENT_RECEIVED', scheduleOffset: 0 } ] } };
   if (m === 'PUT' && /^\\/notifications\\//.test(c)) return { json: { id: c.split('/')[2] } };
@@ -117,7 +119,7 @@ const resumo = (cs) => cs.map((c) => `${c.conta} ${c.metodo} ${c.url.split('?')[
       return r;
     };
 
-    // ---- 1. cliente novo no CNPJ 2: só o Asaas do CNPJ 2, notificações desligadas ----
+    // ---- 1. cliente novo no CNPJ 2: só o Asaas do CNPJ 2, só aviso por e-mail (19/11/2026) ----
     let desde = new Date().toISOString();
     const n2 = await criar('00000000000701', { atendidoPor: 'CNPJ 2' });
     let f = await ler(n2.ent.id);
@@ -125,8 +127,10 @@ const resumo = (cs) => cs.map((c) => `${c.conta} ${c.metodo} ${c.url.split('?')[
     confere('novo CNPJ 2: salvo, Atendido_Por e Asaas_Conta = CNPJ 2', n2.r.ok === true && f.Atendido_Por === 'CNPJ 2' && f.Asaas_Conta === 'CNPJ 2' && /^cus_sim_CNPJ2_/.test(f.Asaas_Customer_Id || ''), { r: n2.r, f });
     confere('novo CNPJ 2: nenhuma chamada ao Asaas do CNPJ 1', cs.length > 0 && cs.every((c) => c.conta === 'CNPJ 2'), resumo(cs));
     const post = cs.find((c) => c.metodo === 'POST');
-    confere('novo CNPJ 2: criado com notificações desligadas e referência do sistema', post && post.corpo.notificationDisabled === true && post.corpo.externalReference === n2.ent.id && post.corpo.email === 'fin@exemplo.invalid', post && post.corpo);
-    confere('novo CNPJ 2: ajustou as notificações (só e-mail onde já era)', cs.filter((c) => c.metodo === 'PUT' && c.url.startsWith('/notifications/')).every((c) => c.corpo.whatsappEnabledForCustomer === false && c.corpo.smsEnabledForCustomer === false)
+    confere('novo CNPJ 2: criado com avisos ligados (tem e-mail) e referência do sistema', post && post.corpo.notificationDisabled === false && post.corpo.externalReference === n2.ent.id && post.corpo.email === 'fin@exemplo.invalid', post && post.corpo);
+    const soEmail = (c) => c.corpo.enabled === true && c.corpo.emailEnabledForCustomer === true && c.corpo.smsEnabledForCustomer === false && c.corpo.whatsappEnabledForCustomer === false
+      && c.corpo.phoneCallEnabledForCustomer === false && c.corpo.emailEnabledForProvider === false && c.corpo.smsEnabledForProvider === false;
+    confere('novo CNPJ 2: ajustou as notificações para SÓ e-mail ao cliente', cs.filter((c) => c.metodo === 'PUT' && c.url.startsWith('/notifications/')).every(soEmail)
       && cs.some((c) => c.metodo === 'PUT' && c.url.startsWith('/notifications/')), resumo(cs));
     confere('novo CNPJ 2: mensagem normal', n2.r.mensagem === 'Cadastro salvo!', n2.r.mensagem);
 
@@ -138,13 +142,23 @@ const resumo = (cs) => cs.map((c) => `${c.conta} ${c.metodo} ${c.url.split('?')[
     confere('novo sem escolha: CNPJ 1 nos dois campos', f.Atendido_Por === 'CNPJ 1' && f.Asaas_Conta === 'CNPJ 1' && /^cus_sim_CNPJ1_/.test(f.Asaas_Customer_Id || ''), f);
     confere('novo sem escolha: só o Asaas do CNPJ 1', cs.every((c) => c.conta === 'CNPJ 1'), resumo(cs));
 
+    // ---- 2b. cliente novo SEM e-mail: tudo desligado, como antes (19/11/2026) ----
+    desde = new Date().toISOString();
+    const ns = await criar('00000000000705', { emails: '' });
+    cs = await chamadas(idSimulador, desde);
+    const postSem = cs.find((c) => c.metodo === 'POST');
+    const putsSem = cs.filter((c) => c.metodo === 'PUT' && c.url.startsWith('/notifications/'));
+    confere('novo sem e-mail: criado com notificações desligadas', ns.r.ok === true && postSem && postSem.corpo.notificationDisabled === true && !postSem.corpo.email, postSem && postSem.corpo);
+    confere('novo sem e-mail: nenhum canal ligado', putsSem.length > 0 && putsSem.every((c) => c.corpo.enabled === false && c.corpo.emailEnabledForCustomer === false
+      && c.corpo.smsEnabledForCustomer === false && c.corpo.whatsappEnabledForCustomer === false && c.corpo.phoneCallEnabledForCustomer === false), resumo(cs));
+
     // ---- 3. editar sem trocar o CNPJ: só atualiza no mesmo Asaas, sem mexer nas notificações ----
     desde = new Date().toISOString();
     const idAntes = (await ler(n2.ent.id)).Asaas_Customer_Id;
     let r = await editar(n2.ent, { atendidoPor: 'CNPJ 2' });
     cs = await chamadas(idSimulador, desde);
     f = await ler(n2.ent.id);
-    confere('editar no mesmo CNPJ: um PUT no Asaas do CNPJ 2 e nada mais', JSON.stringify(resumo(cs)) === JSON.stringify(['CNPJ 2 PUT /customers/ID']) && cs[0].corpo.notificationDisabled === undefined, resumo(cs));
+    confere('editar no mesmo CNPJ (já tinha e-mail): lê e atualiza no Asaas do CNPJ 2, sem mexer nos avisos', JSON.stringify(resumo(cs)) === JSON.stringify(['CNPJ 2 GET /customers/ID', 'CNPJ 2 PUT /customers/ID']) && cs[1].corpo.notificationDisabled === undefined, resumo(cs));
     confere('editar no mesmo CNPJ: id e conta iguais, mensagem normal', f.Asaas_Customer_Id === idAntes && f.Asaas_Conta === 'CNPJ 2' && r.mensagem === 'Alterações salvas!', { f, r });
 
     // ---- 4. trocar CNPJ 2 -> CNPJ 1: confere cobranças, cria no CNPJ 1, tira do CNPJ 2 ----
@@ -195,7 +209,7 @@ const resumo = (cs) => cs.map((c) => `${c.conta} ${c.metodo} ${c.url.split('?')[
     cs = await chamadas(idSimulador, desde);
     f = await ler(ne.ent.id);
     const putExistente = cs.find((c) => c.metodo === 'PUT' && c.url === '/customers/cus_existente_CNPJ2');
-    confere('já existe no destino: atualiza o existente (com notificações desligadas), sem POST', putExistente && putExistente.corpo.notificationDisabled === true && !cs.some((c) => c.metodo === 'POST'), resumo(cs));
+    confere('já existe no destino: atualiza o existente (avisos ligados, tem e-mail), sem POST', putExistente && putExistente.corpo.notificationDisabled === false && !cs.some((c) => c.metodo === 'POST'), resumo(cs));
     confere('já existe no destino: grava o id existente', f.Asaas_Customer_Id === 'cus_existente_CNPJ2' && f.Asaas_Conta === 'CNPJ 2', f);
 
     // ---- 8. não consegue tirar do antigo: fica no novo e avisa para tirar à mão ----
@@ -211,7 +225,28 @@ const resumo = (cs) => cs.map((c) => `${c.conta} ${c.metodo} ${c.url.split('?')[
     r = await editar(nn.ent, { atendidoPor: 'CNPJ 1' });
     cs = await chamadas(idSimulador, desde);
     f = await ler(nn.ent.id);
-    confere('sem conta anotada: atualiza no CNPJ 1 e anota a conta', JSON.stringify(resumo(cs)) === JSON.stringify(['CNPJ 1 PUT /customers/ID']) && f.Asaas_Conta === 'CNPJ 1', { cs: resumo(cs), f });
+    confere('sem conta anotada: atualiza no CNPJ 1 e anota a conta', JSON.stringify(resumo(cs)) === JSON.stringify(['CNPJ 1 GET /customers/ID', 'CNPJ 1 PUT /customers/ID']) && f.Asaas_Conta === 'CNPJ 1', { cs: resumo(cs), f });
+
+    // ---- 10. cliente que no Asaas não tinha e-mail e ganhou um na edição: liga SÓ o e-mail (19/11/2026) ----
+    await local('PATCH', `/v0/${CAD}/Entidades_Cadastradas/${nn.ent.id}`, { fields: { Asaas_Customer_Id: 'cus_SEMEMAIL_1', Asaas_Conta: 'CNPJ 1', Atendido_Por: 'CNPJ 1' } });
+    desde = new Date().toISOString();
+    r = await editar(nn.ent, { atendidoPor: 'CNPJ 1' });
+    cs = await chamadas(idSimulador, desde);
+    const ligou = cs.find((c) => c.metodo === 'POST' && c.url === '/customers/cus_SEMEMAIL_1');
+    const putsLig = cs.filter((c) => c.metodo === 'PUT' && c.url.startsWith('/notifications/'));
+    confere('ganhou e-mail: atualiza o e-mail e liga os avisos do cliente', cs.some((c) => c.metodo === 'PUT' && c.url === '/customers/cus_SEMEMAIL_1' && c.corpo.email === 'fin@exemplo.invalid')
+      && ligou && ligou.corpo.notificationDisabled === false, resumo(cs));
+    confere('ganhou e-mail: todos os avisos só por e-mail ao cliente', putsLig.length === 3 && putsLig.every((c) => c.corpo.enabled === true && c.corpo.emailEnabledForCustomer === true
+      && c.corpo.smsEnabledForCustomer === false && c.corpo.whatsappEnabledForCustomer === false && c.corpo.phoneCallEnabledForCustomer === false
+      && c.corpo.emailEnabledForProvider === false && c.corpo.smsEnabledForProvider === false), resumo(cs));
+    confere('ganhou e-mail: mensagem conta que ligou o aviso', r.ok === true && /Aviso por e-mail ligado no Asaas/.test(r.mensagem || ''), r.mensagem);
+
+    // ---- 11. continua sem e-mail na edição: não liga nada ----
+    await local('PATCH', `/v0/${CAD}/Entidades_Cadastradas/${nn.ent.id}`, { fields: { Asaas_Customer_Id: 'cus_SEMEMAIL_2' } });
+    desde = new Date().toISOString();
+    r = await editar(nn.ent, { atendidoPor: 'CNPJ 1', emails: '' });
+    cs = await chamadas(idSimulador, desde);
+    confere('continua sem e-mail: só lê e atualiza, sem ligar avisos', JSON.stringify(resumo(cs)) === JSON.stringify(['CNPJ 1 GET /customers/ID', 'CNPJ 1 PUT /customers/ID']), resumo(cs));
   } finally {
     if (copias.length) await t.apagarCopias(copias.concat([idSinc, idSimulador].filter(Boolean).map((id) => ({ id }))));
     for (const id of apagarEnt) await local('DELETE', `/v0/${CAD}/Entidades_Cadastradas/${id}`).catch(() => {});

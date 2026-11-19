@@ -6139,3 +6139,23 @@ sempre os dois campos. Até 19/11/2026 nenhuma das contas tinha cobrança criada
 - **Asaas (as duas contas):** página de pagamento personalizada pela API (`POST /myAccount/paymentCheckoutConfig`): topo
   branco com a logo (SR + "SOLUÇÕES RÁPIDAS / MANUTENÇÃO PREDIAL"), faixa do valor `#0F2747`, letras brancas.
   Aprovado automaticamente na hora. Antes: padrão azul (`#007AB4` / `#1DA9DA`), sem logo.
+
+## Avisos do Asaas: só e-mail (19/11/2026)
+
+Pedido do dono: ligar SÓ o aviso por e-mail das cobranças para os clientes das duas contas (antes, desde 29/09 e
+09/11/2026, tudo desligado).
+
+- **Clientes que já existiam:** 25 do CNPJ 1 e 18 do CNPJ 2 com `notificationDisabled: false` e os 8 eventos
+  (criada, alterada, 10 dias antes, no dia, linha digitável, vencida, vencida há 7 dias, recebida) só com
+  `emailEnabledForCustomer`. SMS, WhatsApp, ligação e avisos para o dono desligados. Os 2 do CNPJ 1 sem e-mail no
+  Asaas ficaram com tudo desligado (o Asaas recusa ligar e-mail sem endereço). Feito por script, fora do sistema.
+- **Cliente novo (ou movido/reaproveitado) — "Asaas - Sincroniza cliente":** "Pede criacao" manda
+  `notificationDisabled: !temEmail`; "Monta ajustes de notificacao" põe `enabled`/`emailEnabledForCustomer` =
+  tem e-mail e todo o resto false (inclusive os avisos para o dono). Edição normal continua sem mexer nos avisos.
+- **Edição do cadastro:** o e-mail novo ou trocado já ia para o Asaas no PUT do cliente. Desde 19/11/2026 o caminho
+  "atualizar" primeiro lê o cliente no Asaas (`Pede cliente atual`); se lá ele NÃO tinha e-mail e agora tem, liga o
+  cliente (`notificationDisabled: false`) e deixa todos os eventos só com e-mail (`Ve se liga avisos` → ... →
+  `Ajusta notificacoes da edicao`), e a mensagem do salvar avisa. Quem já tinha e-mail não tem os avisos mexidos.
+- **Taxa:** R$ 0,99 por cobrança com aviso (uma vez por boleto), além da taxa do boleto pago.
+- **Teste:** `banco/testes/testar-asaas-por-cnpj.js` (33 ok; casos novos: cliente sem e-mail nasce desligado, ganhou
+  e-mail na edição liga só o e-mail, continua sem e-mail não liga nada).
