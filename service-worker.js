@@ -1,5 +1,5 @@
 // Sobe junto com o APP_VERSION do app.js a cada publicação.
-const CACHE_NAME = "solucoes-rapidas-2026.11.19a";
+const CACHE_NAME = "solucoes-rapidas-2026.11.19b";
 // "./" e "./index.html" são a landing institucional; "./sistema.html" é o
 // app de verdade (painel), que antes ocupava a raiz; "./conta.html" é a
 // entrada por e-mail e senha, criar conta e recuperar senha.
@@ -21,9 +21,9 @@ const APP_SHELL = [
   "./conta.css",
   "./conta.js",
   "./manifest.json",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icons/favicon.png",
+  "./icons/icon-192.png?v=20261119",
+  "./icons/icon-512.png?v=20261119",
+  "./icons/favicon.png?v=20261119",
 ];
 
 self.addEventListener("install", (event) => {

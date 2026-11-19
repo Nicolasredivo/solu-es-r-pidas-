@@ -6122,3 +6122,20 @@ para clientes cadastrados no CNPJ 2.
   (`codigoEmissorDoDocumento`). Nome digitado à mão ou mexido depois sai pelo CNPJ 1.
 - **Pelo chat:** `gerar_documento.py` (skill pdf-solucoes-rapidas) tem o PIX do CNPJ 2; a skill emitir-nfse traz o
   bloco do CNPJ 2.
+
+## Padrão de multa e juros dos boletos (19/11/2026)
+
+Regra do dono: todo boleto, nas duas contas Asaas, sai com **multa de 2%** e **juros de 1% ao mês**; o vencimento é o
+prazo combinado com cada cliente. O Asaas não guarda isso como padrão da conta pela API: vai em cada cobrança
+(`fine: { value: 2 }`, `interest: { value: 1 }`). A geração de boletos (passo futuro, lê `Gera_Boleto`) deve mandar
+sempre os dois campos. Até 19/11/2026 nenhuma das contas tinha cobrança criada.
+
+## Ícone novo da aba e do app + marca na página de pagamento do Asaas (19/11/2026, versão 2026.11.19b)
+
+- **Ícones:** `icons/favicon.png` (64), `icon-192.png` e `icon-512.png` refeitos a partir de `imagens/logo.png` (o SR do
+  menu), num quadrado branco como `.sidebar-marca-simbolo` (no escuro da aba o azul-marinho sumia). O favicon tem cantos
+  arredondados; os do app (maskable) são quadrados com o SR em 62% da largura. Endereços com `?v=20261119` nas três
+  páginas, no manifest e no APP_SHELL, para o navegador não ficar com o ícone antigo.
+- **Asaas (as duas contas):** página de pagamento personalizada pela API (`POST /myAccount/paymentCheckoutConfig`): topo
+  branco com a logo (SR + "SOLUÇÕES RÁPIDAS / MANUTENÇÃO PREDIAL"), faixa do valor `#0F2747`, letras brancas.
+  Aprovado automaticamente na hora. Antes: padrão azul (`#007AB4` / `#1DA9DA`), sem logo.
