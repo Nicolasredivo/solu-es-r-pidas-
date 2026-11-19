@@ -8118,3 +8118,7 @@ body:has(#page-inicio:not(.hidden)) .busca-gatilho-topo + .conexao {
   color: var(--text);
   font-weight: 600;
 }
+
+/* "Emitido pelo" na aba Documentos: só mostra o CNPJ do cliente (19/11/2026, sem troca à mão). */
+.doc-emissor-info { margin: 0 0 12px; }
+.doc-emissor-info .doc-hint { display: block; margin-top: 2px; }

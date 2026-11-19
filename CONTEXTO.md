@@ -6108,3 +6108,17 @@ Pedido do dono: a exigência fiscal do cliente virou chave liga/desliga, na mesm
   (`/webhook/exigencia-fiscal`, `{id, exigencia: "nota"|"recibo"}`; recusa valor ou código inválido e cliente
   que não existe). O Salvar do cadastro manda o valor guardado (`cadastro.exigenciaFiscal`), então não desfaz.
 - **Teste:** `banco/testes/testar-exigencia-fiscal.js` (13 ok).
+
+## Conta do CNPJ 2 na nota e no recibo, só para cliente do CNPJ 2 (19/11/2026)
+
+Pedido do dono: modelos de NF e de recibo iguais aos de sempre, mas com os dados bancários do CNPJ 2, valendo só
+para clientes cadastrados no CNPJ 2.
+
+- **Banco:** `Empresas_Emissoras` do CNPJ 2 ganhou `Chave_PIX` = o próprio CNPJ (cadastrado no Asaas em 18/11/2026).
+- **Nota (página Notas fiscais):** a escolha de conta saiu. Cliente do CNPJ 2 = sempre a conta do CNPJ 2, no formato
+  "Dados para pagamento - ASAAS I.P S.A - 461 NICOLAS REDIVO ZOMER Agência: 0001 Conta: 8268641-1 ou chave PIX CNPJ =
+  69915001000162" (montado de Empresas_Emissoras); os outros = o bloco fixo do Inter (`NF_PAGAMENTO`).
+- **Documentos:** "Emitido pelo" deixou de ser botão e só mostra o CNPJ, que segue o cliente puxado
+  (`codigoEmissorDoDocumento`). Nome digitado à mão ou mexido depois sai pelo CNPJ 1.
+- **Pelo chat:** `gerar_documento.py` (skill pdf-solucoes-rapidas) tem o PIX do CNPJ 2; a skill emitir-nfse traz o
+  bloco do CNPJ 2.

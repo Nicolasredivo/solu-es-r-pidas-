@@ -2065,15 +2065,11 @@
           <div id="doc-cliente-sugestao" class="sugestao-lista hidden"></div>
           <p id="doc-cliente-status" class="placeholder-text ct-ajuda">Preenche cliente, endereço e solicitante. Dá para mudar tudo depois.</p>
 
-          <!-- Qual dos dois CNPJs emite: muda o CNPJ do cabeçalho/assinatura e os dados de pagamento
-               do recibo. Puxar um cliente escolhe o CNPJ dele (08/11/2026). -->
-          <div class="grupo">
-            <label>Emitido pelo</label>
-            <div class="opcoes" id="doc-emissor">
-              <button type="button" class="opcao active" data-valor="CNPJ 1">CNPJ 1</button>
-              <button type="button" class="opcao" data-valor="CNPJ 2">CNPJ 2</button>
-            </div>
-          </div>
+          <!-- Qual dos dois CNPJs emite: muda o CNPJ do cabeçalho/assinatura e os dados de pagamento do recibo.
+               Desde 19/11/2026 segue o cliente puxado (pedido do dono): só cliente do CNPJ 2 sai pelo CNPJ 2. -->
+          <label>Emitido pelo</label>
+          <p class="doc-emissor-info"><strong id="doc-emissor">CNPJ 1</strong>
+            <span class="doc-hint">Segue o cliente: só cliente cadastrado no CNPJ 2 sai pelo CNPJ 2, com a conta dele.</span></p>
 
           <div data-tipos="recibo">
             <label for="doc-referente">Referente a</label>
@@ -2196,16 +2192,9 @@
             <select id="nf-obra"></select>
           </div>
 
-          <!-- Cliente do CNPJ 2: a nota sai pelo CNPJ 2, e aqui se escolhe de qual conta são os dados de pagamento
-               que vão na descrição (16/11/2026). Começa na conta do CNPJ 1, que é o que o dono vem usando. -->
-          <div id="nf-pagamento-bloco" class="grupo hidden">
-            <label>Dados para pagamento na nota</label>
-            <div class="opcoes" id="nf-pagamento">
-              <button type="button" class="opcao active" data-valor="CNPJ 1">Conta do CNPJ 1</button>
-              <button type="button" class="opcao" data-valor="CNPJ 2">Conta do CNPJ 2</button>
-            </div>
-            <p class="doc-hint">Este cliente é atendido pelo CNPJ 2: a nota sai por ele. Aqui você escolhe a conta que aparece para o cliente pagar.</p>
-          </div>
+          <!-- Cliente do CNPJ 2: a nota sai pelo CNPJ 2 e com a conta do CNPJ 2 nos dados de pagamento, sem escolha
+               (pedido do dono, 19/11/2026; antes dava para escolher a conta do CNPJ 1). -->
+          <p id="nf-pagamento-bloco" class="doc-hint hidden">Este cliente é do CNPJ 2: a nota sai pelo CNPJ 2, com a conta do CNPJ 2 (Asaas) para pagamento.</p>
 
           <label for="nf-servico">Serviço feito</label>
           <textarea id="nf-servico" class="auto-altura" rows="2" placeholder="Ex: Troca de 2 lâmpadas na garagem."></textarea>

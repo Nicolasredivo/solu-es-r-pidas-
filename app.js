@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.18b";
+const APP_VERSION = "2026.11.19a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -11548,8 +11548,8 @@ async function puxarClienteNoDocumento(id) {
   docCampos.edificio.value = ehEmpresa ? nomeComIniciais(cliente.razaoSocial || cliente.nomeFantasia) : nomeDoEdificio(nome);
   const docDigitos = String(cliente.documento || "").replace(/\D/g, "");
   docCampos.cnpjCliente.value = docDigitos.length === 14 ? formatarCNPJ(docDigitos) : "";
-  // O documento sai pelo CNPJ que atende o cliente (dá para trocar à mão depois).
-  escolherEmissorDoDocumento(cliente.atendidoPor);
+  // O documento sai pelo CNPJ que atende o cliente (sem troca à mão desde 19/11/2026).
+  atualizarEmissorDoDocumento();
   docClienteBusca.value = "";
   docClienteStatus.textContent = `Buscando endereço e contatos de ${nome}...`;
   try {
@@ -11602,6 +11602,7 @@ ligarSugestoesContato(docCampos.solicitante, document.getElementById("doc-solici
 docCampos.endereco.addEventListener("input", () => ajustarAlturaAuto(docCampos.endereco));
 docCampos.cliente.addEventListener("input", () => {
   if (docCampos.cliente.value.trim() !== docClienteNomePuxado.trim()) docClienteId = "";
+  atualizarEmissorDoDocumento();
 });
 ligarMascaraDinheiro(docCampos.valor);
 
@@ -11610,17 +11611,21 @@ ligarMascaraDinheiro(docCampos.valor);
 // ---- quem emite (CNPJ 1 ou CNPJ 2) ----
 
 const docEmissor = document.getElementById("doc-emissor");
-configurarGrupo(docEmissor);
 
-function escolherEmissorDoDocumento(codigo) {
-  const valor = codigo === "CNPJ 2" ? "CNPJ 2" : "CNPJ 1";
-  docEmissor.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === valor));
+// Pedido do dono (19/11/2026): o modelo com os dados do CNPJ 2 só vale para cliente cadastrado no CNPJ 2.
+// O emissor segue o cliente puxado; nome digitado à mão (ou mexido depois) sai pelo CNPJ 1.
+function codigoEmissorDoDocumento() {
+  const cliente = docClienteId ? cadastros.find((c) => c.id === docClienteId) : null;
+  return cliente && cliente.atendidoPor === "CNPJ 2" ? "CNPJ 2" : "CNPJ 1";
+}
+function atualizarEmissorDoDocumento() {
+  docEmissor.textContent = codigoEmissorDoDocumento();
 }
 
 // Dados do CNPJ escolhido no formato do PDF. CNPJ 1 = null (o gerador já sabe os dados de sempre).
 // O CNPJ 2 vem do banco (lista de clientes); sem conseguir buscar, dá erro em vez de sair com dado errado.
 async function emissorDoDocumento() {
-  const codigo = escolhaDoGrupo(docEmissor) || "CNPJ 1";
+  const codigo = codigoEmissorDoDocumento();
   if (codigo === "CNPJ 1") return null;
   if (!empresasEmissoras.some((e) => e.codigo === codigo)) {
     const dados = await pedirAoN8n("listar-cadastros", {});
@@ -11860,7 +11865,7 @@ function limparDocumento() {
   docContatosCliente = [];
   docClienteId = "";
   docClienteNomePuxado = "";
-  escolherEmissorDoDocumento("CNPJ 1");
+  atualizarEmissorDoDocumento();
   escolherLaudoLocal("edificio");
   docClienteStatus.textContent = "Preenche cliente, endereço e solicitante. Dá para mudar tudo depois.";
   docItens.innerHTML = "";
@@ -13197,29 +13202,33 @@ let nfCliente = null; // { id, nome, documento }
 let nfAmbiente = "";
 let nfEnviando = false;
 
-// Conta que aparece nos dados de pagamento da descrição (16/11/2026). Cliente do CNPJ 1: sempre a do CNPJ 1.
-// Cliente do CNPJ 2: a nota sai pelo CNPJ 2 e o dono escolhe a conta; começa na do CNPJ 1, que é o que ele vem
-// usando ("futuramente vai mudar"). O texto da conta do CNPJ 2 é montado igual ao da emissão pelo chat, com os
-// dados da tabela Empresas_Emissoras (chegam junto com a lista de clientes).
+// Conta que aparece nos dados de pagamento da descrição. Desde 19/11/2026 (pedido do dono) segue o cliente, sem
+// escolha: cliente do CNPJ 1 = conta do CNPJ 1 (Inter); cliente do CNPJ 2 = conta do CNPJ 2 (Asaas), montada no
+// mesmo formato com os dados da tabela Empresas_Emissoras (chegam junto com a lista de clientes).
 const nfPagamentoBloco = document.getElementById("nf-pagamento-bloco");
-const nfPagamentoGrupo = document.getElementById("nf-pagamento");
 
 function nfContaDoCnpj2() {
-  return !nfPagamentoBloco.classList.contains("hidden") && escolhaDoGrupo(nfPagamentoGrupo) === "CNPJ 2";
+  return !nfPagamentoBloco.classList.contains("hidden");
 }
 
+// "461 - Asaas I.P S.A" + titular → "ASAAS I.P S.A - 461 NICOLAS ..." (igual ao "INTER - 077 CIRLEI ..." do CNPJ 1).
 function nfPagamentoTexto() {
   if (!nfContaDoCnpj2()) return NF_PAGAMENTO;
   const e = empresasEmissoras.find((x) => x.codigo === "CNPJ 2");
   if (!e || !String(e.conta || "").trim()) return "";
+  const banco = String(e.banco || "").trim();
+  const m = /^(\d{3})\s*-\s*(.+)$/.exec(banco);
+  const bancoTexto = m ? `${m[2].toUpperCase()} - ${m[1]}` : banco.toUpperCase();
   const pix = String(e.pix || "").trim();
-  return `Dados para pagamento - ${String(e.banco || "").toUpperCase()} - ${String(e.titular || "").toUpperCase()} Agência: ${e.agencia || ""} Conta: ${e.conta || ""}${pix ? ` ou chave PIX = ${pix}` : ""}`;
+  const pixDigitos = pix.replace(/\D/g, "");
+  const pixTexto = !pix ? "" : pixDigitos.length === 14 && pixDigitos === pix.replace(/[.\-/\s]/g, "")
+    ? ` ou chave PIX CNPJ = ${pixDigitos}` : ` ou chave PIX = ${pix}`;
+  return `Dados para pagamento - ${bancoTexto} ${String(e.titular || "").toUpperCase()} Agência: ${e.agencia || ""} Conta: ${e.conta || ""}${pixTexto}`;
 }
 
-// Mostra (ou esconde) a escolha e volta para a conta do CNPJ 1.
+// Mostra (ou esconde) o aviso "cliente do CNPJ 2", que também decide a conta.
 function nfMostrarPagamento(mostrar) {
   nfPagamentoBloco.classList.toggle("hidden", !mostrar);
-  nfPagamentoGrupo.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === "CNPJ 1"));
   nfAtualizarPrevia();
 }
 
@@ -13322,10 +13331,6 @@ document.getElementById("nf-cliente-tirar").addEventListener("click", () => {
 });
 ligarMascaraDinheiro(nfCampos.valor);
 ligarMascaraDinheiro(nfCampos.material);
-configurarGrupo(nfPagamentoGrupo, () => {
-  nfAtualizarPrevia();
-  nfDesfazerConferencia();
-});
 configurarGrupo(nfTipoValor, () => {
   document.getElementById("nf-material-bloco").classList.toggle("hidden", escolhaDoGrupo(nfTipoValor) !== "separado");
   nfAtualizarPrevia();
@@ -13432,7 +13437,7 @@ async function nfConferir(evento) {
   else if (!nfCampos.servico.value.trim()) erro = "Escreva o serviço feito.";
   else if (!(total > 0)) erro = "Falta o valor total.";
   else if (escolhaDoGrupo(nfTipoValor) === "separado" && !(material > 0 && material < total)) erro = "O material precisa ser maior que zero e menor que o total.";
-  else if (nfContaDoCnpj2() && !nfPagamentoTexto()) erro = "Não achei os dados da conta do CNPJ 2. Escolha a conta do CNPJ 1 ou confira o cadastro da empresa.";
+  else if (nfContaDoCnpj2() && !nfPagamentoTexto()) erro = "Não achei os dados da conta do CNPJ 2 (servidor fora?). Tente de novo daqui a pouco.";
   else if (descricao.length > NF_LIMITE) erro = `A descrição passou de ${NF_LIMITE} caracteres: encurte o serviço.`;
   if (erro) {
     nfMostrarStatus("error", erro);
@@ -13579,7 +13584,6 @@ function nfSepararDescricao(descricao) {
   const texto = String(descricao || "").replace(/\s+/g, " ").trim();
   const iPagamento = texto.indexOf("Dados para pagamento - ");
   let corpo = (iPagamento >= 0 ? texto.slice(0, iPagamento) : texto).trim();
-  const pagamento = iPagamento >= 0 ? texto.slice(iPagamento).trim() : "";
   const numero = (s) => Number(String(s).replace(/\./g, "").replace(",", "."));
   const reais = "R\\$\\s*[\\d.]+,\\d{2}";
   const separado = corpo.match(new RegExp(`\\s*Valor material = R\\$\\s*([\\d.]+,\\d{2})\\.\\s*Valor mão de obra = ${reais}\\.\\s*Valor total = ${reais}\\.?$`));
@@ -13595,7 +13599,7 @@ function nfSepararDescricao(descricao) {
     tipo = "incluso";
     corpo = corpo.slice(0, incluso.index);
   } else if (soTotal) corpo = corpo.slice(0, soTotal.index);
-  return { servico: corpo.trim(), tipo, material, outraConta: Boolean(pagamento) && pagamento !== NF_PAGAMENTO };
+  return { servico: corpo.trim(), tipo, material };
 }
 
 async function nfRepetirNota(n) {
@@ -13612,10 +13616,6 @@ async function nfRepetirNota(n) {
   nfTipoValor.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === partes.tipo));
   document.getElementById("nf-material-bloco").classList.toggle("hidden", partes.tipo !== "separado");
   porValorNoCampo(nfCampos.material, partes.tipo === "separado" ? partes.material : 0);
-  // A nota original usou a conta do CNPJ 2: a escolha (que só existe para cliente do CNPJ 2) acompanha.
-  if (partes.outraConta && !nfPagamentoBloco.classList.contains("hidden")) {
-    nfPagamentoGrupo.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === "CNPJ 2"));
-  }
   ajustarAlturaAuto(nfCampos.servico);
   nfAtualizarPrevia();
   nfDesfazerConferencia();
