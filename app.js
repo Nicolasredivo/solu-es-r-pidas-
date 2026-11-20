@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.19b";
+const APP_VERSION = "2026.11.20a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -3669,13 +3669,18 @@ function receitaPassaNosFiltros(receita, termo) {
 
 function desenharReceitas() {
   const termo = buscaReceita.value.trim().toLowerCase();
-  const visiveis = recebimentos.filter((r) => receitaPassaNosFiltros(r, termo));
+  // Desde 20/11/2026 notas, recibos e boletos aparecem na central de cobranças, lá em cima; aqui ficam só as contas
+  // lançadas à mão (o painel e a divisão continuam somando todas).
+  const automaticas = new Set(((typeof cobDados !== "undefined" && cobDados && cobDados.recebimentos) || [])
+    .filter((x) => x.origem && x.origem !== "manual").map((x) => x.id));
+  const manuais = recebimentos.filter((r) => !r.asaasId && !automaticas.has(r.id));
+  const visiveis = manuais.filter((r) => receitaPassaNosFiltros(r, termo));
 
   listaReceitasBox.innerHTML = "";
   atualizarResumoReceber();
 
-  if (!recebimentos.length) {
-    mostrarListaReceitasStatus("neutral", "Nenhuma conta a receber ainda.");
+  if (!manuais.length) {
+    mostrarListaReceitasStatus("neutral", "Nenhuma conta lançada à mão.");
     return;
   }
   if (!visiveis.length) {
@@ -3685,7 +3690,7 @@ function desenharReceitas() {
 
   const soma = visiveis.reduce((t, r) => t + Number(r.valor || 0), 0);
   mostrarListaReceitasStatus("neutral",
-    `${visiveis.length} de ${recebimentos.length} · ${dinheiro(soma)}`);
+    `${visiveis.length} de ${manuais.length} · ${dinheiro(soma)}`);
 
   visiveis.forEach((r) => listaReceitasBox.appendChild(montarLinhaReceita(r)));
 }
@@ -3719,8 +3724,20 @@ function montarLinhaReceita(receita) {
   const botaoExcluir = linha.querySelector(".receita-excluir");
 
   botaoReceber.classList.toggle("hidden", recebida);
+  // Boleto do Asaas (20/11/2026): receber, mudar ou cancelar passa pela central de cobranças, senão o boleto seguiria
+  // aberto no Asaas e o cliente continuaria recebendo aviso de vencido.
+  if (receita.asaasId) {
+    botaoReceber.classList.add("hidden");
+    botaoExcluir.classList.add("hidden");
+  }
 
   linha.querySelector(".despesa-resumo").addEventListener("click", () => {
+    if (receita.asaasId) {
+      const x = cobDados && (cobDados.recebimentos || []).find((y) => y.id === receita.id);
+      if (x) cobAbrir(x);
+      else mostrarToast("Este é um boleto do Asaas: abra-o na central de cobranças, aqui em cima.");
+      return;
+    }
     desarmarConfirmacao(botaoExcluir, "Excluir");
     abrirContaNoForm(receitaForm, linha, acoes, () => abrirFormReceita(receita));
   });
@@ -13202,6 +13219,138 @@ let nfCliente = null; // { id, nome, documento }
 let nfAmbiente = "";
 let nfEnviando = false;
 
+// Boleto junto com a nota (20/11/2026): para cliente com "Gera boletos". Primeiro sai o boleto (o link vai na
+// descrição, no lugar dos dados do banco, como o dono aprovou), depois a nota; o boleto entra sozinho no A receber.
+const nfBoleto = {
+  bloco: document.getElementById("nf-boleto-bloco"),
+  liga: document.getElementById("nf-boleto-liga"),
+  campos: document.getElementById("nf-boleto-campos"),
+  forma: document.getElementById("nf-boleto-forma"),
+  parcelasBloco: document.getElementById("nf-boleto-parcelas-bloco"),
+  parcelas: document.getElementById("nf-boleto-parcelas"),
+  venc: document.getElementById("nf-boleto-venc"),
+  prazos: document.getElementById("nf-boleto-prazos"),
+  dica: document.getElementById("nf-boleto-dica"),
+  lista: document.getElementById("nf-boleto-lista"),
+  desligado: document.getElementById("nf-boleto-desligado"),
+};
+// Identificação do pedido de boleto: a mesma em toda nova tentativa, então uma queda de internet no meio nunca cria
+// boleto em dobro (o servidor devolve o que já existe). Zera depois que nota e boleto saem.
+let nfBoletoGrupo = "";
+let nfBoletoCriado = null; // { grupo, assinatura, cobrancas, existente }
+// Mesmo tamanho do link de verdade do Asaas, para a conta dos 1100 caracteres já valer na prévia.
+const NF_LINK_MODELO = "https://www.asaas.com/i/xxxxxxxxxxxx";
+
+function nfBoletoDoCliente() {
+  const c = nfCliente && cadastros.find((x) => x.id === nfCliente.id);
+  return Boolean(c && c.geraBoleto);
+}
+function nfBoletoAtivo() {
+  return nfBoletoDoCliente() && nfBoleto.liga.checked;
+}
+function nfBoletoPixDaConta() {
+  const c = nfCliente && cadastros.find((x) => x.id === nfCliente.id);
+  const conta = (c && c.atendidoPor) || "CNPJ 1";
+  const estado = typeof cobDados !== "undefined" && cobDados && cobDados.contas && cobDados.contas[conta];
+  return estado && estado.pix !== undefined ? Boolean(estado.pix) : null;
+}
+function nfBoletoPlano() {
+  const total = valorDoCampo(nfCampos.valor);
+  const n = escolhaDoGrupo(nfBoleto.forma) === "parcelado" ? Number(nfBoleto.parcelas.value) || 2 : 1;
+  const primeiro = nfBoleto.venc.value || cobDiaUtil(cobSomaDias(hojeISO(), 7));
+  const vencimentos = [];
+  for (let i = 0; i < n; i++) vencimentos.push(i === 0 ? primeiro : cobDiaUtil(cobMaisMeses(primeiro, i)));
+  return { n, total, vencimentos, valores: total > 0 ? cobParcelas(total, n) : [] };
+}
+function nfBoletoAssinatura(plano) {
+  return JSON.stringify([nfCliente && nfCliente.id, Number(plano.total || 0).toFixed(2), plano.vencimentos]);
+}
+// O que vai no fim da descrição da nota no lugar dos dados do banco.
+function nfBoletoTexto(plano, links) {
+  const pix = nfBoletoPixDaConta() === false ? "" : " ou PIX";
+  const link1 = (links && links[0]) || NF_LINK_MODELO;
+  if (plano.n === 1) return `Pagamento por boleto${pix}: ${link1} (vence ${dataBonita(plano.vencimentos[0])}).`;
+  const datas = plano.vencimentos.map(dataBonita);
+  return `Pagamento em ${plano.n} boletos (vencimentos ${datas.slice(0, -1).join(", ")} e ${datas[datas.length - 1]}). 1º boleto${pix}: ${link1}. Os demais chegam por e-mail antes de cada vencimento.`;
+}
+function nfBoletoDesenhar() {
+  const mostrar = nfBoletoDoCliente();
+  nfBoleto.bloco.classList.toggle("hidden", !mostrar);
+  if (!mostrar) return;
+  const ligado = nfBoleto.liga.checked;
+  nfBoleto.campos.classList.toggle("hidden", !ligado);
+  nfBoleto.desligado.classList.toggle("hidden", ligado);
+  if (!ligado) return;
+  nfBoleto.parcelasBloco.classList.toggle("hidden", escolhaDoGrupo(nfBoleto.forma) !== "parcelado");
+  nfBoleto.venc.min = hojeISO();
+  if (!nfBoleto.venc.value) nfBoleto.venc.value = cobDiaUtil(cobSomaDias(hojeISO(), 7));
+  const plano = nfBoletoPlano();
+  const dicas = [];
+  const util = cobDiaUtil(plano.vencimentos[0]);
+  if (util !== plano.vencimentos[0]) dicas.push(`${cobDiaCurto(plano.vencimentos[0])} não é dia útil: o próximo é ${cobDiaCurto(util)}.`);
+  if (plano.vencimentos[0] < hojeISO()) dicas.push("Essa data já passou.");
+  dicas.push(nfBoletoPixDaConta() === false
+    ? "Sai sem PIX por enquanto: a chave PIX desta conta ainda não está pronta no Asaas (quando ficar, entra sozinha)."
+    : "Multa de 2% e juros de 1% ao mês depois do vencimento; dá para pagar até 20 dias depois.");
+  dicas.push("O cliente recebe lembrete por e-mail 1 dia antes e, se atrasar, um aviso todo dia.");
+  nfBoleto.dica.textContent = dicas.join(" ");
+  nfBoleto.lista.innerHTML = "";
+  if (plano.total > 0) {
+    plano.vencimentos.forEach((v, i) => {
+      const linha = document.createElement("div");
+      linha.className = "nf-boleto-parcela";
+      const a = document.createElement("span");
+      a.textContent = plano.n > 1 ? `${i + 1}º boleto · vence ${cobDiaCurto(v)}` : `Vence ${cobDiaCurto(v)}/${v.slice(0, 4)}`;
+      const b = document.createElement("strong");
+      b.textContent = nfReais(plano.valores[i]);
+      linha.append(a, b);
+      nfBoleto.lista.append(linha);
+    });
+  }
+  nfBoleto.prazos.querySelectorAll(".opcao").forEach((o) => {
+    o.classList.toggle("active", cobDiaUtil(cobSomaDias(hojeISO(), Number(o.dataset.dias))) === nfBoleto.venc.value);
+  });
+}
+// Boleto que já existe (a nota dele não tinha saído): a próxima emissão usa este mesmo, sem criar outro.
+function nfBoletoUsarExistente(grupo, cobrancas) {
+  if (!grupo || !cobrancas.length) return;
+  nfBoletoGrupo = grupo;
+  nfBoleto.liga.checked = true;
+  const parcelado = cobrancas.length > 1;
+  nfBoleto.forma.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === (parcelado ? "parcelado" : "vista")));
+  if (parcelado) nfBoleto.parcelas.value = String(cobrancas.length);
+  nfBoleto.venc.value = cobrancas[0].vencimento || "";
+  nfBoletoCriado = { grupo, cobrancas, existente: true, assinatura: "" };
+  nfBoletoDesenhar();
+}
+function nfBoletoZerar() {
+  nfBoletoGrupo = "";
+  nfBoletoCriado = null;
+}
+// Volta o bloco do boleto ao padrão (à vista, 7 dias): cliente novo ou formulário limpo.
+function nfBoletoPadrao() {
+  nfBoleto.liga.checked = true;
+  nfBoleto.forma.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === "vista"));
+  nfBoleto.parcelas.value = "2";
+  nfBoleto.venc.value = "";
+}
+// Nota cancelada que tinha boleto aberto: pergunta se cancela o boleto também (senão o cliente ainda pode pagar).
+async function nfBoletosDaNotaCancelada(nota) {
+  try {
+    const r = await pedirAoN8n("cobrancas", { acao: "painel" });
+    const abertos = ((r && r.recebimentos) || []).filter((x) => x.notaId === nota.id && (x.status || "Pendente") === "Pendente" && x.asaasId);
+    if (!abertos.length) return;
+    const total = abertos.reduce((s, x) => s + Number(x.valor || 0), 0);
+    const ok = await cobConfirmar("Cancelar o boleto também?", `Esta nota tinha ${abertos.length === 1 ? "um boleto aberto" : abertos.length + " boletos abertos"} de ${dinheiro(total)}. Se não cancelar, o cliente ainda consegue pagar por ele.`, "Sim, cancelar o boleto", true);
+    if (!ok) return;
+    for (const x of abertos) await pedirAoN8n("cobrancas", { acao: "cancelar", id: x.id });
+    mostrarToast(abertos.length === 1 ? "Boleto cancelado." : "Boletos cancelados.");
+    cobCarregar({ sincronizar: false });
+  } catch (err) {
+    mostrarToast("A nota foi cancelada, mas não consegui conferir o boleto: veja em Financeiro › A receber.", null, "erro");
+  }
+}
+
 // Conta que aparece nos dados de pagamento da descrição. Desde 19/11/2026 (pedido do dono) segue o cliente, sem
 // escolha: cliente do CNPJ 1 = conta do CNPJ 1 (Inter); cliente do CNPJ 2 = conta do CNPJ 2 (Asaas), montada no
 // mesmo formato com os dados da tabela Empresas_Emissoras (chegam junto com a lista de clientes).
@@ -13241,7 +13390,8 @@ function nfMostrarStatus(tipo, mensagem) {
   nfStatus.className = mensagem ? `status show ${tipo}` : "status";
 }
 
-function nfDescricao() {
+// "pagamento" (opcional) troca o fim da descrição: com boleto, vai o link do boleto no lugar dos dados do banco.
+function nfDescricao(pagamento) {
   const servico = nfCampos.servico.value.trim().replace(/\s+/g, " ");
   const frase = servico && !/[.!?]$/.test(servico) ? servico + "." : servico;
   const total = valorDoCampo(nfCampos.valor);
@@ -13254,7 +13404,8 @@ function nfDescricao() {
       valores = `Valor material = ${nfReais(material)}. Valor mão de obra = ${nfReais(total - material)}. Valor total = ${nfReais(total)}.`;
     } else valores = `Valor total = ${nfReais(total)}.`;
   }
-  return [frase, valores, nfPagamentoTexto()].filter(Boolean).join(" ");
+  const fim = pagamento !== undefined ? pagamento : nfBoletoAtivo() ? nfBoletoTexto(nfBoletoPlano()) : nfPagamentoTexto();
+  return [frase, valores, fim].filter(Boolean).join(" ");
 }
 
 function nfAtualizarPrevia() {
@@ -13282,6 +13433,11 @@ async function nfEscolherCliente(id) {
   document.getElementById("nf-cliente-nome").textContent = nfCliente.nome;
   document.getElementById("nf-cliente-doc").textContent = nfCliente.documento ? formatarDocumento(nfCliente.documento.replace(/\D/g, "")) : "Sem CPF/CNPJ no cadastro";
   document.getElementById("nf-cliente-escolhido").classList.remove("hidden");
+  nfBoletoZerar();
+  nfBoletoPadrao();
+  nfBoletoDesenhar();
+  // Se o cliente gera boleto, as contas do Asaas (PIX pronto ou não) vêm junto, para a prévia já sair certa.
+  if (c.geraBoleto && !cobDados) cobCarregar({ sincronizar: false }).then(() => { nfBoletoDesenhar(); nfAtualizarPrevia(); }).catch(() => {});
   nfMostrarPagamento(c.atendidoPor === "CNPJ 2");
   nfDesfazerConferencia();
   const bloco = document.getElementById("nf-obra-bloco");
@@ -13307,6 +13463,8 @@ async function nfEscolherCliente(id) {
 
 function nfTirarCliente() {
   nfCliente = null;
+  nfBoletoZerar();
+  nfBoletoDesenhar();
   nfMostrarPagamento(false);
   document.getElementById("nf-cliente-escolhido").classList.add("hidden");
   document.getElementById("nf-obra-bloco").classList.add("hidden");
@@ -13338,6 +13496,31 @@ configurarGrupo(nfTipoValor, () => {
 });
 formNota.addEventListener("input", () => {
   if (document.activeElement === nfCampos.busca) return;
+  nfBoletoDesenhar();
+  nfAtualizarPrevia();
+  nfDesfazerConferencia();
+});
+// Boleto: forma de pagar, parcelas, data e os atalhos de prazo (7, 15, 30 dias, já no dia útil).
+configurarGrupo(nfBoleto.forma, () => {
+  nfBoletoDesenhar();
+  nfAtualizarPrevia();
+  nfDesfazerConferencia();
+});
+nfBoleto.parcelas.addEventListener("change", () => {
+  nfBoletoDesenhar();
+  nfAtualizarPrevia();
+  nfDesfazerConferencia();
+});
+nfBoleto.liga.addEventListener("change", () => {
+  nfBoletoDesenhar();
+  nfAtualizarPrevia();
+  nfDesfazerConferencia();
+});
+nfBoleto.prazos.addEventListener("click", (ev) => {
+  const b = ev.target.closest(".opcao");
+  if (!b) return;
+  nfBoleto.venc.value = cobDiaUtil(cobSomaDias(hojeISO(), Number(b.dataset.dias)));
+  nfBoletoDesenhar();
   nfAtualizarPrevia();
   nfDesfazerConferencia();
 });
@@ -13439,15 +13622,29 @@ async function nfConferir(evento) {
   else if (escolhaDoGrupo(nfTipoValor) === "separado" && !(material > 0 && material < total)) erro = "O material precisa ser maior que zero e menor que o total.";
   else if (nfContaDoCnpj2() && !nfPagamentoTexto()) erro = "Não achei os dados da conta do CNPJ 2 (servidor fora?). Tente de novo daqui a pouco.";
   else if (descricao.length > NF_LIMITE) erro = `A descrição passou de ${NF_LIMITE} caracteres: encurte o serviço.`;
+  const comBoleto = nfBoletoAtivo();
+  const plano = comBoleto ? nfBoletoPlano() : null;
+  if (!erro && comBoleto) {
+    if (plano.vencimentos[0] < hojeISO()) erro = "O vencimento do boleto já passou: escolha outra data.";
+    else if (plano.valores.some((v) => v < 5)) erro = "Cada boleto precisa ser de pelo menos R$ 5,00 (regra do Asaas).";
+    else if (nfBoletoCriado && !nfBoletoCriado.existente && nfBoletoCriado.grupo === nfBoletoGrupo && nfBoletoCriado.assinatura !== nfBoletoAssinatura(plano)) {
+      erro = "Já foi criado um boleto desta nota com outro valor ou outra data. Volte o valor e a data de antes, ou cancele esse boleto em Financeiro › A receber e escolha o cliente de novo.";
+    }
+  }
   if (erro) {
     nfMostrarStatus("error", erro);
     return;
   }
   const pedido = { clienteId: nfCliente.id, localId: nfCampos.obra.value || "", descricao, valor: total.toFixed(2) };
-  nfMostrarStatus("loading", "Conferindo os dados...");
-  let r;
+  nfMostrarStatus("loading", comBoleto ? "Conferindo a nota e o boleto..." : "Conferindo os dados...");
+  let r, rb = null;
   try {
-    r = await pedirAoN8n("notas-fiscais", { acao: "preparar", ...pedido });
+    [r, rb] = await Promise.all([
+      pedirAoN8n("notas-fiscais", { acao: "preparar", ...pedido }),
+      comBoleto ? pedirAoN8n("cobrancas", { acao: "preparar", clienteId: nfCliente.id, valor: total.toFixed(2),
+        material: (escolhaDoGrupo(nfTipoValor) === "separado" ? material : 0).toFixed(2), parcelas: String(plano.n),
+        vencimentos: JSON.stringify(plano.vencimentos) }) : null,
+    ]);
   } catch (err) {
     nfMostrarStatus("error", "Não consegui falar com o servidor. O n8n está ligado?");
     return;
@@ -13456,12 +13653,18 @@ async function nfConferir(evento) {
     nfMostrarStatus("error", (r && r.mensagem) || "Não consegui conferir agora.");
     return;
   }
+  if (comBoleto && (!rb || !rb.ok)) {
+    nfMostrarStatus("error", (rb && rb.mensagem) || "Não consegui conferir o boleto agora. Tente de novo em instantes.");
+    return;
+  }
   nfMostrarStatus("", "");
-  nfMostrarConferencia(r, pedido);
+  nfMostrarConferencia(r, pedido, comBoleto ? { rb, plano, material: escolhaDoGrupo(nfTipoValor) === "separado" ? material : 0 } : null);
 }
 
-function nfMostrarConferencia(r, pedido) {
+function nfMostrarConferencia(r, pedido, boleto) {
   nfAmbiente = r.ambiente || nfAmbiente;
+  // Ambiente de testes do governo: a nota não vale, então boleto de verdade não sai junto.
+  if (boleto && nfAmbiente === "Testes") boleto = null;
   document.getElementById("nf-aviso-testes").classList.toggle("hidden", nfAmbiente !== "Testes");
   nfConferencia.innerHTML = "";
   const caixa = document.createElement("div");
@@ -13478,12 +13681,35 @@ function nfMostrarConferencia(r, pedido) {
     nfLinha("Endereço da obra", r.obra),
     nfLinha("Competência", nfData(r.competencia)),
     nfLinha("Valor", nfReais(Number(r.valor))),
-    nfLinha("Descrição", r.descricao, "nf-conf-descricao"));
+    nfLinha("Descrição", boleto ? r.descricao.replace(NF_LINK_MODELO, "(link do boleto, criado ao emitir)") : r.descricao, "nf-conf-descricao"));
   if (r.problemas && r.problemas.length) {
     const p = document.createElement("div");
     p.className = "status show error";
     p.textContent = "Não dá para emitir: " + r.problemas.join(" ");
     caixa.append(p);
+  }
+  // Boleto (20/11/2026): o que vai ser criado no Asaas, junto com a nota.
+  if (boleto) {
+    const { rb, plano } = boleto;
+    const sub = document.createElement("div");
+    sub.className = "moldura-titulo nf-conf-sub";
+    sub.textContent = plano.n > 1 ? `Boletos (${plano.n} parcelas)` : "Boleto";
+    const conta = rb.conta || {};
+    caixa.append(sub, nfLinha("Conta do Asaas", `${conta.codigo || ""}${conta.pix === false ? " · boleto sem PIX por enquanto" : conta.pix ? " · boleto com PIX" : ""}`));
+    (rb.parcelas || []).forEach((p) => caixa.append(nfLinha(plano.n > 1 ? `${p.n}º boleto` : "Valor e vencimento",
+      `${nfReais(Number(p.valor))} · vence ${cobDiaCurto(String(p.vencimento))}/${String(p.vencimento).slice(0, 4)}`)));
+    const emails = (rb.cliente && rb.cliente.emails) || [];
+    caixa.append(
+      nfLinha("Lembrete 1 dia antes", emails.length ? emails.join(", ") : "Cliente sem e-mail: mande o link pelo WhatsApp"),
+      nfLinha("Regras", "Multa de 2% e juros de 1% ao mês depois do vencimento; dá para pagar até 20 dias depois; aviso por e-mail todo dia se atrasar"),
+      nfLinha("Taxa do Asaas", conta.taxaBoleto != null ? `${nfReais(Number(conta.taxaBoleto))} por boleto pago, mais ${nfReais(Number(conta.taxaAviso || 0.99))} do aviso` : "Só se for pago"));
+    if (rb.problemas && rb.problemas.length) {
+      const p = document.createElement("div");
+      p.className = "status show error";
+      p.textContent = "Não dá para gerar o boleto: " + rb.problemas.join(" ");
+      caixa.append(p);
+    }
+    (rb.avisos || []).forEach((a) => caixa.append(nfAviso("Atenção", a)));
   }
   (r.avisos || []).forEach((a) => caixa.append(nfAviso("Atenção", a)));
   let confirmaRepetida = null;
@@ -13504,8 +13730,10 @@ function nfMostrarConferencia(r, pedido) {
   status.setAttribute("role", "status");
   const acoes = document.createElement("div");
   acoes.className = "nf-acoes";
-  const emitir = nfBotao(nfAmbiente === "Testes" ? "Emitir nota de teste" : "Emitir nota", "", () => nfEmitir(pedido, { emitir, voltar, status, confirmaRepetida, caixa }));
-  emitir.disabled = !r.podeEmitir;
+  const rotuloEmitir = boleto ? (nfAmbiente === "Testes" ? "Emitir nota de teste e boleto" : "Emitir nota e boleto")
+    : nfAmbiente === "Testes" ? "Emitir nota de teste" : "Emitir nota";
+  const emitir = nfBotao(rotuloEmitir, "", () => nfEmitir(pedido, { emitir, voltar, status, confirmaRepetida, caixa, boleto }));
+  emitir.disabled = !r.podeEmitir || Boolean(boleto && !boleto.rb.podeGerar);
   const voltar = nfBotao("Voltar e corrigir", "botao-secundario", () => {
     nfDesfazerConferencia();
     nfCampos.servico.focus();
@@ -13527,7 +13755,43 @@ async function nfEmitir(pedido, tela) {
   nfEnviando = true;
   tela.emitir.disabled = true;
   tela.voltar.disabled = true;
-  tela.status.textContent = "Enviando ao governo... não feche esta tela.";
+  // Boleto primeiro (o link vai na descrição); se ele não sair, a nota também não sai.
+  let cobrancas = null;
+  if (tela.boleto) {
+    tela.status.textContent = "Criando o boleto no Asaas... não feche esta tela.";
+    tela.status.className = "status show loading";
+    if (!nfBoletoGrupo) nfBoletoGrupo = crypto.randomUUID();
+    const plano = tela.boleto.plano;
+    let rb;
+    try {
+      rb = await pedirAoN8n("cobrancas", { acao: "criar", grupo: nfBoletoGrupo, clienteId: pedido.clienteId, origem: "nota",
+        servico: nfCampos.servico.value.trim().replace(/\s+/g, " ").slice(0, 300), valor: pedido.valor,
+        material: Number(tela.boleto.material || 0).toFixed(2), parcelas: String(plano.n), vencimentos: JSON.stringify(plano.vencimentos) });
+    } catch (err) {
+      rb = { ok: false, mensagem: "a conexão caiu durante o pedido do boleto. Toque em Emitir de novo: o sistema confere antes e nunca cria boleto em dobro." };
+    }
+    if (!rb || !rb.ok || !(rb.cobrancas || []).length) {
+      nfEnviando = false;
+      tela.voltar.disabled = false;
+      tela.emitir.disabled = false;
+      tela.status.className = "status show error";
+      tela.status.textContent = "A nota não foi emitida: " + ((rb && rb.mensagem) || "o boleto não foi criado.");
+      if (rb && (rb.cobrancas || []).length) cobCarregar({ sincronizar: false });
+      return;
+    }
+    cobrancas = rb.cobrancas;
+    nfBoletoCriado = { grupo: nfBoletoGrupo, assinatura: nfBoletoAssinatura(plano), cobrancas, existente: Boolean(nfBoletoCriado && nfBoletoCriado.existente) };
+    const descricao = nfDescricao(nfBoletoTexto({ n: cobrancas.length, vencimentos: cobrancas.map((c) => c.vencimento) }, cobrancas.map((c) => c.link)));
+    if (descricao.length > NF_LIMITE) {
+      nfEnviando = false;
+      tela.voltar.disabled = false;
+      tela.status.className = "status show error";
+      tela.status.textContent = `Com o link do boleto, a descrição passou de ${NF_LIMITE} caracteres: encurte o serviço e emita de novo (o mesmo boleto vai junto).`;
+      return;
+    }
+    pedido = { ...pedido, descricao };
+  }
+  tela.status.textContent = cobrancas ? "Boleto criado. Enviando a nota ao governo... não feche esta tela." : "Enviando ao governo... não feche esta tela.";
   tela.status.className = "status show loading";
   let r;
   try {
@@ -13540,6 +13804,20 @@ async function nfEmitir(pedido, tela) {
   if (r && r.ok && r.nota) {
     nfConferencia.innerHTML = "";
     nfConferencia.append(nfQuadroEmitida(r.nota, r.ambiente));
+    if (cobrancas) {
+      // Liga nota e boleto (se falhar, a sincronização liga sozinha pelo link que está na descrição).
+      let ligadas = cobrancas;
+      try {
+        const rl = await pedirAoN8n("cobrancas", { acao: "ligar-nota", grupo: nfBoletoGrupo, notaId: r.nota.id });
+        if (rl && rl.ok && (rl.cobrancas || []).length) ligadas = rl.cobrancas;
+      } catch (err) { /* fica para a sincronização */ }
+      nfConferencia.append(nfQuadroBoleto(ligadas));
+      nfBoletoZerar();
+      cobCarregar({ sincronizar: false });
+    } else if (r.ambiente !== "Testes") {
+      // Nota sem boleto também vai para o A receber (sem previsão de pagamento).
+      pedirAoN8n("cobrancas", { acao: "registrar-nota", notaId: r.nota.id }).then(() => cobCarregar({ sincronizar: false })).catch(() => {});
+    }
     const outra = nfBotao("Emitir outra nota", "botao-secundario", () => {
       nfLimparFormulario();
       nfConferencia.classList.add("hidden");
@@ -13556,17 +13834,48 @@ async function nfEmitir(pedido, tela) {
   tela.voltar.disabled = false;
   tela.status.className = "status show error";
   if (r && r.semResposta) {
-    tela.status.textContent = r.mensagem || "Não sei se a nota saiu. Confira antes de tentar de novo.";
+    tela.status.textContent = (r.mensagem || "Não sei se a nota saiu. Confira antes de tentar de novo.")
+      + (cobrancas ? " O boleto já foi criado: quando a nota for conferida, ele se liga a ela sozinho." : "");
     tela.emitir.disabled = true; // só depois de conferir, pela lista
+    if (cobrancas) cobCarregar({ sincronizar: false });
     return;
   }
-  tela.status.textContent = (r && r.mensagem) || "A nota não foi emitida.";
+  tela.status.textContent = ((r && r.mensagem) || "A nota não foi emitida.")
+    + (cobrancas ? " O boleto já foi criado e continua valendo: corrija o que for preciso e emita de novo (o mesmo boleto vai na nota), ou cancele o boleto em Financeiro › A receber." : "");
+  if (cobrancas) cobCarregar({ sincronizar: false });
   // Recusada: a mesma conferência pode ser corrigida e emitida de novo (o número muda sozinho).
   tela.emitir.disabled = !(r && r.recusada);
 }
 
+// Os boletos que saíram junto com a nota, com o link para mandar.
+function nfQuadroBoleto(cobrancas) {
+  const q = document.createElement("div");
+  q.className = "moldura nf-emitida nf-boleto-feito";
+  const t = document.createElement("div");
+  t.className = "moldura-titulo";
+  t.textContent = cobrancas.length > 1 ? `${cobrancas.length} boletos criados no Asaas` : "Boleto criado no Asaas";
+  q.append(t);
+  cobrancas.forEach((c, i) => {
+    q.append(nfLinha(cobrancas.length > 1 ? `${i + 1}º boleto` : "Boleto", `${nfReais(Number(c.valor))} · vence ${dataBonita(c.vencimento)}`));
+    const acoes = document.createElement("div");
+    acoes.className = "nf-acoes";
+    if (c.link) {
+      acoes.append(nfBotao("Abrir boleto", "", () => window.open(c.link, "_blank", "noopener")));
+      acoes.append(nfBotao("Copiar link", "botao-secundario", () => copiarTexto(c.link, "Link do boleto copiado.")));
+      acoes.append(nfBotao("Mandar no WhatsApp", "botao-secundario", () => cobWhatsapp(c)));
+    }
+    q.append(acoes);
+  });
+  const dica = document.createElement("p");
+  dica.className = "doc-hint";
+  dica.textContent = "Já está em Financeiro › A receber. O cliente recebe o lembrete por e-mail 1 dia antes de vencer e, se atrasar, um aviso por dia.";
+  q.append(dica);
+  return q;
+}
+
 function nfLimparFormulario() {
   nfTirarCliente();
+  nfBoletoPadrao();
   nfCampos.servico.value = "";
   nfCampos.valor.value = "";
   nfCampos.material.value = "";
@@ -13582,7 +13891,9 @@ function nfLimparFormulario() {
 // A descrição guardada é "<serviço> <valores> <dados de pagamento>": aqui ela é separada de volta nessas partes.
 function nfSepararDescricao(descricao) {
   const texto = String(descricao || "").replace(/\s+/g, " ").trim();
-  const iPagamento = texto.indexOf("Dados para pagamento - ");
+  // O fim é o bloco do banco ou, desde 20/11/2026, o link do boleto ("Pagamento por boleto..." / "Pagamento em N boletos...").
+  const marcas = ["Dados para pagamento - ", "Pagamento por boleto", "Pagamento em "].map((m) => texto.indexOf(m)).filter((i) => i >= 0);
+  const iPagamento = marcas.length ? Math.min(...marcas) : -1;
   let corpo = (iPagamento >= 0 ? texto.slice(0, iPagamento) : texto).trim();
   const numero = (s) => Number(String(s).replace(/\./g, "").replace(",", "."));
   const reais = "R\\$\\s*[\\d.]+,\\d{2}";
@@ -13743,6 +14054,7 @@ function nfAbrirCancelamento(li, nota, botaoAbrir) {
       carregarNotas();
       painelCarregarNotas();
       painelCarregarFaturamento(true);
+      nfBoletosDaNotaCancelada(nota);
       return;
     }
     confirmar.disabled = false;
@@ -15813,6 +16125,802 @@ document.addEventListener("keydown", (evento) => {
     buscaMarcar(buscaRapida.indice + (evento.shiftKey ? -1 : 1));
   }
 }, true);
+
+// =====================================================================================================
+// COBRANÇAS PELO ASAAS (20/11/2026): boleto junto com a nota, as duas contas do Asaas somadas como uma só, o que
+// precisa de você, o total a receber por dia/semana/mês e a baixa sozinha quando o dinheiro entra.
+// Fluxos "App - Cobrancas" (webhook cobrancas) e "Cobrancas - Sincronizar" (de 30 em 30 min). As regras ficam no
+// banco (banco/cobrancas.sql): aqui o app só mostra e pede.
+// =====================================================================================================
+
+function cobEsc(v) {
+  return String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// --- Datas: iguais às do banco (fim de semana e feriados nacionais/bancários e de Joinville não são dia útil). ---
+function cobIso(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function cobData(iso) {
+  const [a, m, d] = String(iso).slice(0, 10).split("-").map(Number);
+  return new Date(a, m - 1, d, 12);
+}
+function cobSomaDias(iso, n) {
+  const d = cobData(iso);
+  d.setDate(d.getDate() + n);
+  return cobIso(d);
+}
+function cobMaisMeses(iso, n) {
+  const d = cobData(iso);
+  const alvo = new Date(d.getFullYear(), d.getMonth() + n, 1, 12);
+  alvo.setDate(Math.min(d.getDate(), new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate()));
+  return cobIso(alvo);
+}
+function cobPascoa(ano) {
+  const a = ano % 19, b = Math.floor(ano / 100), c = ano % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+}
+function cobFeriado(iso) {
+  if (["01-01", "03-09", "04-21", "05-01", "09-07", "10-12", "11-02", "11-15", "11-20", "12-25"].includes(iso.slice(5, 10))) return true;
+  const p = cobPascoa(Number(iso.slice(0, 4)));
+  return [-48, -47, -2, 60].some((n) => cobSomaDias(p, n) === iso);
+}
+function cobDiaUtil(iso) {
+  let d = iso;
+  for (let i = 0; i < 15; i++) {
+    const dia = cobData(d).getDay();
+    if (dia !== 0 && dia !== 6 && !cobFeriado(d)) return d;
+    d = cobSomaDias(d, 1);
+  }
+  return d;
+}
+const COB_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+function cobDiaCurto(iso) {
+  return `${COB_SEMANA[cobData(iso).getDay()]}, ${dataBonita(iso).slice(0, 5)}`;
+}
+function cobDias(de, ate) {
+  return Math.round((cobData(ate) - cobData(de)) / 86400000);
+}
+// Parcelas em centavos: as primeiras arredondadas e a última com a sobra (a soma bate sempre).
+function cobParcelas(total, n) {
+  const c = Math.round(total * 100), base = Math.floor(c / n), v = [];
+  for (let i = 0; i < n; i++) v.push((i === n - 1 ? c - base * (n - 1) : base) / 100);
+  return v;
+}
+// Quanto um boleto vencido vale hoje: multa de 2% + juros de 1% ao mês, proporcional aos dias (conta do Asaas).
+function cobValorHoje(x) {
+  const dias = Math.max(0, cobDias(x.vencimento, hojeISO()));
+  const v = Number(x.valor || 0);
+  return dias ? Math.round((v + v * 0.02 + (v * 0.01 * dias) / 30) * 100) / 100 : v;
+}
+const COB_TEL = "(47) 99667-0900";
+
+// --- Situação de cada cobrança ---
+function cobTemBoleto(x) { return Boolean(x.asaasId) || x.asaasStatus === "CRIANDO" || x.asaasStatus === "ERRO"; }
+function cobAberta(x) { return (x.status || "Pendente") === "Pendente"; }
+function cobVencida(x) { return cobAberta(x) && Boolean(x.asaasId) && Boolean(x.vencimento) && x.vencimento < hojeISO(); }
+function cobSoma(lista, f) { return lista.reduce((s, x) => s + Number((f ? f(x) : x.valor) || 0), 0); }
+function cobPlural(n, um, varios) { return `${n} ${n === 1 ? um : varios}`; }
+function cobSituacao(x) {
+  if (x.status === "Recebido") {
+    const como = x.baixaPor === "manual" ? " · por fora" : x.baixaPor === "conciliacao" ? " · entrada no Asaas" : "";
+    return { texto: `Pago ${dataBonita(x.dataRecebimento).slice(0, 5)}${como}`, classe: "ok" };
+  }
+  if (x.status === "Cancelado") return { texto: "Cancelado", classe: "neutro" };
+  if (x.asaasStatus === "ERRO") return { texto: "Não foi criado", classe: "erro" };
+  if (x.asaasStatus === "CRIANDO") return { texto: "Criando…", classe: "neutro" };
+  if (!cobTemBoleto(x)) return x.vencimento ? { texto: `Previsto ${dataBonita(x.vencimento).slice(0, 5)}`, classe: "aviso" } : { texto: "Sem previsão", classe: "aviso" };
+  if (cobVencida(x)) {
+    const d = cobDias(x.vencimento, hojeISO());
+    return { texto: `Vencido há ${cobPlural(d, "dia", "dias")}`, classe: "erro" };
+  }
+  if (x.vistoEm) return { texto: `Visto ${dataBonita(String(x.vistoEm).slice(0, 10)).slice(0, 5)}`, classe: "visto" };
+  if (x.lembrete) return { texto: "Lembrete enviado", classe: "info" };
+  return { texto: "Aguardando", classe: "info" };
+}
+// A descrição guardada já traz "NFS-e nº", "Recibo ·" e a parcela: aqui sai só o serviço (sem repetir o que a linha mostra).
+function cobDescricaoCurta(x) {
+  return String(x.descricao || "").replace(/^NFS-e nº \S+( · )?/, "").replace(/^Recibo · /, "").replace(/ · parcela \d+ de \d+$/, "").trim();
+}
+function cobOrigemTexto(x) {
+  if (x.notaNumero) return `NFS-e nº ${x.notaNumero}`;
+  if (x.origem === "recibo") return "Recibo";
+  if (x.origem === "asaas") return "Feito no Asaas";
+  if (x.origem === "avulsa") return "Boleto avulso";
+  return x.origem === "nota" ? "Nota" : "Lançada à mão";
+}
+
+// --- Elementos ---
+function cobEl(tag, classe, texto) {
+  const e = document.createElement(tag);
+  if (classe) e.className = classe;
+  if (texto != null) e.textContent = texto;
+  return e;
+}
+function cobBotao(rotulo, aoClicar, classe = "botao-secundario") {
+  const b = cobEl("button", classe, rotulo);
+  b.type = "button";
+  b.addEventListener("click", (ev) => { ev.stopPropagation(); aoClicar(b); });
+  return b;
+}
+
+const cobEls = {
+  status: document.getElementById("cob-status"),
+  conteudo: document.getElementById("cob-conteudo"),
+  asaas: document.getElementById("cob-asaas"),
+  fila: document.getElementById("cob-fila"),
+  dias: document.getElementById("cob-dias"),
+  semBoleto: document.getElementById("cob-sem-boleto"),
+  periodo: document.getElementById("cob-periodo"),
+  lista: document.getElementById("cob-lista-bloco"),
+};
+let cobDados = null;
+let cobPedido = null;
+let cobUltimaSinc = 0;
+let cobPeriodo = "dia";
+let cobFiltro = { status: "abertas", cnpj: "", busca: "" };
+let cobFilaTudo = false;
+
+function cobMostrarStatus(texto, tipo) {
+  cobEls.status.textContent = texto || "";
+  cobEls.status.className = "doc-hint" + (tipo ? " " + tipo : "");
+}
+
+async function cobCarregar({ sincronizar = true } = {}) {
+  if (cobPedido) return cobPedido;
+  cobPedido = (async () => {
+    if (!cobDados) cobMostrarStatus("Carregando as cobranças...");
+    try {
+      const r = await pedirAoN8n("cobrancas", { acao: "painel" });
+      if (!r || !r.ok) {
+        cobMostrarStatus((r && r.mensagem) || "Não consegui carregar as cobranças agora.", "error");
+        return null;
+      }
+      cobDados = r;
+      cobDesenhar();
+      // Confere com o Asaas em segundo plano se a última conferência tem mais de 5 minutos.
+      const ultima = r.sinc && r.sinc.quando ? new Date(r.sinc.quando).getTime() : 0;
+      if (sincronizar && Date.now() - ultima > 5 * 60000 && Date.now() - cobUltimaSinc > 60000) cobSincronizar(false);
+      return r;
+    } catch (err) {
+      cobMostrarStatus("Não consegui falar com o servidor para ver as cobranças.", "error");
+      return null;
+    } finally {
+      cobPedido = null;
+    }
+  })();
+  return cobPedido;
+}
+
+async function cobSincronizar(avisar) {
+  cobUltimaSinc = Date.now();
+  try {
+    await pedirAoN8n("cobrancas", { acao: "sincronizar" });
+  } catch (err) {
+    if (avisar) mostrarToast("Não consegui pedir a conferência agora.", null, "erro");
+    return;
+  }
+  if (avisar) mostrarToast("Conferindo com o Asaas: os números se atualizam em alguns segundos.");
+  setTimeout(() => cobCarregar({ sincronizar: false }), 20000);
+}
+
+function cobDesenhar() {
+  const d = cobDados;
+  if (!d) return;
+  cobMostrarStatus("");
+  cobEls.conteudo.classList.remove("hidden");
+  // O resumo antigo do A receber repetia os mesmos números: a central assume.
+  document.getElementById("resumo-receber").classList.add("cob-escondido");
+  cobDesenharAsaas(d);
+  cobDesenharFila(d);
+  cobDesenharDias(d);
+  cobDesenharSemBoleto(d);
+  cobDesenharPeriodo(d);
+  cobDesenharLista(d);
+  // A lista de baixo (lançadas à mão) deixa de mostrar o que agora está aqui.
+  if (financeiroCarregado) desenharReceitas();
+}
+
+function cobCab(destino, titulo, cor, icone, extra) {
+  destino.style.setProperty("--cor", cor);
+  const cab = cobEl("div", "painel-cab");
+  const ic = cobEl("span", "painel-ic");
+  ic.innerHTML = icone;
+  const h = cobEl("h2", "", titulo);
+  cab.append(ic, h);
+  if (extra) cab.append(extra);
+  destino.append(cab);
+}
+const COB_IC = {
+  banco: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 10h18M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18M12 3l9 5H3z"/></svg>',
+  sino: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 21h4"/></svg>',
+  calendario: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  nota: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6"/></svg>',
+  barras: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  lista: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+};
+
+// --- 1. As duas contas do Asaas como uma só ---
+function cobDesenharAsaas(d) {
+  const destino = cobEls.asaas;
+  destino.innerHTML = "";
+  const contas = d.contas || {};
+  const itens = d.recebimentos || [];
+  const saldo = cobSoma(["CNPJ 1", "CNPJ 2"].map((k) => contas[k] || {}), (c) => c.saldo);
+  const abertos = itens.filter((x) => cobAberta(x) && x.asaasId);
+  const vencidos = itens.filter(cobVencida);
+  // Tudo o que está em aberto sem boleto no Asaas (nota, recibo, conta à mão, boleto que não chegou a ser criado):
+  // a mesma conta do "Total a receber" lá embaixo.
+  const semBoleto = itens.filter((x) => cobAberta(x) && !x.asaasId);
+  const mes = hojeISO().slice(0, 7);
+  const doMes = itens.filter((x) => x.status === "Recebido" && String(x.dataRecebimento || "").slice(0, 7) === mes);
+  const recebido = cobSoma(doMes, (x) => x.valorPago ?? x.valor);
+  const liquido = cobSoma(doMes, (x) => x.valorLiquido ?? x.valorPago ?? x.valor);
+  const grade = cobEl("div", "painel-kpis cob-kpis");
+  const kpi = (cor, rotulo, valor, nota, classeNota) => {
+    const k = cobEl("div", "kpi");
+    k.style.setProperty("--cor", cor);
+    k.append(cobEl("span", "kpi-rotulo", rotulo), cobEl("span", "kpi-valor", dinheiro(valor)), cobEl("span", "kpi-nota" + (classeNota ? " " + classeNota : ""), nota));
+    return k;
+  };
+  const erros = ["CNPJ 1", "CNPJ 2"].filter((k) => contas[k] && contas[k].erro);
+  grade.append(
+    kpi("62, 207, 142", "Saldo no Asaas", saldo, erros.length ? `sem leitura do ${erros.join(" e ")}` : "CNPJ 1 + CNPJ 2 somados", erros.length ? "kpi-aviso" : ""),
+    kpi("91, 141, 239", "Vai entrar", cobSoma(abertos) + cobSoma(semBoleto), `${cobPlural(abertos.length, "boleto", "boletos")} + ${cobPlural(semBoleto.length, "sem boleto", "sem boleto")}`),
+    kpi("229, 72, 77", "Vencido", cobSoma(vencidos), vencidos.length ? `${cobPlural(vencidos.length, "boleto", "boletos")} · hoje ${dinheiro(cobSoma(vencidos, cobValorHoje))}` : "nenhum boleto vencido", vencidos.length ? "kpi-perigo" : ""),
+    kpi("167, 139, 250", "Recebido no mês", recebido, recebido ? `líquido ${dinheiro(liquido)}` : "nada ainda neste mês"));
+  destino.append(grade);
+  // Linha das contas: PIX, taxa e a última conferência com o Asaas.
+  const pix1 = (contas["CNPJ 1"] || {}).pix, pix2 = (contas["CNPJ 2"] || {}).pix;
+  const pix = pix1 && pix2 ? "PIX ativo nas duas contas."
+    : pix2 ? "PIX ativo no CNPJ 2. No CNPJ 1 o boleto sai sem PIX até a chave ficar pronta; depois o PIX entra sozinho."
+      : pix1 ? "PIX ativo no CNPJ 1. No CNPJ 2 o boleto sai sem PIX até a chave ficar pronta." : "Os boletos saem sem PIX até as chaves ficarem prontas.";
+  const taxas = ["CNPJ 1", "CNPJ 2"].map((k) => {
+    const c = contas[k] || {};
+    if (c.taxaBoleto == null) return "";
+    const promo = c.promoAte && c.promoAte > hojeISO() ? ` até ${dataBonita(c.promoAte).slice(0, 5)}` : "";
+    return `${k}: ${dinheiro(c.taxaBoleto)}${promo}`;
+  }).filter(Boolean).join(" · ");
+  const quando = d.sinc && d.sinc.quando ? new Date(d.sinc.quando) : null;
+  const ha = quando ? Math.max(0, Math.round((Date.now() - quando.getTime()) / 60000)) : null;
+  const linha = cobEl("div", "cob-contas-linha");
+  linha.append(cobEl("span", "", pix));
+  if (taxas) linha.append(cobEl("span", "", `Taxa por boleto pago: ${taxas}, mais ${dinheiro((contas["CNPJ 1"] || contas["CNPJ 2"] || {}).taxaAviso || 0.99)} do aviso por e-mail.`));
+  const conferido = cobEl("span", "cob-contas-sinc", ha === null ? "Ainda não conferido com o Asaas." : ha < 1 ? "Conferido com o Asaas agora." : `Conferido com o Asaas há ${ha < 60 ? cobPlural(ha, "minuto", "minutos") : cobPlural(Math.round(ha / 60), "hora", "horas")}.`);
+  conferido.append(" ", cobBotao("Conferir agora", () => cobSincronizar(true), "cob-link"));
+  linha.append(conferido);
+  destino.append(linha);
+}
+
+// --- 2. Precisa de você ---
+function cobFilaItens(d) {
+  const itens = d.recebimentos || [];
+  const porId = Object.fromEntries(itens.map((x) => [x.id, x]));
+  const hoje = hojeISO();
+  const fila = [];
+  const add = (nivel, texto, botoes, ordem) => fila.push({ nivel, texto, botoes, ordem });
+  for (const x of itens) {
+    if (!cobAberta(x)) continue;
+    const quem = x.cliente || "Cliente";
+    if (x.asaasStatus === "ERRO") {
+      add("erro", `${quem}: o boleto de ${dinheiro(x.valor)} não foi criado no Asaas${x.aviso ? ` (${x.aviso})` : ""}.`,
+        [["Tentar de novo", (b) => cobTentarDeNovo(x, b)], ["Cancelar", (b) => cobCancelar(x, b)]], 0);
+      continue;
+    }
+    if (x.aviso) {
+      const botoes = [];
+      if (/nota deste boleto foi cancelada/i.test(x.aviso) && x.asaasId) botoes.push(["Cancelar o boleto", (b) => cobCancelar(x, b)]);
+      if (/por fora/i.test(x.aviso)) botoes.push(["Dar baixa", () => cobAbrirBaixa(x)]);
+      botoes.push(["Ver", () => cobAbrir(x)]);
+      add("aviso", `${quem}: ${x.aviso}`, botoes, 1);
+    }
+    if (cobVencida(x)) {
+      const dias = cobDias(x.vencimento, hoje);
+      add("erro", `${quem}: boleto de ${dinheiro(x.valor)} venceu há ${cobPlural(dias, "dia", "dias")}. Hoje sai por ${dinheiro(cobValorHoje(x))}, com multa e juros.`,
+        [["Lembrar no WhatsApp", () => cobWhatsapp(x)], ["Recebi por fora", () => cobAbrirBaixa(x)]], 2);
+    } else if (x.asaasId && !x.vistoEm && x.vencimento && cobDias(hoje, x.vencimento) <= 2) {
+      const quando = x.vencimento === hoje ? "vence hoje" : x.vencimento === cobSomaDias(hoje, 1) ? "vence amanhã" : `vence ${cobDiaCurto(x.vencimento)}`;
+      add("aviso", `${quem}: ${quando} e ninguém abriu o boleto ainda.`, [["Mandar no WhatsApp", () => cobWhatsapp(x)]], 3);
+    }
+    if (x.asaasId && x.origem === "nota" && !x.notaId && Date.now() - new Date(x.criadoEm).getTime() > 10 * 60000) {
+      add("aviso", `${quem}: boleto de ${dinheiro(x.valor)} criado, mas a nota fiscal não saiu.`,
+        [["Emitir a nota", () => cobEmitirNotaDoBoleto(x)], ["Cancelar o boleto", (b) => cobCancelar(x, b)]], 1);
+    }
+  }
+  for (const c of d.conciliacao || []) {
+    const de = `${dinheiro(c.valor)} no Asaas do ${c.conta}${c.pagador ? ` (${c.pagador})` : ""} em ${dataBonita(c.data).slice(0, 5)}`;
+    const s = c.sugestao && porId[c.sugestao];
+    if (c.status === "pendente" && s) {
+      add("info", `Entrou ${de}. É de ${s.cliente || "?"} · ${cobOrigemTexto(s)}?`,
+        [["Sim, dar baixa", (b) => cobConciliar(c, s, b)], ["É de outra", () => cobEscolherPar(c)], ["Não é de nenhuma", (b) => cobIgnorar(c, b)]], 4);
+    } else {
+      add("info", `Entrou ${de} sem cobrança no sistema.`, [["Ligar a uma cobrança", () => cobEscolherPar(c)], ["Deixar de lado", (b) => cobIgnorar(c, b)]], 5);
+    }
+  }
+  if ((d.notasSemConta || []).length) {
+    const n = d.notasSemConta.length;
+    add("info", `${cobPlural(n, "nota emitida", "notas emitidas")} antes das cobranças ${n === 1 ? "ainda não está" : "ainda não estão"} no A receber. Diga o que já recebeu.`,
+      [["Organizar", () => cobOrganizarAntigas()]], 6);
+  }
+  return fila.sort((a, b) => a.ordem - b.ordem);
+}
+
+function cobDesenharFila(d) {
+  const destino = cobEls.fila;
+  destino.innerHTML = "";
+  const fila = cobFilaItens(d);
+  destino.classList.toggle("hidden", !fila.length);
+  if (!fila.length) return;
+  destino.className = "painel-cartao cob-fila";
+  cobCab(destino, "Precisa de você", "245, 166, 35", COB_IC.sino, cobEl("span", "cob-contagem", String(fila.length)));
+  const mostrar = cobFilaTudo ? fila : fila.slice(0, 6);
+  for (const f of mostrar) {
+    const linha = cobEl("div", `cob-fila-item cob-${f.nivel}`);
+    linha.append(cobEl("p", "cob-fila-texto", f.texto));
+    const acoes = cobEl("div", "cob-fila-acoes");
+    f.botoes.forEach(([rotulo, fn], i) => acoes.append(cobBotao(rotulo, fn, i === 0 ? "" : "botao-secundario")));
+    linha.append(acoes);
+    destino.append(linha);
+  }
+  if (fila.length > 6) destino.append(cobBotao(cobFilaTudo ? "Mostrar menos" : `Mostrar todos (${fila.length})`, () => { cobFilaTudo = !cobFilaTudo; cobDesenharFila(cobDados); }, "cob-link"));
+}
+
+// --- Linha de uma cobrança (usada nas listas) ---
+function cobLinha(x) {
+  const s = cobSituacao(x);
+  const linha = cobEl("button", "cob-linha");
+  linha.type = "button";
+  const txt = cobEl("span", "cob-linha-txt");
+  const topo = cobEl("span", "cob-linha-topo");
+  topo.append(cobEl("span", `cob-pilula cob-p-${s.classe}`, s.texto), cobEl("strong", "", x.cliente || "Cliente"));
+  if (x.emissor) topo.append(cobEl("span", "cob-tag", x.emissor));
+  const partes = [cobOrigemTexto(x)];
+  const descricao = cobDescricaoCurta(x);
+  if (descricao) partes.push(descricao);
+  if (x.parcelas > 1) partes.push(`parcela ${x.parcela} de ${x.parcelas}`);
+  if (x.vencimento && x.status === "Pendente" && x.asaasId) partes.push(`vence ${cobDiaCurto(x.vencimento)}`);
+  txt.append(topo, cobEl("span", "cob-linha-sub", partes.join(" · ")));
+  const valor = cobEl("span", "cob-linha-valor");
+  valor.append(cobEl("strong", "", dinheiro(x.valor)));
+  if (cobVencida(x)) valor.append(cobEl("span", "cob-vermelho", `hoje ${dinheiro(cobValorHoje(x))}`));
+  else if (x.status === "Recebido" && x.valorLiquido != null && Number(x.valorLiquido) !== Number(x.valorPago ?? x.valor)) valor.append(cobEl("span", "", `líquido ${dinheiro(x.valorLiquido)}`));
+  linha.append(txt, valor);
+  linha.addEventListener("click", () => cobAbrir(x));
+  return linha;
+}
+
+// --- 3. Boletos: a receber por dia de vencimento ---
+function cobDesenharDias(d) {
+  const destino = cobEls.dias;
+  destino.innerHTML = "";
+  cobCab(destino, "Boletos por dia de vencimento", "91, 141, 239", COB_IC.calendario);
+  const hoje = hojeISO();
+  const abertos = (d.recebimentos || []).filter((x) => cobAberta(x) && x.asaasId && x.vencimento);
+  if (!abertos.length) {
+    destino.append(cobEl("p", "doc-hint", "Nenhum boleto em aberto. Os boletos gerados com a nota aparecem aqui, no dia em que vencem."));
+    return;
+  }
+  const grupos = new Map();
+  for (const x of abertos.sort((a, b) => a.vencimento.localeCompare(b.vencimento))) {
+    const chave = x.vencimento < hoje ? "vencidos" : x.vencimento;
+    if (!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave).push(x);
+  }
+  for (const [chave, lista] of grupos) {
+    const det = cobEl("details", "cob-dia" + (chave === "vencidos" ? " cob-dia-vencido" : ""));
+    if (chave === "vencidos" || chave === hoje) det.open = true;
+    const sum = cobEl("summary");
+    const rotulo = chave === "vencidos" ? "Vencidos" : chave === hoje ? `Hoje, ${dataBonita(chave).slice(0, 5)}` : chave === cobSomaDias(hoje, 1) ? `Amanhã, ${dataBonita(chave).slice(0, 5)}` : cobDiaCurto(chave);
+    sum.append(cobEl("strong", "", rotulo), cobEl("span", "cob-dia-qtd", cobPlural(lista.length, "boleto", "boletos")), cobEl("span", "cob-dia-total", dinheiro(cobSoma(lista))));
+    det.append(sum);
+    lista.forEach((x) => det.append(cobLinha(x)));
+    destino.append(det);
+  }
+}
+
+// --- 4. Notas e recibos sem boleto (sem previsão de pagamento) ---
+function cobDesenharSemBoleto(d) {
+  const destino = cobEls.semBoleto;
+  destino.innerHTML = "";
+  const lista = (d.recebimentos || []).filter((x) => cobAberta(x) && !cobTemBoleto(x));
+  cobCab(destino, "Notas e recibos sem boleto", "245, 166, 35", COB_IC.nota, cobEl("span", "cob-cab-total", dinheiro(cobSoma(lista))));
+  destino.append(cobEl("p", "doc-hint cob-sem-previsao", "Sem previsão de pagamento. Dá baixa sozinho quando o PIX cai no Asaas com o mesmo valor; o que cai no Inter, marque você."));
+  if (!lista.length) {
+    destino.append(cobEl("p", "doc-hint", "Nada pendente. Toda nota emitida de cliente sem boleto (e todo recibo) entra aqui."));
+    return;
+  }
+  for (const x of lista.sort((a, b) => String(a.criadoEm).localeCompare(String(b.criadoEm)))) {
+    const linha = cobLinha(x);
+    const dias = Math.max(0, cobDias(String(x.criadoEm).slice(0, 10), hojeISO()));
+    linha.querySelector(".cob-linha-sub").textContent += ` · há ${cobPlural(dias, "dia", "dias")}`;
+    destino.append(linha);
+  }
+}
+
+// --- 5. Tudo a receber por dia, semana ou mês ---
+function cobChavePeriodo(iso) {
+  if (cobPeriodo === "mes") return iso.slice(0, 7);
+  if (cobPeriodo === "semana") {
+    const d = cobData(iso);
+    const seg = cobSomaDias(iso, -((d.getDay() + 6) % 7));
+    return seg;
+  }
+  return iso;
+}
+function cobRotuloPeriodo(chave) {
+  if (cobPeriodo === "mes") return mesBonito(chave);
+  if (cobPeriodo === "semana") return `semana de ${dataBonita(chave).slice(0, 5)} a ${dataBonita(cobSomaDias(chave, 6)).slice(0, 5)}`;
+  return cobDiaCurto(chave);
+}
+function cobDesenharPeriodo(d) {
+  const destino = cobEls.periodo;
+  destino.innerHTML = "";
+  const seletor = cobEl("div", "cob-seg");
+  [["dia", "Dia"], ["semana", "Semana"], ["mes", "Mês"]].forEach(([v, r]) => {
+    const b = cobBotao(r, () => { cobPeriodo = v; cobDesenharPeriodo(cobDados); }, cobPeriodo === v ? "cob-seg-ativo" : "");
+    seletor.append(b);
+  });
+  cobCab(destino, "Tudo a receber", "62, 207, 142", COB_IC.barras, seletor);
+  const hoje = hojeISO();
+  const itens = (d.recebimentos || []).filter(cobAberta);
+  const comData = itens.filter((x) => x.asaasId && x.vencimento);
+  const semPrevisao = itens.filter((x) => !(x.asaasId && x.vencimento));
+  const vencidos = comData.filter((x) => x.vencimento < hoje);
+  const grupos = new Map();
+  for (const x of comData.filter((y) => y.vencimento >= hoje).sort((a, b) => a.vencimento.localeCompare(b.vencimento))) {
+    const k = cobChavePeriodo(x.vencimento);
+    grupos.set(k, (grupos.get(k) || []).concat(x));
+  }
+  const linhas = [];
+  if (vencidos.length) linhas.push({ rotulo: "Vencidos (cobrar)", qtd: vencidos.length, total: cobSoma(vencidos), classe: "cob-l-vencido" });
+  for (const [k, lista] of grupos) linhas.push({ rotulo: cobRotuloPeriodo(k), qtd: lista.length, total: cobSoma(lista) });
+  const maior = Math.max(1, ...linhas.map((l) => l.total), cobSoma(semPrevisao));
+  const tabela = cobEl("div", "cob-tabela");
+  const poe = (l) => {
+    const row = cobEl("div", "cob-t-linha " + (l.classe || ""));
+    const barra = cobEl("span", "cob-t-barra");
+    barra.style.width = `${Math.max(2, Math.round((l.total / maior) * 100))}%`;
+    const nome = cobEl("span", "cob-t-nome");
+    nome.append(cobEl("span", "", l.rotulo), barra);
+    row.append(nome, cobEl("span", "cob-t-qtd", l.qtdTexto || cobPlural(l.qtd, "boleto", "boletos")), cobEl("strong", "cob-t-total", dinheiro(l.total)));
+    tabela.append(row);
+  };
+  if (!linhas.length && !semPrevisao.length) {
+    destino.append(cobEl("p", "doc-hint", "Nada a receber agora."));
+    return;
+  }
+  linhas.forEach(poe);
+  if (semPrevisao.length) poe({ rotulo: "Sem previsão (notas e recibos sem boleto)", qtd: semPrevisao.length, qtdTexto: cobPlural(semPrevisao.length, "conta", "contas"), total: cobSoma(semPrevisao), classe: "cob-l-sem" });
+  const total = cobEl("div", "cob-t-linha cob-t-soma");
+  total.append(cobEl("span", "cob-t-nome", "Total a receber"), cobEl("span", "cob-t-qtd", cobPlural(itens.length, "conta", "contas")), cobEl("strong", "cob-t-total", dinheiro(cobSoma(itens))));
+  tabela.append(total);
+  destino.append(tabela);
+}
+
+// --- 6. Lista completa com filtros ---
+function cobDesenharLista(d) {
+  const destino = cobEls.lista;
+  destino.innerHTML = "";
+  cobCab(destino, "Todas as cobranças", "154, 160, 180", COB_IC.lista);
+  const filtros = cobEl("div", "cob-filtros");
+  const seg = (opcoes, atual, aoEscolher) => {
+    const s = cobEl("div", "cob-seg");
+    opcoes.forEach(([v, r]) => s.append(cobBotao(r, () => { aoEscolher(v); cobDesenharLista(cobDados); }, atual === v ? "cob-seg-ativo" : "")));
+    return s;
+  };
+  filtros.append(
+    seg([["abertas", "A receber"], ["vencidas", "Vencidas"], ["recebidas", "Recebidas"], ["canceladas", "Canceladas"], ["todas", "Todas"]], cobFiltro.status, (v) => { cobFiltro.status = v; }),
+    seg([["", "Os dois CNPJs"], ["CNPJ 1", "CNPJ 1"], ["CNPJ 2", "CNPJ 2"]], cobFiltro.cnpj, (v) => { cobFiltro.cnpj = v; }));
+  const busca = cobEl("input", "cob-busca");
+  busca.type = "text";
+  busca.setAttribute("aria-label", "Buscar cobrança");
+  busca.placeholder = "Buscar por cliente, nota ou serviço";
+  busca.value = cobFiltro.busca;
+  busca.addEventListener("input", () => { cobFiltro.busca = busca.value; cobDesenharLinhasDaLista(cobDados, caixa, rodape); });
+  filtros.append(busca);
+  destino.append(filtros);
+  const caixa = cobEl("div", "cob-lista");
+  const rodape = cobEl("p", "doc-hint cob-rodape");
+  destino.append(caixa, rodape);
+  cobDesenharLinhasDaLista(d, caixa, rodape);
+}
+function cobDesenharLinhasDaLista(d, caixa, rodape) {
+  const termo = normalizarTexto(cobFiltro.busca || "");
+  const lista = (d.recebimentos || []).filter((x) => {
+    if (cobFiltro.cnpj && x.emissor !== cobFiltro.cnpj) return false;
+    if (cobFiltro.status === "abertas" && !cobAberta(x)) return false;
+    if (cobFiltro.status === "vencidas" && !cobVencida(x)) return false;
+    if (cobFiltro.status === "recebidas" && x.status !== "Recebido") return false;
+    if (cobFiltro.status === "canceladas" && x.status !== "Cancelado") return false;
+    if (termo && !normalizarTexto(`${x.cliente} ${x.descricao} ${x.notaNumero || ""} ${x.documento || ""}`).includes(termo)) return false;
+    return true;
+  });
+  caixa.innerHTML = "";
+  lista.forEach((x) => caixa.append(cobLinha(x)));
+  if (!lista.length) caixa.append(cobEl("p", "doc-hint", "Nada com esses filtros."));
+  rodape.textContent = `${cobPlural(lista.length, "cobrança", "cobranças")} · ${dinheiro(cobSoma(lista))}`;
+}
+
+// --- WhatsApp: a mensagem fica pronta e sai do WhatsApp do dono (o do Asaas continua desligado) ---
+function cobWhatsapp(x) {
+  const pix = ((cobDados && cobDados.contas && cobDados.contas[x.emissor]) || {}).pix;
+  const como = pix ? "boleto ou PIX" : "boleto";
+  const texto = cobVencida(x)
+    ? `Olá! Tudo bem? O boleto de ${dinheiro(x.valor)} (${x.descricao || "serviço"}) venceu em ${dataBonita(x.vencimento)}. Pelo link ele já sai com o valor de hoje, ${dinheiro(cobValorHoje(x))} com multa e juros, e pode ser pago por ${como}:\n${x.link}\nSe já pagou, pode desconsiderar. Obrigado!\nSoluções Rápidas · ${COB_TEL}`
+    : `Olá! Tudo bem? Segue o boleto de ${dinheiro(x.valor)} (${x.descricao || "serviço"}), com vencimento em ${dataBonita(x.vencimento)}. Pode ser pago por ${como}:\n${x.link}\nQualquer dúvida, estou à disposição.\nSoluções Rápidas · ${COB_TEL}`;
+  const numero = String(x.whatsapp || "").replace(/\D/g, "");
+  window.open(`https://wa.me/${numero.length >= 12 ? numero : ""}?text=${encodeURIComponent(texto)}`, "_blank", "noopener");
+}
+
+// --- Pedidos ao servidor ---
+async function cobPedir(dados, botao, ok) {
+  if (botao) botao.disabled = true;
+  try {
+    const r = await pedirAoN8n("cobrancas", dados);
+    if (!r || !r.ok) {
+      mostrarToast((r && r.mensagem) || "Não deu certo. Nada mudou.", null, "erro");
+      return null;
+    }
+    if (ok) mostrarToast(r.mensagem || ok);
+    await cobCarregar({ sincronizar: false });
+    return r;
+  } catch (err) {
+    mostrarToast("Não consegui falar com o servidor. Nada mudou.", null, "erro");
+    return null;
+  } finally {
+    if (botao) botao.disabled = false;
+  }
+}
+async function cobCancelar(x, botao) {
+  const ok = await cobConfirmar("Cancelar esta cobrança?", x.asaasId
+    ? `O boleto de ${dinheiro(x.valor)} de ${x.cliente} sai do Asaas (sem taxa) e o cliente não consegue mais pagar por ele.`
+    : `A conta de ${dinheiro(x.valor)} de ${x.cliente} sai do A receber.`, "Sim, cancelar", true);
+  if (ok) await cobPedir({ acao: "cancelar", id: x.id }, botao, "Cancelada.");
+}
+async function cobTentarDeNovo(x, botao) {
+  await cobPedir({ acao: "criar", grupo: x.grupo, clienteId: x.clienteId, valor: String(x.valor), servico: x.descricao || "Serviço", parcelas: String(x.parcelas || 1), vencimentos: "[]" }, botao, "Pedido enviado ao Asaas.");
+}
+async function cobConciliar(c, x, botao) {
+  await cobPedir({ acao: "conciliar", conciliacaoId: c.id, id: x.id }, botao, "Baixa feita.");
+}
+async function cobIgnorar(c, botao) {
+  await cobPedir({ acao: "ignorar", conciliacaoId: c.id }, botao, "Deixada de lado.");
+}
+
+// --- Janela das cobranças (detalhe, baixa, data nova, escolher o par, notas antigas) ---
+const cobDialogo = document.getElementById("cob-dialogo");
+const cobDialogoForm = document.getElementById("cob-dialogo-form");
+let cobDialogoAoConfirmar = null;
+function cobAbrirDialogo({ titulo, texto, montar, botaoOk = "Confirmar", perigo = false, semOk = false, aoConfirmar }) {
+  document.getElementById("cob-dialogo-titulo").textContent = titulo;
+  document.getElementById("cob-dialogo-texto").textContent = texto || "";
+  const campos = document.getElementById("cob-dialogo-campos");
+  campos.innerHTML = "";
+  if (montar) montar(campos);
+  const ok = document.getElementById("cob-dialogo-ok");
+  ok.textContent = botaoOk;
+  ok.classList.toggle("botao-perigo", perigo);
+  ok.classList.toggle("hidden", semOk);
+  ok.disabled = false;
+  document.getElementById("cob-dialogo-voltar").textContent = semOk ? "Fechar" : "Voltar";
+  document.getElementById("cob-dialogo-erro").textContent = "";
+  cobDialogoAoConfirmar = aoConfirmar || null;
+  if (!cobDialogo.open) cobDialogo.showModal();
+}
+function cobFecharDialogo() {
+  if (cobDialogo.open) cobDialogo.close();
+}
+document.getElementById("cob-dialogo-voltar").addEventListener("click", cobFecharDialogo);
+cobDialogoForm.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  if (!cobDialogoAoConfirmar) return cobFecharDialogo();
+  const ok = document.getElementById("cob-dialogo-ok");
+  ok.disabled = true;
+  try {
+    const erro = await cobDialogoAoConfirmar();
+    if (erro) document.getElementById("cob-dialogo-erro").textContent = erro;
+    else cobFecharDialogo();
+  } finally {
+    ok.disabled = false;
+  }
+});
+function cobConfirmar(titulo, texto, botaoOk, perigo) {
+  return new Promise((resolver) => {
+    let respondeu = false;
+    cobAbrirDialogo({ titulo, texto, botaoOk, perigo, aoConfirmar: () => { respondeu = true; resolver(true); } });
+    cobDialogo.addEventListener("close", () => { if (!respondeu) resolver(false); }, { once: true });
+  });
+}
+function cobCampo(campos, rotulo, tipo, valor, extra = {}) {
+  const id = "cob-campo-" + Math.random().toString(36).slice(2, 8);
+  const l = cobEl("label", "", rotulo);
+  l.htmlFor = id;
+  const i = cobEl(tipo === "select" ? "select" : "input");
+  i.id = id;
+  if (tipo !== "select") i.type = tipo;
+  Object.assign(i, extra);
+  if (valor != null) i.value = valor;
+  campos.append(l, i);
+  return i;
+}
+
+function cobAbrirBaixa(x) {
+  let data, valor, forma;
+  cobAbrirDialogo({
+    titulo: x.asaasId ? "Recebi por fora" : "Recebi esta conta",
+    texto: x.asaasId ? `O cliente pagou sem usar o boleto (PIX no Inter, transferência, dinheiro). O sistema dá baixa no Asaas, sem mexer no saldo e sem taxa do boleto, e os avisos de vencido param.` : `Marca como recebida a conta de ${x.cliente}.`,
+    botaoOk: "Registrar recebimento",
+    montar: (campos) => {
+      data = cobCampo(campos, "Quando o dinheiro entrou", "date", hojeISO(), { max: hojeISO() });
+      valor = cobCampo(campos, "Valor recebido", "text", "", { inputMode: "numeric" });
+      ligarMascaraDinheiro(valor);
+      porValorNoCampo(valor, Number(x.valor));
+      forma = cobCampo(campos, "Como pagou", "select");
+      ["PIX", "Transferência", "Dinheiro", "Boleto", "Cartão"].forEach((f) => forma.append(new Option(f, f)));
+    },
+    aoConfirmar: async () => {
+      if (!data.value || data.value > hojeISO()) return "Escolha a data, de hoje para trás.";
+      if (!(valorDoCampo(valor) > 0)) return "Falta o valor.";
+      const r = await cobPedir({ acao: "baixa", id: x.id, data: data.value, valor: valorDoCampo(valor).toFixed(2), forma: forma.value }, null, "Recebimento registrado.");
+      return r ? "" : "Não deu certo: tente de novo.";
+    },
+  });
+}
+
+function cobAbrirProrrogar(x) {
+  let campo, dica;
+  cobAbrirDialogo({
+    titulo: "Mudar o vencimento",
+    texto: `Hoje vence em ${dataBonita(x.vencimento)}. O Asaas troca a data no mesmo boleto (sem taxa), e os avisos passam a seguir a data nova: lembrete 1 dia antes e aviso todo dia depois que vencer.`,
+    botaoOk: "Trocar a data",
+    montar: (campos) => {
+      campo = cobCampo(campos, "Nova data de vencimento", "date", cobDiaUtil(cobSomaDias(hojeISO(), 7)), { min: hojeISO() });
+      dica = cobEl("p", "doc-hint");
+      campos.append(dica);
+      const mostrar = () => { const u = campo.value ? cobDiaUtil(campo.value) : ""; dica.textContent = u && u !== campo.value ? `${cobDiaCurto(campo.value)} não é dia útil: o próximo é ${cobDiaCurto(u)}.` : ""; };
+      campo.addEventListener("input", mostrar);
+      mostrar();
+    },
+    aoConfirmar: async () => {
+      if (!campo.value || campo.value < hojeISO()) return "Escolha uma data de hoje em diante.";
+      const r = await cobPedir({ acao: "prorrogar", id: x.id, vencimento: campo.value }, null, "Vencimento trocado.");
+      return r ? "" : "Não deu certo: tente de novo.";
+    },
+  });
+}
+
+function cobEscolherPar(c) {
+  let sel;
+  const candidatas = (cobDados.recebimentos || []).filter((x) => cobAberta(x) && (x.emissor || "CNPJ 1") === c.conta)
+    .sort((a, b) => Math.abs(Number(a.valor) - Number(c.valor)) - Math.abs(Number(b.valor) - Number(c.valor)));
+  cobAbrirDialogo({
+    titulo: "De qual cobrança é esta entrada?",
+    texto: `Entrou ${dinheiro(c.valor)} no Asaas do ${c.conta}${c.pagador ? ` (${c.pagador})` : ""} em ${dataBonita(c.data)}.`,
+    botaoOk: "Ligar e dar baixa",
+    montar: (campos) => {
+      sel = cobCampo(campos, "Cobrança", "select");
+      candidatas.forEach((x) => sel.append(new Option(`${x.cliente} · ${cobOrigemTexto(x)} · ${dinheiro(x.valor)}`, x.id)));
+      if (!candidatas.length) campos.append(cobEl("p", "doc-hint", `Nenhuma cobrança aberta no ${c.conta}.`));
+    },
+    aoConfirmar: async () => {
+      if (!sel || !sel.value) return "Escolha a cobrança.";
+      const x = candidatas.find((y) => y.id === sel.value);
+      const r = await cobPedir({ acao: "conciliar", conciliacaoId: c.id, id: x.id }, null, "Baixa feita.");
+      return r ? "" : "Não deu certo: tente de novo.";
+    },
+  });
+}
+
+function cobOrganizarAntigas() {
+  const notas = (cobDados && cobDados.notasSemConta) || [];
+  const escolhas = new Map();
+  cobAbrirDialogo({
+    titulo: "Notas de antes das cobranças",
+    texto: "Estas notas foram emitidas antes de o A receber começar a se montar sozinho. Para cada uma, diga se ainda vai receber ou se já recebeu.",
+    botaoOk: "Organizar",
+    montar: (campos) => {
+      const lista = cobEl("div", "cob-antigas");
+      for (const n of notas) {
+        const linha = cobEl("div", "cob-antiga");
+        linha.append(cobEl("span", "cob-antiga-txt", `Nº ${n.numero} · ${n.cliente || "Cliente"} · ${dinheiro(n.valor)} · ${dataBonita(String(n.emitidaEm).slice(0, 10))}`));
+        const s = cobEl("select", "cob-antiga-sel");
+        [["", "Deixar como está"], ["receber", "Ainda vou receber"], ["recebida", "Já recebi"]].forEach(([v, r]) => s.append(new Option(r, v)));
+        s.addEventListener("change", () => escolhas.set(n.id, s.value));
+        linha.append(s);
+        lista.append(linha);
+      }
+      campos.append(lista);
+    },
+    aoConfirmar: async () => {
+      const receber = [...escolhas].filter(([, v]) => v === "receber").map(([k]) => k);
+      const recebidas = [...escolhas].filter(([, v]) => v === "recebida").map(([k]) => k);
+      if (!receber.length && !recebidas.length) return "Escolha pelo menos uma nota.";
+      const r = await cobPedir({ acao: "incluir-antigas", receber: JSON.stringify(receber), recebidas: JSON.stringify(recebidas) }, null, "Notas organizadas.");
+      return r ? "" : "Não deu certo: tente de novo.";
+    },
+  });
+}
+
+// Boleto que saiu sem nota (a nota foi recusada): abre Notas fiscais com o cliente e o valor; o boleto vai junto.
+async function cobEmitirNotaDoBoleto(x) {
+  cobFecharDialogo();
+  const aba = document.querySelector('.sidebar-item[data-page="documentos"]');
+  if (aba) aba.click();
+  const sub = document.querySelector('.subtab-doc[data-subdoc="notas"]');
+  if (sub) sub.click();
+  await garantirCadastrosCarregados();
+  await nfEscolherCliente(x.clienteId);
+  nfCampos.servico.value = String(x.descricao || "").replace(/ · parcela \d+ de \d+$/, "");
+  const grupo = (cobDados.recebimentos || []).filter((y) => y.grupo && y.grupo === x.grupo);
+  porValorNoCampo(nfCampos.valor, cobSoma(grupo.length ? grupo : [x]));
+  nfBoletoUsarExistente(x.grupo, grupo.length ? grupo : [x]);
+  ajustarAlturaAuto(nfCampos.servico);
+  nfAtualizarPrevia();
+  mostrarToast("Confira o serviço e emita a nota: o boleto que já existe vai junto, sem criar outro.");
+}
+
+// Detalhe de uma cobrança: dados, histórico e o que dá para fazer.
+async function cobAbrir(x) {
+  const s = cobSituacao(x);
+  cobAbrirDialogo({
+    titulo: x.cliente || "Cobrança",
+    texto: "",
+    semOk: true,
+    montar: (campos) => {
+      const ficha = cobEl("div", "cob-ficha");
+      const linha = (r, v, cls) => { if (v === "" || v == null) return; const l = cobEl("div", "cob-ficha-linha"); l.append(cobEl("span", "", r), cobEl("strong", cls || "", v)); ficha.append(l); };
+      linha("Situação", s.texto, `cob-pilula cob-p-${s.classe}`);
+      linha("Valor", dinheiro(x.valor));
+      if (cobVencida(x)) linha("Valor de hoje", dinheiro(cobValorHoje(x)), "cob-vermelho");
+      linha("Referente a", `${cobOrigemTexto(x)}${cobDescricaoCurta(x) ? " · " + cobDescricaoCurta(x) : ""}`);
+      if (x.parcelas > 1) linha("Parcela", `${x.parcela} de ${x.parcelas}`);
+      if (x.vencimento) linha(x.asaasId ? "Vencimento" : "Previsão", `${cobDiaCurto(x.vencimento)}/${x.vencimento.slice(0, 4)}`);
+      linha("Conta", x.emissor || "");
+      if (x.status === "Recebido") {
+        linha("Recebido", `${dinheiro(x.valorPago ?? x.valor)} em ${dataBonita(x.dataRecebimento)}`);
+        if (x.taxa) linha("Taxa do Asaas", dinheiro(x.taxa));
+        if (x.multaJuros) linha("Multa e juros", dinheiro(x.multaJuros));
+      }
+      if (x.aviso) linha("Atenção", x.aviso, "cob-amarelo");
+      campos.append(ficha);
+      const acoes = cobEl("div", "cob-acoes");
+      if (x.link) {
+        acoes.append(cobBotao("Abrir boleto", () => window.open(x.link, "_blank", "noopener"), ""));
+        acoes.append(cobBotao("Copiar link", () => copiarTexto(x.link, "Link do boleto copiado.")));
+        acoes.append(cobBotao("WhatsApp", () => cobWhatsapp(x)));
+      }
+      if (x.boletoUrl) acoes.append(cobBotao("PDF do boleto", () => window.open(x.boletoUrl, "_blank", "noopener")));
+      if (cobAberta(x) && x.asaasStatus !== "ERRO" && x.asaasStatus !== "CRIANDO") {
+        acoes.append(cobBotao(x.asaasId ? "Recebi por fora" : "Recebi", () => cobAbrirBaixa(x)));
+        if (x.asaasId) acoes.append(cobBotao("Mudar vencimento", () => cobAbrirProrrogar(x)));
+      }
+      if (cobAberta(x)) acoes.append(cobBotao("Cancelar", (b) => cobCancelar(x, b), "botao-secundario botao-perigo"));
+      campos.append(acoes);
+      const hist = cobEl("div", "cob-historico");
+      hist.append(cobEl("p", "doc-hint", "Buscando o histórico..."));
+      campos.append(hist);
+      pedirAoN8n("cobrancas", { acao: "historico", id: x.id }).then((r) => {
+        hist.innerHTML = "";
+        const eventos = (r && r.eventos) || [];
+        if (!eventos.length) { hist.append(cobEl("p", "doc-hint", "Sem histórico ainda.")); return; }
+        hist.append(cobEl("div", "moldura-titulo", "Histórico"));
+        for (const e of eventos) {
+          const l = cobEl("div", "cob-evento");
+          const q = new Date(e.quando);
+          l.append(cobEl("span", "cob-evento-quando", `${String(q.getDate()).padStart(2, "0")}/${String(q.getMonth() + 1).padStart(2, "0")} ${String(q.getHours()).padStart(2, "0")}:${String(q.getMinutes()).padStart(2, "0")}`), cobEl("span", "", e.texto || e.tipo));
+          hist.append(l);
+        }
+      }).catch(() => { hist.innerHTML = ""; hist.append(cobEl("p", "doc-hint", "Não consegui buscar o histórico.")); });
+    },
+  });
+}
+
+// Abrir o Financeiro ou a aba A receber carrega (e confere) as cobranças.
+document.querySelector('.sidebar-item[data-page="financeiro"]').addEventListener("click", () => cobCarregar());
+document.querySelectorAll('.subtab-fin[data-subfin="receber"]').forEach((b) => b.addEventListener("click", () => cobCarregar()));
 
 // Toda abertura passa pelo login por e-mail e senha (conta.html). O endereço
 // antigo sistema.html#senha cai aqui também, e é levado para o Entrar.

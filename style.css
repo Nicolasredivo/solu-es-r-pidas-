@@ -8122,3 +8122,123 @@ body:has(#page-inicio:not(.hidden)) .busca-gatilho-topo + .conexao {
 /* "Emitido pelo" na aba Documentos: só mostra o CNPJ do cliente (19/11/2026, sem troca à mão). */
 .doc-emissor-info { margin: 0 0 12px; }
 .doc-emissor-info .doc-hint { display: block; margin-top: 2px; }
+
+/* =====================================================================================================
+   COBRANÇAS (20/11/2026): central do A receber (as duas contas do Asaas como uma só) e o boleto na nota fiscal.
+   Mesmo visual do painel do Início (cartões, números-chave); cada situação com a sua cor.
+   ===================================================================================================== */
+.cob-central { margin-bottom: 28px; }
+.cob-escondido { display: none !important; }
+.cob-asaas { margin-bottom: 12px; }
+.cob-kpis { margin-bottom: 8px; }
+.cob-contas-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 0 0 14px; font-size: 0.8rem; color: var(--muted); }
+.cob-contas-sinc { margin-left: auto; }
+.cob-link,
+button.cob-link {
+  width: auto; padding: 0; border: none; background: none; box-shadow: none;
+  color: var(--accent); font-size: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+.cob-grade { margin-bottom: 12px; }
+.cob-contagem, .cob-cab-total { font-weight: 700; font-variant-numeric: tabular-nums; }
+.cob-contagem { min-width: 24px; padding: 1px 8px; border-radius: 999px; text-align: center; background: rgba(245, 166, 35, 0.18); color: var(--aviso); font-size: 0.8rem; }
+
+/* Precisa de você: cada item com a cor do que é (vermelho = cobrar, amarelo = atenção, azul = conferir). */
+.cob-fila { margin-bottom: 12px; }
+.cob-fila-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0 10px 12px; border-top: 1px solid var(--borda-suave); box-shadow: inset 3px 0 0 var(--accent); }
+.cob-fila-item.cob-erro { box-shadow: inset 3px 0 0 var(--error); }
+.cob-fila-item.cob-aviso { box-shadow: inset 3px 0 0 var(--aviso); }
+.cob-fila-texto { flex: 1; min-width: 0; margin: 0; font-size: 0.9rem; line-height: 1.4; }
+.cob-fila-acoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.cob-fila-acoes button, .cob-acoes button { width: auto; padding: 7px 12px; font-size: 0.82rem; }
+
+/* Linha de uma cobrança: situação, cliente e CNPJ em cima; de onde veio embaixo; valor à direita. */
+.cob-central button.cob-linha, .cob-dialogo button.cob-linha {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
+  padding: 10px 6px; border: none; border-top: 1px solid var(--borda-suave); border-radius: 0;
+  background: transparent; color: var(--text); font-size: 0.9rem; font-weight: 400; text-align: left; box-shadow: none;
+}
+.cob-central button.cob-linha:hover { background: rgba(255, 255, 255, 0.03); filter: none; transform: none; }
+.cob-linha-txt { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.cob-linha-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cob-linha-sub { font-size: 0.78rem; color: var(--muted); }
+.cob-linha-valor { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cob-linha-valor span { font-size: 0.75rem; color: var(--muted); }
+.cob-pilula { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.68rem; font-weight: 700; white-space: nowrap; }
+.cob-p-ok { background: rgba(62, 207, 142, 0.16); color: var(--ok); }
+.cob-p-erro { background: rgba(229, 72, 77, 0.16); color: #ff7b7f; }
+.cob-p-aviso { background: rgba(245, 166, 35, 0.16); color: var(--aviso); }
+.cob-p-info { background: rgba(91, 141, 239, 0.16); color: #8fb0f5; }
+.cob-p-visto { background: rgba(167, 139, 250, 0.18); color: #c4b5fd; }
+.cob-p-neutro { background: rgba(154, 160, 180, 0.16); color: var(--muted); }
+.cob-tag { padding: 1px 6px; border: 1px solid var(--borda); border-radius: 6px; font-size: 0.68rem; color: var(--muted); }
+.cob-vermelho, .cob-linha-valor .cob-vermelho { color: #ff7b7f; font-weight: 600; }
+.cob-amarelo { color: var(--aviso); }
+
+/* Boletos por dia: cada dia abre e fecha; vencidos e hoje já vêm abertos. */
+.cob-dia { border-top: 1px solid var(--borda-suave); }
+.cob-dia > summary { display: flex; align-items: center; gap: 10px; padding: 10px 4px; cursor: pointer; list-style: none; }
+.cob-dia > summary::-webkit-details-marker { display: none; }
+.cob-dia > summary::before { content: ""; flex: none; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform var(--transicao); }
+.cob-dia[open] > summary::before { transform: rotate(45deg); }
+.cob-dia-qtd { font-size: 0.8rem; color: var(--muted); }
+.cob-dia-total { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cob-dia-vencido > summary strong, .cob-dia-vencido > summary .cob-dia-total { color: #ff7b7f; }
+.cob-dia button.cob-linha { padding-left: 18px; }
+.cob-sem-previsao { margin: -4px 0 8px; }
+
+/* Botões de escolha colados (Dia / Semana / Mês, filtros). */
+.cob-seg { display: inline-flex; overflow: hidden; border: 1px solid var(--borda); border-radius: 9px; }
+.cob-seg button { width: auto; padding: 6px 11px; border: none; border-radius: 0; background: transparent; color: var(--muted); font-size: 0.78rem; font-weight: 600; box-shadow: none; }
+.cob-seg button + button { border-left: 1px solid var(--borda); }
+.cob-seg button.cob-seg-ativo { background: rgba(91, 141, 239, 0.2); color: var(--text); }
+
+/* Tudo a receber por período: nome com barra proporcional, quantidade e total alinhado à direita. */
+.cob-t-linha { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 9px 0; border-top: 1px solid var(--borda-suave); }
+.cob-t-nome { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.cob-t-barra { display: block; height: 4px; border-radius: 4px; background: rgba(62, 207, 142, 0.7); }
+.cob-l-vencido .cob-t-barra { background: var(--error); }
+.cob-l-vencido .cob-t-nome > span:first-child { color: #ff7b7f; font-weight: 600; }
+.cob-l-sem .cob-t-barra { background: var(--aviso); }
+.cob-t-qtd { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
+.cob-t-total { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cob-t-soma { border-top: 2px solid var(--borda); font-weight: 700; }
+
+.cob-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.cob-busca { flex: 1; min-width: 180px; }
+input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px; font-size: 0.9rem; }
+.cob-rodape { margin-top: 6px; text-align: right; }
+
+/* Janela das cobranças. */
+.cob-dialogo { width: min(540px, calc(100vw - 32px)); max-height: 88vh; overflow: auto; }
+.cob-dialogo-campos label { display: block; margin-top: 10px; }
+.cob-ficha-linha { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; border-top: 1px solid var(--borda-suave); font-size: 0.9rem; }
+.cob-ficha-linha > span { color: var(--muted); }
+.cob-ficha-linha > strong { text-align: right; }
+.cob-acoes { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 6px; }
+.cob-historico { margin-top: 10px; }
+.cob-evento { display: flex; gap: 10px; padding: 6px 0; border-top: 1px solid var(--borda-suave); font-size: 0.82rem; }
+.cob-evento-quando { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cob-antiga { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-top: 1px solid var(--borda-suave); }
+.cob-antiga-txt { font-size: 0.86rem; }
+.cob-manual-titulo { margin-top: 8px; }
+
+/* Boleto dentro da nota fiscal. */
+.nf-boleto { margin-top: 14px; }
+.nf-boleto-topo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.nf-boleto-topo .moldura-titulo { margin: 0; }
+.nf-boleto-liga { margin: 0; }
+.nf-boleto-prazos { margin-top: 6px; }
+.nf-boleto-lista { display: grid; gap: 4px; margin-top: 8px; }
+.nf-boleto-parcela { display: flex; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: 8px; background: var(--campo); font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+.nf-conf-sub { margin-top: 14px; }
+.nf-boleto-feito { border-color: var(--accent); background: rgba(91, 141, 239, 0.08); }
+
+@media (max-width: 560px) {
+  .cob-fila-item { flex-direction: column; align-items: stretch; }
+  .cob-fila-acoes { justify-content: flex-start; }
+  .cob-contas-sinc { margin-left: 0; }
+  .cob-t-linha { grid-template-columns: minmax(0, 1fr) auto; }
+  .cob-t-qtd { display: none; }
+  .cob-filtros .cob-seg { width: 100%; }
+  .cob-filtros .cob-seg button { flex: 1; padding: 6px 4px; }
+}

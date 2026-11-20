@@ -1327,6 +1327,24 @@
              Item 5. Mesma estrutura da aba "A pagar", de propósito: quem
              aprendeu uma sabe usar a outra. -->
         <div id="subfin-receber" class="subpage-fin hidden">
+          <!-- Central de cobranças (20/11/2026): as duas contas do Asaas somadas como uma só, o que precisa de ação,
+               os boletos por dia de vencimento, as notas e recibos sem boleto (sem previsão) e o total a receber por
+               dia, semana ou mês. Dados do fluxo "App - Cobrancas"; as regras ficam no banco (banco/cobrancas.sql). -->
+          <section id="cob-central" class="cob-central" aria-label="Cobranças">
+            <p id="cob-status" class="doc-hint"></p>
+            <div id="cob-conteudo" class="hidden">
+              <div id="cob-asaas" class="cob-asaas"></div>
+              <div id="cob-fila" class="hidden"></div>
+              <div class="painel-grade cob-grade">
+                <div id="cob-dias" class="painel-cartao"></div>
+                <div id="cob-sem-boleto" class="painel-cartao"></div>
+                <div id="cob-periodo" class="painel-cartao painel-largo"></div>
+              </div>
+              <div id="cob-lista-bloco" class="painel-cartao"></div>
+            </div>
+          </section>
+          <h2 class="titulo-bloco cob-manual-titulo">Lançar conta a receber à mão</h2>
+          <p class="doc-hint">Para o que não tem nota nem recibo pelo sistema (um serviço pago em dinheiro, por exemplo). Nota e recibo entram sozinhos lá em cima.</p>
           <div id="resumo-receber" class="resumo-financeiro hidden">
             <div class="resumo-item">
               <span class="resumo-rotulo">A receber</span>
@@ -2212,6 +2230,41 @@
           <label for="nf-valor">Valor total</label>
           <input type="text" id="nf-valor" inputmode="numeric" placeholder="R$ 0,00" />
 
+          <!-- Boleto junto com a nota (20/11/2026): só para cliente com "Gera boletos" ligado. Primeiro sai o boleto
+               (o link vai na descrição, no lugar dos dados do banco), depois a nota; o boleto entra sozinho no A receber. -->
+          <div id="nf-boleto-bloco" class="moldura nf-boleto hidden">
+            <div class="nf-boleto-topo">
+              <div class="moldura-titulo">Boleto</div>
+              <label class="checkbox-linha nf-boleto-liga"><input type="checkbox" id="nf-boleto-liga" checked /><span>Gerar boleto desta vez</span></label>
+            </div>
+            <div id="nf-boleto-campos">
+              <label>Como vai pagar</label>
+              <div class="opcoes" id="nf-boleto-forma">
+                <button type="button" class="opcao active" data-valor="vista">À vista</button>
+                <button type="button" class="opcao" data-valor="parcelado">Parcelado</button>
+              </div>
+              <div id="nf-boleto-parcelas-bloco" class="hidden">
+                <label for="nf-boleto-parcelas">Em quantas vezes</label>
+                <select id="nf-boleto-parcelas">
+                  <option value="2">2 vezes</option><option value="3">3 vezes</option><option value="4">4 vezes</option>
+                  <option value="5">5 vezes</option><option value="6">6 vezes</option><option value="7">7 vezes</option>
+                  <option value="8">8 vezes</option><option value="9">9 vezes</option><option value="10">10 vezes</option>
+                  <option value="11">11 vezes</option><option value="12">12 vezes</option>
+                </select>
+              </div>
+              <label for="nf-boleto-venc">Vencimento do primeiro boleto</label>
+              <input type="date" id="nf-boleto-venc" />
+              <div class="opcoes nf-boleto-prazos" id="nf-boleto-prazos">
+                <button type="button" class="opcao active" data-dias="7">7 dias</button>
+                <button type="button" class="opcao" data-dias="15">15 dias</button>
+                <button type="button" class="opcao" data-dias="30">30 dias</button>
+              </div>
+              <p id="nf-boleto-dica" class="doc-hint"></p>
+              <div id="nf-boleto-lista" class="nf-boleto-lista"></div>
+            </div>
+            <p id="nf-boleto-desligado" class="doc-hint hidden">Sem boleto desta vez: a nota sai com os dados do banco e entra no A receber, sem previsão de pagamento.</p>
+          </div>
+
           <div class="moldura nf-previa">
             <div class="moldura-titulo">Descrição que vai na nota</div>
             <p id="nf-descricao" class="nf-descricao"></p>
@@ -2620,6 +2673,21 @@
   </dialog>
 
   <!-- "Tem certeza?" da chave Gera boletos do cliente (18/11/2026). -->
+  <!-- Janela das cobranças (20/11/2026): detalhe com histórico, recebi por fora, mudar vencimento, escolher de qual
+       cobrança é uma entrada e organizar as notas de antes. O conteúdo é montado pelo app.js. -->
+  <dialog id="cob-dialogo" class="dialogo cob-dialogo" aria-labelledby="cob-dialogo-titulo">
+    <form id="cob-dialogo-form" novalidate>
+      <h2 id="cob-dialogo-titulo" class="dialogo-titulo"></h2>
+      <p id="cob-dialogo-texto" class="dialogo-texto"></p>
+      <div id="cob-dialogo-campos" class="cob-dialogo-campos"></div>
+      <p id="cob-dialogo-erro" class="doc-hint error" role="alert"></p>
+      <div class="dialogo-botoes">
+        <button type="button" id="cob-dialogo-voltar" class="botao-secundario">Voltar</button>
+        <button type="submit" id="cob-dialogo-ok">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="dialogo-boleto" class="dialogo" aria-labelledby="dialogo-boleto-titulo">
     <h2 id="dialogo-boleto-titulo" class="dialogo-titulo">Tem certeza?</h2>
     <p id="dialogo-boleto-texto" class="dialogo-texto"></p>
