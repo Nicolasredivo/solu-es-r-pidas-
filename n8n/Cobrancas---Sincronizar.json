@@ -1,0 +1,747 @@
+{
+  "name": "Cobrancas - Sincronizar",
+  "nodes": [
+    {
+      "id": "e046bbfa-e79e-4a6d-a47f-54de565a3943",
+      "name": "A cada 30 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "55c5f111-e6c4-4905-b4bf-a1766ed9ff15",
+      "name": "Pedido do app",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        420
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "8535fab4-4ab8-4c51-885e-52db60eeea9a",
+      "name": "Plano",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select cob_sinc_plano('{}'::jsonb) as r",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "TkRgR5fLjBCec0VE",
+          "name": "Banco local - n8n_app (cobrancas)"
+        }
+      }
+    },
+    {
+      "id": "e049d298-1a4a-49a9-8321-d63feb5012fc",
+      "name": "Livre?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "573e5c60-a4c6-4526-bebd-fff73cbab4b5",
+              "leftValue": "={{ ($json.r || {}).ocupado !== true && ($json.r || {}).ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "c92f5693-8f52-41cb-97c9-865641f8dd3f",
+      "name": "Lista chamadas 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const r = $('Plano').first().json.r || {};\nconst c = (r.chamadas || []).map((x) => ({ json: x }));\nreturn c.length ? c : [{ json: { pular: true, ref: { tipo: 'nada' } } }];"
+      }
+    },
+    {
+      "id": "c468e550-83b5-4fae-b22f-ffc27cedccb2",
+      "name": "Uma por vez 1",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "2446b66a-17ce-4d06-95ea-1fda9aa67ea4",
+      "name": "Asaas 1",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        180
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "17cd3840-05f8-47b6-959d-14bd967dae91",
+      "name": "Guarda ref 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        180
+      ],
+      "parameters": {
+        "jsCode": "// Junta a resposta do Asaas com a referência da chamada (para o banco saber de quem é).\nreturn [{ json: { ref: $('Uma por vez 1').first().json.ref, resposta: $input.first().json } }];"
+      }
+    },
+    {
+      "id": "be097771-1c7d-497e-95dd-119bda20a00a",
+      "name": "Junta respostas 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        420
+      ],
+      "parameters": {
+        "jsCode": "// Respostas da primeira volta; e quem pagou sem ser cliente conhecido (PIX direto): pede o nome e o documento.\nconst plano = $('Plano').first().json.r || {};\nconst respostas = $input.all().map((i) => i.json).filter((x) => x.ref && x.ref.tipo !== 'nada');\nconst conhecidos = new Set((plano.clientesConhecidos || []).map((k) => k.conta + '|' + k.asaas));\nconst falta = new Map();\nfor (const x of respostas) {\n  if (!x.ref || x.ref.tipo !== 'lista' || !x.resposta || !Array.isArray(x.resposta.data)) continue;\n  for (const pay of x.resposta.data) {\n    if (!['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(pay.status) || !pay.customer) continue;\n    const k = x.ref.conta + '|' + pay.customer;\n    if (!conhecidos.has(k)) falta.set(k, { conta: x.ref.conta, id: pay.customer });\n  }\n}\nreturn [{ json: { respostas, falta: [...falta.values()].slice(0, 30) } }];"
+      }
+    },
+    {
+      "id": "156d5716-ca8b-47f1-84fe-c3788c89ae0a",
+      "name": "Lista chamadas 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        420
+      ],
+      "parameters": {
+        "jsCode": "const f = $('Junta respostas 1').first().json.falta || [];\nconst c = f.map((k) => ({ json: { conta: k.conta, metodo: 'GET', url: 'https://api.asaas.com/v3/customers/' + encodeURIComponent(k.id), ref: { tipo: 'cliente', id: k.id } } }));\nreturn c.length ? c : [{ json: { pular: true, ref: { tipo: 'nada' } } }];"
+      }
+    },
+    {
+      "id": "1066365f-bffa-47a0-949b-ae4b65de2414",
+      "name": "Uma por vez 2",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1540,
+        420
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "2a1cf997-693c-4ace-8394-dc812f267114",
+      "name": "Asaas 2",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1760,
+        300
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "4c5cfbe3-91d9-40d5-af5a-f87abd786ade",
+      "name": "Guarda ref 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Junta a resposta do Asaas com a referência da chamada (para o banco saber de quem é).\nreturn [{ json: { ref: $('Uma por vez 2').first().json.ref, resposta: $input.first().json } }];"
+      }
+    },
+    {
+      "id": "5abbce98-9ee2-42db-8d42-7317610d37c2",
+      "name": "Junta clientes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        540
+      ],
+      "parameters": {
+        "jsCode": "const j = $('Junta respostas 1').first().json;\nconst clientes = $input.all().map((i) => i.json).filter((x) => x.ref && x.ref.tipo === 'cliente' && x.resposta && x.resposta.id)\n  .map((x) => ({ customer: { id: x.resposta.id, name: x.resposta.name, cpfCnpj: x.resposta.cpfCnpj } }));\nreturn [{ json: { p: { respostas: j.respostas, clientes } } }];"
+      }
+    },
+    {
+      "id": "f22779c8-dfcc-4831-aa5c-c96f1f1af8cb",
+      "name": "Grava",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1980,
+        540
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select cob_sinc_gravar($1::jsonb) as r",
+        "options": {
+          "queryReplacement": "={{ [ $json.p ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "TkRgR5fLjBCec0VE",
+          "name": "Banco local - n8n_app (cobrancas)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "b184cc8b-4120-45f1-ac00-119802481ad3",
+      "name": "Lista chamadas 3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        540
+      ],
+      "parameters": {
+        "jsCode": "const r = $('Grava').first().json.r || {};\nconst c = (r.chamadas || []).map((x) => ({ json: x }));\nreturn c.length ? c : [{ json: { pular: true, ref: { tipo: 'nada' } } }];"
+      }
+    },
+    {
+      "id": "b4a1b0d8-26ca-45a9-9b66-894636054d72",
+      "name": "Uma por vez 3",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2420,
+        540
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "51bb0b51-15cd-4d65-9d8e-e30bf32e91b1",
+      "name": "Asaas 3",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2640,
+        420
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "73ec6784-30f7-4adf-9abc-c14510b90498",
+      "name": "Guarda ref 3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        420
+      ],
+      "parameters": {
+        "jsCode": "// Junta a resposta do Asaas com a referência da chamada (para o banco saber de quem é).\nreturn [{ json: { ref: $('Uma por vez 3').first().json.ref, resposta: $input.first().json } }];"
+      }
+    },
+    {
+      "id": "43e8b607-1216-4dd8-8dfd-94e12dafeffc",
+      "name": "Junta 3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        660
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { respostas: $input.all().map((i) => i.json).filter((x) => x.ref && x.ref.tipo !== 'nada') } }];"
+      }
+    },
+    {
+      "id": "3e7f4985-2045-470c-935c-160c10d3c0bf",
+      "name": "Lista lembretes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        660
+      ],
+      "parameters": {
+        "jsCode": "// Lembrete de véspera (o Asaas não tem \"1 dia antes\"): um e-mail por boleto, para os e-mails do cliente.\nconst r = $('Plano').first().json.r || {};\nconst l = (r.lembretes || []).filter((x) => Array.isArray(x.emails) && x.emails.length);\nreturn l.length ? l.map((x) => ({ json: { evento: x.evento, para: x.emails.join(', '), quantos: x.emails.length, assunto: x.assunto, html: x.html } })) : [{ json: { nada: true } }];"
+      }
+    },
+    {
+      "id": "6ad0eb69-a39e-41d1-ad29-437b77da65b5",
+      "name": "Tem lembrete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3080,
+        660
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2e6f4d01-b056-42a2-8d2f-917f023fe5e7",
+              "leftValue": "={{ $json.nada !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "44882e12-2e30-46c3-9e45-ce679de24c8d",
+      "name": "Manda lembrete",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        3300,
+        560
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "fromEmail": "Soluções Rápidas <adm.solucoes.rapidas@gmail.com>",
+        "toEmail": "={{ $json.para }}",
+        "subject": "={{ $json.assunto }}",
+        "emailFormat": "html",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "smtp": {
+          "id": "Nro05J2y8zTXUFXp",
+          "name": "Gmail - Recuperacao de senha (Solucoes Rapidas)"
+        }
+      },
+      "webhookId": "96f4db5a-020c-491c-9d73-8c7ba2a2427a"
+    },
+    {
+      "id": "658d875a-340b-4c83-94a5-2ce277611277",
+      "name": "Junta lembretes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        660
+      ],
+      "parameters": {
+        "jsCode": "const enviados = $('Lista lembretes').all().filter((i) => !i.json.nada);\nconst res = $input.all();\nconst lembretes = enviados.map((i, k) => ({ evento: i.json.evento, quantos: i.json.quantos, ok: !!(res[k] && res[k].json && !res[k].json.error && !res[k].json.nada) }));\nreturn [{ json: { lembretes } }];"
+      }
+    },
+    {
+      "id": "beb4bae4-7731-4759-addd-add1ebce6196",
+      "name": "Final",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3740,
+        660
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select cob_sinc_final($1::jsonb) as r",
+        "options": {
+          "queryReplacement": "={{ [ { lembretes: $json.lembretes, respostas: $('Junta 3').first().json.respostas } ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "TkRgR5fLjBCec0VE",
+          "name": "Banco local - n8n_app (cobrancas)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "A cada 30 minutos": {
+      "main": [
+        [
+          {
+            "node": "Plano",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Plano",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plano": {
+      "main": [
+        [
+          {
+            "node": "Livre?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Livre?": {
+      "main": [
+        [
+          {
+            "node": "Lista chamadas 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lista chamadas 1": {
+      "main": [
+        [
+          {
+            "node": "Uma por vez 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uma por vez 1": {
+      "main": [
+        [
+          {
+            "node": "Junta respostas 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Asaas 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Asaas 1": {
+      "main": [
+        [
+          {
+            "node": "Guarda ref 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guarda ref 1": {
+      "main": [
+        [
+          {
+            "node": "Uma por vez 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta respostas 1": {
+      "main": [
+        [
+          {
+            "node": "Lista chamadas 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lista chamadas 2": {
+      "main": [
+        [
+          {
+            "node": "Uma por vez 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uma por vez 2": {
+      "main": [
+        [
+          {
+            "node": "Junta clientes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Asaas 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Asaas 2": {
+      "main": [
+        [
+          {
+            "node": "Guarda ref 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guarda ref 2": {
+      "main": [
+        [
+          {
+            "node": "Uma por vez 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta clientes": {
+      "main": [
+        [
+          {
+            "node": "Grava",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava": {
+      "main": [
+        [
+          {
+            "node": "Lista chamadas 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lista chamadas 3": {
+      "main": [
+        [
+          {
+            "node": "Uma por vez 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uma por vez 3": {
+      "main": [
+        [
+          {
+            "node": "Junta 3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Asaas 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Asaas 3": {
+      "main": [
+        [
+          {
+            "node": "Guarda ref 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guarda ref 3": {
+      "main": [
+        [
+          {
+            "node": "Uma por vez 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta 3": {
+      "main": [
+        [
+          {
+            "node": "Lista lembretes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lista lembretes": {
+      "main": [
+        [
+          {
+            "node": "Tem lembrete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem lembrete?": {
+      "main": [
+        [
+          {
+            "node": "Manda lembrete",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Junta lembretes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manda lembrete": {
+      "main": [
+        [
+          {
+            "node": "Junta lembretes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta lembretes": {
+      "main": [
+        [
+          {
+            "node": "Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "timezone": "America/Sao_Paulo"
+  }
+}

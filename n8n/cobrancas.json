@@ -1,0 +1,901 @@
+{
+  "name": "App - Cobrancas",
+  "nodes": [
+    {
+      "id": "0dc4ad60-0d3a-4711-89f7-5795c7d49c9a",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "018e30a5-ef1e-4452-a0ee-04fd5de3c6b8",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cobrancas",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      }
+    },
+    {
+      "id": "25e50adf-48b5-4343-b983-6ea67a4bbcc6",
+      "name": "Confere acesso",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "acesso",
+            "senha": "={{ $json.body.senha }}",
+            "tokenAcesso": "={{ $json.body.tokenAcesso }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "43d6201f-19b2-412e-a1c6-6e2847dc9928",
+      "name": "Acesso permitido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9cf224c8-b698-4da0-8e3a-eaef17381712",
+              "leftValue": "={{ $json.permitido === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "d78b48c2-e687-41f8-9aae-883bfd4cb50b",
+      "name": "Responde acesso negado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        520
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"acessoNegado\": true,\n  \"mensagem\": \"Acesso não autorizado. Entre de novo.\"\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "22022a24-305e-4dbf-8584-6a85f2d46e67",
+      "name": "Le entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Tudo chega como texto (o app manda formulário simples). Só passa o que tem o formato certo; o banco confere o resto.\nconst b = $('Recebe pedido do app').first().json.body || {};\nconst t = (v) => String(v ?? '').replace(/[\\u0000-\\u001f\\u007f]/g, ' ').trim();\nconst ACOES = ['painel', 'historico', 'preparar', 'criar', 'ligar-nota', 'registrar-nota', 'baixa', 'prorrogar', 'cancelar', 'conciliar', 'ignorar', 'incluir-antigas', 'sincronizar'];\nconst acao = ACOES.includes(t(b.acao)) ? t(b.acao) : '';\nconst REC = /^rec[A-Za-z0-9]{14}$/;\nconst GRUPO = /^[A-Za-z0-9-]{8,64}$/;\nconst id = (v) => (REC.test(t(v)) ? t(v) : '');\nconst data = (v) => (/^\\d{4}-\\d{2}-\\d{2}$/.test(t(v)) ? t(v) : '');\nconst num = (v) => { let s = t(v); if (s.includes(',')) s = s.replace(/\\./g, '').replace(',', '.'); return /^\\d{1,9}(\\.\\d{1,2})?$/.test(s) ? Number(s) : null; };\nconst lista = (v, f) => { try { const a = JSON.parse(t(v) || '[]'); return Array.isArray(a) ? a.map(f).filter(Boolean).slice(0, 60) : []; } catch (e) { return []; } };\nconst p = { acao };\nlet erro = '';\nif (!acao) erro = 'Ação inválida.';\nif (['historico', 'baixa', 'prorrogar', 'cancelar'].includes(acao)) { p.id = id(b.id); if (!p.id) erro = 'Cobrança inválida.'; }\nif (acao === 'preparar' || acao === 'criar') {\n  p.clienteId = id(b.clienteId); p.valor = num(b.valor); p.material = num(b.material) || 0;\n  p.parcelas = Math.max(1, Math.min(12, parseInt(t(b.parcelas), 10) || 1));\n  p.vencimentos = lista(b.vencimentos, data);\n  if (!p.clienteId) erro = 'Escolha o cliente.'; else if (!p.valor) erro = 'Confira o valor.';\n  if (acao === 'criar') {\n    p.grupo = GRUPO.test(t(b.grupo)) ? t(b.grupo) : '';\n    p.origem = t(b.origem) === 'nota' ? 'nota' : 'avulsa';\n    p.servico = t(b.servico).replace(/\\s+/g, ' ').slice(0, 300);\n    if (!erro && !p.grupo) erro = 'Pedido sem identificação: recarregue a página.';\n    if (!erro && !p.servico) erro = 'Escreva o serviço.';\n  }\n}\nif (acao === 'ligar-nota') { p.grupo = GRUPO.test(t(b.grupo)) ? t(b.grupo) : ''; p.notaId = id(b.notaId); if (!p.grupo || !p.notaId) erro = 'Faltou a nota ou o boleto.'; }\nif (acao === 'registrar-nota') { p.notaId = id(b.notaId); if (!p.notaId) erro = 'Nota inválida.'; }\nif (acao === 'baixa') { p.data = data(b.data); p.valor = num(b.valor); p.forma = ['PIX', 'Boleto', 'Dinheiro', 'Transferência', 'Cartão'].includes(t(b.forma)) ? t(b.forma) : ''; if (!erro && !p.valor) erro = 'Falta o valor recebido.'; }\nif (acao === 'prorrogar') { p.vencimento = data(b.vencimento); if (!erro && !p.vencimento) erro = 'Escolha a data nova.'; }\nif (acao === 'conciliar') { p.conciliacaoId = id(b.conciliacaoId); p.id = id(b.id); if (!p.conciliacaoId || !p.id) erro = 'Escolha a cobrança desta entrada.'; }\nif (acao === 'ignorar') { p.conciliacaoId = id(b.conciliacaoId); if (!p.conciliacaoId) erro = 'Entrada inválida.'; }\nif (acao === 'incluir-antigas') { p.receber = lista(b.receber, id); p.recebidas = lista(b.recebidas, id); if (!p.receber.length && !p.recebidas.length) erro = 'Escolha as notas.'; }\nreturn [{ json: { ok: !erro, erro, p } }];"
+      }
+    },
+    {
+      "id": "4622a392-fac9-45b7-aad0-078643f72682",
+      "name": "Entrada ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4d46b261-92e0-43b2-9ca8-535d4a632797",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "dc020aea-b48d-413c-950c-efec2775742a",
+      "name": "Responde entrada invalida",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        520
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, mensagem: $json.erro }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "923411e2-e052-4ea8-991b-6a7f5b674261",
+      "name": "Sincronizar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2cbd944c-9465-4932-a3d7-e6c3d70e6761",
+              "leftValue": "={{ $json.p.acao === 'sincronizar' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "10e30e48-7ff0-4e69-bee6-bb6fc441db22",
+      "name": "Dispara sincronizacao",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        100
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "Ix4CN4bzAxoxIo1M",
+          "mode": "id"
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "12a08792-11a4-4a33-9c5d-659d01f055b1",
+      "name": "Responde sincronizando",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        100
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Conferindo com o Asaas.\"\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "bffd1ba4-1934-4b8f-851a-34fea80eba30",
+      "name": "Planeja",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1320,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select cob_acao($1::jsonb) as r",
+        "options": {
+          "queryReplacement": "={{ [ $json.p ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "TkRgR5fLjBCec0VE",
+          "name": "Banco local - n8n_app (cobrancas)"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "cf8daf97-ae38-4b79-898b-8b987f0fe7c6",
+      "name": "Responde erro do banco",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        560
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"O banco não respondeu. Nada mudou: tente de novo em instantes.\"\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "b5de34e9-2a09-4bcf-8291-08556a8c0320",
+      "name": "Tem chamadas?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "feadac61-349c-411b-a1c9-2f6f195b1f00",
+              "leftValue": "={{ ((($json.r || {}).chamadas) || []).length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "816ede0a-9413-45a2-be8f-9aa30926fb6a",
+      "name": "Responde direto",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        440
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify(($json.r || {}).resposta || { ok: false, mensagem: 'Sem resposta.' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "a9bb3af3-985c-4f03-8ab8-2c930efcb0ed",
+      "name": "Lista chamadas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        240
+      ],
+      "parameters": {
+        "jsCode": "const r = $('Planeja').first().json.r || {};\nreturn (r.chamadas || []).map((c) => ({ json: c }));"
+      }
+    },
+    {
+      "id": "5e4c7448-ecec-4e82-8655-1cd0e4a5837e",
+      "name": "Uma por vez",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1980,
+        240
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "5f9764e2-8237-41fb-aac5-a8a3a8daf194",
+      "name": "Asaas",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2200,
+        120
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "34e145ac-6f00-4ccd-a36b-b0d9b4ba88d3",
+      "name": "Guarda ref",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        120
+      ],
+      "parameters": {
+        "jsCode": "// Junta a resposta do Asaas com a referência da chamada (para o banco saber de quem é).\nreturn [{ json: { ref: $('Uma por vez').first().json.ref, resposta: $input.first().json } }];"
+      }
+    },
+    {
+      "id": "ba587ca0-cf12-41a5-aec6-b4b5f14053eb",
+      "name": "Junta respostas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        360
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { p: { contexto: ($('Planeja').first().json.r || {}).contexto, respostas: $input.all().map((i) => i.json) } } }];"
+      }
+    },
+    {
+      "id": "cea05f4f-3eed-4235-813b-ea2dfb5ec247",
+      "name": "Registra",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2420,
+        360
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select cob_registrar($1::jsonb) as r",
+        "options": {
+          "queryReplacement": "={{ [ $json.p ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "TkRgR5fLjBCec0VE",
+          "name": "Banco local - n8n_app (cobrancas)"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "beb8995f-b1ec-4b7b-81d7-352d2fe977d7",
+      "name": "Segunda volta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2640,
+        360
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "bc94c274-a5d6-4686-a4e8-c628ae2d7e40",
+              "leftValue": "={{ ((($json.r || {}).chamadas) || []).length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "e2af262d-288e-4705-96f8-643c0220d1dd",
+      "name": "Responde registrado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2860,
+        520
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify(($json.r || {}).resposta || { ok: false, mensagem: 'Sem resposta.' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "44b3e82e-042f-462d-b199-22ee22870dab",
+      "name": "Lista chamadas 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const r = $('Registra').first().json.r || {};\nreturn (r.chamadas || []).map((c) => ({ json: c }));"
+      }
+    },
+    {
+      "id": "145a0764-336b-492b-abce-33ebe35aeab7",
+      "name": "Uma por vez 2",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3080,
+        300
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "b9033319-96d6-4c7d-92bf-8dfd455523f1",
+      "name": "Asaas 2",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3300,
+        180
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "IFZw1TAX7fpYHiU6",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e2ee37b7-9337-48b2-9727-74359aa02aa2",
+      "name": "Guarda ref 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        180
+      ],
+      "parameters": {
+        "jsCode": "// Junta a resposta do Asaas com a referência da chamada (para o banco saber de quem é).\nreturn [{ json: { ref: $('Uma por vez 2').first().json.ref, resposta: $input.first().json } }];"
+      }
+    },
+    {
+      "id": "b9e87d41-a279-4355-8f42-6142cb0caab7",
+      "name": "Junta respostas 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        420
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { p: { contexto: ($('Registra').first().json.r || {}).contexto, respostas: $input.all().map((i) => i.json) } } }];"
+      }
+    },
+    {
+      "id": "eebff845-185a-44cf-907e-85540a3ef75e",
+      "name": "Registra 2",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3520,
+        420
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select cob_registrar($1::jsonb) as r",
+        "options": {
+          "queryReplacement": "={{ [ $json.p ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "TkRgR5fLjBCec0VE",
+          "name": "Banco local - n8n_app (cobrancas)"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "a25543a3-99ea-4fb1-8718-8bc21674baab",
+      "name": "Responde 2",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3740,
+        420
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify(($json.r || {}).resposta || { ok: false, mensagem: 'Sem resposta.' }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Confere acesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere acesso": {
+      "main": [
+        [
+          {
+            "node": "Acesso permitido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acesso permitido?": {
+      "main": [
+        [
+          {
+            "node": "Le entrada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde acesso negado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le entrada": {
+      "main": [
+        [
+          {
+            "node": "Entrada ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada ok?": {
+      "main": [
+        [
+          {
+            "node": "Sincronizar?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde entrada invalida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sincronizar?": {
+      "main": [
+        [
+          {
+            "node": "Dispara sincronizacao",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Planeja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispara sincronizacao": {
+      "main": [
+        [
+          {
+            "node": "Responde sincronizando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planeja": {
+      "main": [
+        [
+          {
+            "node": "Tem chamadas?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde erro do banco",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem chamadas?": {
+      "main": [
+        [
+          {
+            "node": "Lista chamadas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde direto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lista chamadas": {
+      "main": [
+        [
+          {
+            "node": "Uma por vez",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uma por vez": {
+      "main": [
+        [
+          {
+            "node": "Junta respostas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Asaas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Asaas": {
+      "main": [
+        [
+          {
+            "node": "Guarda ref",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guarda ref": {
+      "main": [
+        [
+          {
+            "node": "Uma por vez",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta respostas": {
+      "main": [
+        [
+          {
+            "node": "Registra",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registra": {
+      "main": [
+        [
+          {
+            "node": "Segunda volta?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde erro do banco",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Segunda volta?": {
+      "main": [
+        [
+          {
+            "node": "Lista chamadas 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde registrado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lista chamadas 2": {
+      "main": [
+        [
+          {
+            "node": "Uma por vez 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uma por vez 2": {
+      "main": [
+        [
+          {
+            "node": "Junta respostas 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Asaas 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Asaas 2": {
+      "main": [
+        [
+          {
+            "node": "Guarda ref 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guarda ref 2": {
+      "main": [
+        [
+          {
+            "node": "Uma por vez 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta respostas 2": {
+      "main": [
+        [
+          {
+            "node": "Registra 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registra 2": {
+      "main": [
+        [
+          {
+            "node": "Responde 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde erro do banco",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "timezone": "America/Sao_Paulo"
+  }
+}
