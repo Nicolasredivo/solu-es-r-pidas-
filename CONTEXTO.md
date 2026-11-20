@@ -6159,3 +6159,93 @@ Pedido do dono: ligar SÓ o aviso por e-mail das cobranças para os clientes das
 - **Taxa:** R$ 0,99 por cobrança com aviso (uma vez por boleto), além da taxa do boleto pago.
 - **Teste:** `banco/testes/testar-asaas-por-cnpj.js` (33 ok; casos novos: cliente sem e-mail nasce desligado, ganhou
   e-mail na edição liga só o e-mail, continua sem e-mail não liga nada).
+
+**Desde 20/11/2026 a regra mudou** (seção "Cobranças pelo Asaas", logo abaixo): só o aviso de vencido, todo dia.
+
+## Cobranças pelo Asaas: boleto junto com a nota, A receber automático e baixa sozinha (20/11/2026, versão 2026.11.20a)
+
+Pedido do dono (19/11, à noite, publicado sem ele por autorização dele): primeira etapa da geração de boletos, com
+estas regras dele: vencimento padrão de **7 dias** (primeiro ou único boleto); aviso por e-mail **1 dia antes** do
+vencimento e **todo dia depois de vencido**, nenhum outro; boleto pagável até **20 dias depois** do vencimento, com a
+multa de 2% e os juros de 1% ao mês; nota de cliente com boleto leva **só o link do boleto** (no lugar dos dados do
+banco); as duas contas do Asaas **somadas como uma só** no Financeiro; notas sem boleto também contam, separadas e
+**sem previsão de pagamento**; total a receber por **dia, semana ou mês**; recibos, boletos e notas sem boleto
+**ligados aos pagamentos** para dar baixa sozinha.
+
+### Avisos do Asaas (os 43 clientes com e-mail e todo cliente novo)
+- Ligado só o `PAYMENT_OVERDUE` periódico com `scheduleOffset: 1` (o Asaas aceita 1, 7, 15 e 30: "todo dia enquanto
+  não pagar"), só por e-mail ao cliente. Desligados: criada, alterada, 10 dias antes, no dia, linha digitável, vencida
+  (o de offset 0, para não sair dois no 1º dia) e recebida. Cliente sem e-mail: tudo desligado, como antes.
+- **"1 dia antes" o Asaas não tem** (o `PAYMENT_DUEDATE_WARNING` só aceita 0, 5, 10, 15 e 30; testado num cliente de
+  teste, recusou 1). Por isso o **lembrete de véspera sai do próprio sistema**, pelo Gmail da empresa (a mesma
+  credencial SMTP da recuperação de senha), das 8h às 20h, um por boleto e por data de vencimento (mudou a data, sai
+  de novo para a data nova). E-mail simples, com o valor, o serviço e o botão "Ver boleto e pagar".
+- Script aplicado: `scratchpad .../boletos-v2/aplicar-regra-avisos.js` (cópia de antes: `avisos-antes-regra-20-11.json`).
+  Fluxo "Asaas - Sincroniza cliente": nós "Monta ajustes de notificacao" e "Monta so email da edicao" com a regra nova
+  (`corpoDoAviso`). Teste `testar-asaas-por-cnpj.js` 33 ok.
+
+### Banco (`banco/cobrancas.sql`, rodar de novo é seguro)
+- **O Airtable local só vê coluna/tabela nova depois de reaberto o atalho**: por isso as cobranças falam com o banco
+  direto (credencial "Banco local - n8n_app (cobrancas)", usuário `n8n_app`) e a regra mora em funções SQL. **Só tipos
+  que o Airtable local entende** (text, integer, numeric, boolean, date, timestamptz, jsonb, text[]): outro tipo faz ele
+  não ligar.
+- `Recebimentos` ganhou: Cliente_Ref, Nota_Ref, Arquivo_Ref, Origem (nota | recibo | avulsa | asaas; vazio = à mão),
+  Emissor, Grupo, Parcela_Numero/Total, Asaas_Conta, Asaas_Status, Boleto_Url, Visto_Em, Valor_Pago, Valor_Liquido,
+  Taxa, Multa_Juros, Baixa_Por (asaas | conciliacao | manual), Baixa_Ref, Aviso, Atualizado_Em. Únicos: Asaas_Cobranca_Id,
+  (Grupo, Parcela_Numero) e Arquivo_Ref.
+- Tabelas novas: `Cobranca_Eventos` (histórico de cada cobrança; `Chave` única evita repetir), `Conciliacao` (dinheiro
+  que entrou no Asaas sem ser por boleto nosso) e `Cobranca_Estado` (início das cobranças, contas do Asaas, última
+  sincronização, trava).
+- Funções: `cob_acao` (decide: painel, preparar, criar, ligar-nota, registrar-nota, baixa, prorrogar, cancelar,
+  conciliar, ignorar, incluir-antigas, historico) e `cob_registrar` (grava as respostas do Asaas); `cob_sinc_plano`,
+  `cob_sinc_gravar`, `cob_sinc_final` (sincronização); datas com `cob_dia_util` (fim de semana, feriados nacionais e
+  bancários, Joinville 09/03).
+- **Corte das notas antigas**: `Cobranca_Estado` "inicio" = 19/11/2026 ~22h50. Notas emitidas depois entram sozinhas no
+  A receber; as de antes aparecem em "Organizar" (o dono diz quais ainda vai receber e quais já recebeu).
+- Backup antes: `banco-solucoes\backups\manual\antes-cobrancas-2026-11-19.dump`.
+
+### Fluxos
+- **"App - Cobrancas"** (webhook `cobrancas`, só o Dono): Le entrada (valida tudo) → `cob_acao` → chamadas ao Asaas
+  uma por vez (sub-fluxo "Asaas - Chamada pela conta", em "Loop Over Items") → `cob_registrar` → até uma segunda
+  volta (procurar antes de criar). Ação `sincronizar` dispara o sincronizador sem esperar.
+- **"Cobrancas - Sincronizar"** (de 30 em 30 min e quando o app pede; não guarda execução que deu certo): uma por vez
+  (trava de 10 min); lê saldo, chave PIX e taxas (1x/dia) das duas contas, a situação de cada boleto aberto (e se o
+  cliente abriu a fatura: `viewingInfo`), cobranças criadas direto no Asaas, pagamentos e o extrato dos últimos 3 dias;
+  liga notas novas e recibos ao A receber; dá baixa no que entrou; manda os lembretes de véspera; e, quando o PIX de um
+  boleto aberto caiu direto na chave, dá baixa nele no Asaas (`receiveInCash`) para os avisos de vencido pararem.
+- Criação do boleto: `billingType BOLETO`, `fine 2`, `interest 1`, `daysAfterDueDateToRegistrationCancellation 20`,
+  `externalReference` = id do A receber. PIX no boleto: sai sozinho quando a conta tem chave ativa (CNPJ 2 tem; CNPJ 1
+  aguarda a portabilidade e passa a ter sem mexer em nada). Repetir o mesmo pedido (mesmo "grupo") nunca cria em dobro:
+  o banco devolve o que já existe e, na dúvida, procura no Asaas pela referência antes de criar.
+- **Conciliação** (sem IA, por regra): mesma conta e mesmo valor ao centavo. Pagador = o próprio cliente no Asaas ou
+  mesmo CPF/CNPJ → baixa sozinha. Só o valor bate → sugestão em "Precisa de você" (um toque confirma). Nada bate →
+  "entrou sem cobrança" (ligar a uma cobrança ou deixar de lado). O Inter (CNPJ 1) não é lido: lá a baixa é à mão.
+
+### App
+- **Notas fiscais**: cliente com "Gera boletos" ganha o bloco Boleto (gerar desta vez, à vista ou 2 a 12 parcelas,
+  vencimento com atalhos 7/15/30 dias já em dia útil, prévia das parcelas). A descrição troca os dados do banco por
+  "Pagamento por boleto (ou PIX): link (vence ...)" ou "Pagamento em N boletos (vencimentos ...). 1º boleto: link". A
+  conferência mostra a nota e o boleto juntos; "Emitir nota e boleto" cria o boleto, emite a nota com o link verdadeiro
+  e liga os dois. Nota recusada depois do boleto: emitir de novo usa o mesmo boleto. Cliente sem boleto: depois da
+  nota, `registrar-nota` (entra no A receber sem previsão). Cancelar a nota pergunta se cancela o boleto também.
+- **Financeiro › A receber = central de cobranças**: Asaas das duas contas somadas (saldo, vai entrar, vencido com o
+  valor de hoje, recebido no mês com o líquido), linha das contas (PIX, taxa, última conferência + "Conferir agora"),
+  **Precisa de você** (não criado, sem nota, vencido, vence e ninguém abriu, entrada para conferir, notas antigas),
+  **Boletos por dia de vencimento**, **Notas e recibos sem boleto** (sem previsão), **Tudo a receber** por dia/semana/
+  mês com a linha "sem previsão" e o total, e **Todas as cobranças** com filtros. Tocar numa cobrança abre a ficha com
+  o histórico e as ações (abrir/copiar link, WhatsApp com mensagem pronta, PDF, recebi por fora, mudar vencimento,
+  cancelar). A lista antiga ficou só para as contas lançadas à mão; boleto do Asaas não se exclui nem se marca por lá.
+- Abrir o Financeiro pede uma conferência com o Asaas se a última tem mais de 5 minutos.
+
+### Testes
+- `banco/testes/testar-cobrancas.js`: 59 ok (regras no banco, Asaas simulado, estado real guardado e devolvido).
+- `banco/testes/testar-fluxo-cobrancas.js`: 15 ok (cópias dos dois fluxos com Asaas simulado e sem e-mail).
+- Na tela (painel do navegador, dados inventados): central, ficha, recebi por fora, nota com boleto parcelado, nota
+  recusada e reenviada sem boleto em dobro, nota sem boleto, notas antigas, celular de 375 px sem rolagem lateral.
+- Sincronização real, só leitura, com as duas contas: saldo lido, PIX do CNPJ 2 ativo e do CNPJ 1 não, taxa R$ 0,99
+  (promoção até 21/11 no CNPJ 1 e 02/02/2027 no CNPJ 2), 6 notas antigas para organizar.
+
+### Ainda não feito (próximas etapas)
+- PDF da nota anexado na página do boleto (o Asaas aceita `POST /payments/{id}/documents`; precisa de envio de arquivo).
+- Ler o extrato do Inter (enquanto a chave PIX do CNPJ 1 não vai para o Asaas, o que cai lá é baixa à mão).
+- Painel do Início com as cobranças; regra de vencimento por administradora; pasta Boletos em Arquivos.
