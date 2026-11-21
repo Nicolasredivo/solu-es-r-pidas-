@@ -189,6 +189,8 @@ create or replace function cob_parcela(total numeric, n int, i int) returns nume
 create or replace function cob_descricao_boleto(r "Recebimentos", numero text, servico text) returns text language sql stable as $$
   select left(
     case when coalesce(btrim(numero), '') <> '' then 'Referente à NFS-e nº ' || btrim(numero)
+         when r."Origem" = 'recibo' then 'Referente ao recibo de ' || to_char(coalesce((select (a."Criado_Em" at time zone 'America/Sao_Paulo')::date
+              from "Arquivos_Cliente" a where a.id = r."Arquivo_Ref"), (r."Criado_Em" at time zone 'America/Sao_Paulo')::date, cob_hoje()), 'DD/MM/YYYY')
          when r."Origem" = 'nota' then 'Referente à NFS-e de ' || to_char(coalesce((r."Criado_Em" at time zone 'America/Sao_Paulo')::date, cob_hoje()), 'DD/MM/YYYY')
          else 'Referente a' end
     || case when coalesce(r."Parcela_Total", 1) > 1 then ' (parcela ' || r."Parcela_Numero" || ' de ' || r."Parcela_Total" || ')' else '' end
@@ -347,7 +349,7 @@ end $$;
 -- ao Asaas e depois entrega as respostas para cob_registrar, com o mesmo contexto).
 create or replace function cob_acao(p jsonb) returns jsonb language plpgsql as $$
 declare
-  acao text := cob_txt(p, 'acao'); r "Recebimentos"; c "Entidades_Cadastradas"; pre jsonb; grupo text := cob_txt(p, 'grupo');
+  acao text := cob_txt(p, 'acao'); r "Recebimentos"; c "Entidades_Cadastradas"; pre jsonb; grupo text := cob_txt(p, 'grupo'); base "Recebimentos";
   item jsonb; chamadas jsonb := '[]'; novo text; i int; n int; servico text; desc_boleto text; origem text; venc date;
   hoje date := cob_hoje(); conc "Conciliacao"; nota "Notas_Fiscais"; ids text[];
 begin
@@ -359,7 +361,7 @@ begin
     if grupo is null or grupo !~ '^[A-Za-z0-9-]{8,64}$' then
       return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'Pedido sem identificação: recarregue a página.'));
     end if;
-    origem := case when cob_txt(p, 'origem') = 'nota' then 'nota' else 'avulsa' end;
+    origem := case when cob_txt(p, 'origem') in ('nota', 'recibo') then cob_txt(p, 'origem') else 'avulsa' end;
     servico := left(regexp_replace(coalesce(cob_txt(p, 'servico'), 'Serviço'), '\s+', ' ', 'g'), 300);
     -- Pedido repetido (internet caiu e o app tentou de novo): devolve o que já existe, sem criar outro.
     if not exists (select 1 from "Recebimentos" where "Grupo" = grupo) then
@@ -370,23 +372,47 @@ begin
       end if;
       select * into c from "Entidades_Cadastradas" where id = cob_txt(p, 'clienteId');
       n := jsonb_array_length(pre -> 'parcelas');
+      -- Ciclo do dono desde 21/11/2026: a nota (ou o recibo) sai antes e já está no A receber; o boleto nasce DESSA
+      -- conta (ela vira o 1º boleto), então o "Referente à NFS-e nº X" já vai na criação e nada conta em dobro.
+      if cob_txt(p, 'recebimentoId') is not null then
+        select * into base from "Recebimentos" where id = cob_txt(p, 'recebimentoId');
+        if base.id is null or coalesce(base."Status", 'Pendente') <> 'Pendente' or coalesce(base."Asaas_Cobranca_Id", '') <> '' or base."Grupo" is not null then
+          return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'Esta conta já tem boleto ou não está mais em aberto.'));
+        end if;
+        if base."Cliente_Ref" is distinct from c.id then
+          return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'A conta é de outro cliente: o boleto não foi criado.'));
+        end if;
+        if round(base."Valor", 2) <> round(coalesce(cob_num(p, 'valor'), 0), 2) then
+          return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'O boleto precisa ter o valor da conta (' || cob_reais(base."Valor") || ').'));
+        end if;
+        origem := coalesce(nullif(base."Origem", ''), origem);
+      end if;
       for i in 1..n loop
         item := pre -> 'parcelas' -> (i - 1);
-        insert into "Recebimentos" ("Descricao", "Valor", "Cliente_Nome", "Cliente_Documento", "Cliente_Ref", "Vencimento", "Status",
-            "Forma", "Origem", "Emissor", "Grupo", "Parcela_Numero", "Parcela_Total", "Asaas_Conta", "Asaas_Cliente_Id", "Asaas_Status",
-            "Material_Valor", "Atualizado_Em")
-        values (left(servico, 140) || case when n > 1 then ' · parcela ' || i || ' de ' || n else '' end, (item ->> 'valor')::numeric,
-            cob_nome_cliente(c), cob_digitos(c."CPF_CNPJ"), c.id, (item ->> 'vencimento')::date, 'Pendente', 'Boleto', origem,
-            pre -> 'cliente' ->> 'emissor', grupo, i, n, pre -> 'cliente' ->> 'emissor', c."Asaas_Customer_Id", 'CRIANDO',
-            (item ->> 'material')::numeric, now())
-        returning id into novo;
+        if i = 1 and base.id is not null then
+          update "Recebimentos" set "Valor" = (item ->> 'valor')::numeric, "Vencimento" = (item ->> 'vencimento')::date, "Forma" = 'Boleto',
+                 "Grupo" = grupo, "Parcela_Numero" = 1, "Parcela_Total" = n, "Asaas_Conta" = pre -> 'cliente' ->> 'emissor',
+                 "Asaas_Cliente_Id" = c."Asaas_Customer_Id", "Asaas_Status" = 'CRIANDO', "Material_Valor" = (item ->> 'material')::numeric,
+                 "Descricao" = left(base."Descricao", 140) || case when n > 1 then ' · parcela 1 de ' || n else '' end, "Atualizado_Em" = now()
+           where id = base.id;
+          novo := base.id;
+        else
+          insert into "Recebimentos" ("Descricao", "Valor", "Cliente_Nome", "Cliente_Documento", "Cliente_Ref", "Vencimento", "Status",
+              "Forma", "Origem", "Emissor", "Grupo", "Parcela_Numero", "Parcela_Total", "Asaas_Conta", "Asaas_Cliente_Id", "Asaas_Status",
+              "Material_Valor", "Nota_Ref", "Atualizado_Em")
+          values (left(coalesce(base."Descricao", servico), 140) || case when n > 1 then ' · parcela ' || i || ' de ' || n else '' end, (item ->> 'valor')::numeric,
+              cob_nome_cliente(c), cob_digitos(c."CPF_CNPJ"), c.id, (item ->> 'vencimento')::date, 'Pendente', 'Boleto', origem,
+              pre -> 'cliente' ->> 'emissor', grupo, i, n, pre -> 'cliente' ->> 'emissor', c."Asaas_Customer_Id", 'CRIANDO',
+              (item ->> 'material')::numeric, base."Nota_Ref", now())
+          returning id into novo;
+        end if;
         perform cob_evento(novo, 'criando', 'Cobrança preparada no sistema' || case when n > 1 then ' (parcela ' || i || ' de ' || n || ')' else '' end || '.');
       end loop;
     end if;
     -- Chamadas ao Asaas só para o que ainda não tem boleto lá.
     for r in select * from "Recebimentos" where "Grupo" = grupo and coalesce("Asaas_Cobranca_Id", '') = '' and "Status" = 'Pendente' order by "Parcela_Numero" loop
-      -- "Referente à NFS-e de <data>: serviço" (o número entra assim que a nota sai).
-      desc_boleto := cob_descricao_boleto(r, null, servico);
+      -- "Referente à NFS-e nº X: serviço" (ou "ao recibo de <data>"); boleto sem nota ainda: a data, e o número depois.
+      desc_boleto := cob_descricao_boleto(r, (select nf."Numero_NFSe" from "Notas_Fiscais" nf where nf.id = r."Nota_Ref" and nf."Status" = 'Emitida'), servico);
       -- Linha já existia (repetição): primeiro procura no Asaas pela referência, para nunca criar boleto em dobro.
       if r."Asaas_Status" = 'ERRO' or r."Criado_Em" < now() - interval '1 minute' then
         chamadas := chamadas || jsonb_build_object('conta', r."Asaas_Conta", 'metodo', 'GET',
@@ -431,6 +457,7 @@ begin
   end if;
 
   if acao = 'registrar-nota' then return jsonb_build_object('resposta', cob_registrar_nota(cob_txt(p, 'notaId'))); end if;
+  if acao = 'registrar-recibo' then return jsonb_build_object('resposta', cob_registrar_recibo(cob_txt(p, 'arquivoId'))); end if;
 
   if acao in ('baixa', 'prorrogar', 'cancelar') then
     select * into r from "Recebimentos" where id = cob_txt(p, 'id');
@@ -560,6 +587,27 @@ begin
   return k;
 end $$;
 
+-- A receber de um recibo gerado no sistema (sem previsão). Repetir não duplica.
+create or replace function cob_registrar_recibo(aid text) returns jsonb language plpgsql as $$
+declare a "Arquivos_Cliente"; novo text;
+begin
+  select * into a from "Arquivos_Cliente" where id = aid;
+  if a.id is null or a."Tipo" <> 'recibo' or coalesce(a."Valor", 0) <= 0 then
+    return jsonb_build_object('ok', false, 'mensagem', 'Recibo não encontrado (ou sem valor).');
+  end if;
+  select id into novo from "Recebimentos" where "Arquivo_Ref" = a.id limit 1;
+  if novo is not null then return jsonb_build_object('ok', true, 'existente', true, 'id', novo); end if;
+  insert into "Recebimentos" ("Descricao", "Valor", "Cliente_Nome", "Cliente_Documento", "Cliente_Ref", "Status", "Origem", "Emissor", "Arquivo_Ref", "Atualizado_Em")
+  select left('Recibo · ' || coalesce(nullif(a."Titulo", ''), 'serviço'), 140), a."Valor", coalesce(cob_nome_cliente(c), a."Cliente_Nome"),
+         cob_digitos(c."CPF_CNPJ"), c.id, 'Pendente', 'recibo', coalesce(a."Emissor", c."Atendido_Por", 'CNPJ 1'), a.id, now()
+    from (select 1) z left join "Entidades_Cadastradas" c on c.id = a."Cliente_Ref"
+  on conflict do nothing
+  returning id into novo;
+  if novo is null then select id into novo from "Recebimentos" where "Arquivo_Ref" = a.id limit 1;
+  else perform cob_evento(novo, 'recibo', 'Recibo gerado: entra no A receber sem previsão de pagamento.'); end if;
+  return jsonb_build_object('ok', novo is not null, 'id', novo);
+end $$;
+
 -- A receber de uma nota sem boleto (ou de uma nota emitida pelo chat). Repetir não duplica.
 create or replace function cob_registrar_nota(nid text) returns jsonb language plpgsql as $$
 declare n "Notas_Fiscais"; c "Entidades_Cadastradas"; novo text; servico text;
@@ -646,6 +694,7 @@ end $$;
 
 -- Grava num A receber o que o Asaas devolveu de um pagamento (criado agora ou achado depois).
 create or replace function cob_gravar_pagamento(rid text, pay jsonb, motivo text) returns void language plpgsql as $$
+declare numero text;
 begin
   update "Recebimentos" set "Asaas_Cobranca_Id" = pay ->> 'id', "Asaas_Link" = pay ->> 'invoiceUrl', "Boleto_Url" = pay ->> 'bankSlipUrl',
          "Asaas_Status" = coalesce(pay ->> 'status', 'PENDING'), "Asaas_Cliente_Id" = coalesce(pay ->> 'customer', "Asaas_Cliente_Id"),
@@ -653,6 +702,10 @@ begin
    where id = rid;
   perform cob_evento(rid, 'criado', 'Boleto criado no Asaas: ' || cob_reais((pay ->> 'value')::numeric) || ', vence em '
     || to_char((pay ->> 'dueDate')::date, 'DD/MM/YYYY') || '. Pode ser pago até 30 dias depois, com multa e juros.', 'criado:' || rid);
+  select btrim(nf."Numero_NFSe") into numero from "Recebimentos" x join "Notas_Fiscais" nf on nf.id = x."Nota_Ref" where x.id = rid;
+  if coalesce(numero, '') <> '' and position(('NFS-e nº ' || numero) in coalesce(pay ->> 'description', '')) > 0 then
+    perform cob_descricao_feita(rid, numero, null);
+  end if;
 end $$;
 
 -- ========================= sincronização (fluxo "Cobrancas - Sincronizar", de 30 em 30 minutos) =========================
@@ -905,14 +958,7 @@ begin
   -- Recibos gerados no sistema (o recibo é a cobrança de quem não tem nota): entram no A receber sem previsão.
   for a in select * from "Arquivos_Cliente" ac where ac."Tipo" = 'recibo' and ac."Origem" = 'gerado' and coalesce(ac."Valor", 0) > 0
              and ini is not null and ac."Criado_Em" >= ini and not exists (select 1 from "Recebimentos" x where x."Arquivo_Ref" = ac.id) loop
-    novo := null;
-    insert into "Recebimentos" ("Descricao", "Valor", "Cliente_Nome", "Cliente_Documento", "Cliente_Ref", "Status", "Origem", "Emissor", "Arquivo_Ref", "Atualizado_Em")
-    select left('Recibo · ' || coalesce(nullif(a."Titulo", ''), 'serviço'), 140), a."Valor", coalesce(cob_nome_cliente(c), a."Cliente_Nome"),
-           cob_digitos(c."CPF_CNPJ"), c.id, 'Pendente', 'recibo', coalesce(a."Emissor", c."Atendido_Por", 'CNPJ 1'), a.id, now()
-      from (select 1) z left join "Entidades_Cadastradas" c on c.id = a."Cliente_Ref"
-    on conflict do nothing
-    returning id into novo;
-    if novo is not null then perform cob_evento(novo, 'recibo', 'Recibo gerado: entra no A receber sem previsão de pagamento.'); end if;
+    perform cob_registrar_recibo(a.id);
   end loop;
 
   -- Chave PIX do CNPJ chegou ao Asaas: notas e recibos daquele CNPJ passam a sair com a conta do Asaas. Um erro aqui

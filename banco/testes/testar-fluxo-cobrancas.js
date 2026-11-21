@@ -115,6 +115,7 @@ async function criarSimulador() {
     await q(`delete from "Cobranca_Estado" where id = 'sinc:trava'`);
     // Taxas e agência/conta só são pedidas 1x por dia: o teste força pedir (o estado real volta no fim).
     await q(`update "Cobranca_Estado" set "Valor" = "Valor" - 'taxasEm' - 'numeroEm' where id like 'conta:%'`);
+    const empAntes = await q(`select "Codigo", "Banco", "Conta", "Chave_PIX" from "Empresas_Emissoras" order by 1`);
     const sr = await fetch('http://localhost:5678/webhook/' + caminhoSinc, { method: 'POST' }).then((r) => r.json()).catch((e) => ({ erro: e.message }));
     const b2d = (await q(`select * from "Recebimentos" where id = $1`, [b2.id]))[0];
     confere('sincronizar: boleto pago vira Recebido com taxa', b2d.Status === 'Recebido' && Number(b2d.Taxa) === 1.99 && b2d.Visto_Em !== null, { sr, b2d });
@@ -122,8 +123,9 @@ async function criarSimulador() {
     confere('sincronizar: saldo, PIX e taxa da conta', est && Number(est.Valor.saldo) === 10 && est.Valor.pix === true && Number(est.Valor.taxaBoleto) === 1.99, est);
     confere('sincronizar: guarda agência/conta do Asaas e as chaves PIX', est && est.Valor.conta === '9999999-9' && est.Valor.agencia === '0001'
       && Array.isArray(est.Valor.pixChaves) && est.Valor.pixChaves[0].tipo === 'CNPJ', est);
-    const emp1 = (await q(`select "Banco" from "Empresas_Emissoras" where "Codigo" = 'CNPJ 1'`))[0];
-    confere('sincronizar: CNPJ 1 sem chave PIX no Asaas continua com o banco de antes', emp1 && !/^\s*461/.test(emp1.Banco || ''), emp1);
+    // O simulador não tem a chave do CNPJ 1: a sincronização de teste não pode mexer nos dados de pagamento reais.
+    const empDepois = await q(`select "Codigo", "Banco", "Conta", "Chave_PIX" from "Empresas_Emissoras" order by 1`);
+    confere('sincronizar: dados de pagamento das empresas não mudam sem a chave do próprio CNPJ', JSON.stringify(empAntes) === JSON.stringify(empDepois), empDepois);
     const trava = (await q(`select "Valor" from "Cobranca_Estado" where id = 'sinc:trava'`))[0];
     confere('sincronizar: trava solta no fim', trava && new Date(trava.Valor.ate) <= new Date(Date.now() + 2000), trava);
 

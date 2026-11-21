@@ -198,6 +198,42 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
     const rn4d = (await q(`select "Status" from "Recebimentos" where id = $1`, [rn4.resposta.id]))[0];
     confere('nota cancelada: a conta a receber dela é cancelada', rn4d.Status === 'Cancelado', rn4d);
 
+    // ---------- ciclo do dono desde 21/11/2026: nota (ou recibo) primeiro, boleto depois, da MESMA conta ----------
+    const nota5 = (await q(`insert into "Notas_Fiscais" ("Ambiente", "Serie", "Numero_DPS", "Status", "Numero_NFSe", "Cliente_Ref", "Tomador_Nome", "Descricao", "Valor", "Emissor", "Emitida_Em")
+        values ('Testes', 999, (random() * 1000000)::int + 1, 'Emitida', '9005', $1, 'TESTE', 'Conserto da bomba. Valor total = R$ 300,00. Pagamento por boleto (vence x).', 300, 'CNPJ 2', now()) returning id`, [c1]))[0].id;
+    ids.notas.push(nota5);
+    const rn5 = (await fn('cob_acao', { acao: 'registrar-nota', notaId: nota5 })).resposta;
+    confere('nota emitida antes: entra no A receber sem previsão', rn5.ok && rn5.id, rn5);
+    const grupo3 = 'teste3-' + Date.now();
+    const pedido5 = { acao: 'criar', grupo: grupo3, clienteId: c1, origem: 'nota', recebimentoId: rn5.id, servico: 'Conserto da bomba', parcelas: 2, vencimentos: [somaDias(hoje, 7), somaDias(hoje, 37)] };
+    const cr5x = await fn('cob_acao', { ...pedido5, valor: 299 });
+    confere('boleto da conta com outro valor: recusado', cr5x.resposta && cr5x.resposta.ok === false && /valor da conta/.test(cr5x.resposta.mensagem), cr5x);
+    const cr5 = await fn('cob_acao', { ...pedido5, valor: 300 });
+    confere('boleto nasce da conta da nota: 1ª parcela é a própria conta', cr5.chamadas && cr5.chamadas.length === 2 && cr5.chamadas[0].ref.id === rn5.id, cr5);
+    confere('descrição já na criação: "Referente à NFS-e nº 9005 (parcela 1 de 2): ..."',
+      cr5.chamadas[0].corpo.description.startsWith('Referente à NFS-e nº 9005 (parcela 1 de 2): Conserto da bomba.')
+      && cr5.chamadas[1].corpo.description.startsWith('Referente à NFS-e nº 9005 (parcela 2 de 2)'), cr5.chamadas.map((x) => x.corpo.description));
+    const linhas5 = await q(`select count(*)::int as n, sum("Valor")::numeric as v from "Recebimentos" where "Nota_Ref" = $1`, [nota5]);
+    confere('a nota não conta em dobro: 2 parcelas somando R$ 300', linhas5[0].n === 2 && Number(linhas5[0].v) === 300, linhas5);
+    const reg5 = await fn('cob_registrar', { contexto: cr5.contexto, respostas: cr5.chamadas.map((ch, i) => ({ ref: ch.ref,
+      resposta: respostaPay('pay_testeC' + i + Date.now(), { value: ch.corpo.value, dueDate: ch.corpo.dueDate, description: ch.corpo.description }) })) });
+    confere('boletos criados com link', reg5.resposta.ok && reg5.resposta.cobrancas.every((x) => x.link), reg5.resposta);
+    const ev5 = await q(`select count(*)::int as n from "Cobranca_Eventos" where "Chave" in ($1, $2)`, ['descricao:' + reg5.resposta.cobrancas[0].id + ':9005', 'descricao:' + reg5.resposta.cobrancas[1].id + ':9005']);
+    confere('número já veio na criação: a sincronização não pede de novo', ev5[0].n === 2, ev5);
+    const cr5b = await fn('cob_acao', { ...pedido5, grupo: 'teste3b-' + Date.now(), valor: 150 });
+    confere('a mesma conta não ganha outro boleto', cr5b.resposta && cr5b.resposta.ok === false, cr5b);
+    // Recibo: entra no A receber na hora e o boleto diz "Referente ao recibo de <data>".
+    const rec6 = (await q(`insert into "Arquivos_Cliente" ("Cliente_Ref", "Cliente_Nome", "Tipo", "Titulo", "Valor", "Emissor", "Origem")
+        values ($1, 'TESTE COBRANCAS', 'recibo', 'TESTE recibo de limpeza', 120, 'CNPJ 2', 'gerado') returning id`, [c1]))[0].id;
+    ids.arquivos = [rec6];
+    const rr6 = (await fn('cob_acao', { acao: 'registrar-recibo', arquivoId: rec6 })).resposta;
+    const rr6b = (await fn('cob_acao', { acao: 'registrar-recibo', arquivoId: rec6 })).resposta;
+    confere('recibo entra no A receber na hora (e repetir não duplica)', rr6.ok && rr6.id && rr6b.existente === true && rr6b.id === rr6.id, [rr6, rr6b]);
+    const cr6 = await fn('cob_acao', { acao: 'criar', grupo: 'teste4-' + Date.now(), clienteId: c1, origem: 'recibo', recebimentoId: rr6.id, servico: 'Limpeza', valor: 120, parcelas: 1, vencimentos: [somaDias(hoje, 7)] });
+    confere('boleto do recibo: "Referente ao recibo de <hoje>"', cr6.chamadas && cr6.chamadas.length === 1
+      && cr6.chamadas[0].corpo.description.startsWith('Referente ao recibo de ' + hoje.split('-').reverse().join('/') + ': Limpeza.'), cr6);
+    await q(`delete from "Recebimentos" where "Arquivo_Ref" = $1`, [rec6]);
+
     // ---------- nota emitida fora da tela (chat): liga pelo link e põe o número na descrição pela sincronização ----------
     const grupo2 = 'teste2-' + Date.now();
     const vA = somaDias(hoje, 10), vB = somaDias(hoje, 40);
@@ -268,6 +304,7 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
       await q(`delete from "Conciliacao" where "Transacao_Id" like 'pay:pay_teste%' or "Transacao_Id" like 'ft:ft_teste%'`);
       await q(`delete from "Recebimentos" where "Cliente_Ref" = any($1) or "Nota_Ref" = any($2) or "Asaas_Cobranca_Id" like 'pay_teste%'`, [ids.clientes, ids.notas]);
       if (ids.notas.length) await q(`delete from "Notas_Fiscais" where id = any($1)`, [ids.notas]);
+      if (ids.arquivos) await q(`delete from "Arquivos_Cliente" where id = any($1)`, [ids.arquivos]);
       if (ids.clientes.length) await q(`delete from "Entidades_Cadastradas" where id = any($1)`, [ids.clientes]);
       // O estado real volta como estava, menos o registro de uma troca de banco de verdade (se a chave PIX do CNPJ 1
       // chegar ao Asaas bem durante o teste, a troca vale e a cópia dos dados de antes não pode sumir).
