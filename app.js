@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.20a";
+const APP_VERSION = "2026.11.21a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -11639,16 +11639,21 @@ function atualizarEmissorDoDocumento() {
   docEmissor.textContent = codigoEmissorDoDocumento();
 }
 
-// Dados do CNPJ escolhido no formato do PDF. CNPJ 1 = null (o gerador já sabe os dados de sempre).
+// Dados do CNPJ escolhido no formato do PDF. CNPJ 1 = null (o gerador já sabe os dados de sempre, do Inter) até a
+// chave PIX do CNPJ 1 ir para o Asaas; depois disso, a conta do Asaas, como o CNPJ 2 (regra do dono, 20/11/2026).
 // O CNPJ 2 vem do banco (lista de clientes); sem conseguir buscar, dá erro em vez de sair com dado errado.
 async function emissorDoDocumento() {
   const codigo = codigoEmissorDoDocumento();
-  if (codigo === "CNPJ 1") return null;
   if (!empresasEmissoras.some((e) => e.codigo === codigo)) {
-    const dados = await pedirAoN8n("listar-cadastros", {});
-    if (dados && dados.ok && Array.isArray(dados.empresas)) empresasEmissoras = dados.empresas;
+    try {
+      const dados = await pedirAoN8n("listar-cadastros", {});
+      if (dados && dados.ok && Array.isArray(dados.empresas)) empresasEmissoras = dados.empresas;
+    } catch (err) {
+      if (codigo !== "CNPJ 1") throw err;
+    }
   }
   const e = empresasEmissoras.find((x) => x.codigo === codigo);
+  if (codigo === "CNPJ 1" && !nfContaNoAsaas(e)) return null;
   const cnpj = String((e && e.cnpj) || "").replace(/\D/g, "");
   if (cnpj.length !== 14) throw new Error("sem dados do " + codigo);
   const banco = String(e.banco || "").trim();
@@ -13291,8 +13296,8 @@ function nfBoletoDesenhar() {
   if (plano.vencimentos[0] < hojeISO()) dicas.push("Essa data já passou.");
   dicas.push(nfBoletoPixDaConta() === false
     ? "Sai sem PIX por enquanto: a chave PIX desta conta ainda não está pronta no Asaas (quando ficar, entra sozinha)."
-    : "Multa de 2% e juros de 1% ao mês depois do vencimento; dá para pagar até 20 dias depois.");
-  dicas.push("O cliente recebe lembrete por e-mail 1 dia antes e, se atrasar, um aviso todo dia.");
+    : "Multa de 2% e juros de 1% ao mês depois do vencimento; dá para pagar até 30 dias depois.");
+  dicas.push("O cliente recebe o boleto por e-mail na hora, um lembrete 1 dia antes e, se atrasar, um aviso por dia.");
   nfBoleto.dica.textContent = dicas.join(" ");
   nfBoleto.lista.innerHTML = "";
   if (plano.total > 0) {
@@ -13352,18 +13357,27 @@ async function nfBoletosDaNotaCancelada(nota) {
 }
 
 // Conta que aparece nos dados de pagamento da descrição. Desde 19/11/2026 (pedido do dono) segue o cliente, sem
-// escolha: cliente do CNPJ 1 = conta do CNPJ 1 (Inter); cliente do CNPJ 2 = conta do CNPJ 2 (Asaas), montada no
-// mesmo formato com os dados da tabela Empresas_Emissoras (chegam junto com a lista de clientes).
+// escolha: cliente do CNPJ 1 = conta do CNPJ 1; cliente do CNPJ 2 = conta do CNPJ 2 (Asaas), montada no mesmo formato
+// com os dados da tabela Empresas_Emissoras (chegam junto com a lista de clientes).
+// CNPJ 1: bloco fixo do Inter só até a chave PIX do CNPJ 1 ficar ativa no Asaas. Aí a sincronização das cobranças
+// troca a linha do CNPJ 1 em Empresas_Emissoras para a conta do Asaas (banco 461) e a nota passa a sair com ela,
+// sem ninguém mexer (regra do dono, 20/11/2026: depois da portabilidade, nada mais do Inter).
 const nfPagamentoBloco = document.getElementById("nf-pagamento-bloco");
 
 function nfContaDoCnpj2() {
   return !nfPagamentoBloco.classList.contains("hidden");
 }
 
+// A linha da empresa (Empresas_Emissoras) já é a conta do Asaas (banco 461)?
+function nfContaNoAsaas(e) {
+  return Boolean(e) && /^\s*461\b/.test(String(e.banco || ""));
+}
+
 // "461 - Asaas I.P S.A" + titular → "ASAAS I.P S.A - 461 NICOLAS ..." (igual ao "INTER - 077 CIRLEI ..." do CNPJ 1).
 function nfPagamentoTexto() {
-  if (!nfContaDoCnpj2()) return NF_PAGAMENTO;
-  const e = empresasEmissoras.find((x) => x.codigo === "CNPJ 2");
+  const codigo = nfContaDoCnpj2() ? "CNPJ 2" : "CNPJ 1";
+  const e = empresasEmissoras.find((x) => x.codigo === codigo);
+  if (codigo === "CNPJ 1" && !nfContaNoAsaas(e)) return NF_PAGAMENTO;
   if (!e || !String(e.conta || "").trim()) return "";
   const banco = String(e.banco || "").trim();
   const m = /^(\d{3})\s*-\s*(.+)$/.exec(banco);
@@ -13620,7 +13634,7 @@ async function nfConferir(evento) {
   else if (!nfCampos.servico.value.trim()) erro = "Escreva o serviço feito.";
   else if (!(total > 0)) erro = "Falta o valor total.";
   else if (escolhaDoGrupo(nfTipoValor) === "separado" && !(material > 0 && material < total)) erro = "O material precisa ser maior que zero e menor que o total.";
-  else if (nfContaDoCnpj2() && !nfPagamentoTexto()) erro = "Não achei os dados da conta do CNPJ 2 (servidor fora?). Tente de novo daqui a pouco.";
+  else if (!nfBoletoAtivo() && !nfPagamentoTexto()) erro = `Não achei os dados da conta do ${nfContaDoCnpj2() ? "CNPJ 2" : "CNPJ 1"} (servidor fora?). Tente de novo daqui a pouco.`;
   else if (descricao.length > NF_LIMITE) erro = `A descrição passou de ${NF_LIMITE} caracteres: encurte o serviço.`;
   const comBoleto = nfBoletoAtivo();
   const plano = comBoleto ? nfBoletoPlano() : null;
@@ -13700,8 +13714,9 @@ function nfMostrarConferencia(r, pedido, boleto) {
       `${nfReais(Number(p.valor))} · vence ${cobDiaCurto(String(p.vencimento))}/${String(p.vencimento).slice(0, 4)}`)));
     const emails = (rb.cliente && rb.cliente.emails) || [];
     caixa.append(
-      nfLinha("Lembrete 1 dia antes", emails.length ? emails.join(", ") : "Cliente sem e-mail: mande o link pelo WhatsApp"),
-      nfLinha("Regras", "Multa de 2% e juros de 1% ao mês depois do vencimento; dá para pagar até 20 dias depois; aviso por e-mail todo dia se atrasar"),
+      nfLinha("E-mails do boleto", emails.length ? `${emails.join(", ")} (o boleto na hora, um lembrete 1 dia antes e, se atrasar, um aviso por dia)` : "Cliente sem e-mail: mande o link pelo WhatsApp"),
+      nfLinha("Descrição no boleto", "Referente à NFS-e nº … (o número entra assim que a nota sair)"),
+      nfLinha("Regras", "Multa de 2% e juros de 1% ao mês depois do vencimento; dá para pagar até 30 dias depois"),
       nfLinha("Taxa do Asaas", conta.taxaBoleto != null ? `${nfReais(Number(conta.taxaBoleto))} por boleto pago, mais ${nfReais(Number(conta.taxaAviso || 0.99))} do aviso` : "Só se for pago"));
     if (rb.problemas && rb.problemas.length) {
       const p = document.createElement("div");
@@ -13868,7 +13883,7 @@ function nfQuadroBoleto(cobrancas) {
   });
   const dica = document.createElement("p");
   dica.className = "doc-hint";
-  dica.textContent = "Já está em Financeiro › A receber. O cliente recebe o lembrete por e-mail 1 dia antes de vencer e, se atrasar, um aviso por dia.";
+  dica.textContent = "Já está em Financeiro › A receber, com a descrição \"Referente à NFS-e nº …\". O Asaas manda o boleto por e-mail ao cliente agora; depois vai um lembrete 1 dia antes de vencer e, se atrasar, um aviso por dia.";
   q.append(dica);
   return q;
 }
@@ -16375,8 +16390,9 @@ function cobDesenharAsaas(d) {
   destino.append(grade);
   // Linha das contas: PIX, taxa e a última conferência com o Asaas.
   const pix1 = (contas["CNPJ 1"] || {}).pix, pix2 = (contas["CNPJ 2"] || {}).pix;
-  const pix = pix1 && pix2 ? "PIX ativo nas duas contas."
-    : pix2 ? "PIX ativo no CNPJ 2. No CNPJ 1 o boleto sai sem PIX até a chave ficar pronta; depois o PIX entra sozinho."
+  const notas1 = (contas["CNPJ 1"] || {}).notasPeloAsaas;
+  const pix = pix1 && pix2 ? "PIX ativo nas duas contas." + (notas1 ? " Notas e recibos dos dois CNPJs já saem com a conta do Asaas." : "")
+    : pix2 ? "PIX ativo no CNPJ 2. No CNPJ 1 o boleto sai sem PIX até a chave ficar pronta; quando ficar, o PIX entra sozinho e as notas e recibos do CNPJ 1 passam a sair com a conta do Asaas (sem o Inter)."
       : pix1 ? "PIX ativo no CNPJ 1. No CNPJ 2 o boleto sai sem PIX até a chave ficar pronta." : "Os boletos saem sem PIX até as chaves ficarem prontas.";
   const taxas = ["CNPJ 1", "CNPJ 2"].map((k) => {
     const c = contas[k] || {};
@@ -16527,7 +16543,10 @@ function cobDesenharSemBoleto(d) {
   destino.innerHTML = "";
   const lista = (d.recebimentos || []).filter((x) => cobAberta(x) && !cobTemBoleto(x));
   cobCab(destino, "Notas e recibos sem boleto", "245, 166, 35", COB_IC.nota, cobEl("span", "cob-cab-total", dinheiro(cobSoma(lista))));
-  destino.append(cobEl("p", "doc-hint cob-sem-previsao", "Sem previsão de pagamento. Dá baixa sozinho quando o PIX cai no Asaas com o mesmo valor; o que cai no Inter, marque você."));
+  // Enquanto o CNPJ 1 recebe pelo Inter (chave PIX ainda não foi para o Asaas), o que cai lá é baixa à mão.
+  const interAinda = !((d.contas || {})["CNPJ 1"] || {}).notasPeloAsaas;
+  destino.append(cobEl("p", "doc-hint cob-sem-previsao", "Sem previsão de pagamento. Dá baixa sozinho quando o PIX cai no Asaas com o mesmo valor"
+    + (interAinda ? "; o que cai no Inter, marque você." : ".")));
   if (!lista.length) {
     destino.append(cobEl("p", "doc-hint", "Nada pendente. Toda nota emitida de cliente sem boleto (e todo recibo) entra aqui."));
     return;
