@@ -6317,3 +6317,34 @@ Pedidos do dono (20/11, de manhã), respondendo ao resumo da 1ª etapa: prazo pa
 - `banco/nfse-local.js` estava apagado da pasta do projeto (sem registro na lixeira nem no Kaspersky); o atalho
   "Servidor n8n" liga o serviço de notas por esse arquivo. Foi restaurado do Git (`git checkout -- banco/nfse-local.js`),
   idêntico à versão que estava rodando. Se a emissão parar de ligar, conferir `git status` primeiro.
+
+## Cobranças, 3ª rodada: nota (ou recibo) primeiro, boleto depois; CNPJ 1 já no Asaas (21/11/2026, versão 2026.11.21a)
+
+Pedido do dono: inverter o ciclo para o e-mail do Asaas (que sai na criação do boleto) já levar o número da nota:
+**primeiro a nota ou o recibo, depois o boleto**; e, com a chave PIX no Asaas, **as notas levam os dados e a chave da conta**.
+
+- **Portabilidade concluída:** a chave PIX CNPJ do CNPJ 1 ficou ativa no Asaas em 21/11/2026 e a sincronização trocou
+  sozinha a linha do CNPJ 1 em `Empresas_Emissoras` (Asaas, ag. 0001, conta do CNPJ 1, chave = CNPJ). Os dados do Inter
+  estão em `Cobranca_Estado` "banco-antes:CNPJ 1". Os textos de reserva (`NF_PAGAMENTO` do app e do script do chat,
+  `EMISSOR_PADRAO` do `pdf-documentos.js` e `EMISSORES["1"]` do `gerar_documento.py`) também passaram para o Asaas.
+- **Banco:** `criar` aceita `recebimentoId`: a conta que a nota (ou o recibo) já criou no A receber vira o 1º boleto
+  (as outras parcelas copiam a nota), com validação de cliente, valor igual ao da conta e "uma conta, um boleto". A
+  descrição já sai "Referente à NFS-e nº X (parcela i de n): serviço" ou "Referente ao recibo de <data>: ...", e o
+  `cob_gravar_pagamento` anota a descrição como feita (a sincronização não pede de novo). Nova ação
+  `registrar-recibo` (`cob_registrar_recibo`, a mesma que a sincronização usa).
+- **Fluxo "App - Cobrancas":** "Le entrada" aceita `recebimentoId`, origem "recibo" e `registrar-recibo` (cópia de
+  antes: `banco-solucoes\backups\manual\fluxo-app-cobrancas-antes-ciclo-2026-11-21.json`).
+- **Nota com boleto (app e chat):** emite a nota → `registrar-nota` → `criar` com o `recebimentoId`. A nota leva
+  "Pagamento por boleto (vence dd/mm/aaaa), enviado por e-mail, ou PIX/transferência." + os dados e a chave PIX da conta
+  (sem link: o boleto nasce depois). Nota recusada = nenhum boleto; nota saiu e o boleto falhou = botão "Tentar o boleto
+  de novo" (mesmo pedido, nunca em dobro; no chat, rodar `emitir` de novo). Boleto antigo criado antes da nota (ciclo
+  anterior) continua sendo ligado por `ligar-nota`.
+- **Recibo:** ao gerar um recibo em Documentos, ele entra no A receber na hora; cliente com "Gera boletos" já vê o
+  "Gerar boleto" desta conta. A ficha de toda nota/recibo em aberto sem boleto ganhou o botão "Gerar boleto"
+  (vencimento + 1 a 12 boletos).
+- **Correção:** a cópia do documento na pasta do cliente gravava "CNPJ 2" sempre que havia dados de conta (depois da
+  troca, o CNPJ 1 também tem): agora grava o CNPJ do documento (`codigoEmissorDoDocumento`).
+- **Testes:** `testar-cobrancas.js` 84 ok (boleto da conta da nota com o número na criação, parcelas sem contar em dobro,
+  valor diferente recusado, conta com boleto não ganha outro, recibo na hora e "Referente ao recibo"); `testar-fluxo-
+  cobrancas.js` 17 ok; tela testada no painel do navegador com dados de teste (ordem nota → conta → boleto, falha com
+  "tentar de novo", janela "Gerar boleto").
