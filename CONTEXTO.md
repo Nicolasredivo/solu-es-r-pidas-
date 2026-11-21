@@ -6249,3 +6249,71 @@ banco); as duas contas do Asaas **somadas como uma só** no Financeiro; notas se
 - PDF da nota anexado na página do boleto (o Asaas aceita `POST /payments/{id}/documents`; precisa de envio de arquivo).
 - Ler o extrato do Inter (enquanto a chave PIX do CNPJ 1 não vai para o Asaas, o que cai lá é baixa à mão).
 - Painel do Início com as cobranças; regra de vencimento por administradora; pasta Boletos em Arquivos.
+
+## Cobranças, 2ª rodada: 30 dias, e-mail de cobrança criada, "Referente à NFS-e nº", boleto pela nota do chat e conta do Asaas no lugar do Inter (20 e 21/11/2026, versão 2026.11.21a)
+
+Pedidos do dono (20/11, de manhã), respondendo ao resumo da 1ª etapa: prazo para pagar depois do vencimento **sobe para
+30 dias**; **liga** o e-mail do Asaas na criação do boleto; nota pelo chat **cria o boleto** para quem tem "Gera boletos";
+**todo boleto diz "referente à NF nº ..."**; e, quando a portabilidade da chave PIX do CNPJ 1 para o Asaas terminar,
+**nada mais do Inter**: só os dados e a chave PIX da conta do Asaas de cada CNPJ, conforme o cliente.
+
+### Testado no Asaas de verdade (cliente e boleto de teste, apagados)
+- `daysAfterDueDateToRegistrationCancellation: 30` é aceito na criação. Num boleto que já existe o Asaas **ignora** a
+  troca desse prazo (responde 200, mas continua o de antes): só vale para boleto novo.
+- A descrição de um boleto que já existe muda por `POST` (e `PUT`) em `/payments/{id}`; mudar o vencimento mantém o
+  prazo e a descrição.
+- `GET /myAccount/accountNumber` dá agência e conta de cada conta (CNPJ 1: conta do Asaas já existe, chave PIX ainda não).
+
+### Banco (`banco/cobrancas.sql`)
+- **30 dias** na criação (`cob_acao` e a segunda volta do `cob_registrar`), nos textos do histórico e do "vencido".
+- **Descrição do boleto** (`cob_descricao_boleto`): na criação, `Referente à NFS-e de <data> (parcela i de n): <serviço>.`
+  (o boleto nasce antes da nota, para o link ir nela); quando a nota sai, `Referente à NFS-e nº <número> ...`, pedido ao
+  Asaas por `cob_chamada_descricao` (no `ligar-nota` do app/chat e, se faltar, na sincronização). Deu certo = evento com
+  chave `descricao:<id>:<nº>` (não pede de novo); deu errado = `descricao-erro:<id>:<nº>:<dia>` (tenta de novo no dia
+  seguinte). Mudar a descrição não manda e-mail (o aviso de "cobrança alterada" continua desligado).
+- **Nota ligada pelo link** (`cob_ligar_por_link`): o link do 1º boleto escrito na nota liga a nota a todas as parcelas
+  do mesmo pedido (antes só a do link).
+- **Conta do Asaas no lugar do Inter** (`cob_banco_novo` decide sem gravar; `cob_banco_asaas` aplica, no fim do
+  `cob_sinc_gravar`, protegido: erro vai para `Cobranca_Estado` "banco-erro" e não derruba a sincronização). A
+  sincronização guarda as chaves PIX ativas (`pixChaves`) e, 1x/dia, agência e conta (`/myAccount/accountNumber`) de
+  cada conta. Quando a chave **CNPJ do próprio CNPJ** fica ativa no Asaas (outra chave não basta), a linha da empresa em
+  `Empresas_Emissoras` passa para a conta do Asaas (banco "461 - ...", agência, conta, chave = CNPJ). Os dados de antes
+  ficam em `Cobranca_Estado` "banco-antes:<CNPJ>" (para voltar: copiar de lá para a linha da empresa).
+  O painel manda `contas[CNPJ].notasPeloAsaas` (lido da própria tabela).
+- `n8n_app` ganhou `select, update` em `Empresas_Emissoras`.
+
+### Avisos do Asaas (2ª versão da regra)
+- Ligados, só por e-mail ao cliente: **cobrança criada** (`PAYMENT_CREATED`, o boleto chega na hora) e **vencida todo
+  dia** (`PAYMENT_OVERDUE` periódico, offset 1). O resto desligado; o lembrete de véspera continua saindo pelo sistema.
+- Aplicado nos 43 clientes com e-mail das duas contas (os 2 sem e-mail seguem tudo desligado). Cópia de antes:
+  `banco-solucoes\backups\manual\asaas-avisos-antes-criacao-2026-11-20.json`.
+- Fluxo "Asaas - Sincroniza cliente": `corpoDoAviso` com a regra nova (cliente novo e quem ganha e-mail). Cópia de antes:
+  `banco-solucoes\backups\manual\fluxo-sincroniza-cliente-antes-criacao-2026-11-20.json`.
+- **Custo:** com o aviso de criação, todo boleto passa a ter a taxa do aviso (R$ 0,99, uma vez por boleto), além da
+  taxa do boleto pago.
+
+### App
+- Textos de 30 dias; conferência mostra "E-mails do boleto" (na hora, 1 dia antes, todo dia se atrasar) e "Descrição no
+  boleto: Referente à NFS-e nº …".
+- `nfPagamentoTexto`: o CNPJ 1 usa o bloco fixo do Inter (`NF_PAGAMENTO`) **só enquanto** a linha dele em
+  `Empresas_Emissoras` não é do banco 461; depois, monta da tabela como o CNPJ 2. O recibo (`emissorDoDocumento`) segue
+  a mesma regra. A central tira o "o que cai no Inter, marque você" quando o CNPJ 1 já está no Asaas.
+
+### Chat
+- **Nota pelo chat com boleto:** `~/.claude/skills/emitir-nfse/scripts/nota-sistema.js preparar|emitir <pedido.json>`,
+  pelo mesmo caminho da tela (webhooks `cobrancas` e `notas-fiscais`, com usuário de teste temporário). Boleto primeiro,
+  nota com o link, `ligar-nota`. O arquivo guarda o grupo do boleto: emitir de novo depois de uma recusa usa o mesmo.
+  Sem boleto: dados de pagamento da conta do CNPJ (mesma regra da tela) e `registrar-nota`.
+- **Recibo pelo chat:** `gerar_documento.py` lê a conta do sistema (`dados-emissor.js`) e usa quando é a do Asaas; com o
+  servidor desligado, sai com os dados fixos e avisa.
+
+### Testes
+- `testar-cobrancas.js`: 30 dias, descrição na criação e com o número, ligação pelo link, descrição pela sincronização
+  (acerto e erro), decisão da troca de banco (sem chave, chave aleatória, CNPJ de outro, conta não lida, troca, já é
+  Asaas) e as chaves/conta guardadas. A limpeza não apaga um registro real de troca de banco.
+- `testar-asaas-por-cnpj.js`: cliente novo e quem ganha e-mail nascem com "cobrança criada" + vencido todo dia.
+
+### Ocorrência: o serviço de notas sumiu da pasta (20/11/2026)
+- `banco/nfse-local.js` estava apagado da pasta do projeto (sem registro na lixeira nem no Kaspersky); o atalho
+  "Servidor n8n" liga o serviço de notas por esse arquivo. Foi restaurado do Git (`git checkout -- banco/nfse-local.js`),
+  idêntico à versão que estava rodando. Se a emissão parar de ligar, conferir `git status` primeiro.
