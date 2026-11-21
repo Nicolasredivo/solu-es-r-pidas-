@@ -32,8 +32,8 @@
   // de sempre. Os dados do CNPJ 2 vêm do banco do sistema (Empresas_Emissoras), não deste arquivo.
   // O nome, o endereço, os telefones, os e-mails e o responsável são os mesmos nos dois.
   const EMISSOR_PADRAO = {
-    cnpj: "11.338.567/0001-99", titular: "Cirlei Luis Zomer", banco: "Inter (077)",
-    agencia: "0001", conta: "43090549-1", pix: "11.338.567/0001-99", pixRotulo: "Chave Pix (CNPJ): ",
+    cnpj: "11.338.567/0001-99", titular: "Cirlei Luis Zomer", banco: "Asaas I.P S.A (461)",
+    agencia: "0001", conta: "8023182-2", pix: "11.338.567/0001-99", pixRotulo: "Chave Pix (CNPJ): ",
   };
   function emissorDe(dados) {
     const e = dados && dados.emissor;

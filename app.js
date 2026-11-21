@@ -11831,10 +11831,10 @@ async function guardarCopiaDoDocumento(tipo, dados, blob, nomeArquivo) {
     const r = await pedirAoN8n("arquivos", {
       acao: "salvar", clienteId: docClienteId, clienteNome: dados.cliente || dados.edificio || dados.empresa || "", tipo,
       titulo: resumo.titulo, descricao: resumo.descricao, textoBusca: resumo.textoBusca, valor: resumo.valor,
-      dataDocumento: iso, emissor: dados.emissor ? "CNPJ 2" : "CNPJ 1", hash: await impressaoDoPdf(blob),
-      dadosJson: JSON.stringify({ ...dados, emissor: dados.emissor ? "CNPJ 2" : "CNPJ 1" }), nomeArquivo, arquivo: await pdfEmBase64(blob),
+      dataDocumento: iso, emissor: codigoEmissorDoDocumento(), hash: await impressaoDoPdf(blob),
+      dadosJson: JSON.stringify({ ...dados, emissor: codigoEmissorDoDocumento() }), nomeArquivo, arquivo: await pdfEmBase64(blob),
     });
-    if (r && r.ok) return { ok: true, mensagem: r.jaGuardado ? "Esta cópia já estava guardada na pasta do cliente." : "Cópia guardada na pasta do cliente." };
+    if (r && r.ok) return { ok: true, id: r.id || "", mensagem: r.jaGuardado ? "Esta cópia já estava guardada na pasta do cliente." : "Cópia guardada na pasta do cliente." };
     return { ok: false, mensagem: (r && r.mensagem) || "Não consegui guardar a cópia na pasta do cliente." };
   } catch (err) {
     return { ok: false, mensagem: "Não consegui guardar a cópia na pasta do cliente (servidor fora?)." };
@@ -11856,7 +11856,7 @@ formDocumento.addEventListener("submit", async (evento) => {
     try {
       dados.emissor = await emissorDoDocumento();
     } catch (err) {
-      mostrarDocStatus("error", "Não consegui buscar os dados do CNPJ 2 (servidor fora?). Tente de novo daqui a pouco.");
+      mostrarDocStatus("error", `Não consegui buscar os dados do ${codigoEmissorDoDocumento()} (servidor fora?). Tente de novo daqui a pouco.`);
       return;
     }
     const logos = await carregarGeradorPdf();
@@ -11867,9 +11867,10 @@ formDocumento.addEventListener("submit", async (evento) => {
       mostrarDocStatus("", "");
     } else {
       mostrarDocStatus("ok", `PDF pronto: ${nomeArquivo}`);
-      // dados.emissor é null para o CNPJ 1 e um objeto para o CNPJ 2 (ver emissorDoDocumento).
+      // dados.emissor: dados da conta do CNPJ (null = os de sempre, no gerador); quem emite é codigoEmissorDoDocumento().
       const copia = await guardarCopiaDoDocumento(tipo, dados, blob, nomeArquivo);
       mostrarDocStatus(copia.ok ? "ok" : "error", `PDF pronto: ${nomeArquivo}. ${copia.mensagem}`);
+      if (tipo === "recibo" && copia.ok && copia.id) docReciboNoAReceber(copia.id, dados);
     }
   } catch (err) {
     mostrarDocStatus("error", "Não consegui gerar o PDF. Confira a internet e tente de novo.");
@@ -11877,6 +11878,20 @@ formDocumento.addEventListener("submit", async (evento) => {
     docGerar.disabled = false;
   }
 });
+
+// Recibo antes do boleto (regra do dono, 21/11/2026): o recibo entra no A receber na hora e, se o cliente tem
+// "Gera boletos", já abre o "Gerar boleto" desta conta ("Referente ao recibo de <data>"). Falhar aqui não atrapalha
+// o recibo: a conferência com o Asaas põe ele no A receber de qualquer jeito.
+async function docReciboNoAReceber(arquivoId, dados) {
+  try {
+    const r = await pedirAoN8n("cobrancas", { acao: "registrar-recibo", arquivoId });
+    if (!r || !r.ok || !r.id) return;
+    const cli = cadastros.find((c) => c.id === docClienteId);
+    if (!cli || !cli.geraBoleto) return;
+    cobAbrirGerarBoleto({ id: r.id, clienteId: docClienteId, cliente: dados.cliente || cli.nomeFantasia || cli.razaoSocial || "Cliente",
+      valor: Number(dados.valor || 0), origem: "recibo", descricao: "Recibo · " + (dados.referente || "serviço"), status: "Pendente" });
+  } catch (err) { /* fica para a conferência */ }
+}
 
 function limparDocumento() {
   formDocumento.querySelectorAll('input[type="text"], textarea').forEach((campo) => (campo.value = ""));
@@ -13205,7 +13220,7 @@ desenharVeiculo();
 // do cliente por padrão. Nada é emitido sem passar pela conferência, e qualquer mudança no
 // formulário esconde a conferência (o que vai é sempre o que foi conferido).
 
-const NF_PAGAMENTO = "Dados para pagamento - INTER - 077 CIRLEI LUIS ZOMER Agência: 0001 Conta: 43090549-1 ou chave PIX CNPJ = 11338567000199";
+const NF_PAGAMENTO = "Dados para pagamento - ASAAS I.P S.A - 461 CIRLEI LUIS ZOMER Agência: 0001 Conta: 8023182-2 ou chave PIX CNPJ = 11338567000199";
 const NF_LIMITE = 1100;
 const formNota = document.getElementById("form-nota");
 const nfCampos = {
@@ -13270,13 +13285,16 @@ function nfBoletoPlano() {
 function nfBoletoAssinatura(plano) {
   return JSON.stringify([nfCliente && nfCliente.id, Number(plano.total || 0).toFixed(2), plano.vencimentos]);
 }
-// O que vai no fim da descrição da nota no lugar dos dados do banco.
-function nfBoletoTexto(plano, links) {
-  const pix = nfBoletoPixDaConta() === false ? "" : " ou PIX";
-  const link1 = (links && links[0]) || NF_LINK_MODELO;
-  if (plano.n === 1) return `Pagamento por boleto${pix}: ${link1} (vence ${dataBonita(plano.vencimentos[0])}).`;
+// Fim da descrição da nota de cliente com boleto (ciclo do dono desde 21/11/2026: a nota sai ANTES do boleto, então
+// não leva link): o aviso do boleto + os dados e a chave PIX da conta do CNPJ do cliente.
+function nfBoletoTexto(plano) {
+  const c = nfCliente && cadastros.find((x) => x.id === nfCliente.id);
+  const envio = c && String(c.emails || "").trim() ? "enviado por e-mail" : "enviado pelo WhatsApp";
   const datas = plano.vencimentos.map(dataBonita);
-  return `Pagamento em ${plano.n} boletos (vencimentos ${datas.slice(0, -1).join(", ")} e ${datas[datas.length - 1]}). 1º boleto${pix}: ${link1}. Os demais chegam por e-mail antes de cada vencimento.`;
+  const aviso = plano.n === 1
+    ? `Pagamento por boleto (vence ${datas[0]}), ${envio}, ou PIX/transferência.`
+    : `Pagamento em ${plano.n} boletos (vencimentos ${datas.slice(0, -1).join(", ")} e ${datas[datas.length - 1]}), ${envio.replace("enviado", "enviados")}.`;
+  return [aviso, nfPagamentoTexto()].filter(Boolean).join(" ");
 }
 function nfBoletoDesenhar() {
   const mostrar = nfBoletoDoCliente();
@@ -13634,7 +13652,7 @@ async function nfConferir(evento) {
   else if (!nfCampos.servico.value.trim()) erro = "Escreva o serviço feito.";
   else if (!(total > 0)) erro = "Falta o valor total.";
   else if (escolhaDoGrupo(nfTipoValor) === "separado" && !(material > 0 && material < total)) erro = "O material precisa ser maior que zero e menor que o total.";
-  else if (!nfBoletoAtivo() && !nfPagamentoTexto()) erro = `Não achei os dados da conta do ${nfContaDoCnpj2() ? "CNPJ 2" : "CNPJ 1"} (servidor fora?). Tente de novo daqui a pouco.`;
+  else if (!nfPagamentoTexto()) erro = `Não achei os dados da conta do ${nfContaDoCnpj2() ? "CNPJ 2" : "CNPJ 1"} (servidor fora?). Tente de novo daqui a pouco.`;
   else if (descricao.length > NF_LIMITE) erro = `A descrição passou de ${NF_LIMITE} caracteres: encurte o serviço.`;
   const comBoleto = nfBoletoAtivo();
   const plano = comBoleto ? nfBoletoPlano() : null;
@@ -13715,7 +13733,7 @@ function nfMostrarConferencia(r, pedido, boleto) {
     const emails = (rb.cliente && rb.cliente.emails) || [];
     caixa.append(
       nfLinha("E-mails do boleto", emails.length ? `${emails.join(", ")} (o boleto na hora, um lembrete 1 dia antes e, se atrasar, um aviso por dia)` : "Cliente sem e-mail: mande o link pelo WhatsApp"),
-      nfLinha("Descrição no boleto", "Referente à NFS-e nº … (o número entra assim que a nota sair)"),
+      nfLinha("Descrição no boleto", "Referente à NFS-e nº (o desta nota) e o serviço; o boleto sai logo depois da nota"),
       nfLinha("Regras", "Multa de 2% e juros de 1% ao mês depois do vencimento; dá para pagar até 30 dias depois"),
       nfLinha("Taxa do Asaas", conta.taxaBoleto != null ? `${nfReais(Number(conta.taxaBoleto))} por boleto pago, mais ${nfReais(Number(conta.taxaAviso || 0.99))} do aviso` : "Só se for pago"));
     if (rb.problemas && rb.problemas.length) {
@@ -13770,43 +13788,9 @@ async function nfEmitir(pedido, tela) {
   nfEnviando = true;
   tela.emitir.disabled = true;
   tela.voltar.disabled = true;
-  // Boleto primeiro (o link vai na descrição); se ele não sair, a nota também não sai.
-  let cobrancas = null;
-  if (tela.boleto) {
-    tela.status.textContent = "Criando o boleto no Asaas... não feche esta tela.";
-    tela.status.className = "status show loading";
-    if (!nfBoletoGrupo) nfBoletoGrupo = crypto.randomUUID();
-    const plano = tela.boleto.plano;
-    let rb;
-    try {
-      rb = await pedirAoN8n("cobrancas", { acao: "criar", grupo: nfBoletoGrupo, clienteId: pedido.clienteId, origem: "nota",
-        servico: nfCampos.servico.value.trim().replace(/\s+/g, " ").slice(0, 300), valor: pedido.valor,
-        material: Number(tela.boleto.material || 0).toFixed(2), parcelas: String(plano.n), vencimentos: JSON.stringify(plano.vencimentos) });
-    } catch (err) {
-      rb = { ok: false, mensagem: "a conexão caiu durante o pedido do boleto. Toque em Emitir de novo: o sistema confere antes e nunca cria boleto em dobro." };
-    }
-    if (!rb || !rb.ok || !(rb.cobrancas || []).length) {
-      nfEnviando = false;
-      tela.voltar.disabled = false;
-      tela.emitir.disabled = false;
-      tela.status.className = "status show error";
-      tela.status.textContent = "A nota não foi emitida: " + ((rb && rb.mensagem) || "o boleto não foi criado.");
-      if (rb && (rb.cobrancas || []).length) cobCarregar({ sincronizar: false });
-      return;
-    }
-    cobrancas = rb.cobrancas;
-    nfBoletoCriado = { grupo: nfBoletoGrupo, assinatura: nfBoletoAssinatura(plano), cobrancas, existente: Boolean(nfBoletoCriado && nfBoletoCriado.existente) };
-    const descricao = nfDescricao(nfBoletoTexto({ n: cobrancas.length, vencimentos: cobrancas.map((c) => c.vencimento) }, cobrancas.map((c) => c.link)));
-    if (descricao.length > NF_LIMITE) {
-      nfEnviando = false;
-      tela.voltar.disabled = false;
-      tela.status.className = "status show error";
-      tela.status.textContent = `Com o link do boleto, a descrição passou de ${NF_LIMITE} caracteres: encurte o serviço e emita de novo (o mesmo boleto vai junto).`;
-      return;
-    }
-    pedido = { ...pedido, descricao };
-  }
-  tela.status.textContent = cobrancas ? "Boleto criado. Enviando a nota ao governo... não feche esta tela." : "Enviando ao governo... não feche esta tela.";
+  // Ciclo do dono (21/11/2026): primeiro a nota; o boleto nasce dela, já com "Referente à NFS-e nº X" (assim o
+  // e-mail do Asaas, que sai na criação do boleto, já leva o número da nota).
+  tela.status.textContent = "Enviando a nota ao governo... não feche esta tela.";
   tela.status.className = "status show loading";
   let r;
   try {
@@ -13816,50 +13800,85 @@ async function nfEmitir(pedido, tela) {
   }
   nfEnviando = false;
   carregarNotas();
-  if (r && r.ok && r.nota) {
+  if (!(r && r.ok && r.nota)) {
+    tela.voltar.disabled = false;
+    tela.status.className = "status show error";
+    if (r && r.semResposta) {
+      tela.status.textContent = (r.mensagem || "Não sei se a nota saiu. Confira antes de tentar de novo.") + (tela.boleto ? " O boleto ainda não foi criado." : "");
+      tela.emitir.disabled = true; // só depois de conferir, pela lista
+      return;
+    }
+    tela.status.textContent = ((r && r.mensagem) || "A nota não foi emitida.") + (tela.boleto ? " Nenhum boleto foi criado." : "");
+    // Recusada: a mesma conferência pode ser corrigida e emitida de novo (o número muda sozinho).
+    tela.emitir.disabled = !(r && r.recusada);
+    return;
+  }
+  nfConferencia.innerHTML = "";
+  nfConferencia.append(nfQuadroEmitida(r.nota, r.ambiente));
+  const boletoArea = document.createElement("div");
+  nfConferencia.append(boletoArea);
+  if (tela.boleto && r.ambiente !== "Testes") {
+    await nfBoletoDaNota(r.nota, tela.boleto, boletoArea);
+  } else if (r.ambiente !== "Testes") {
+    // Nota sem boleto também vai para o A receber (sem previsão de pagamento).
+    pedirAoN8n("cobrancas", { acao: "registrar-nota", notaId: r.nota.id }).then(() => cobCarregar({ sincronizar: false })).catch(() => {});
+  }
+  const outra = nfBotao("Emitir outra nota", "botao-secundario", () => {
+    nfLimparFormulario();
+    nfConferencia.classList.add("hidden");
     nfConferencia.innerHTML = "";
-    nfConferencia.append(nfQuadroEmitida(r.nota, r.ambiente));
-    if (cobrancas) {
-      // Liga nota e boleto (se falhar, a sincronização liga sozinha pelo link que está na descrição).
-      let ligadas = cobrancas;
-      try {
-        const rl = await pedirAoN8n("cobrancas", { acao: "ligar-nota", grupo: nfBoletoGrupo, notaId: r.nota.id });
-        if (rl && rl.ok && (rl.cobrancas || []).length) ligadas = rl.cobrancas;
-      } catch (err) { /* fica para a sincronização */ }
-      nfConferencia.append(nfQuadroBoleto(ligadas));
+    nfCampos.busca.focus();
+  });
+  nfConferencia.append(outra);
+  if (r.avisoRegistro) nfConferencia.append(nfAviso("Atenção", r.avisoRegistro));
+  mostrarToast(`Nota nº ${r.nota.numeroNota} emitida.`);
+  painelCarregarNotas();
+  painelCarregarFaturamento(true);
+}
+
+// Boleto da nota que acabou de sair: a conta da nota no A receber vira o boleto (sem contar em dobro). Se o Asaas
+// falhar, a nota continua valendo e o botão tenta de novo com o mesmo pedido (nunca cria boleto em dobro).
+async function nfBoletoDaNota(nota, boleto, area) {
+  const plano = boleto.plano;
+  if (!nfBoletoGrupo) nfBoletoGrupo = crypto.randomUUID();
+  const grupo = nfBoletoGrupo;
+  const existente = nfBoletoCriado && nfBoletoCriado.existente && nfBoletoCriado.grupo === grupo;
+  const servico = nfCampos.servico.value.trim().replace(/\s+/g, " ").slice(0, 300);
+  const tentar = async () => {
+    area.innerHTML = "";
+    const st = document.createElement("div");
+    st.className = "status show loading";
+    st.textContent = "Nota emitida. Criando o boleto no Asaas...";
+    area.append(st);
+    let rb;
+    try {
+      if (existente) {
+        // Boleto antigo, criado antes da nota (ciclo de antes de 21/11): só liga os dois.
+        rb = await pedirAoN8n("cobrancas", { acao: "ligar-nota", grupo, notaId: nota.id });
+      } else {
+        const rn = await pedirAoN8n("cobrancas", { acao: "registrar-nota", notaId: nota.id });
+        if (!rn || !rn.ok || !rn.id) throw new Error((rn && rn.mensagem) || "a nota não entrou no A receber");
+        rb = await pedirAoN8n("cobrancas", { acao: "criar", grupo, clienteId: nfCliente ? nfCliente.id : "", origem: "nota", recebimentoId: rn.id,
+          servico, valor: Number(plano.total || 0).toFixed(2), material: Number(boleto.material || 0).toFixed(2),
+          parcelas: String(plano.n), vencimentos: JSON.stringify(plano.vencimentos) });
+      }
+    } catch (err) {
+      rb = { ok: false, mensagem: "a conexão caiu. Tente de novo: o sistema confere antes e nunca cria boleto em dobro." };
+    }
+    area.innerHTML = "";
+    if (rb && rb.ok && (rb.cobrancas || []).length) {
+      area.append(nfQuadroBoleto(rb.cobrancas));
       nfBoletoZerar();
       cobCarregar({ sincronizar: false });
-    } else if (r.ambiente !== "Testes") {
-      // Nota sem boleto também vai para o A receber (sem previsão de pagamento).
-      pedirAoN8n("cobrancas", { acao: "registrar-nota", notaId: r.nota.id }).then(() => cobCarregar({ sincronizar: false })).catch(() => {});
+      return;
     }
-    const outra = nfBotao("Emitir outra nota", "botao-secundario", () => {
-      nfLimparFormulario();
-      nfConferencia.classList.add("hidden");
-      nfConferencia.innerHTML = "";
-      nfCampos.busca.focus();
-    });
-    nfConferencia.append(outra);
-    if (r.avisoRegistro) nfConferencia.append(nfAviso("Atenção", r.avisoRegistro));
-    mostrarToast(`Nota nº ${r.nota.numeroNota} emitida.`);
-    painelCarregarNotas();
-    painelCarregarFaturamento(true);
-    return;
-  }
-  tela.voltar.disabled = false;
-  tela.status.className = "status show error";
-  if (r && r.semResposta) {
-    tela.status.textContent = (r.mensagem || "Não sei se a nota saiu. Confira antes de tentar de novo.")
-      + (cobrancas ? " O boleto já foi criado: quando a nota for conferida, ele se liga a ela sozinho." : "");
-    tela.emitir.disabled = true; // só depois de conferir, pela lista
-    if (cobrancas) cobCarregar({ sincronizar: false });
-    return;
-  }
-  tela.status.textContent = ((r && r.mensagem) || "A nota não foi emitida.")
-    + (cobrancas ? " O boleto já foi criado e continua valendo: corrija o que for preciso e emita de novo (o mesmo boleto vai na nota), ou cancele o boleto em Financeiro › A receber." : "");
-  if (cobrancas) cobCarregar({ sincronizar: false });
-  // Recusada: a mesma conferência pode ser corrigida e emitida de novo (o número muda sozinho).
-  tela.emitir.disabled = !(r && r.recusada);
+    const erro = document.createElement("div");
+    erro.className = "status show error";
+    erro.textContent = "A nota saiu, mas o boleto não: " + ((rb && rb.mensagem) || "o Asaas não respondeu.") + " A nota já está em Financeiro › A receber.";
+    area.append(erro, nfBotao("Tentar o boleto de novo", "", tentar));
+    cobCarregar({ sincronizar: false });
+  };
+  await tentar();
 }
 
 // Os boletos que saíram junto com a nota, com o link para mandar.
@@ -13883,7 +13902,7 @@ function nfQuadroBoleto(cobrancas) {
   });
   const dica = document.createElement("p");
   dica.className = "doc-hint";
-  dica.textContent = "Já está em Financeiro › A receber, com a descrição \"Referente à NFS-e nº …\". O Asaas manda o boleto por e-mail ao cliente agora; depois vai um lembrete 1 dia antes de vencer e, se atrasar, um aviso por dia.";
+  dica.textContent = "Já está em Financeiro › A receber, com a descrição \"Referente à NFS-e nº …\" desta nota. O Asaas manda o boleto por e-mail ao cliente agora; depois vai um lembrete 1 dia antes de vencer e, se atrasar, um aviso por dia.";
   q.append(dica);
   return q;
 }
@@ -16811,6 +16830,47 @@ function cobAbrirProrrogar(x) {
   });
 }
 
+// Boleto de uma nota ou recibo que já está no A receber (o recibo logo depois de gerado, ou a nota cujo boleto
+// falhou). A própria conta vira o boleto: "Referente à NFS-e nº X" ou "Referente ao recibo de <data>".
+function cobAbrirGerarBoleto(x) {
+  let venc, parcelas, dica;
+  const grupo = crypto.randomUUID();
+  cobAbrirDialogo({
+    titulo: "Gerar boleto",
+    texto: `${x.cliente} · ${cobOrigemTexto(x)} · ${dinheiro(x.valor)}. O Asaas manda o boleto por e-mail na hora; lembrete 1 dia antes e aviso todo dia se atrasar. Multa 2% e juros 1% ao mês; dá para pagar até 30 dias depois.`,
+    botaoOk: "Gerar boleto",
+    montar: (campos) => {
+      venc = cobCampo(campos, "Vencimento (1º boleto)", "date", cobDiaUtil(cobSomaDias(hojeISO(), 7)), { min: hojeISO() });
+      parcelas = cobCampo(campos, "Quantos boletos", "select");
+      for (let i = 1; i <= 12; i++) parcelas.append(new Option(i === 1 ? "1 (à vista)" : `${i} (mês a mês)`, String(i)));
+      dica = cobEl("p", "doc-hint");
+      campos.append(dica);
+      const mostrar = () => {
+        const n = Number(parcelas.value) || 1;
+        const v = cobParcelas(Number(x.valor || 0), n);
+        const u = venc.value ? cobDiaUtil(venc.value) : "";
+        dica.textContent = (u && u !== venc.value ? `${cobDiaCurto(venc.value)} não é dia útil: vai para ${cobDiaCurto(u)}. ` : "")
+          + (n > 1 ? `${n} boletos de ${dinheiro(v[0])}${v[n - 1] !== v[0] ? " (o último " + dinheiro(v[n - 1]) + ")" : ""}.` : "");
+      };
+      venc.addEventListener("input", mostrar);
+      parcelas.addEventListener("change", mostrar);
+      mostrar();
+    },
+    aoConfirmar: async () => {
+      if (!venc.value || venc.value < hojeISO()) return "Escolha um vencimento de hoje em diante.";
+      const n = Number(parcelas.value) || 1;
+      const primeiro = cobDiaUtil(venc.value);
+      const vencimentos = [];
+      for (let i = 0; i < n; i++) vencimentos.push(i === 0 ? primeiro : cobDiaUtil(cobMaisMeses(primeiro, i)));
+      if (cobParcelas(Number(x.valor || 0), n).some((v) => v < 5)) return "Cada boleto precisa ser de pelo menos R$ 5,00.";
+      const r = await cobPedir({ acao: "criar", grupo, clienteId: x.clienteId, origem: x.origem, recebimentoId: x.id,
+        servico: cobDescricaoCurta(x) || cobOrigemTexto(x), valor: Number(x.valor).toFixed(2), material: "0.00",
+        parcelas: String(n), vencimentos: JSON.stringify(vencimentos) }, null, n > 1 ? "Boletos criados no Asaas." : "Boleto criado no Asaas.");
+      return r ? "" : "O boleto não saiu: tente de novo (nunca cria em dobro).";
+    },
+  });
+}
+
 function cobEscolherPar(c) {
   let sel;
   const candidatas = (cobDados.recebimentos || []).filter((x) => cobAberta(x) && (x.emissor || "CNPJ 1") === c.conta)
@@ -16916,6 +16976,7 @@ async function cobAbrir(x) {
         acoes.append(cobBotao(x.asaasId ? "Recebi por fora" : "Recebi", () => cobAbrirBaixa(x)));
         if (x.asaasId) acoes.append(cobBotao("Mudar vencimento", () => cobAbrirProrrogar(x)));
       }
+      if (cobAberta(x) && !x.asaasId && !x.grupo && x.clienteId && ["nota", "recibo"].includes(x.origem)) acoes.append(cobBotao("Gerar boleto", () => cobAbrirGerarBoleto(x), ""));
       if (cobAberta(x)) acoes.append(cobBotao("Cancelar", (b) => cobCancelar(x, b), "botao-secundario botao-perigo"));
       campos.append(acoes);
       const hist = cobEl("div", "cob-historico");
