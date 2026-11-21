@@ -82,6 +82,8 @@ create table if not exists "Cobranca_Estado" (
 insert into "Cobranca_Estado" (id, "Valor") values ('inicio', jsonb_build_object('quando', now())) on conflict (id) do nothing;
 
 grant select, insert, update, delete on "Cobranca_Eventos", "Conciliacao", "Cobranca_Estado" to n8n_app;
+-- A sincronização troca os dados de pagamento do CNPJ para a conta do Asaas quando a chave PIX chega lá (cob_banco_asaas).
+grant select, update on "Empresas_Emissoras" to n8n_app;
 
 -- ========================= peças pequenas =========================
 create or replace function cob_txt(j jsonb, k text) returns text language sql immutable as $$
@@ -180,6 +182,77 @@ create or replace function cob_item(r "Recebimentos") returns jsonb language sql
 create or replace function cob_parcela(total numeric, n int, i int) returns numeric language sql immutable as $$
   select round(case when i < n then floor(total * 100 / n) / 100 else total - (n - 1) * (floor(total * 100 / n) / 100) end, 2) $$;
 
+-- Descrição do boleto no Asaas (aparece na fatura, no PDF do boleto e nos e-mails do Asaas). Regra do dono (20/11/2026):
+-- todo boleto diz a que nota se refere: "Referente à NFS-e nº 445: <serviço>". O boleto nasce ANTES da nota (o link
+-- dele vai na nota), então até a nota sair vai a data dela; assim que sai, o sistema troca pelo número (mudar a
+-- descrição não manda e-mail ao cliente: o aviso de "cobrança alterada" fica desligado).
+create or replace function cob_descricao_boleto(r "Recebimentos", numero text, servico text) returns text language sql stable as $$
+  select left(
+    case when coalesce(btrim(numero), '') <> '' then 'Referente à NFS-e nº ' || btrim(numero)
+         when r."Origem" = 'nota' then 'Referente à NFS-e de ' || to_char(coalesce((r."Criado_Em" at time zone 'America/Sao_Paulo')::date, cob_hoje()), 'DD/MM/YYYY')
+         else 'Referente a' end
+    || case when coalesce(r."Parcela_Total", 1) > 1 then ' (parcela ' || r."Parcela_Numero" || ' de ' || r."Parcela_Total" || ')' else '' end
+    || ': ' || s.t || case when s.t ~ '[.!?]$' then '' else '.' end
+    || ' Após o vencimento: multa de 2% e juros de 1% ao mês. Dúvidas: (47) 99667-0900.', 500)
+  from (select coalesce(nullif(left(btrim(regexp_replace(coalesce(servico, ''), '\s+', ' ', 'g')), 330), ''), 'serviço') as t) s $$;
+
+-- Pede ao Asaas a descrição com o número da nota (usada ao ligar a nota e, se falhar, de novo na sincronização).
+create or replace function cob_chamada_descricao(r "Recebimentos", numero text, servico text) returns jsonb language sql stable as $$
+  select jsonb_build_object('conta', r."Asaas_Conta", 'metodo', 'POST', 'url', 'https://api.asaas.com/v3/payments/' || r."Asaas_Cobranca_Id",
+    'corpo', jsonb_build_object('description', cob_descricao_boleto(r, numero, servico)),
+    'ref', jsonb_build_object('tipo', 'descricao', 'id', r.id, 'numero', btrim(coalesce(numero, '')))) $$;
+
+-- Resposta do Asaas à troca da descrição: deu certo = não pede de novo; deu errado = tenta de novo amanhã.
+create or replace function cob_descricao_feita(rid text, numero text, erro text) returns void language plpgsql as $$
+begin
+  if erro is null then
+    perform cob_evento(rid, 'descricao', 'Descrição do boleto no Asaas: "Referente à NFS-e nº ' || coalesce(numero, '?') || '".', 'descricao:' || rid || ':' || coalesce(numero, ''));
+  else
+    perform cob_evento(rid, 'erro', 'Não consegui pôr o número da nota na descrição do boleto (' || left(erro, 150) || '). Tento de novo amanhã.',
+      'descricao-erro:' || rid || ':' || coalesce(numero, '') || ':' || cob_hoje());
+  end if;
+end $$;
+
+-- Conta do Asaas nos dados de pagamento (regra do dono, 20/11/2026): quando a chave PIX do próprio CNPJ fica ativa
+-- no Asaas (fim da portabilidade do CNPJ 1, que hoje está no Inter), as notas e os recibos daquele CNPJ passam a
+-- sair com a conta do Asaas, sem ninguém mexer. Os dados de antes ficam guardados em Cobranca_Estado
+-- ("banco-antes:<CNPJ>") para poder voltar.
+-- cob_banco_novo só DECIDE (não grava): devolve os dados novos da linha, ou null se ainda não é a hora.
+create or replace function cob_banco_novo(e jsonb, est jsonb, banco_asaas text) returns jsonb language sql immutable as $$
+  select case
+    when coalesce(e ->> 'Banco', '') ~ '^\s*461\M' then null                  -- já é a conta do Asaas
+    when length(cob_digitos(e ->> 'CNPJ')) <> 14 then null
+    when coalesce(est ->> 'conta', '') !~ '^[0-9]+(-[0-9A-Za-z])?$' then null      -- conta do Asaas ainda não lida
+    -- Só a chave PIX do próprio CNPJ, ativa, conta como "portabilidade concluída" (outra chave não basta).
+    when not exists (select 1 from jsonb_array_elements(coalesce(est -> 'pixChaves', '[]')) as k(v)
+                      where upper(coalesce(k.v ->> 'tipo', '')) = 'CNPJ' and cob_digitos(k.v ->> 'chave') = cob_digitos(e ->> 'CNPJ')) then null
+    else jsonb_build_object('Banco', coalesce(nullif(btrim(banco_asaas), ''), '461 - Asaas I.P S.A'),
+                            'Agencia', coalesce(nullif(est ->> 'agencia', ''), '0001'), 'Conta', est ->> 'conta',
+                            'Chave_PIX', cob_digitos(e ->> 'CNPJ'))
+  end $$;
+
+create or replace function cob_banco_asaas() returns jsonb language plpgsql as $$
+declare e "Empresas_Emissoras"; est jsonb; novo jsonb; banco text; trocados jsonb := '[]';
+begin
+  -- Mesmo jeito de escrever o banco que o CNPJ 2 já usa ("461 - Asaas I.P S.A").
+  select x."Banco" into banco from "Empresas_Emissoras" x where coalesce(x."Banco", '') ~ '^\s*461\M' limit 1;
+  for e in select * from "Empresas_Emissoras" loop
+    select "Valor" into est from "Cobranca_Estado" where id = 'conta:' || e."Codigo";
+    novo := cob_banco_novo(to_jsonb(e), est, banco);
+    if novo is null then continue; end if;
+    insert into "Cobranca_Estado" (id, "Valor") values ('banco-antes:' || e."Codigo", jsonb_build_object('quando', now(),
+        'Banco', e."Banco", 'Agencia', e."Agencia", 'Conta', e."Conta", 'Chave_PIX', e."Chave_PIX"))
+    on conflict (id) do nothing;
+    update "Empresas_Emissoras" set "Banco" = novo ->> 'Banco', "Agencia" = novo ->> 'Agencia', "Conta" = novo ->> 'Conta',
+           "Chave_PIX" = novo ->> 'Chave_PIX'
+     where id = e.id;
+    insert into "Cobranca_Estado" (id, "Valor") values ('banco-trocado:' || e."Codigo", jsonb_build_object('quando', now(), 'conta', novo ->> 'Conta'))
+    on conflict (id) do update set "Valor" = excluded."Valor";
+    trocados := trocados || jsonb_build_object('codigo', e."Codigo", 'conta', novo ->> 'Conta');
+  end loop;
+  return trocados;
+end $$;
+
 -- ========================= painel (o que o app mostra) =========================
 create or replace function cob_painel(p jsonb) returns jsonb language plpgsql stable as $$
 declare hoje date := cob_hoje(); ini timestamptz;
@@ -201,7 +274,10 @@ begin
        where n."Ambiente" = 'Producao' and n."Status" = 'Emitida'
          and not exists (select 1 from "Recebimentos" r where r."Nota_Ref" = n.id)
          and (ini is null or n."Emitida_Em" < ini)), '[]'::jsonb),
-    'contas', coalesce((select jsonb_object_agg(substr(e.id, 7), e."Valor") from "Cobranca_Estado" e where e.id like 'conta:%'), '{}'::jsonb),
+    -- notasPeloAsaas: a linha do CNPJ em Empresas_Emissoras já é a conta do Asaas (notas e recibos saem com ela).
+    'contas', coalesce((select jsonb_object_agg(substr(e.id, 7), e."Valor" || jsonb_build_object('notasPeloAsaas',
+        exists (select 1 from "Empresas_Emissoras" x where x."Codigo" = substr(e.id, 7) and coalesce(x."Banco", '') ~ '^\s*461\M')))
+      from "Cobranca_Estado" e where e.id like 'conta:%'), '{}'::jsonb),
     'sinc', (select "Valor" from "Cobranca_Estado" where id = 'sinc'));
 end $$;
 
@@ -309,8 +385,8 @@ begin
     end if;
     -- Chamadas ao Asaas só para o que ainda não tem boleto lá.
     for r in select * from "Recebimentos" where "Grupo" = grupo and coalesce("Asaas_Cobranca_Id", '') = '' and "Status" = 'Pendente' order by "Parcela_Numero" loop
-      desc_boleto := left(servico || case when r."Parcela_Total" > 1 then ' - Parcela ' || r."Parcela_Numero" || ' de ' || r."Parcela_Total" else '' end
-        || '. Após o vencimento: multa de 2% e juros de 1% ao mês. Dúvidas: (47) 99667-0900.', 500);
+      -- "Referente à NFS-e de <data>: serviço" (o número entra assim que a nota sai).
+      desc_boleto := cob_descricao_boleto(r, null, servico);
       -- Linha já existia (repetição): primeiro procura no Asaas pela referência, para nunca criar boleto em dobro.
       if r."Asaas_Status" = 'ERRO' or r."Criado_Em" < now() - interval '1 minute' then
         chamadas := chamadas || jsonb_build_object('conta', r."Asaas_Conta", 'metodo', 'GET',
@@ -319,7 +395,9 @@ begin
         chamadas := chamadas || jsonb_build_object('conta', r."Asaas_Conta", 'metodo', 'POST', 'url', 'https://api.asaas.com/v3/payments',
           'corpo', jsonb_build_object('customer', r."Asaas_Cliente_Id", 'billingType', 'BOLETO', 'value', r."Valor", 'dueDate', r."Vencimento",
             'description', desc_boleto, 'externalReference', r.id, 'fine', jsonb_build_object('value', 2), 'interest', jsonb_build_object('value', 1),
-            'daysAfterDueDateToRegistrationCancellation', 20),
+            -- Pagável até 30 dias depois do vencimento (regra do dono, 20/11/2026; antes 20). Só vale na criação:
+            -- o Asaas não muda esse prazo num boleto que já existe (testado).
+            'daysAfterDueDateToRegistrationCancellation', 30),
           'ref', jsonb_build_object('tipo', 'criar', 'id', r.id));
       end if;
     end loop;
@@ -343,13 +421,9 @@ begin
     update "Recebimentos" set "Nota_Ref" = nota.id, "Atualizado_Em" = now() where "Grupo" = grupo and "Nota_Ref" is null;
     for r in select * from "Recebimentos" where "Grupo" = grupo loop
       perform cob_evento(r.id, 'nota-ligada', 'Ligado à NFS-e nº ' || coalesce(nota."Numero_NFSe", '?') || '.', 'nota-ligada:' || r.id);
-      -- A descrição do boleto passa a citar a nota (mudar a descrição não manda e-mail ao cliente).
-      if coalesce(r."Asaas_Cobranca_Id", '') <> '' and r."Status" = 'Pendente' then
-        chamadas := chamadas || jsonb_build_object('conta', r."Asaas_Conta", 'metodo', 'POST', 'url', 'https://api.asaas.com/v3/payments/' || r."Asaas_Cobranca_Id",
-          'corpo', jsonb_build_object('description', left('NFS-e nº ' || coalesce(nota."Numero_NFSe", '') || ' - ' || cob_servico_da_nota(nota."Descricao")
-            || case when r."Parcela_Total" > 1 then ' - Parcela ' || r."Parcela_Numero" || ' de ' || r."Parcela_Total" else '' end
-            || '. Após o vencimento: multa de 2% e juros de 1% ao mês. Dúvidas: (47) 99667-0900.', 500)),
-          'ref', jsonb_build_object('tipo', 'descricao', 'id', r.id));
+      -- A descrição do boleto passa a citar a nota: "Referente à NFS-e nº X" (mudar a descrição não manda e-mail ao cliente).
+      if coalesce(r."Asaas_Cobranca_Id", '') <> '' and r."Status" = 'Pendente' and coalesce(nota."Numero_NFSe", '') <> '' then
+        chamadas := chamadas || cob_chamada_descricao(r, nota."Numero_NFSe", cob_servico_da_nota(nota."Descricao"));
       end if;
     end loop;
     if jsonb_array_length(chamadas) = 0 then return jsonb_build_object('resposta', cob_resultado_grupo(grupo)); end if;
@@ -465,6 +539,27 @@ begin
   return jsonb_build_object('ok', true, 'mensagem', 'Recebimento registrado.', 'item', (select cob_item(x) from "Recebimentos" x where x.id = rid));
 end $$;
 
+-- O link de um boleto escrito na nota liga a nota a ele e às outras parcelas do mesmo pedido (o "ligar" do app ou do
+-- chat que não chegou a rodar). Devolve quantas cobranças ligou (0 = nenhum boleto citado na nota).
+create or replace function cob_ligar_por_link(nid text) returns int language plpgsql as $$
+declare n "Notas_Fiscais"; r "Recebimentos"; k int;
+begin
+  select * into n from "Notas_Fiscais" where id = nid;
+  if n.id is null then return 0; end if;
+  update "Recebimentos" x set "Nota_Ref" = n.id, "Atualizado_Em" = now()
+   where x."Nota_Ref" is null and (
+     (coalesce(x."Asaas_Link", '') <> '' and position(x."Asaas_Link" in coalesce(n."Descricao", '')) > 0)
+     or x."Grupo" in (select y."Grupo" from "Recebimentos" y where y."Grupo" is not null and coalesce(y."Asaas_Link", '') <> ''
+                        and position(y."Asaas_Link" in coalesce(n."Descricao", '')) > 0));
+  get diagnostics k = row_count;
+  if k > 0 then
+    for r in select * from "Recebimentos" x where x."Nota_Ref" = n.id loop
+      perform cob_evento(r.id, 'nota-ligada', 'Ligado à NFS-e nº ' || coalesce(n."Numero_NFSe", '?') || ' (pelo link do boleto escrito na nota).', 'nota-ligada:' || r.id);
+    end loop;
+  end if;
+  return k;
+end $$;
+
 -- A receber de uma nota sem boleto (ou de uma nota emitida pelo chat). Repetir não duplica.
 create or replace function cob_registrar_nota(nid text) returns jsonb language plpgsql as $$
 declare n "Notas_Fiscais"; c "Entidades_Cadastradas"; novo text; servico text;
@@ -504,7 +599,7 @@ begin
         chamadas := chamadas || jsonb_build_object('conta', r."Asaas_Conta", 'metodo', 'POST', 'url', 'https://api.asaas.com/v3/payments',
           'corpo', jsonb_build_object('customer', r."Asaas_Cliente_Id", 'billingType', 'BOLETO', 'value', r."Valor", 'dueDate', r."Vencimento",
             'description', ref ->> 'descricao', 'externalReference', r.id, 'fine', jsonb_build_object('value', 2),
-            'interest', jsonb_build_object('value', 1), 'daysAfterDueDateToRegistrationCancellation', 20),
+            'interest', jsonb_build_object('value', 1), 'daysAfterDueDateToRegistrationCancellation', 30),
           'ref', jsonb_build_object('tipo', 'criar', 'id', r.id));
       else
         update "Recebimentos" set "Asaas_Status" = 'ERRO', "Aviso" = erro, "Atualizado_Em" = now() where id = rid;
@@ -516,7 +611,7 @@ begin
         perform cob_evento(rid, 'erro', 'O Asaas não aceitou criar o boleto: ' || coalesce(erro, 'resposta inesperada') || '.');
       end if;
     elsif ref ->> 'tipo' = 'descricao' then
-      if erro is not null then perform cob_evento(rid, 'erro', 'Não consegui pôr o número da nota na descrição do boleto: ' || erro || '.'); end if;
+      perform cob_descricao_feita(rid, ref ->> 'numero', erro);
     elsif ref ->> 'tipo' = 'baixa' then
       if erro is null then
         perform cob_baixar(rid, (ctx ->> 'data')::date, (ctx ->> 'valor')::numeric, coalesce(ctx ->> 'por', 'manual'), ctx ->> 'ref', ctx ->> 'forma');
@@ -557,7 +652,7 @@ begin
          "Aviso" = null, "Atualizado_Em" = now()
    where id = rid;
   perform cob_evento(rid, 'criado', 'Boleto criado no Asaas: ' || cob_reais((pay ->> 'value')::numeric) || ', vence em '
-    || to_char((pay ->> 'dueDate')::date, 'DD/MM/YYYY') || '. Pode ser pago até 20 dias depois, com multa e juros.', 'criado:' || rid);
+    || to_char((pay ->> 'dueDate')::date, 'DD/MM/YYYY') || '. Pode ser pago até 30 dias depois, com multa e juros.', 'criado:' || rid);
 end $$;
 
 -- ========================= sincronização (fluxo "Cobrancas - Sincronizar", de 30 em 30 minutos) =========================
@@ -585,6 +680,12 @@ begin
     select coalesce(("Valor" ->> 'taxasEm')::date, '2000-01-01') < hoje into taxas from "Cobranca_Estado" where id = 'conta:' || conta;
     if coalesce(taxas, true) then
       chamadas := chamadas || jsonb_build_object('conta', conta, 'metodo', 'GET', 'url', 'https://api.asaas.com/v3/myAccount/fees', 'ref', jsonb_build_object('tipo', 'taxas', 'conta', conta));
+    end if;
+    -- Agência e conta no Asaas (vão nos dados de pagamento das notas e recibos quando o PIX do CNPJ estiver lá): 1x/dia.
+    taxas := null;
+    select coalesce(("Valor" ->> 'numeroEm')::date, '2000-01-01') < hoje into taxas from "Cobranca_Estado" where id = 'conta:' || conta;
+    if coalesce(taxas, true) then
+      chamadas := chamadas || jsonb_build_object('conta', conta, 'metodo', 'GET', 'url', 'https://api.asaas.com/v3/myAccount/accountNumber', 'ref', jsonb_build_object('tipo', 'numero-conta', 'conta', conta));
     end if;
   end loop;
   -- Cada boleto aberto: como está no Asaas e se o cliente já abriu a fatura.
@@ -662,8 +763,18 @@ begin
       insert into "Cobranca_Estado" (id, "Valor") values ('conta:' || conta, jsonb_build_object('saldo', (res ->> 'balance')::numeric, 'saldoEm', now(), 'erro', null))
       on conflict (id) do update set "Valor" = "Cobranca_Estado"."Valor" || excluded."Valor";
     elsif ref ->> 'tipo' = 'pix' then
-      insert into "Cobranca_Estado" (id, "Valor") values ('conta:' || conta, jsonb_build_object('pix', jsonb_array_length(coalesce(res -> 'data', '[]')) > 0))
+      -- Quais chaves (tipo e chave) também ficam guardadas: a do próprio CNPJ ativa = portabilidade concluída.
+      insert into "Cobranca_Estado" (id, "Valor") values ('conta:' || conta, jsonb_build_object('pix', jsonb_array_length(coalesce(res -> 'data', '[]')) > 0,
+          'pixChaves', coalesce((select jsonb_agg(jsonb_build_object('tipo', k.v ->> 'type', 'chave', k.v ->> 'key'))
+                                   from jsonb_array_elements(coalesce(res -> 'data', '[]')) as k(v) where coalesce(k.v ->> 'status', 'ACTIVE') = 'ACTIVE'), '[]'::jsonb)))
       on conflict (id) do update set "Valor" = "Cobranca_Estado"."Valor" || excluded."Valor";
+    elsif ref ->> 'tipo' = 'numero-conta' then
+      if coalesce(res ->> 'account', '') ~ '^[0-9]+$' then
+        insert into "Cobranca_Estado" (id, "Valor") values ('conta:' || conta, jsonb_build_object('agencia', coalesce(nullif(res ->> 'agency', ''), '0001'),
+            'conta', (res ->> 'account') || case when coalesce(res ->> 'accountDigit', '') ~ '^[0-9A-Za-z]$' then '-' || (res ->> 'accountDigit') else '' end,
+            'numeroEm', hoje))
+        on conflict (id) do update set "Valor" = "Cobranca_Estado"."Valor" || excluded."Valor";
+      end if;
     elsif ref ->> 'tipo' = 'taxas' then
       promo := cob_data(res -> 'payment' -> 'bankSlip', 'expirationDate');
       taxa := case when promo is not null and promo > hoje then (res -> 'payment' -> 'bankSlip' ->> 'discountValue')::numeric
@@ -765,9 +876,20 @@ begin
   -- Notas emitidas depois do começo das cobranças: toda nota vira "a receber" (com boleto, liga; sem boleto, cria).
   for n in select * from "Notas_Fiscais" nf where nf."Ambiente" = 'Producao' and nf."Status" = 'Emitida' and ini is not null and nf."Emitida_Em" >= ini
              and not exists (select 1 from "Recebimentos" x where x."Nota_Ref" = nf.id) loop
-    update "Recebimentos" x set "Nota_Ref" = n.id, "Atualizado_Em" = now()
-     where x."Nota_Ref" is null and coalesce(x."Asaas_Link", '') <> '' and position(x."Asaas_Link" in coalesce(n."Descricao", '')) > 0;
-    if not found then perform cob_registrar_nota(n.id); end if;
+    if cob_ligar_por_link(n.id) = 0 then perform cob_registrar_nota(n.id); end if;
+  end loop;
+  -- Descrição do boleto com o número da nota ("Referente à NFS-e nº X"): pede ao Asaas o que ainda falta (ligado pela
+  -- sincronização, ou o Asaas falhou na hora). Boleto que falhou: no máximo uma tentativa por dia.
+  for r in select x.* from "Recebimentos" x join "Notas_Fiscais" nf on nf.id = x."Nota_Ref"
+            where x."Status" = 'Pendente' and coalesce(x."Asaas_Cobranca_Id", '') <> ''
+              and coalesce(x."Asaas_Status", '') in ('PENDING', 'OVERDUE', 'AWAITING_RISK_ANALYSIS')
+              and nf."Status" = 'Emitida' and coalesce(nf."Numero_NFSe", '') <> ''
+              and not exists (select 1 from "Cobranca_Eventos" e
+                               where e."Chave" in ('descricao:' || x.id || ':' || btrim(nf."Numero_NFSe"),
+                                                   'descricao-erro:' || x.id || ':' || btrim(nf."Numero_NFSe") || ':' || hoje))
+            order by x."Criado_Em" desc limit 20 loop
+    select * into n from "Notas_Fiscais" where id = r."Nota_Ref";
+    dinheiro := dinheiro || cob_chamada_descricao(r, n."Numero_NFSe", cob_servico_da_nota(n."Descricao"));
   end loop;
   -- Nota cancelada: a conta sem boleto é cancelada junto; boleto aberto fica avisado para o dono decidir.
   for r in select x.* from "Recebimentos" x join "Notas_Fiscais" nf on nf.id = x."Nota_Ref"
@@ -792,6 +914,15 @@ begin
     returning id into novo;
     if novo is not null then perform cob_evento(novo, 'recibo', 'Recibo gerado: entra no A receber sem previsão de pagamento.'); end if;
   end loop;
+
+  -- Chave PIX do CNPJ chegou ao Asaas: notas e recibos daquele CNPJ passam a sair com a conta do Asaas. Um erro aqui
+  -- nunca derruba a sincronização (fica anotado em "banco-erro").
+  begin
+    perform cob_banco_asaas();
+  exception when others then
+    insert into "Cobranca_Estado" (id, "Valor") values ('banco-erro', jsonb_build_object('quando', now(), 'erro', left(sqlerrm, 200)))
+    on conflict (id) do update set "Valor" = excluded."Valor";
+  end;
 
   insert into "Cobranca_Estado" (id, "Valor") values ('sinc', jsonb_build_object('quando', now(), 'importados', importados, 'vinculados', vinculados, 'sugeridos', sugeridos))
   on conflict (id) do update set "Valor" = excluded."Valor";
@@ -834,7 +965,7 @@ begin
     perform cob_evento(rid, 'vencimento', 'Vencimento mudou no Asaas para ' || to_char(cob_data(pay, 'dueDate'), 'DD/MM/YYYY') || '.');
   end if;
   if st = 'OVERDUE' and r."Asaas_Status" is distinct from 'OVERDUE' then
-    perform cob_evento(rid, 'vencido', 'Venceu sem pagamento. O Asaas avisa o cliente por e-mail todo dia, até pagar ou até 20 dias depois.', 'vencido:' || rid || ':' || r."Vencimento");
+    perform cob_evento(rid, 'vencido', 'Venceu sem pagamento. O Asaas avisa o cliente por e-mail todo dia; dá para pagar até 30 dias depois do vencimento.', 'vencido:' || rid || ':' || r."Vencimento");
   end if;
 end $$;
 
@@ -855,6 +986,12 @@ begin
     end if;
   end loop;
   for x in select * from jsonb_array_elements(coalesce(p -> 'respostas', '[]')) loop
+    -- Descrição com o número da nota.
+    if x -> 'ref' ->> 'tipo' = 'descricao' then
+      perform cob_descricao_feita(x -> 'ref' ->> 'id', x -> 'ref' ->> 'numero',
+        case when (x -> 'resposta') ? 'error' then coalesce(x -> 'resposta' -> 'error' ->> 'message', 'erro') end);
+      continue;
+    end if;
     if (x -> 'resposta') ? 'error' then
       perform cob_evento(x -> 'ref' ->> 'id', 'erro', 'Recebido por fora, mas o Asaas não deu baixa no boleto: dê baixa pelo sistema para os avisos pararem.');
       update "Recebimentos" set "Aviso" = 'Pago por fora: falta dar baixa no boleto do Asaas.' where id = x -> 'ref' ->> 'id';

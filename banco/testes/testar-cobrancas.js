@@ -63,9 +63,11 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
     const cr = await fn('cob_acao', { acao: 'criar', grupo, clienteId: c1, origem: 'nota', servico: 'Troca de boia da cisterna', valor: 1306, material: 406, parcelas: 3, vencimentos: [v1, v2, v3] });
     confere('criar: pede 3 boletos ao Asaas', cr.chamadas && cr.chamadas.length === 3 && cr.chamadas.every((x) => x.metodo === 'POST' && x.conta === 'CNPJ 2'), cr);
     const corpo = cr.chamadas[0].corpo;
-    confere('criar: multa 2%, juros 1%, pagável 20 dias depois', corpo.fine.value === 2 && corpo.interest.value === 1 && corpo.daysAfterDueDateToRegistrationCancellation === 20 && corpo.billingType === 'BOLETO', corpo);
+    confere('criar: multa 2%, juros 1%, pagável 30 dias depois', corpo.fine.value === 2 && corpo.interest.value === 1 && corpo.daysAfterDueDateToRegistrationCancellation === 30 && corpo.billingType === 'BOLETO', corpo);
     confere('criar: referência = id do A receber', /^rec[A-Za-z0-9]{14}$/.test(corpo.externalReference) && corpo.externalReference === cr.chamadas[0].ref.id, corpo);
-    confere('criar: descrição com parcela e telefone', /Parcela 1 de 3/.test(corpo.description) && /99667-0900/.test(corpo.description) && corpo.description.length <= 500, corpo.description);
+    confere('criar: descrição "Referente à NFS-e de <hoje> (parcela 1 de 3): serviço", com telefone',
+      corpo.description.startsWith('Referente à NFS-e de ' + hoje.split('-').reverse().join('/') + ' (parcela 1 de 3): Troca de boia da cisterna.')
+      && /99667-0900/.test(corpo.description) && corpo.description.length <= 500, corpo.description);
     const cr2 = await fn('cob_acao', { acao: 'criar', grupo, clienteId: c1, origem: 'nota', servico: 'x', valor: 1306, parcelas: 3, vencimentos: [v1, v2, v3] });
     confere('criar repetido (antes da resposta): procura no Asaas em vez de criar de novo', (cr2.chamadas || []).every((x) => x.metodo === 'GET' || x.metodo === 'POST'), cr2);
     const linhas = await q(`select count(*)::int as n from "Recebimentos" where "Grupo" = $1`, [grupo]);
@@ -87,12 +89,16 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
 
     // ---------- ligar nota ----------
     const lig = await fn('cob_acao', { acao: 'ligar-nota', grupo, notaId: nota });
-    confere('ligar nota: descrição do boleto passa a citar a nota', lig.chamadas && lig.chamadas.length === 3 && /NFS-e nº 9001/.test(lig.chamadas[0].corpo.description), lig);
+    confere('ligar nota: descrição do boleto vira "Referente à NFS-e nº 9001 (parcela 1 de 3): ..."', lig.chamadas && lig.chamadas.length === 3
+      && lig.chamadas[0].corpo.description.startsWith('Referente à NFS-e nº 9001 (parcela 1 de 3): Troca de boia da cisterna.')
+      && lig.chamadas.every((ch) => ch.ref.tipo === 'descricao' && ch.ref.numero === '9001' && ch.metodo === 'POST'), lig);
     const ligOutro = await fn('cob_acao', { acao: 'ligar-nota', grupo, notaId: nota2 });
     confere('ligar nota de outro cliente: recusa', ligOutro.resposta && ligOutro.resposta.ok === false, ligOutro);
     await fn('cob_registrar', { contexto: lig.contexto, respostas: lig.chamadas.map((ch) => ({ ref: ch.ref, resposta: { id: 'x' } })) });
     const ligadas = await q(`select count(*)::int as n from "Recebimentos" where "Grupo" = $1 and "Nota_Ref" = $2`, [grupo, nota]);
     confere('ligar nota: as 3 parcelas apontam para a nota', ligadas[0].n === 3, ligadas);
+    const evDesc = await q(`select count(*)::int as n from "Cobranca_Eventos" e join "Recebimentos" r on r.id = e."Recebimento_Ref" where r."Grupo" = $1 and e."Chave" like 'descricao:%:9001'`, [grupo]);
+    confere('ligar nota: o Asaas aceitou a descrição nova -> fica anotado (não pede de novo)', evDesc[0].n === 3, evDesc);
 
     // ---------- baixa, prorrogar, cancelar ----------
     const bx = await fn('cob_acao', { acao: 'baixa', id: p1.id, data: hoje, valor: 435.33, forma: 'PIX' });
@@ -192,6 +198,58 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
     const rn4d = (await q(`select "Status" from "Recebimentos" where id = $1`, [rn4.resposta.id]))[0];
     confere('nota cancelada: a conta a receber dela é cancelada', rn4d.Status === 'Cancelado', rn4d);
 
+    // ---------- nota emitida fora da tela (chat): liga pelo link e põe o número na descrição pela sincronização ----------
+    const grupo2 = 'teste2-' + Date.now();
+    const vA = somaDias(hoje, 10), vB = somaDias(hoje, 40);
+    const crB = await fn('cob_acao', { acao: 'criar', grupo: grupo2, clienteId: c1, origem: 'nota', servico: 'Limpeza de caixa', valor: 200, parcelas: 2, vencimentos: [vA, vB] });
+    const regB = await fn('cob_registrar', { contexto: crB.contexto, respostas: crB.chamadas.map((ch, i) => ({ ref: ch.ref, resposta: respostaPay('pay_testeB' + i + Date.now(), { value: ch.corpo.value, dueDate: ch.corpo.dueDate }) })) });
+    const [b1, b2] = regB.resposta.cobrancas;
+    const nota4 = (await q(`insert into "Notas_Fiscais" ("Ambiente", "Serie", "Numero_DPS", "Status", "Numero_NFSe", "Cliente_Ref", "Tomador_Nome", "Descricao", "Valor", "Emissor", "Emitida_Em")
+        values ('Testes', 999, (random() * 1000000)::int + 1, 'Emitida', '9004', $1, 'TESTE', $2, 200, 'CNPJ 2', now()) returning id`,
+      [c1, 'Limpeza de caixa. Valor total = R$ 200,00. Pagamento em 2 boletos (vencimentos x e y). 1º boleto ou PIX: ' + b1.link + '. Os demais chegam por e-mail.']))[0].id;
+    ids.notas.push(nota4);
+    const kLig = (await q('select cob_ligar_por_link($1) as k', [nota4]))[0].k;
+    confere('link do 1º boleto na nota liga as 2 parcelas do pedido', kLig === 2, kLig);
+    confere('nota sem link de boleto não liga nada', (await q('select cob_ligar_por_link($1) as k', [nota2]))[0].k === 0);
+    const grD = await fn('cob_sinc_gravar', { respostas: [] });
+    const descB = (grD.chamadas || []).filter((ch) => ch.ref.tipo === 'descricao' && [b1.id, b2.id].includes(ch.ref.id));
+    confere('sincronização pede a descrição "Referente à NFS-e nº 9004" das 2 parcelas', descB.length === 2
+      && descB.some((ch) => ch.corpo.description.startsWith('Referente à NFS-e nº 9004 (parcela 2 de 2): Limpeza de caixa.')), grD.chamadas);
+    const okB = descB.find((ch) => ch.ref.id === b1.id), erroB = descB.find((ch) => ch.ref.id === b2.id);
+    await fn('cob_sinc_final', { respostas: [{ ref: okB.ref, resposta: { id: b1.asaasId, status: 'PENDING' } }, { ref: erroB.ref, resposta: { error: { message: '400 - teste' } } }] });
+    const evB = await q(`select "Recebimento_Ref" as r, "Chave" as k from "Cobranca_Eventos" where "Recebimento_Ref" = any($1) and ("Chave" like 'descricao:%' or "Chave" like 'descricao-erro:%')`, [[b1.id, b2.id]]);
+    confere('descrição aceita fica anotada; recusada vira aviso com data', evB.some((e) => e.r === b1.id && e.k === 'descricao:' + b1.id + ':9004')
+      && evB.some((e) => e.r === b2.id && e.k === 'descricao-erro:' + b2.id + ':9004:' + hoje), evB);
+    const b2Final = (await q(`select "Status", "Asaas_Status", "Aviso" from "Recebimentos" where id = $1`, [b2.id]))[0];
+    confere('erro na descrição não mexe na cobrança (nem vira "pago por fora")', b2Final.Status === 'Pendente' && !/por fora/.test(b2Final.Aviso || ''), b2Final);
+    const grD2 = await fn('cob_sinc_gravar', { respostas: [] });
+    confere('não pede de novo a que deu certo, nem a que falhou hoje (tenta amanhã)', !(grD2.chamadas || []).some((ch) => ch.ref.tipo === 'descricao' && [b1.id, b2.id].includes(ch.ref.id)), grD2.chamadas);
+    await q(`delete from "Cobranca_Estado" where id = 'sinc:trava'`);
+
+    // ---------- conta do Asaas nos dados de pagamento quando a chave PIX do CNPJ chega lá ----------
+    // A decisão é uma função que não grava (cob_banco_novo); a linha real da empresa não é tocada no teste.
+    const emp = { Codigo: 'CNPJ 1', CNPJ: '99.999.999/0001-91', Banco: '077 - Banco Inter', Agencia: '0001', Conta: '1-1', Chave_PIX: '99999999000191' };
+    const decide = async (e, est) => (await q('select cob_banco_novo($1::jsonb, $2::jsonb, $3) as r', [JSON.stringify(e), JSON.stringify(est), '461 - Asaas I.P S.A']))[0].r;
+    const estBase = { agencia: '0001', conta: '1234567-8', pix: false, pixChaves: [] };
+    confere('sem chave PIX no Asaas: continua com o banco de antes', (await decide(emp, estBase)) === null);
+    confere('outra chave (aleatória) não basta', (await decide(emp, { ...estBase, pix: true, pixChaves: [{ tipo: 'EVP', chave: 'abc-123' }] })) === null);
+    confere('chave CNPJ de outro CNPJ não basta', (await decide(emp, { ...estBase, pix: true, pixChaves: [{ tipo: 'CNPJ', chave: '11111111000191' }] })) === null);
+    confere('conta do Asaas ainda não lida: espera', (await decide(emp, { pix: true, pixChaves: [{ tipo: 'CNPJ', chave: '99999999000191' }] })) === null);
+    const troca1 = await decide(emp, { ...estBase, pix: true, pixChaves: [{ tipo: 'CNPJ', chave: '99999999000191' }] });
+    confere('chave do próprio CNPJ ativa: passa para a conta do Asaas', troca1 && troca1.Banco === '461 - Asaas I.P S.A' && troca1.Agencia === '0001'
+      && troca1.Conta === '1234567-8' && troca1.Chave_PIX === '99999999000191', troca1);
+    confere('linha que já é do Asaas não muda', (await decide({ ...emp, Banco: '461 - Asaas I.P S.A' }, { ...estBase, pixChaves: [{ tipo: 'CNPJ', chave: '99999999000191' }] })) === null);
+    // A sincronização guarda as chaves e a agência/conta de cada conta (aqui numa conta de teste, que não existe na tabela).
+    await fn('cob_sinc_gravar', { respostas: [
+      { ref: { tipo: 'pix', conta: 'TESTE 9' }, resposta: { data: [{ type: 'CNPJ', key: '99999999000191', status: 'ACTIVE' }] } },
+      { ref: { tipo: 'numero-conta', conta: 'TESTE 9' }, resposta: { agency: '0001', account: '1234567', accountDigit: '8' } }] });
+    const est9 = (await q(`select "Valor" as v from "Cobranca_Estado" where id = 'conta:TESTE 9'`))[0];
+    confere('sincronização guarda chaves PIX e agência/conta do Asaas', est9 && est9.v.pix === true && est9.v.conta === '1234567-8' && est9.v.agencia === '0001'
+      && est9.v.pixChaves.length === 1 && est9.v.pixChaves[0].tipo === 'CNPJ', est9);
+    const pa2 = (await fn('cob_acao', { acao: 'painel' })).resposta;
+    confere('painel diz se as notas de cada conta já saem pelo Asaas', Object.values(pa2.contas).every((c) => typeof c.notasPeloAsaas === 'boolean'), Object.keys(pa2.contas));
+    await q(`delete from "Cobranca_Estado" where id = 'sinc:trava'`);
+
     // ---------- segurança ----------
     const inv = await fn('cob_acao', { acao: 'apagar-tudo' });
     confere('ação desconhecida é recusada', inv.resposta && inv.resposta.ok === false, inv);
@@ -211,8 +269,10 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
       await q(`delete from "Recebimentos" where "Cliente_Ref" = any($1) or "Nota_Ref" = any($2) or "Asaas_Cobranca_Id" like 'pay_teste%'`, [ids.clientes, ids.notas]);
       if (ids.notas.length) await q(`delete from "Notas_Fiscais" where id = any($1)`, [ids.notas]);
       if (ids.clientes.length) await q(`delete from "Entidades_Cadastradas" where id = any($1)`, [ids.clientes]);
-      await q(`delete from "Cobranca_Estado"`);
-      for (const e of estadoAntes) await q(`insert into "Cobranca_Estado" (id, "Valor") values ($1, $2)`, [e.id, JSON.stringify(e.Valor)]);
+      // O estado real volta como estava, menos o registro de uma troca de banco de verdade (se a chave PIX do CNPJ 1
+      // chegar ao Asaas bem durante o teste, a troca vale e a cópia dos dados de antes não pode sumir).
+      await q(`delete from "Cobranca_Estado" where id not like 'banco-antes:CNPJ %' and id not like 'banco-trocado:CNPJ %'`);
+      for (const e of estadoAntes) await q(`insert into "Cobranca_Estado" (id, "Valor") values ($1, $2) on conflict (id) do nothing`, [e.id, JSON.stringify(e.Valor)]);
       const sobrou = await q(`select (select count(*) from "Entidades_Cadastradas" where "CPF_CNPJ" like '999999990%')::int as c, (select count(*) from "Recebimentos" where "Descricao" like '%TESTE%' or "Cliente_Nome" like 'TESTE%')::int as r`);
       confere('limpeza: nada de teste ficou no banco', sobrou[0].c === 0 && sobrou[0].r === 0, sobrou);
     } catch (e) { falhas++; console.log('ERRO na limpeza', e.message); }

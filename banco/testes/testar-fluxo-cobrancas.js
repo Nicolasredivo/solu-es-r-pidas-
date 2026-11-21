@@ -29,6 +29,7 @@ const SIMULADOR = `return $input.all().map((i) => {
   if (m === 'GET' && /^\\/pix\\/addressKeys/.test(c)) return { json: { data: p.conta === 'CNPJ 2' ? [{ id: 'k', type: 'CNPJ', status: 'ACTIVE' }] : [] } };
   if (m === 'GET' && /^\\/payments\\?/.test(c)) return { json: { data: [] } };
   if (m === 'GET' && /^\\/financialTransactions/.test(c)) return { json: { data: [] } };
+  if (m === 'GET' && c === '/myAccount/accountNumber') return { json: { agency: '0001', account: '9999999', accountDigit: '9' } };
   if (m === 'GET' && c === '/myAccount/fees') return { json: { payment: { bankSlip: { defaultValue: 1.99, discountValue: 0.99, expirationDate: '2000-01-01 00:00:00' } }, notification: { messagingFeeValue: 0.99 } } };
   if (m === 'GET' && /^\\/payments\\/[^/]+\\/viewingInfo$/.test(c)) return { json: { invoiceViewedDate: '2026-11-20 08:00:00' } };
   if (m === 'GET' && /^\\/payments\\/[^/?]+$/.test(c)) return { json: { id: c.split('/')[2], status: 'RECEIVED', value: 200, netValue: 198.01, paymentDate: '2026-11-20', billingType: 'BOLETO' } };
@@ -112,13 +113,19 @@ async function criarSimulador() {
 
     // ---------- sincronização (cópia, Asaas simulado): o boleto aberto foi pago ----------
     await q(`delete from "Cobranca_Estado" where id = 'sinc:trava'`);
+    // Taxas e agência/conta só são pedidas 1x por dia: o teste força pedir (o estado real volta no fim).
+    await q(`update "Cobranca_Estado" set "Valor" = "Valor" - 'taxasEm' - 'numeroEm' where id like 'conta:%'`);
     const sr = await fetch('http://localhost:5678/webhook/' + caminhoSinc, { method: 'POST' }).then((r) => r.json()).catch((e) => ({ erro: e.message }));
     const b2d = (await q(`select * from "Recebimentos" where id = $1`, [b2.id]))[0];
     confere('sincronizar: boleto pago vira Recebido com taxa', b2d.Status === 'Recebido' && Number(b2d.Taxa) === 1.99 && b2d.Visto_Em !== null, { sr, b2d });
     const est = (await q(`select "Valor" from "Cobranca_Estado" where id = 'conta:CNPJ 2'`))[0];
     confere('sincronizar: saldo, PIX e taxa da conta', est && Number(est.Valor.saldo) === 10 && est.Valor.pix === true && Number(est.Valor.taxaBoleto) === 1.99, est);
+    confere('sincronizar: guarda agência/conta do Asaas e as chaves PIX', est && est.Valor.conta === '9999999-9' && est.Valor.agencia === '0001'
+      && Array.isArray(est.Valor.pixChaves) && est.Valor.pixChaves[0].tipo === 'CNPJ', est);
+    const emp1 = (await q(`select "Banco" from "Empresas_Emissoras" where "Codigo" = 'CNPJ 1'`))[0];
+    confere('sincronizar: CNPJ 1 sem chave PIX no Asaas continua com o banco de antes', emp1 && !/^\s*461/.test(emp1.Banco || ''), emp1);
     const trava = (await q(`select "Valor" from "Cobranca_Estado" where id = 'sinc:trava'`))[0];
-    confere('sincronizar: trava solta no fim', trava && new Date(trava.Valor.ate) <= new Date(), trava);
+    confere('sincronizar: trava solta no fim', trava && new Date(trava.Valor.ate) <= new Date(Date.now() + 2000), trava);
 
     // ---------- cancelar ----------
     const grupo2 = crypto.randomUUID();
@@ -134,8 +141,9 @@ async function criarSimulador() {
       await q(`delete from "Recebimentos" where "Cliente_Ref" = any($1) or "Nota_Ref" = any($2) or "Asaas_Cobranca_Id" like 'pay_simflx%'`, [ids.clientes, ids.notas]);
       if (ids.notas.length) await q(`delete from "Notas_Fiscais" where id = any($1)`, [ids.notas]);
       if (ids.clientes.length) await q(`delete from "Entidades_Cadastradas" where id = any($1)`, [ids.clientes]);
-      await q(`delete from "Cobranca_Estado"`);
-      for (const e of estadoAntes) await q(`insert into "Cobranca_Estado" (id, "Valor") values ($1, $2)`, [e.id, JSON.stringify(e.Valor)]);
+      // Volta o estado real, menos um registro de troca de banco de verdade (banco-antes / banco-trocado).
+      await q(`delete from "Cobranca_Estado" where id not like 'banco-antes:CNPJ %' and id not like 'banco-trocado:CNPJ %'`);
+      for (const e of estadoAntes) await q(`insert into "Cobranca_Estado" (id, "Valor") values ($1, $2) on conflict (id) do nothing`, [e.id, JSON.stringify(e.Valor)]);
     } catch (e) { console.log('ERRO na limpeza do banco', e.message); }
     await db.end();
     await t.sairEApagarUsuarioDeTeste().catch(() => {});
