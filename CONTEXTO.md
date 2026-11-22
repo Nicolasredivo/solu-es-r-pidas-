@@ -6348,3 +6348,46 @@ Pedido do dono: inverter o ciclo para o e-mail do Asaas (que sai na criação do
   valor diferente recusado, conta com boleto não ganha outro, recibo na hora e "Referente ao recibo"); `testar-fluxo-
   cobrancas.js` 17 ok; tela testada no painel do navegador com dados de teste (ordem nota → conta → boleto, falha com
   "tentar de novo", janela "Gerar boleto").
+
+## Cobranças, 4ª rodada: e-mails pelo sistema, taxa na nota, PDF no boleto (22/11/2026, versão 2026.11.22a)
+
+Decisões do dono numa "trilha" (ele dizia a ação, eu a reação do sistema):
+
+- **Avisos do Asaas TODOS desligados** (economiza R$ 0,99 por boleto); **quem avisa o cliente é o sistema**, do e-mail
+  adm (credencial SMTP do fluxo "Cobrancas - Sincronizar"):
+  - boleto criado: um e-mail por pedido (todas as parcelas), com os PDFs dos boletos e da nota (ou recibo) ANEXOS;
+  - véspera do vencimento: lembrete (tom de lembrete) com boleto e nota anexos;
+  - atraso: a cada 3 dias (1º, 4º, 7º... dia depois do vencimento, até o 29º);
+  - véspera e atraso só das 8h às 20h; dia perdido (PC desligado) não sai depois;
+  - 30 dias de atraso: o boleto não pode mais ser pago; aviso SÓ para o dono (campo Aviso → "Precisa de você"),
+    que some quando ele dá uma data nova.
+  - Liga a partir de `Cobranca_Estado` "emails-sistema" (desde 22/11/2026 13h46). Clientes do Asaas: notificationDisabled
+    e todos os avisos desligados (45 clientes, conferidos; cópia de antes em
+    `banco-solucoes\backups\manual\asaas-avisos-antes-desligar-2026-11-22.json`); fluxo "Asaas - Sincroniza cliente"
+    cria e edita cliente sem ligar aviso nenhum.
+- **Contato** em boleto, e-mails e mensagens de WhatsApp: só (47) 99208-1047 + adm.solucoes.rapidas@gmail.com. O dono
+  trocou o celular das duas contas no painel do Asaas; o e-mail de contato do CNPJ 1 no Asaas continua o hotmail (só
+  muda pelo suporte).
+- **PDF da nota na página do boleto** no Asaas (documento INVOICE, visível antes de pagar), enviado logo depois de o
+  boleto nascer (o "App - Cobrancas" dispara a sincronização). Sub-fluxo "Asaas - Chamada pela conta" ganhou a rota de
+  arquivo (multipart).
+- **Nota de cliente com boleto:** sem a chave PIX: "Pagamento por boleto bancário (vence ...), enviado por e-mail. Dados
+  da conta: ASAAS ... Agência ... Conta ...".
+- **Taxa do boleto somada ao valor** (nota e recibo de cliente com "Gera boletos"): uma taxa por boleto, da conta do
+  cliente (Cobranca_Estado conta:CNPJ X → taxaBoleto; sem leitura, R$ 1,99). Fica dentro do total (e da mão de obra),
+  sem linha própria; só o dono vê a conta, na conferência; dá para desmarcar. No chat: `"taxa": "nao"` no pedido.
+  Recibo: soma uma taxa (à vista).
+- **Taxa como gasto:** cada boleto pago vira uma despesa paga "Taxa do boleto · cliente · NFS-e nº X", categoria
+  "Taxas do Asaas" (Servico_Ref = a conta), com a taxa real (valor pago − líquido).
+- **Entradas para classificar:** "Anotar" com texto livre (de onde e por que veio o dinheiro; status 'anotado', coluna
+  `Conciliacao.Anotacao`, fora do faturamento). PIX mandado pelo próprio dono (nome do titular ou CNPJ das empresas)
+  nunca vira baixa nem sugestão: já vem anotado "Transferência entre contas próprias (ex.: saldo do Inter)".
+- **Financeiro dos dois CNPJs:** decidido pelo dono: igual para os dois, cada um com seus clientes, tudo somado como uma
+  conta só (a "fase 3" adiada deixa de existir).
+- **Ficou para depois (combinado):** pasta "Atendimento" em Documentos (código único por atendimento ligando orçamento,
+  recibo, nota e boleto, e escolher laudos/relatórios para ir junto no e-mail); concluir atendimento e já faturar;
+  servidor ligar sozinho com o Windows; relatório para o síndico. Boleto pelo WhatsApp num toque: não.
+- **Testes:** `testar-cobrancas.js` 101 ok; `testar-fluxo-cobrancas.js` 17 ok; `testar-asaas-por-cnpj.js` com a regra
+  nova; PDF no boleto testado no Asaas real nas duas contas (cliente e boleto de teste apagados); tela conferida no
+  painel do navegador com dados de exemplo. Para voltar: scripts do scratchpad com `--voltar` e as cópias em
+  `backups/manual/*-2026-11-22.json`.
