@@ -13858,8 +13858,8 @@ async function nfEmitir(pedido, tela) {
   nfEnviando = true;
   tela.emitir.disabled = true;
   tela.voltar.disabled = true;
-  // Ciclo do dono (21/11/2026): primeiro a nota; o boleto nasce dela, já com "Referente à NFS-e nº X" (assim o
-  // e-mail do Asaas, que sai na criação do boleto, já leva o número da nota).
+  // Ciclo do dono (21/11/2026): primeiro a nota; o boleto nasce dela, já com "Referente à NFS-e nº X" (o e-mail do
+  // sistema, que sai logo depois do boleto, leva o boleto e a nota em PDF).
   tela.status.textContent = "Enviando a nota ao governo... não feche esta tela.";
   tela.status.className = "status show loading";
   let r;
@@ -16649,7 +16649,8 @@ function cobDesenharAsaas(d) {
   const ha = quando ? Math.max(0, Math.round((Date.now() - quando.getTime()) / 60000)) : null;
   const linha = cobEl("div", "cob-contas-linha");
   linha.append(cobEl("span", "", pix));
-  if (taxas) linha.append(cobEl("span", "", `Taxa por boleto pago: ${taxas}, mais ${dinheiro((contas["CNPJ 1"] || contas["CNPJ 2"] || {}).taxaAviso || 0.99)} do aviso por e-mail.`));
+  // Sem a taxa do aviso: os avisos do Asaas estão desligados desde 22/11/2026 (quem manda os e-mails é o sistema).
+  if (taxas) linha.append(cobEl("span", "", `Taxa por boleto pago: ${taxas} (já somada no valor da nota; vira gasto em "Taxas do Asaas" quando o boleto é pago).`));
   const conferido = cobEl("span", "cob-contas-sinc", ha === null ? "Ainda não conferido com o Asaas." : ha < 1 ? "Conferido com o Asaas agora." : `Conferido com o Asaas há ${ha < 60 ? cobPlural(ha, "minuto", "minutos") : cobPlural(Math.round(ha / 60), "hora", "horas")}.`);
   conferido.append(" ", cobBotao("Conferir agora", () => cobSincronizar(true), "cob-link"));
   linha.append(conferido);
@@ -16791,7 +16792,7 @@ function cobDesenharSemBoleto(d) {
   cobCab(destino, "Notas e recibos sem boleto", "245, 166, 35", COB_IC.nota, cobEl("span", "cob-cab-total", dinheiro(cobSoma(lista))));
   // Enquanto o CNPJ 1 recebe pelo Inter (chave PIX ainda não foi para o Asaas), o que cai lá é baixa à mão.
   const interAinda = !((d.contas || {})["CNPJ 1"] || {}).notasPeloAsaas;
-  destino.append(cobEl("p", "doc-hint cob-sem-previsao", "Sem previsão de pagamento. Dá baixa sozinho quando o PIX cai no Asaas com o mesmo valor"
+  destino.append(cobEl("p", "doc-hint cob-sem-previsao", "Sem previsão de pagamento. Dá baixa sozinho quando o próprio cliente paga no Asaas o valor exato; se quem paga é outro (a administradora, por exemplo), aparece em \"Precisa de você\" para você confirmar"
     + (interAinda ? "; o que cai no Inter, marque você." : ".")));
   if (!lista.length) {
     destino.append(cobEl("p", "doc-hint", "Nada pendente. Toda nota emitida de cliente sem boleto (e todo recibo) entra aqui."));

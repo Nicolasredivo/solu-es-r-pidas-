@@ -159,7 +159,12 @@ async function criarSimulador() {
     t.confere('sem erro inesperado', false, e.message);
   } finally {
     try {
+      // A taxa do boleto pago vira despesa (Taxas do Asaas): sai antes da conta de teste, senão fica órfã no Financeiro.
+      await q(`delete from "Despesas" where "Servico_Ref" in (select id from "Recebimentos" where "Cliente_Ref" = any($1) or "Nota_Ref" = any($2) or "Asaas_Cobranca_Id" like 'pay_simflx%')`, [ids.clientes, ids.notas]);
       await q(`delete from "Recebimentos" where "Cliente_Ref" = any($1) or "Nota_Ref" = any($2) or "Asaas_Cobranca_Id" like 'pay_simflx%'`, [ids.clientes, ids.notas]);
+      await q(`delete from "Despesas" where "Categoria" = 'Taxas do Asaas' and "Descricao" like 'Taxa do boleto · TESTE %' and "Criado_Em" >= $1`, [inicio]);
+      const sobra = (await q(`select count(*)::int as n from "Despesas" where "Descricao" like 'Taxa do boleto · TESTE %'`))[0].n;
+      confere('limpeza: nenhuma despesa de teste no Financeiro', sobra === 0, sobra);
       if (ids.notas.length) await q(`delete from "Notas_Fiscais" where id = any($1)`, [ids.notas]);
       if (ids.clientes.length) await q(`delete from "Entidades_Cadastradas" where id = any($1)`, [ids.clientes]);
       // Volta o estado real, menos um registro de troca de banco de verdade (banco-antes / banco-trocado).

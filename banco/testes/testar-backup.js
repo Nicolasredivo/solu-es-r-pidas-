@@ -5,6 +5,13 @@ const t = require('./comum');
 const { FIN, CAD, lista, chamar, confere } = t;
 
 (async () => {
+  // O fluxo está desligado de propósito desde 27/10/2026 (decisão do dono); desde 14/11/2026 o backup é do banco
+  // inteiro (banco/backup-banco.js, teste testar-backup-banco.js). Desligado = nada a testar aqui.
+  const fluxo = (await t.n8n('GET', '/workflows?limit=250')).data.find((w) => w.name === 'App - Backup de tudo');
+  if (!fluxo || !fluxo.active) {
+    console.log('"App - Backup de tudo" está desligado de propósito (o backup agora é o do banco inteiro): nada a testar.');
+    return;
+  }
   await t.entrarComUsuarioDeTeste();
   try {
     const r = await chamar('fazer-backup');

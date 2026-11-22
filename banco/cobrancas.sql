@@ -657,6 +657,9 @@ declare n "Notas_Fiscais"; c "Entidades_Cadastradas"; novo text; servico text;
 begin
   select * into n from "Notas_Fiscais" where id = nid;
   if n.id is null or n."Status" <> 'Emitida' then return jsonb_build_object('ok', false, 'mensagem', 'Nota não encontrada ou não emitida.'); end if;
+  -- Uma de cada vez por nota (22/11/2026): o app (logo depois de emitir) e a sincronização podem registrar a mesma
+  -- nota no mesmo instante; sem a trava, ela entraria duas vezes no A receber.
+  perform pg_advisory_xact_lock(hashtext('cob-registrar-nota:' || n.id));
   select id into novo from "Recebimentos" where "Nota_Ref" = n.id limit 1;
   if novo is not null then return jsonb_build_object('ok', true, 'existente', true, 'id', novo); end if;
   select * into c from "Entidades_Cadastradas" where id = n."Cliente_Ref";
@@ -981,8 +984,12 @@ begin
   if emails_desde is not null then
     -- (a) Boleto criado: um e-mail por pedido (todas as parcelas), com os boletos e a nota (ou recibo) anexos.
     for g in select coalesce(x."Grupo", x.id) as k, min(x.id) as primeiro from "Recebimentos" x
-              where x."Criado_Em" >= emails_desde and x."Status" = 'Pendente' and coalesce(x."Asaas_Cobranca_Id", '') <> ''
+              where x."Status" = 'Pendente' and coalesce(x."Asaas_Cobranca_Id", '') <> ''
                 and x."Asaas_Status" in ('PENDING', 'AWAITING_RISK_ANALYSIS') and x."Cliente_Ref" is not null
+                -- Boleto criado depois de ligar os e-mails (a conta pode ser mais antiga: "Gerar boleto" numa nota de antes),
+                -- ou feito direto no painel do Asaas depois disso (os avisos do Asaas estão desligados: só o sistema avisa).
+                and (exists (select 1 from "Cobranca_Eventos" ce where ce."Chave" = 'criado:' || x.id and ce."Quando" >= emails_desde)
+                     or (x."Origem" = 'asaas' and x."Criado_Em" >= emails_desde))
                 and not exists (select 1 from "Recebimentos" y where y."Grupo" = x."Grupo" and coalesce(y."Asaas_Cobranca_Id", '') = '' and y."Status" = 'Pendente')
                 and not exists (select 1 from "Cobranca_Eventos" e where e."Chave" in ('email-criado:' || coalesce(x."Grupo", x.id), 'sem-email:criado:' || coalesce(x."Grupo", x.id)))
               group by 1 limit 20 loop
@@ -1070,20 +1077,7 @@ begin
       from "Entidades_Cadastradas" where coalesce("Asaas_Customer_Id", '') <> ''), '[]'::jsonb));
 end $$;
 
--- Texto do lembrete de véspera (HTML simples, sem imagens: chega bem em qualquer e-mail).
-create or replace function cob_email_lembrete(r "Recebimentos") returns text language sql stable as $$
-  select '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#1f2937;max-width:560px">'
-    || '<p style="margin:0 0 4px;font-size:18px;color:#0F2747"><strong>Soluções Rápidas</strong></p>'
-    || '<p style="margin:0 0 16px;color:#6b7280;font-size:13px">Manutenção predial</p>'
-    || '<p>Olá! Este é um lembrete de que o boleto abaixo <strong>vence amanhã, ' || to_char(r."Vencimento", 'DD/MM/YYYY') || '</strong>.</p>'
-    || '<table style="border-collapse:collapse;margin:12px 0;font-size:14px">'
-    || '<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Cliente</td><td style="padding:4px 0">' || replace(replace(replace(coalesce(r."Cliente_Nome", ''), '&', '&amp;'), '<', '&lt;'), '>', '&gt;') || '</td></tr>'
-    || '<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Valor</td><td style="padding:4px 0"><strong>' || cob_reais(r."Valor") || '</strong></td></tr>'
-    || '<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Referente a</td><td style="padding:4px 0">' || replace(replace(replace(coalesce(r."Descricao", ''), '&', '&amp;'), '<', '&lt;'), '>', '&gt;') || '</td></tr>'
-    || '</table>'
-    || '<p><a href="' || replace(coalesce(r."Asaas_Link", ''), '"', '') || '" style="display:inline-block;background:#0F2747;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:6px">Ver boleto e pagar</a></p>'
-    || '<p style="font-size:13px;color:#6b7280">Se já pagou, pode desconsiderar este e-mail. Após o vencimento entram multa de 2% e juros de 1% ao mês.</p>'
-    || '<p style="font-size:13px;color:#6b7280">Dúvidas: (47) 99667-0900 · (47) 99208-1047</p></div>' $$;
+-- (O texto do lembrete de véspera é o cob_email_html(r, 'vespera'); cob_email_lembrete fica só como atalho dele.)
 
 -- Passo 2: grava tudo o que o Asaas respondeu. p: { respostas: [{ ref, resposta }], clientes: [{ conta, customer: {...} }] }
 create or replace function cob_sinc_gravar(p jsonb) returns jsonb language plpgsql as $$

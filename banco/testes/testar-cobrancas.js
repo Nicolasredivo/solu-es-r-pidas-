@@ -316,6 +316,8 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
       [c1, JSON.stringify([{ id: attE, filename: 'NFS-e 9007.pdf', type: 'application/pdf', size: 10 }])]))[0].id;
     ids.notas.push(notaE);
     await q(`update "Recebimentos" set "Nota_Ref" = $2 where "Grupo" = $1`, [grupoE, notaE]);
+    // Conta mais antiga que os e-mails do sistema (ex.: "Gerar boleto" numa nota de antes): vale a hora do boleto.
+    await q(`update "Recebimentos" set "Criado_Em" = now() - interval '3 days' where "Grupo" = $1`, [grupoE]);
     const plE = await fn('cob_sinc_plano', { hora: 22 });
     const emE = (plE.lembretes || []).filter((l) => l.tipo === 'criado' && regE.resposta.cobrancas.some((c) => c.id === l.id));
     confere('boleto criado: um e-mail só para o pedido de 2 parcelas, mesmo fora do horário', emE.length === 1 && emE[0].emails.length === 2, plE.lembretes);
@@ -408,6 +410,7 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
       await q(`delete from "Conciliacao" where "Transacao_Id" like 'pay:pay_teste%' or "Transacao_Id" like 'ft:ft_teste%'`);
       await q(`delete from "Despesas" where "Categoria" = 'Taxas do Asaas' and "Servico_Ref" in (select id from "Recebimentos" where "Cliente_Ref" = any($1) or "Nota_Ref" = any($2) or "Asaas_Cobranca_Id" like 'pay_teste%')`, [ids.clientes, ids.notas]);
       await q(`delete from "Recebimentos" where "Cliente_Ref" = any($1) or "Nota_Ref" = any($2) or "Asaas_Cobranca_Id" like 'pay_teste%'`, [ids.clientes, ids.notas]);
+      await q(`delete from "Despesas" where "Categoria" = 'Taxas do Asaas' and "Descricao" like 'Taxa do boleto · TESTE %' and "Servico_Ref" is null`);
       if (ids.notas.length) await q(`delete from "Notas_Fiscais" where id = any($1)`, [ids.notas]);
       if (ids.arquivos) await q(`delete from "Arquivos_Cliente" where id = any($1)`, [ids.arquivos]);
       if (ids.clientes.length) await q(`delete from "Entidades_Cadastradas" where id = any($1)`, [ids.clientes]);
@@ -415,8 +418,9 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
       // chegar ao Asaas bem durante o teste, a troca vale e a cópia dos dados de antes não pode sumir).
       await q(`delete from "Cobranca_Estado" where id not like 'banco-antes:CNPJ %' and id not like 'banco-trocado:CNPJ %'`);
       for (const e of estadoAntes) await q(`insert into "Cobranca_Estado" (id, "Valor") values ($1, $2) on conflict (id) do nothing`, [e.id, JSON.stringify(e.Valor)]);
-      const sobrou = await q(`select (select count(*) from "Entidades_Cadastradas" where "CPF_CNPJ" like '999999990%')::int as c, (select count(*) from "Recebimentos" where "Descricao" like '%TESTE%' or "Cliente_Nome" like 'TESTE%')::int as r`);
-      confere('limpeza: nada de teste ficou no banco', sobrou[0].c === 0 && sobrou[0].r === 0, sobrou);
+      const sobrou = await q(`select (select count(*) from "Entidades_Cadastradas" where "CPF_CNPJ" like '999999990%')::int as c, (select count(*) from "Recebimentos" where "Descricao" like '%TESTE%' or "Cliente_Nome" like 'TESTE%')::int as r,
+        (select count(*) from "Despesas" where "Descricao" like 'Taxa do boleto · TESTE %')::int as d`);
+      confere('limpeza: nada de teste ficou no banco', sobrou[0].c === 0 && sobrou[0].r === 0 && sobrou[0].d === 0, sobrou);
     } catch (e) { falhas++; console.log('ERRO na limpeza', e.message); }
     await db.end();
     console.log(`\n${ok} ok, ${falhas} falha(s)`);
