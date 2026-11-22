@@ -8273,3 +8273,59 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
   .cob-filtros .cob-seg { width: 100%; }
   .cob-filtros .cob-seg button { flex: 1; padding: 6px 4px; }
 }
+
+/* =====================================================================================================
+   INÍCIO NO COMPUTADOR (22/11/2026, pedido do dono): em tela larga o painel ocupa o espaço vazio dos lados.
+   Só vale a partir de 1280px; celular e tablet continuam iguais. Cartões em 3 colunas: (agenda + contas a
+   pagar) | (limite do MEI + faturamento) | últimas notas; mais respiro entre os blocos.
+   ===================================================================================================== */
+@media (min-width: 1280px) {
+  #page-inicio {
+    max-width: 1640px;
+    padding: 32px 36px;
+  }
+
+  #page-inicio .inicio-hero {
+    margin-bottom: 26px;
+    padding: 24px 28px;
+  }
+
+  #page-inicio .painel-acoes {
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  #page-inicio .painel-acao {
+    flex: 1 1 0;
+    padding: 12px 16px;
+  }
+
+  #page-inicio .painel-kpis {
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  /* As colunas do celular "somem" e os cartões se encaixam numa grade de 3 x 2, cada linha com a mesma altura
+     (fica alinhado, sem vão): agenda | limite do MEI | últimas notas (alta) / contas a pagar | faturamento. */
+  #page-inicio .painel-grade {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-areas: "hoje mei notas" "contas fat notas";
+    align-items: stretch;
+    gap: 18px;
+  }
+
+  #page-inicio .painel-coluna {
+    display: contents;
+  }
+
+  #page-inicio #painel-hoje { grid-area: hoje; }
+  #page-inicio #painel-mei { grid-area: mei; }
+  #page-inicio #painel-contas { grid-area: contas; }
+  #page-inicio #painel-fat { grid-area: fat; }
+  #page-inicio #painel-notas { grid-area: notas; grid-column: auto; }
+
+  #page-inicio .inicio-atalhos {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 14px;
+  }
+}
