@@ -90,7 +90,13 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "airtableTokenApi",
         "options": {
-          "timeout": 15000
+          "timeout": 15000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 0
+            }
+          }
         },
         "sendBody": true,
         "specifyBody": "json",
@@ -110,12 +116,12 @@
           "name": "Airtable local (banco do PC)"
         }
       },
-      "onError": "continueErrorOutput"
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"ok\": true,\n  \"mensagem\": \"Cadastro excluído.\"\n}",
+        "responseBody": "={{ JSON.stringify({ ok: $json.ok, mensagem: $json.mensagem }) }}",
         "options": {}
       },
       "id": "e0000000-0000-4000-8000-000000000036",
@@ -125,21 +131,6 @@
       "position": [
         1340,
         -160
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "{\n  \"ok\": false,\n  \"mensagem\": \"Não consegui excluir. Confira no Airtable antes de tentar de novo.\"\n}",
-        "options": {}
-      },
-      "id": "e0000000-0000-4000-8000-000000000037",
-      "name": "Responde erro ao excluir",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        1340,
-        20
       ]
     },
     {
@@ -210,6 +201,19 @@
           "timeout": 20000
         }
       }
+    },
+    {
+      "id": "11894686-7aae-4fb2-94a2-78a98b74407e",
+      "name": "Confere o resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -60
+      ],
+      "parameters": {
+        "jsCode": "// Cada item é uma chamada (endereços, contatos e, por último, o cliente), na mesma ordem.\nconst itens = $input.all().map((i) => i.json || {});\nconst motivo = (j) => String((j.error && (j.error.description || j.error.message)) || 'erro').slice(0, 160);\nconst falhas = itens.filter((j) => j.error);\nif (!falhas.length) return [{ json: { ok: true, mensagem: 'Cadastro excluído.' } }];\nconst cliente = itens[itens.length - 1] || {};\nif (cliente.error) {\n  return [{ json: { ok: false, mensagem: 'Não consegui excluir o cadastro (' + motivo(cliente) + '). '\n    + (itens.length > 1 ? 'Endereços ou contatos dele podem já ter saído: abra o cadastro e confira antes de tentar de novo.' : 'Nada mudou: tente de novo.') } }];\n}\nreturn [{ json: { ok: true, mensagem: 'Cadastro excluído, mas não consegui tirar tudo o que era dele (' + motivo(falhas[0]) + '). Confira os contatos.' } }];"
+      }
     }
   ],
   "connections": {
@@ -257,14 +261,7 @@
       "main": [
         [
           {
-            "node": "Responde excluido",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Responde erro ao excluir",
+            "node": "Confere o resultado",
             "type": "main",
             "index": 0
           }
@@ -298,6 +295,17 @@
         [
           {
             "node": "Monta a lista do que apagar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere o resultado": {
+      "main": [
+        [
+          {
+            "node": "Responde excluido",
             "type": "main",
             "index": 0
           }
