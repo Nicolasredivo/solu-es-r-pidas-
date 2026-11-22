@@ -8280,9 +8280,40 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
    pagar) | (limite do MEI + faturamento) | últimas notas; mais respiro entre os blocos.
    ===================================================================================================== */
 @media (min-width: 1280px) {
+  /* Todas as telas (22/11/2026, "faz nas outras abas tbm"): a mesma largura do Início. */
+  .page,
+  #page-contatos,
+  #page-veiculo {
+    max-width: 1640px;
+    padding: 32px 36px;
+  }
+
   #page-inicio {
     max-width: 1640px;
     padding: 32px 36px;
+  }
+
+  /* Formulários (campos um embaixo do outro) não esticam até 1640px: campo de 1,5 m é ruim de ler e de preencher.
+     Ficam com largura confortável, centralizados; as listas e painéis é que ocupam a tela toda. */
+  #form-entidade, #adm-form, #sind-form, #em-form, #chamado-form, #chamado-editar-box,
+  #form-documento, #form-nota, #form-convite {
+    max-width: 920px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Chamados: os cartões viram grade (2 a 3 por linha) em vez de faixas esticadas de ponta a ponta. */
+  #lista-chamados-sem-data,
+  #lista-chamados-com-data {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+
+  #lista-chamados-sem-data > .chamado-card,
+  #lista-chamados-com-data > .chamado-card {
+    margin: 0;
   }
 
   #page-inicio .inicio-hero {
