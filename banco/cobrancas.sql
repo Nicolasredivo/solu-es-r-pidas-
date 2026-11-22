@@ -142,12 +142,11 @@ create or replace function cob_emails(cliente text) returns text[] language sql 
   )
   select coalesce(array_agg(e order by g, k, n), '{}') from unicos $$;
 
--- Destinos dos e-mails do sistema (regra do dono, 22/11/2026): 1º no "Para", 2º no "Cc", 3º no "Cco" (cópia
--- oculta); do 4º em diante, no "Cc", ao lado do 2º.
+-- Destinos dos e-mails do sistema (regra do dono, 22/11/2026): o 1º no "Para" e todos os outros no "Cc", juntos,
+-- sem cópia oculta ("cco" fica sempre vazio).
 create or replace function cob_destinos(emails text[]) returns jsonb language sql immutable as $$
   select jsonb_build_object('para', coalesce(emails[1], ''),
-    'cc', coalesce(array_to_string(array_remove(array[emails[2]] || emails[4:], null), ', '), ''),
-    'cco', coalesce(emails[3], '')) $$;
+    'cc', coalesce(array_to_string(emails[2:], ', '), ''), 'cco', '') $$;
 
 create or replace function cob_nome_cliente(c "Entidades_Cadastradas") returns text language sql immutable as $$
   select coalesce(nullif(btrim(c."Nome_Fantasia_Identificador"), ''), nullif(btrim(c."Razao_Social_Nome"), ''), 'Cliente sem nome') $$;

@@ -371,9 +371,9 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
     const prop = (await q(`select "Status", "Anotacao", "Sugestao_Ref" from "Conciliacao" where "Transacao_Id" like 'ft:ft_teste_proprio%'`))[0];
     confere('PIX do próprio dono: fica para classificar, já anotado, sem sugestão', prop && prop.Status === 'sem-par' && /contas próprias/.test(prop.Anotacao || '') && !prop.Sugestao_Ref, prop);
     await q(`delete from "Cobranca_Estado" where id in ('sinc:trava', 'emails-sistema')`);
-    // Para/Cc/Cco (22/11/2026): 1º Para, 2º Cc, 3º Cco, do 4º em diante no Cc.
+    // Destinos (22/11/2026): 1º no Para, todos os outros no Cc (sem cópia oculta).
     const ds = (await q(`select cob_destinos(array['a@x.com','b@x.com','c@x.com','d@x.com']) as d, cob_destinos(array['a@x.com']) as u, cob_emails($1) as e`, [c1]))[0];
-    confere('destinos: Para, Cc, Cco e o 4º no Cc', ds.d.para === 'a@x.com' && ds.d.cc === 'b@x.com, d@x.com' && ds.d.cco === 'c@x.com' && ds.u.cc === '' && ds.u.cco === '', ds);
+    confere('destinos: 1º no Para, os outros juntos no Cc, nada oculto', ds.d.para === 'a@x.com' && ds.d.cc === 'b@x.com, c@x.com, d@x.com' && ds.d.cco === '' && ds.u.cc === '' && ds.u.cco === '', ds);
     confere('e-mails do cliente na ordem do cadastro', JSON.stringify(ds.e) === JSON.stringify(['financeiro@example.com', 'outro@example.com']), ds.e);
     // Nota por e-mail: a nota + só os documentos do mesmo cliente.
     const docMeu = (await q(`insert into "Arquivos_Cliente" ("Cliente_Ref", "Cliente_Nome", "Tipo", "Titulo", "Data_Documento", "Emissor", "Origem", "Arquivo")

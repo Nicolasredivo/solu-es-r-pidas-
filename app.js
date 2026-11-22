@@ -13955,7 +13955,7 @@ async function nfBoletoDaNota(nota, boleto, area) {
 
 // Nota por e-mail ao financeiro do cliente (pedido do dono, 22/11/2026). Cliente sem boleto: depois de emitir, o
 // sistema pergunta se manda a nota (PDF) e quais documentos da pasta do cliente vão junto. Sai do e-mail adm: 1º e-mail
-// no Para, 2º no Cc, 3º no Cco (cópia oculta), do 4º em diante no Cc. Também pela lista ("Enviar por e-mail").
+// no Para e todos os outros no Cc, juntos (sem cópia oculta). Também pela lista ("Enviar por e-mail").
 const NF_PASTAS_EMAIL = { orcamento: "Orçamento", recibo: "Recibo", comunicado: "Comunicado", laudo: "Laudo" };
 async function nfMontarEnvioEmail(area, nota) {
   area.innerHTML = "";
