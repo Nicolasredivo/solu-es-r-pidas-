@@ -340,7 +340,7 @@
         660
       ],
       "parameters": {
-        "jsCode": "// Lembrete de véspera (o Asaas não tem \"1 dia antes\"): um e-mail por boleto, para os e-mails do cliente.\nconst r = $('Plano').first().json.r || {};\nconst l = (r.lembretes || []).filter((x) => Array.isArray(x.emails) && x.emails.length);\nreturn l.length ? l.map((x) => ({ json: { evento: x.evento, para: x.emails.join(', '), quantos: x.emails.length, assunto: x.assunto, html: x.html } })) : [{ json: { nada: true } }];"
+        "jsCode": "// E-mails ao cliente pelo sistema (22/11/2026): boleto criado, lembrete de véspera e aviso de atraso, com os PDFs.\nconst r = $('Plano').first().json.r || {};\nconst l = (r.lembretes || []).filter((x) => Array.isArray(x.emails) && x.emails.length);\nreturn l.length ? l.map((x) => ({ json: { evento: x.evento, tipo: x.tipo || 'vespera', para: x.emails.join(', '), quantos: x.emails.length,\n  assunto: x.assunto, html: x.html, anexos: Array.isArray(x.anexos) ? x.anexos : [] } })) : [{ json: { nada: true } }];"
       }
     },
     {
@@ -395,7 +395,8 @@
         "emailFormat": "html",
         "html": "={{ $json.html }}",
         "options": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "fileAttachments": "={{ Object.keys($binary || {}).join(',') }}"
         }
       },
       "credentials": {
@@ -416,7 +417,7 @@
         660
       ],
       "parameters": {
-        "jsCode": "const enviados = $('Lista lembretes').all().filter((i) => !i.json.nada);\nconst res = $input.all();\nconst lembretes = enviados.map((i, k) => ({ evento: i.json.evento, quantos: i.json.quantos, ok: !!(res[k] && res[k].json && !res[k].json.error && !res[k].json.nada) }));\nreturn [{ json: { lembretes } }];"
+        "jsCode": "const enviados = $('Lista lembretes').all().filter((i) => !i.json.nada);\nconst res = $input.all();\nlet baixados = [];\ntry { baixados = $('Baixa anexos').all(); } catch (e) { baixados = []; }\nconst lembretes = enviados.map((i, k) => ({ evento: i.json.evento, tipo: i.json.tipo, quantos: i.json.quantos,\n  anexos: baixados[k] ? baixados[k].json.anexosOk : 0, ok: !!(res[k] && res[k].json && !res[k].json.error && !res[k].json.nada) }));\nreturn [{ json: { lembretes } }];"
       }
     },
     {
@@ -442,6 +443,19 @@
         }
       },
       "onError": "continueRegularOutput"
+    },
+    {
+      "id": "d549e10f-635b-4cab-af21-e51b0faa9b8e",
+      "name": "Baixa anexos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3190,
+        460
+      ],
+      "parameters": {
+        "jsCode": "// Baixa os PDFs (boleto no Asaas, nota ou recibo no sistema) para irem anexos. Só desses dois endereços e só PDF.\n// O que falhar fica de fora: o link do boleto vai sempre no texto do e-mail.\nconst OK = /^(https:\\/\\/[a-z0-9.-]*asaas\\.com\\/|http:\\/\\/localhost:5678\\/webhook\\/anexo\\?id=att[0-9a-f]{32}$)/;\nconst out = [];\nfor (const it of $input.all()) {\n  const binary = {};\n  let i = 0;\n  for (const a of (it.json.anexos || []).slice(0, 15)) {\n    if (!OK.test(String(a.url || ''))) continue;\n    try {\n      const b = Buffer.from(await this.helpers.httpRequest({ url: a.url, encoding: 'arraybuffer', timeout: 30000 }));\n      if (b.length < 100 || b.subarray(0, 4).toString() !== '%PDF') continue;\n      binary['anexo' + i] = await this.helpers.prepareBinaryData(b, String(a.nome || 'documento.pdf').replace(/[\\\\/:*?\"<>|]/g, '_'), 'application/pdf');\n      i++;\n    } catch (e) { /* fica de fora */ }\n  }\n  out.push({ json: { ...it.json, anexosOk: i }, binary });\n}\nreturn out;"
+      }
     }
   ],
   "connections": {
@@ -701,7 +715,7 @@
       "main": [
         [
           {
-            "node": "Manda lembrete",
+            "node": "Baixa anexos",
             "type": "main",
             "index": 0
           }
@@ -731,6 +745,17 @@
         [
           {
             "node": "Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixa anexos": {
+      "main": [
+        [
+          {
+            "node": "Manda lembrete",
             "type": "main",
             "index": 0
           }

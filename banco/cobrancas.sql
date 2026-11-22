@@ -72,6 +72,8 @@ create table if not exists "Conciliacao" (
   "Confianca" text,                               -- alta | media | baixa
   "Criado_Em" timestamptz not null default now()
 );
+-- De onde e por que veio o dinheiro, escrito pelo dono (22/11/2026). Status 'anotado' = classificada sem ligar a conta.
+alter table "Conciliacao" add column if not exists "Anotacao" text;
 
 -- Estado das cobranças: começo (corte das notas antigas), última sincronização, contas do Asaas, trava.
 create table if not exists "Cobranca_Estado" (
@@ -195,7 +197,7 @@ create or replace function cob_descricao_boleto(r "Recebimentos", numero text, s
          else 'Referente a' end
     || case when coalesce(r."Parcela_Total", 1) > 1 then ' (parcela ' || r."Parcela_Numero" || ' de ' || r."Parcela_Total" || ')' else '' end
     || ': ' || s.t || case when s.t ~ '[.!?]$' then '' else '.' end
-    || ' Após o vencimento: multa de 2% e juros de 1% ao mês. Dúvidas: (47) 99667-0900.', 500)
+    || ' Após o vencimento: multa de 2% e juros de 1% ao mês. Dúvidas: (47) 99208-1047 ou adm.solucoes.rapidas@gmail.com.', 500)
   from (select coalesce(nullif(left(btrim(regexp_replace(coalesce(servico, ''), '\s+', ' ', 'g')), 330), ''), 'serviço') as t) s $$;
 
 -- Pede ao Asaas a descrição com o número da nota (usada ao ligar a nota e, se falhar, de novo na sincronização).
@@ -292,7 +294,7 @@ begin
           or (r."Status" = 'Cancelado' and r."Criado_Em" >= now() - interval '45 days')), '[]'::jsonb),
     'conciliacao', coalesce((select jsonb_agg(jsonb_build_object('id', c.id, 'conta', c."Conta", 'data', c."Data", 'valor', c."Valor",
           'pagador', c."Pagador", 'documento', c."Pagador_Documento", 'clienteId', c."Cliente_Ref", 'descricao', c."Descricao",
-          'status', c."Status", 'confianca', c."Confianca", 'sugestao', c."Sugestao_Ref") order by c."Data" desc)
+          'status', c."Status", 'confianca', c."Confianca", 'sugestao', c."Sugestao_Ref", 'anotacao', c."Anotacao") order by c."Data" desc)
         from "Conciliacao" c where c."Status" in ('pendente', 'sem-par') and c."Data" >= hoje - 60), '[]'::jsonb),
     'notasSemConta', coalesce((select jsonb_agg(jsonb_build_object('id', n.id, 'numero', n."Numero_NFSe", 'cliente', n."Tomador_Nome",
           'clienteId', n."Cliente_Ref", 'valor', n."Valor", 'emitidaEm', n."Emitida_Em", 'emissor', n."Emissor") order by n."Emitida_Em" desc)
@@ -545,8 +547,12 @@ begin
   end if;
 
   if acao = 'ignorar' then
-    update "Conciliacao" set "Status" = 'ignorado' where id = cob_txt(p, 'conciliacaoId') and "Status" in ('pendente', 'sem-par');
-    return jsonb_build_object('resposta', jsonb_build_object('ok', true, 'mensagem', 'Entrada deixada de lado.'));
+    -- Com texto: fica anotada (de onde e por que veio), fora do faturamento. Sem texto: só deixada de lado.
+    update "Conciliacao" set "Status" = case when coalesce(btrim(cob_txt(p, 'texto')), '') <> '' then 'anotado' else 'ignorado' end,
+           "Anotacao" = coalesce(nullif(left(btrim(cob_txt(p, 'texto')), 300), ''), "Anotacao")
+     where id = cob_txt(p, 'conciliacaoId') and "Status" in ('pendente', 'sem-par');
+    return jsonb_build_object('resposta', jsonb_build_object('ok', true, 'mensagem',
+      case when coalesce(btrim(cob_txt(p, 'texto')), '') <> '' then 'Entrada anotada.' else 'Entrada deixada de lado.' end));
   end if;
 
   if acao = 'incluir-antigas' then
@@ -695,7 +701,8 @@ begin
       return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'O Asaas não deu baixa no boleto: ' || erro || '. Nada mudou.'));
     elsif ref ->> 'tipo' = 'prorrogar' then
       if erro is null then
-        update "Recebimentos" set "Vencimento" = (ctx ->> 'vencimento')::date, "Asaas_Status" = coalesce(res ->> 'status', "Asaas_Status"), "Atualizado_Em" = now() where id = rid;
+        update "Recebimentos" set "Vencimento" = (ctx ->> 'vencimento')::date, "Asaas_Status" = coalesce(res ->> 'status', "Asaas_Status"),
+               "Aviso" = case when "Aviso" like 'Venceu há mais de 30 dias%' then null else "Aviso" end, "Atualizado_Em" = now() where id = rid;
         perform cob_evento(rid, 'vencimento', 'Vencimento mudou de ' || to_char((ctx ->> 'antes')::date, 'DD/MM/YYYY') || ' para '
           || to_char((ctx ->> 'vencimento')::date, 'DD/MM/YYYY') || '. Os avisos seguem a data nova.');
         return jsonb_build_object('resposta', jsonb_build_object('ok', true, 'mensagem', 'Vencimento trocado no Asaas.', 'item', (select cob_item(y) from "Recebimentos" y where y.id = rid)));
@@ -733,11 +740,85 @@ begin
 end $$;
 
 -- ========================= sincronização (fluxo "Cobrancas - Sincronizar", de 30 em 30 minutos) =========================
+-- Taxa do Asaas como gasto (pedido do dono, 22/11/2026): cada boleto pago vira uma despesa paga no Financeiro, com a
+-- taxa que o Asaas cobrou de fato (valor pago - líquido). Uma só por cobrança (Servico_Ref); refeita se a taxa mudar.
+create or replace function cob_despesa_taxa(rid text, quando date) returns void language plpgsql as $$
+declare r "Recebimentos"; numero text; did text;
+begin
+  select * into r from "Recebimentos" where id = rid;
+  if r.id is null or coalesce(r."Taxa", 0) <= 0 then return; end if;
+  select nf."Numero_NFSe" into numero from "Notas_Fiscais" nf where nf.id = r."Nota_Ref" and nf."Status" = 'Emitida';
+  select id into did from "Despesas" where "Servico_Ref" = rid and "Categoria" = 'Taxas do Asaas' limit 1;
+  if did is null then
+    insert into "Despesas" ("Descricao", "Valor", "Vencimento", "Status", "Categoria", "Data_Pagamento", "Forma_Pagamento", "Observacoes", "Servico_Ref")
+    values (left('Taxa do boleto · ' || coalesce(r."Cliente_Nome", 'cliente') || coalesce(' · NFS-e nº ' || nullif(btrim(numero), ''), ''), 200),
+            r."Taxa", coalesce(quando, cob_hoje()), 'Pago', 'Taxas do Asaas', coalesce(quando, cob_hoje()), 'Asaas',
+            'Descontada pelo Asaas do boleto pago (' || coalesce(r."Asaas_Conta", '') || ').', rid);
+  else
+    update "Despesas" set "Valor" = r."Taxa" where id = did and "Valor" is distinct from r."Taxa";
+  end if;
+end $$;
+
+-- Anexos dos e-mails do sistema: o PDF do boleto (link público do Asaas) e o PDF da nota ou do recibo (guardados no
+-- sistema, entregues pelo fluxo "anexo"). O nó do n8n baixa cada um; o que falhar fica de fora (o link vai no texto).
+create or replace function cob_anexos(r "Recebimentos", com_documento boolean default true) returns jsonb language sql stable as $$
+  select coalesce(jsonb_agg(a.v order by a.o), '[]'::jsonb) from (
+    select 1 as o, jsonb_build_object('url', r."Boleto_Url", 'nome', 'Boleto ' || to_char(r."Vencimento", 'DD-MM-YYYY') ||
+           case when coalesce(r."Parcela_Total", 1) > 1 then ' (' || r."Parcela_Numero" || ' de ' || r."Parcela_Total" || ')' else '' end || '.pdf') as v
+     where coalesce(r."Boleto_Url", '') ~ '^https://[a-z0-9.-]*asaas\.com/'
+    union all
+    select 2, jsonb_build_object('url', 'http://localhost:5678/webhook/anexo?id=' || (nf."Pdf_Nota" -> 0 ->> 'id'),
+           'nome', coalesce(nullif(nf."Pdf_Nota" -> 0 ->> 'filename', ''), 'NFS-e ' || coalesce(nf."Numero_NFSe", '') || '.pdf'))
+      from "Notas_Fiscais" nf
+     where com_documento and nf.id = r."Nota_Ref" and nf."Status" = 'Emitida' and coalesce(nf."Pdf_Nota" -> 0 ->> 'id', '') ~ '^att[0-9a-f]{32}$'
+    union all
+    select 3, jsonb_build_object('url', 'http://localhost:5678/webhook/anexo?id=' || (ac."Arquivo" -> 0 ->> 'id'),
+           'nome', coalesce(nullif(ac."Arquivo" -> 0 ->> 'filename', ''), 'Recibo.pdf'))
+      from "Arquivos_Cliente" ac
+     where com_documento and ac.id = r."Arquivo_Ref" and coalesce(ac."Arquivo" -> 0 ->> 'id', '') ~ '^att[0-9a-f]{32}$') a $$;
+
+create or replace function cob_html(t text) returns text language sql immutable as $$
+  select replace(replace(replace(coalesce(t, ''), '&', '&amp;'), '<', '&lt;'), '>', '&gt;') $$;
+
+-- E-mail do sistema (HTML simples, sem imagens). tipo: criado | vespera | atraso. Para "criado" de um boleto parcelado,
+-- `parcelas` traz todas as parcelas do pedido (uma linha cada).
+create or replace function cob_email_html(r "Recebimentos", tipo text, parcelas jsonb default null) returns text language sql stable as $$
+  select '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#1f2937;max-width:560px">'
+    || '<p style="margin:0 0 4px;font-size:18px;color:#0F2747"><strong>Soluções Rápidas</strong></p>'
+    || '<p style="margin:0 0 16px;color:#6b7280;font-size:13px">Manutenção predial</p>'
+    || case tipo
+         when 'criado' then '<p>Olá! Segue o boleto do serviço prestado' || case when jsonb_array_length(coalesce(parcelas, '[]')) > 1
+              then ', em ' || jsonb_array_length(parcelas) || ' parcelas.' else ', com vencimento em <strong>' || to_char(r."Vencimento", 'DD/MM/YYYY') || '</strong>.' end
+              || ' O boleto' || case when r."Nota_Ref" is not null then ' e a nota fiscal vão anexos.' when r."Arquivo_Ref" is not null then ' e o recibo vão anexos.' else ' vai anexo.' end || '</p>'
+         when 'vespera' then '<p>Olá! Só um lembrete: o boleto abaixo <strong>vence amanhã, ' || to_char(r."Vencimento", 'DD/MM/YYYY') || '</strong>.</p>'
+         else '<p>Olá! Consta em aberto o boleto abaixo, que venceu em <strong>' || to_char(r."Vencimento", 'DD/MM/YYYY')
+              || '</strong>. Pelo link ele já sai com o valor atualizado.</p>' end
+    || '<table style="border-collapse:collapse;margin:12px 0;font-size:14px">'
+    || '<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Cliente</td><td style="padding:4px 0">' || cob_html(r."Cliente_Nome") || '</td></tr>'
+    || '<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Referente a</td><td style="padding:4px 0">' || cob_html(r."Descricao") || '</td></tr>'
+    || case when jsonb_array_length(coalesce(parcelas, '[]')) > 1 then
+         (select string_agg('<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Parcela ' || (x ->> 'n') || '</td><td style="padding:4px 0"><strong>'
+            || cob_reais((x ->> 'valor')::numeric) || '</strong> · vence ' || to_char((x ->> 'vencimento')::date, 'DD/MM/YYYY')
+            || ' · <a href="' || replace(coalesce(x ->> 'link', ''), '"', '') || '">ver boleto</a></td></tr>', '' order by (x ->> 'n')::int)
+            from jsonb_array_elements(parcelas) x)
+       else '<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Valor</td><td style="padding:4px 0"><strong>' || cob_reais(r."Valor") || '</strong></td></tr>'
+         || '<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Vencimento</td><td style="padding:4px 0">' || to_char(r."Vencimento", 'DD/MM/YYYY') || '</td></tr>' end
+    || '</table>'
+    || case when jsonb_array_length(coalesce(parcelas, '[]')) > 1 then '' else
+         '<p><a href="' || replace(coalesce(r."Asaas_Link", ''), '"', '') || '" style="display:inline-block;background:#0F2747;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:6px">Ver boleto e pagar</a></p>' end
+    || '<p style="font-size:13px;color:#6b7280">' || case when tipo = 'criado' then '' else 'Se já pagou, pode desconsiderar este e-mail. ' end
+    || 'Após o vencimento entram multa de 2% e juros de 1% ao mês.</p>'
+    || '<p style="font-size:13px;color:#6b7280">Dúvidas: (47) 99208-1047 · adm.solucoes.rapidas@gmail.com</p></div>' $$;
+
+-- (nome antigo, usado pelos testes)
+create or replace function cob_email_lembrete(r "Recebimentos") returns text language sql stable as $$ select cob_email_html(r, 'vespera') $$;
+
 -- Passo 1: trava (uma sincronização por vez), lista o que perguntar ao Asaas e reserva os lembretes da véspera.
 create or replace function cob_sinc_plano(p jsonb) returns jsonb language plpgsql as $$
 -- (p.hora só existe para o teste conferir o lembrete fora do horário; o fluxo nunca manda.)
 declare ok int; hoje date := cob_hoje(); hora int := coalesce(cob_num(p, 'hora')::int, extract(hour from now() at time zone 'America/Sao_Paulo')::int);
   chamadas jsonb := '[]'; r record; conta text; desde date := cob_hoje() - 3; lembretes jsonb := '[]'; taxas boolean; reservado text;
+  emails_desde timestamptz; g record; base "Recebimentos"; dias int;
 begin
   insert into "Cobranca_Estado" (id, "Valor") values ('sinc:trava', jsonb_build_object('ate', now() + interval '10 minutes'))
   on conflict (id) do update set "Valor" = excluded."Valor" where ("Cobranca_Estado"."Valor" ->> 'ate')::timestamptz < now()
@@ -774,8 +855,48 @@ begin
       chamadas := chamadas || jsonb_build_object('conta', r.aconta, 'metodo', 'GET', 'url', 'https://api.asaas.com/v3/payments/' || r.pid || '/viewingInfo', 'ref', jsonb_build_object('tipo', 'visto', 'id', r.id));
     end if;
   end loop;
-  -- Lembrete de véspera (regra do dono: 1 dia antes do vencimento). O Asaas não tem "1 dia antes", então o próprio
-  -- sistema manda, das 8h às 20h. A reserva com a chave garante um lembrete só por boleto e por data de vencimento.
+  -- E-mails ao cliente pelo sistema (regra do dono, 22/11/2026: os avisos do Asaas ficam desligados). Ligado a partir
+  -- de Cobranca_Estado 'emails-sistema' (desde). Remetente: adm (credencial SMTP do fluxo). A reserva com a chave garante
+  -- um envio só por boleto/pedido e por data; e-mail perdido (PC desligado) não sai atrasado.
+  select ("Valor" ->> 'desde')::timestamptz into emails_desde from "Cobranca_Estado" where id = 'emails-sistema';
+  if emails_desde is not null then
+    -- (a) Boleto criado: um e-mail por pedido (todas as parcelas), com os boletos e a nota (ou recibo) anexos.
+    for g in select coalesce(x."Grupo", x.id) as k, min(x.id) as primeiro from "Recebimentos" x
+              where x."Criado_Em" >= emails_desde and x."Status" = 'Pendente' and coalesce(x."Asaas_Cobranca_Id", '') <> ''
+                and x."Asaas_Status" in ('PENDING', 'AWAITING_RISK_ANALYSIS') and x."Cliente_Ref" is not null
+                and not exists (select 1 from "Recebimentos" y where y."Grupo" = x."Grupo" and coalesce(y."Asaas_Cobranca_Id", '') = '' and y."Status" = 'Pendente')
+                and not exists (select 1 from "Cobranca_Eventos" e where e."Chave" in ('email-criado:' || coalesce(x."Grupo", x.id), 'sem-email:criado:' || coalesce(x."Grupo", x.id)))
+              group by 1 limit 20 loop
+      select * into base from "Recebimentos" where id = (select y.id from "Recebimentos" y where coalesce(y."Grupo", y.id) = g.k order by y."Parcela_Numero" nulls first limit 1);
+      if coalesce(array_length(cob_emails(base."Cliente_Ref"), 1), 0) = 0 then
+        perform cob_evento(base.id, 'sem-email', 'Boleto criado, mas o cliente não tem e-mail: mande pelo WhatsApp.', 'sem-email:criado:' || g.k);
+        update "Recebimentos" set "Aviso" = 'Cliente sem e-mail: mande o boleto pelo WhatsApp.' where id = base.id and "Aviso" is null;
+        continue;
+      end if;
+      reservado := null;
+      insert into "Cobranca_Eventos" ("Recebimento_Ref", "Tipo", "Texto", "Chave", "Dados")
+      values (base.id, 'lembrete-reservado', 'E-mail do boleto sendo enviado.', 'email-criado:' || g.k, '{}')
+      on conflict ("Chave") do nothing returning id into reservado;
+      if reservado is not null then
+        lembretes := lembretes || (select jsonb_build_object('evento', reservado, 'tipo', 'criado', 'id', base.id, 'emails', to_jsonb(cob_emails(base."Cliente_Ref")),
+          'assunto', 'Soluções Rápidas · boleto' || coalesce(' e NFS-e nº ' || nullif(btrim((select nf."Numero_NFSe" from "Notas_Fiscais" nf where nf.id = base."Nota_Ref" and nf."Status" = 'Emitida')), ''), '')
+                     || case when count(*) > 1 then ' · ' || count(*) || ' parcelas' else ' · vence ' || to_char(base."Vencimento", 'DD/MM') end,
+          'html', cob_email_html(base, 'criado', case when count(*) > 1 then jsonb_agg(jsonb_build_object('n', y."Parcela_Numero", 'valor', y."Valor", 'vencimento', y."Vencimento", 'link', y."Asaas_Link")) end),
+          'anexos', (select coalesce(jsonb_agg(a.v), '[]'::jsonb) from (
+                      select t.v from "Recebimentos" z, jsonb_array_elements(cob_anexos(z, false)) as t(v) where coalesce(z."Grupo", z.id) = g.k and z."Status" = 'Pendente'
+                      union all
+                      select t.v from jsonb_array_elements(cob_anexos(base, true)) as t(v) where t.v ->> 'url' like 'http://localhost:%') a))
+          from "Recebimentos" y where coalesce(y."Grupo", y.id) = g.k and y."Status" = 'Pendente');
+      end if;
+    end loop;
+    -- (b) Aviso dos 30 dias: o boleto não pode mais ser pago; quem resolve é o dono (só um aviso, no sistema).
+    for r in select x.* from "Recebimentos" x where x."Status" = 'Pendente' and coalesce(x."Asaas_Cobranca_Id", '') <> ''
+              and x."Vencimento" is not null and hoje - x."Vencimento" >= 30 loop
+      update "Recebimentos" set "Aviso" = 'Venceu há mais de 30 dias e o boleto não pode mais ser pago: dê uma data nova, a baixa (se recebeu por fora) ou cancele.'
+       where id = r.id and coalesce("Aviso", '') not like 'Venceu há mais de 30 dias%';
+      perform cob_evento(r.id, 'limite', 'Venceu há mais de 30 dias: o boleto não pode mais ser pago.', 'limite30:' || r."Asaas_Cobranca_Id" || ':' || r."Vencimento");
+    end loop;
+  end if;
   if hora between 8 and 20 then
     for r in
       with candidatos as (
@@ -793,11 +914,35 @@ begin
       values (r.id, 'lembrete-reservado', 'Lembrete de véspera sendo enviado.', 'lembrete:' || r."Asaas_Cobranca_Id" || ':' || r."Vencimento", '{}')
       on conflict ("Chave") do nothing returning id into reservado;
       if reservado is not null then
-        lembretes := lembretes || jsonb_build_object('evento', reservado, 'id', r.id, 'emails', to_jsonb(r.emails),
+        select * into base from "Recebimentos" where id = r.id;
+        lembretes := lembretes || jsonb_build_object('evento', reservado, 'tipo', 'vespera', 'id', r.id, 'emails', to_jsonb(r.emails),
           'assunto', 'Lembrete: boleto de ' || cob_reais(r."Valor") || ' vence amanhã (' || to_char(r."Vencimento", 'DD/MM') || ')',
-          'html', cob_email_lembrete((select x from "Recebimentos" x where x.id = r.id)));
+          'html', cob_email_html(base, 'vespera'), 'anexos', case when emails_desde is not null then cob_anexos(base) else '[]'::jsonb end);
       end if;
     end loop;
+    -- Atraso: aviso a cada 3 dias (1º, 4º, 7º... dia depois do vencimento) até o 29º; o dia perdido não sai depois.
+    if emails_desde is not null then
+      for r in
+        with candidatos as (
+          select x.* from "Recebimentos" x
+           where x."Status" = 'Pendente' and coalesce(x."Asaas_Cobranca_Id", '') <> '' and x."Asaas_Status" in ('PENDING', 'OVERDUE')
+             and x."Vencimento" < hoje and hoje - x."Vencimento" between 1 and 29 and (hoje - x."Vencimento" - 1) % 3 = 0 and x."Cliente_Ref" is not null)
+        select c.*, cob_emails(c."Cliente_Ref") as emails from candidatos c
+      loop
+        dias := hoje - r."Vencimento";
+        if coalesce(array_length(r.emails, 1), 0) = 0 then continue; end if;
+        reservado := null;
+        insert into "Cobranca_Eventos" ("Recebimento_Ref", "Tipo", "Texto", "Chave", "Dados")
+        values (r.id, 'lembrete-reservado', 'Aviso de atraso sendo enviado.', 'atraso:' || r."Asaas_Cobranca_Id" || ':' || r."Vencimento" || ':' || dias, '{}')
+        on conflict ("Chave") do nothing returning id into reservado;
+        if reservado is not null then
+          select * into base from "Recebimentos" where id = r.id;
+          lembretes := lembretes || jsonb_build_object('evento', reservado, 'tipo', 'atraso', 'id', r.id, 'emails', to_jsonb(r.emails),
+            'assunto', 'Boleto em aberto: ' || cob_reais(r."Valor") || ', venceu em ' || to_char(r."Vencimento", 'DD/MM'),
+            'html', cob_email_html(base, 'atraso'), 'anexos', cob_anexos(base));
+        end if;
+      end loop;
+    end if;
   end if;
   return jsonb_build_object('ok', true, 'ocupado', false, 'chamadas', chamadas, 'lembretes', lembretes, 'hoje', hoje,
     'clientesConhecidos', coalesce((select jsonb_agg(jsonb_build_object('conta', coalesce(nullif("Asaas_Conta", ''), 'CNPJ 1'), 'asaas', "Asaas_Customer_Id"))
@@ -918,6 +1063,15 @@ begin
   -- Entradas novas: de qual cobrança é cada uma? Mesmo valor (ao centavo) e mesma conta. O documento do pagador
   -- igual ao do cliente (ou o próprio cliente no Asaas) dá certeza: baixa sozinha. Sem certeza: vira sugestão.
   for conc in select * from "Conciliacao" where "Status" = 'novo' order by "Data", "Criado_Em" loop
+    -- Dinheiro mandado pelo próprio dono (ex.: o saldo do Inter passando para o Asaas, 22/11/2026): não é pagamento de
+    -- cliente. Fica para classificar, já com a anotação sugerida, e nunca vira baixa nem sugestão de cobrança.
+    if exists (select 1 from "Empresas_Emissoras" em
+                where (length(btrim(coalesce(em."Titular", ''))) >= 8
+                       and upper(coalesce(conc."Pagador", '') || ' ' || coalesce(conc."Descricao", '')) like '%' || upper(btrim(em."Titular")) || '%')
+                   or (length(coalesce(conc."Pagador_Documento", '')) >= 11 and conc."Pagador_Documento" = cob_digitos(em."CNPJ"))) then
+      update "Conciliacao" set "Status" = 'sem-par', "Anotacao" = coalesce("Anotacao", 'Transferência entre contas próprias (ex.: saldo do Inter)') where id = conc.id;
+      continue;
+    end if;
     select count(*) into ncand from "Recebimentos" q
      where q."Status" = 'Pendente' and coalesce(q."Emissor", q."Asaas_Conta", 'CNPJ 1') = conc."Conta" and q."Valor" = conc."Valor"
        and (q."Vencimento" is null or q."Vencimento" between conc."Data" - 90 and conc."Data" + 90);
@@ -1036,6 +1190,7 @@ begin
     if r."Status" = 'Pendente' then
       perform cob_baixar(rid, quando, valor, 'asaas', pay ->> 'id', case pay ->> 'billingType' when 'PIX' then 'PIX' else r."Forma" end);
     end if;
+    perform cob_despesa_taxa(rid, quando);
     return;
   end if;
   -- Aberto: data ou valor mudados direto no Asaas também valem aqui.
@@ -1047,7 +1202,7 @@ begin
     perform cob_evento(rid, 'vencimento', 'Vencimento mudou no Asaas para ' || to_char(cob_data(pay, 'dueDate'), 'DD/MM/YYYY') || '.');
   end if;
   if st = 'OVERDUE' and r."Asaas_Status" is distinct from 'OVERDUE' then
-    perform cob_evento(rid, 'vencido', 'Venceu sem pagamento. O Asaas avisa o cliente por e-mail todo dia; dá para pagar até 30 dias depois do vencimento.', 'vencido:' || rid || ':' || r."Vencimento");
+    perform cob_evento(rid, 'vencido', 'Venceu sem pagamento. O sistema avisa o cliente por e-mail a cada 3 dias; dá para pagar até 30 dias depois do vencimento.', 'vencido:' || rid || ':' || r."Vencimento");
   end if;
 end $$;
 
@@ -1058,8 +1213,11 @@ declare x jsonb; ok int := 0; falhou int := 0;
 begin
   for x in select * from jsonb_array_elements(coalesce(p -> 'lembretes', '[]')) loop
     if coalesce((x ->> 'ok')::boolean, false) then
-      update "Cobranca_Eventos" set "Tipo" = 'lembrete', "Quando" = now(),
-             "Texto" = 'Lembrete de véspera enviado por e-mail (' || coalesce(x ->> 'quantos', '?') || ' endereço(s)).' where id = x ->> 'evento';
+      update "Cobranca_Eventos" set "Tipo" = case x ->> 'tipo' when 'criado' then 'email-criado' when 'atraso' then 'email-atraso' else 'lembrete' end, "Quando" = now(),
+             "Texto" = case x ->> 'tipo' when 'criado' then 'Boleto enviado por e-mail pelo sistema' when 'atraso' then 'Aviso de atraso enviado por e-mail'
+                       else 'Lembrete de véspera enviado por e-mail' end
+                       || ' (' || coalesce(x ->> 'quantos', '?') || ' endereço(s)' || coalesce(', ' || nullif(x ->> 'anexos', '') || ' anexo(s)', '') || ').'
+       where id = x ->> 'evento';
       ok := ok + 1;
     else
       -- Falhou: libera a chave para tentar de novo na próxima volta.

@@ -127,17 +127,13 @@ const resumo = (cs) => cs.map((c) => `${c.conta} ${c.metodo} ${c.url.split('?')[
     confere('novo CNPJ 2: salvo, Atendido_Por e Asaas_Conta = CNPJ 2', n2.r.ok === true && f.Atendido_Por === 'CNPJ 2' && f.Asaas_Conta === 'CNPJ 2' && /^cus_sim_CNPJ2_/.test(f.Asaas_Customer_Id || ''), { r: n2.r, f });
     confere('novo CNPJ 2: nenhuma chamada ao Asaas do CNPJ 1', cs.length > 0 && cs.every((c) => c.conta === 'CNPJ 2'), resumo(cs));
     const post = cs.find((c) => c.metodo === 'POST');
-    confere('novo CNPJ 2: criado com avisos ligados (tem e-mail) e referência do sistema', post && post.corpo.notificationDisabled === false && post.corpo.externalReference === n2.ent.id && post.corpo.email === 'fin@exemplo.invalid', post && post.corpo);
-    // Regra de 20/11/2026 (2ª versão, "liga" do dono): "cobrança criada" (no simulador o "not_a") e o aviso de vencido
-    // periódico ("not_b", todo dia), os dois só por e-mail; o resto ("not_c", recebida) desligado.
+    confere('novo CNPJ 2: criado com os avisos do Asaas desligados (quem avisa é o sistema) e referência do sistema', post && post.corpo.notificationDisabled === true && post.corpo.externalReference === n2.ent.id && post.corpo.email === 'fin@exemplo.invalid', post && post.corpo);
+    // Regra de 22/11/2026 (dono): TODOS os avisos do Asaas desligados; o sistema manda os e-mails pelo adm.
     const canaisDesligados = (c) => c.corpo.smsEnabledForCustomer === false && c.corpo.whatsappEnabledForCustomer === false
       && c.corpo.phoneCallEnabledForCustomer === false && c.corpo.emailEnabledForProvider === false && c.corpo.smsEnabledForProvider === false;
     const regraNova = (puts) => puts.length === 3 && puts.every(canaisDesligados)
-      && puts.filter((c) => c.corpo.enabled === true).length === 2
-      && puts.some((c) => c.url === '/notifications/not_a' && c.corpo.enabled === true && c.corpo.emailEnabledForCustomer === true)
-      && puts.some((c) => c.url === '/notifications/not_b' && c.corpo.enabled === true && c.corpo.emailEnabledForCustomer === true && c.corpo.scheduleOffset === 1)
-      && puts.filter((c) => c.url === '/notifications/not_c').every((c) => c.corpo.enabled === false && c.corpo.emailEnabledForCustomer === false);
-    confere('novo CNPJ 2: cobrança criada + vencido todo dia, só por e-mail; o resto desligado', regraNova(cs.filter((c) => c.metodo === 'PUT' && c.url.startsWith('/notifications/'))), resumo(cs));
+      && puts.every((c) => c.corpo.enabled === false && c.corpo.emailEnabledForCustomer === false);
+    confere('novo CNPJ 2: todos os avisos do Asaas desligados', regraNova(cs.filter((c) => c.metodo === 'PUT' && c.url.startsWith('/notifications/'))), resumo(cs));
     confere('novo CNPJ 2: mensagem normal', n2.r.mensagem === 'Cadastro salvo!', n2.r.mensagem);
 
     // ---- 2. cliente novo sem escolher: CNPJ 1 ----
@@ -215,7 +211,7 @@ const resumo = (cs) => cs.map((c) => `${c.conta} ${c.metodo} ${c.url.split('?')[
     cs = await chamadas(idSimulador, desde);
     f = await ler(ne.ent.id);
     const putExistente = cs.find((c) => c.metodo === 'PUT' && c.url === '/customers/cus_existente_CNPJ2');
-    confere('já existe no destino: atualiza o existente (avisos ligados, tem e-mail), sem POST', putExistente && putExistente.corpo.notificationDisabled === false && !cs.some((c) => c.metodo === 'POST'), resumo(cs));
+    confere('já existe no destino: atualiza o existente (avisos do Asaas desligados), sem POST', putExistente && putExistente.corpo.notificationDisabled === true && !cs.some((c) => c.metodo === 'POST'), resumo(cs));
     confere('já existe no destino: grava o id existente', f.Asaas_Customer_Id === 'cus_existente_CNPJ2' && f.Asaas_Conta === 'CNPJ 2', f);
 
     // ---- 8. não consegue tirar do antigo: fica no novo e avisa para tirar à mão ----
@@ -233,17 +229,16 @@ const resumo = (cs) => cs.map((c) => `${c.conta} ${c.metodo} ${c.url.split('?')[
     f = await ler(nn.ent.id);
     confere('sem conta anotada: atualiza no CNPJ 1 e anota a conta', JSON.stringify(resumo(cs)) === JSON.stringify(['CNPJ 1 GET /customers/ID', 'CNPJ 1 PUT /customers/ID']) && f.Asaas_Conta === 'CNPJ 1', { cs: resumo(cs), f });
 
-    // ---- 10. cliente que no Asaas não tinha e-mail e ganhou um na edição: liga SÓ o e-mail (19/11/2026) ----
+    // ---- 10. cliente que no Asaas não tinha e-mail e ganhou um na edição: atualiza o e-mail, sem ligar aviso no Asaas (22/11/2026) ----
     await local('PATCH', `/v0/${CAD}/Entidades_Cadastradas/${nn.ent.id}`, { fields: { Asaas_Customer_Id: 'cus_SEMEMAIL_1', Asaas_Conta: 'CNPJ 1', Atendido_Por: 'CNPJ 1' } });
     desde = new Date().toISOString();
     r = await editar(nn.ent, { atendidoPor: 'CNPJ 1' });
     cs = await chamadas(idSimulador, desde);
     const ligou = cs.find((c) => c.metodo === 'POST' && c.url === '/customers/cus_SEMEMAIL_1');
     const putsLig = cs.filter((c) => c.metodo === 'PUT' && c.url.startsWith('/notifications/'));
-    confere('ganhou e-mail: atualiza o e-mail e liga os avisos do cliente', cs.some((c) => c.metodo === 'PUT' && c.url === '/customers/cus_SEMEMAIL_1' && c.corpo.email === 'fin@exemplo.invalid')
-      && ligou && ligou.corpo.notificationDisabled === false, resumo(cs));
-    confere('ganhou e-mail: liga cobrança criada + vencido todo dia, só por e-mail', regraNova(putsLig), resumo(cs));
-    confere('ganhou e-mail: mensagem conta que ligou o aviso', r.ok === true && /Aviso por e-mail ligado no Asaas/.test(r.mensagem || ''), r.mensagem);
+    confere('ganhou e-mail: atualiza o e-mail no Asaas', cs.some((c) => c.metodo === 'PUT' && c.url === '/customers/cus_SEMEMAIL_1' && c.corpo.email === 'fin@exemplo.invalid'), resumo(cs));
+    confere('ganhou e-mail: não liga nenhum aviso no Asaas', !ligou && putsLig.length === 0, resumo(cs));
+    confere('ganhou e-mail: mensagem normal, sem "aviso ligado"', r.ok === true && !/Aviso por e-mail ligado/.test(r.mensagem || ''), r.mensagem);
 
     // ---- 11. continua sem e-mail na edição: não liga nada ----
     await local('PATCH', `/v0/${CAD}/Entidades_Cadastradas/${nn.ent.id}`, { fields: { Asaas_Customer_Id: 'cus_SEMEMAIL_2' } });

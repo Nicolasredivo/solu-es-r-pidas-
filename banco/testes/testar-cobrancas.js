@@ -67,7 +67,7 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
     confere('criar: referência = id do A receber', /^rec[A-Za-z0-9]{14}$/.test(corpo.externalReference) && corpo.externalReference === cr.chamadas[0].ref.id, corpo);
     confere('criar: descrição "Referente à NFS-e de <hoje> (parcela 1 de 3): serviço", com telefone',
       corpo.description.startsWith('Referente à NFS-e de ' + hoje.split('-').reverse().join('/') + ' (parcela 1 de 3): Troca de boia da cisterna.')
-      && /99667-0900/.test(corpo.description) && corpo.description.length <= 500, corpo.description);
+      && /99208-1047 ou adm\.solucoes\.rapidas@gmail\.com/.test(corpo.description) && corpo.description.length <= 500, corpo.description);
     const cr2 = await fn('cob_acao', { acao: 'criar', grupo, clienteId: c1, origem: 'nota', servico: 'x', valor: 1306, parcelas: 3, vencimentos: [v1, v2, v3] });
     confere('criar repetido (antes da resposta): procura no Asaas em vez de criar de novo', (cr2.chamadas || []).every((x) => x.metodo === 'GET' || x.metodo === 'POST'), cr2);
     const linhas = await q(`select count(*)::int as n from "Recebimentos" where "Grupo" = $1`, [grupo]);
@@ -302,6 +302,76 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
     confere('painel diz se as notas de cada conta já saem pelo Asaas', Object.values(pa2.contas).every((c) => typeof c.notasPeloAsaas === 'boolean'), Object.keys(pa2.contas));
     await q(`delete from "Cobranca_Estado" where id = 'sinc:trava'`);
 
+    // ---------- e-mails pelo sistema (22/11/2026): criado, véspera, atraso a cada 3 dias, aviso dos 30 dias ----------
+    await q(`delete from "Cobranca_Estado" where id = 'sinc:trava'`);
+    await q(`insert into "Cobranca_Estado" (id, "Valor") values ('emails-sistema', jsonb_build_object('desde', now() - interval '1 hour'))
+             on conflict (id) do update set "Valor" = excluded."Valor"`);
+    const grupoE = 'testeE-' + Date.now();
+    const vE1 = somaDias(hoje, 10), vE2 = somaDias(hoje, 40);
+    const crE = await fn('cob_acao', { acao: 'criar', grupo: grupoE, clienteId: c1, origem: 'nota', servico: 'Pintura do hall', valor: 300, parcelas: 2, vencimentos: [vE1, vE2] });
+    const regE = await fn('cob_registrar', { contexto: crE.contexto, respostas: crE.chamadas.map((ch, i) => ({ ref: ch.ref, resposta: respostaPay('pay_testeE' + i + Date.now(), { value: ch.corpo.value, dueDate: ch.corpo.dueDate }) })) });
+    const attE = 'att' + require('crypto').randomBytes(16).toString('hex');
+    const notaE = (await q(`insert into "Notas_Fiscais" ("Ambiente", "Serie", "Numero_DPS", "Status", "Numero_NFSe", "Cliente_Ref", "Tomador_Nome", "Descricao", "Valor", "Emissor", "Emitida_Em", "Pdf_Nota")
+        values ('Testes', 999, (random() * 1000000)::int + 1, 'Emitida', '9007', $1, 'TESTE', 'Pintura do hall. Valor total = R$ 300,00.', 300, 'CNPJ 2', now(), $2::jsonb) returning id`,
+      [c1, JSON.stringify([{ id: attE, filename: 'NFS-e 9007.pdf', type: 'application/pdf', size: 10 }])]))[0].id;
+    ids.notas.push(notaE);
+    await q(`update "Recebimentos" set "Nota_Ref" = $2 where "Grupo" = $1`, [grupoE, notaE]);
+    const plE = await fn('cob_sinc_plano', { hora: 22 });
+    const emE = (plE.lembretes || []).filter((l) => l.tipo === 'criado' && regE.resposta.cobrancas.some((c) => c.id === l.id));
+    confere('boleto criado: um e-mail só para o pedido de 2 parcelas, mesmo fora do horário', emE.length === 1 && emE[0].emails.length === 2, plE.lembretes);
+    const e0 = emE[0] || { anexos: [], html: '', assunto: '' };
+    confere('e-mail do boleto: 2 boletos + a nota anexos, parcelas na tabela, nº da nota no assunto, contato novo',
+      e0.anexos.length === 3 && e0.anexos.filter((a) => /^https:\/\/www\.asaas\.com\/b\/pdf\//.test(a.url)).length === 2
+      && e0.anexos.some((a) => a.url === 'http://localhost:5678/webhook/anexo?id=' + attE && a.nome === 'NFS-e 9007.pdf')
+      && /Parcela 1/.test(e0.html) && /Parcela 2/.test(e0.html) && /NFS-e nº 9007/.test(e0.assunto) && /99208-1047/.test(e0.html) && /adm\.solucoes\.rapidas@gmail\.com/.test(e0.html), e0);
+    await fn('cob_sinc_final', { lembretes: [{ evento: e0.evento, tipo: 'criado', ok: true, quantos: 2, anexos: 3 }] });
+    const evE = await q(`select "Tipo", "Texto" from "Cobranca_Eventos" where id = $1`, [e0.evento]);
+    confere('enviado fica no histórico ("Boleto enviado por e-mail pelo sistema")', evE[0] && evE[0].Tipo === 'email-criado' && /3 anexo/.test(evE[0].Texto), evE);
+    const plE2 = await fn('cob_sinc_plano', { hora: 10 });
+    confere('o e-mail do boleto não sai de novo', !(plE2.lembretes || []).some((l) => l.tipo === 'criado' && regE.resposta.cobrancas.some((c) => c.id === l.id)), plE2.lembretes);
+    await fn('cob_sinc_final', {});
+    // Atraso: 4 dias depois do vencimento sai (1º, 4º, 7º...); 5 dias não; fora do horário não.
+    const [pe1] = regE.resposta.cobrancas;
+    await q(`update "Recebimentos" set "Vencimento" = $2, "Asaas_Status" = 'OVERDUE' where id = $1`, [pe1.id, somaDias(hoje, -4)]);
+    const plA = await fn('cob_sinc_plano', { hora: 10 });
+    const at = (plA.lembretes || []).find((l) => l.tipo === 'atraso' && l.id === pe1.id);
+    confere('atraso: aviso no 4º dia, com boleto e nota anexos', at && /venceu em/.test(at.assunto) && at.anexos.length === 2 && /Consta em aberto/.test(at.html), plA.lembretes);
+    await fn('cob_sinc_final', {});
+    await q(`update "Recebimentos" set "Vencimento" = $2 where id = $1`, [pe1.id, somaDias(hoje, -5)]);
+    const plA2 = await fn('cob_sinc_plano', { hora: 10 });
+    confere('atraso: no 5º dia não sai', !(plA2.lembretes || []).some((l) => l.tipo === 'atraso' && l.id === pe1.id), plA2.lembretes);
+    await fn('cob_sinc_final', {});
+    await q(`update "Recebimentos" set "Vencimento" = $2 where id = $1`, [pe1.id, somaDias(hoje, -7)]);
+    const plA3 = await fn('cob_sinc_plano', { hora: 21 });
+    confere('atraso: fora do horário não sai (e não fica para depois)', !(plA3.lembretes || []).some((l) => l.tipo === 'atraso' && l.id === pe1.id), plA3.lembretes);
+    await fn('cob_sinc_final', {});
+    // 30 dias: aviso para o dono (só no sistema); data nova tira o aviso.
+    await q(`update "Recebimentos" set "Vencimento" = $2 where id = $1`, [pe1.id, somaDias(hoje, -31)]);
+    await fn('cob_sinc_plano', { hora: 10 });
+    await fn('cob_sinc_final', {});
+    const lim = (await q(`select "Aviso" from "Recebimentos" where id = $1`, [pe1.id]))[0];
+    confere('30 dias: aviso "Venceu há mais de 30 dias..." para o dono', /^Venceu há mais de 30 dias/.test(lim.Aviso || ''), lim);
+    const nvE = somaDias(hoje, 5);
+    const prE = await fn('cob_acao', { acao: 'prorrogar', id: pe1.id, vencimento: nvE });
+    await fn('cob_registrar', { contexto: prE.contexto, respostas: [{ ref: prE.chamadas[0].ref, resposta: { id: 'x', status: 'PENDING', dueDate: nvE } }] });
+    const lim2 = (await q(`select "Aviso" from "Recebimentos" where id = $1`, [pe1.id]))[0];
+    confere('data nova tira o aviso dos 30 dias', !lim2.Aviso, lim2);
+    // Taxa do boleto pago vira gasto pago no Financeiro (o boleto p2 foi pago com taxa de R$ 2,98).
+    const desp = await q(`select * from "Despesas" where "Servico_Ref" = $1 and "Categoria" = 'Taxas do Asaas'`, [p2.id]);
+    confere('boleto pago: a taxa vira gasto "Taxas do Asaas", já pago', desp.length === 1 && Number(desp[0].Valor) === 2.98 && desp[0].Status === 'Pago' && /^Taxa do boleto · /.test(desp[0].Descricao), desp);
+    await q(`select cob_despesa_taxa($1, $2::date)`, [p2.id, hoje]);
+    confere('o gasto da taxa não duplica', (await q(`select count(*)::int as n from "Despesas" where "Servico_Ref" = $1`, [p2.id]))[0].n === 1);
+    // Entradas: anotar com texto livre; transferência do próprio dono já vem anotada e nunca vira sugestão.
+    const an = await fn('cob_acao', { acao: 'ignorar', conciliacaoId: concPix.id, texto: 'Pagamento antigo recebido no Inter' });
+    const anRow = (await q(`select "Status", "Anotacao" from "Conciliacao" where id = $1`, [concPix.id]))[0];
+    confere('anotar entrada: guarda o texto e sai da fila', an.resposta.ok && anRow.Status === 'anotado' && anRow.Anotacao === 'Pagamento antigo recebido no Inter', anRow);
+    const tit = (await q(`select "Titular" from "Empresas_Emissoras" where "Codigo" = 'CNPJ 1'`))[0].Titular;
+    await fn('cob_sinc_gravar', { respostas: [{ ref: { tipo: 'extrato', conta: 'CNPJ 2' }, resposta: { data: [
+      { id: 'ft_teste_proprio' + Date.now(), type: 'PIX_TRANSACTION_CREDIT', value: 99, date: hoje, description: 'Transação via Pix - ' + tit }] } }], clientes: [] });
+    const prop = (await q(`select "Status", "Anotacao", "Sugestao_Ref" from "Conciliacao" where "Transacao_Id" like 'ft:ft_teste_proprio%'`))[0];
+    confere('PIX do próprio dono: fica para classificar, já anotado, sem sugestão', prop && prop.Status === 'sem-par' && /contas próprias/.test(prop.Anotacao || '') && !prop.Sugestao_Ref, prop);
+    await q(`delete from "Cobranca_Estado" where id in ('sinc:trava', 'emails-sistema')`);
+
     // ---------- segurança ----------
     const inv = await fn('cob_acao', { acao: 'apagar-tudo' });
     confere('ação desconhecida é recusada', inv.resposta && inv.resposta.ok === false, inv);
@@ -318,6 +388,7 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
     // Limpeza: tudo o que é de teste sai; o estado real volta como estava.
     try {
       await q(`delete from "Conciliacao" where "Transacao_Id" like 'pay:pay_teste%' or "Transacao_Id" like 'ft:ft_teste%'`);
+      await q(`delete from "Despesas" where "Categoria" = 'Taxas do Asaas' and "Servico_Ref" in (select id from "Recebimentos" where "Cliente_Ref" = any($1) or "Nota_Ref" = any($2) or "Asaas_Cobranca_Id" like 'pay_teste%')`, [ids.clientes, ids.notas]);
       await q(`delete from "Recebimentos" where "Cliente_Ref" = any($1) or "Nota_Ref" = any($2) or "Asaas_Cobranca_Id" like 'pay_teste%'`, [ids.clientes, ids.notas]);
       if (ids.notas.length) await q(`delete from "Notas_Fiscais" where id = any($1)`, [ids.notas]);
       if (ids.arquivos) await q(`delete from "Arquivos_Cliente" where id = any($1)`, [ids.arquivos]);

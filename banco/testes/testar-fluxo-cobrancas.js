@@ -66,7 +66,8 @@ async function criarSimulador() {
     const caminhoSinc = 'teste-sinc-' + crypto.randomBytes(4).toString('hex');
     const sinc = await t.copiaDeTeste(idDe('Cobrancas - Sincronizar'), {
       sincroniza: idSimulador,
-      simulacoes: { 'Manda lembrete': 'return $input.all().map(() => ({ json: { enviado: true } }));', 'A cada 30 minutos': 'return [{ json: {} }];' },
+      simulacoes: { 'Manda lembrete': 'return $input.all().map(() => ({ json: { enviado: true } }));', 'A cada 30 minutos': 'return [{ json: {} }];',
+        'Baixa anexos': 'return $input.all().map((i) => ({ json: { ...i.json, anexosOk: (i.json.anexos || []).length } }));' },
       ajustar: (nodes, con) => {
         nodes.push({ id: crypto.randomUUID(), name: 'Recebe teste', type: 'n8n-nodes-base.webhook', typeVersion: 2, position: [0, 700], webhookId: crypto.randomUUID(),
           parameters: { httpMethod: 'POST', path: caminhoSinc, responseMode: 'lastNode', options: {} } });
