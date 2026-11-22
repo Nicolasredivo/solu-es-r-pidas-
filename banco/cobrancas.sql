@@ -215,6 +215,30 @@ begin
   end if;
 end $$;
 
+-- PDF da nota no boleto (pedido do dono, 22/11/2026). O Asaas não põe arquivo anexo nos e-mails dele, mas mostra o
+-- documento para baixar na página do boleto (a "fatura", que é o link do e-mail), já antes do pagamento. O PDF é o
+-- que o sistema gerou da nota (Pdf_Nota); sem PDF ou sem boleto, não há chamada (null).
+create or replace function cob_chamada_nf_pdf(r "Recebimentos") returns jsonb language sql stable as $$
+  select jsonb_build_object('conta', r."Asaas_Conta", 'metodo', 'POST',
+    'url', 'https://api.asaas.com/v3/payments/' || r."Asaas_Cobranca_Id" || '/documents',
+    'anexo', nf."Pdf_Nota" -> 0 ->> 'id',
+    'ref', jsonb_build_object('tipo', 'nf-pdf', 'id', r.id, 'nota', nf.id, 'numero', btrim(coalesce(nf."Numero_NFSe", ''))))
+  from "Notas_Fiscais" nf
+  where nf.id = r."Nota_Ref" and nf."Status" = 'Emitida' and coalesce(nf."Pdf_Nota" -> 0 ->> 'id', '') ~ '^att[0-9a-f]{32}$'
+    and coalesce(r."Asaas_Cobranca_Id", '') ~ '^pay_[A-Za-z0-9]+$' $$;
+
+-- Resposta do Asaas ao PDF: deu certo = não manda de novo; deu errado = tenta de novo amanhã.
+create or replace function cob_nf_pdf_feito(rid text, nid text, numero text, erro text) returns void language plpgsql as $$
+begin
+  if erro is null then
+    perform cob_evento(rid, 'nf-pdf', 'PDF da NFS-e nº ' || coalesce(nullif(numero, ''), '?') || ' anexado ao boleto (o cliente baixa na página do boleto).',
+      'nf-pdf:' || rid || ':' || coalesce(nid, ''));
+  else
+    perform cob_evento(rid, 'erro', 'Não consegui anexar o PDF da nota ao boleto (' || left(erro, 150) || '). Tento de novo amanhã.',
+      'nf-pdf-erro:' || rid || ':' || coalesce(nid, '') || ':' || cob_hoje());
+  end if;
+end $$;
+
 -- Conta do Asaas nos dados de pagamento (regra do dono, 20/11/2026): quando a chave PIX do próprio CNPJ fica ativa
 -- no Asaas (fim da portabilidade do CNPJ 1, que hoje está no Inter), as notas e os recibos daquele CNPJ passam a
 -- sair com a conta do Asaas, sem ninguém mexer. Os dados de antes ficam guardados em Cobranca_Estado
@@ -445,7 +469,7 @@ begin
       return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'A nota é de outro cliente: não liguei.'));
     end if;
     update "Recebimentos" set "Nota_Ref" = nota.id, "Atualizado_Em" = now() where "Grupo" = grupo and "Nota_Ref" is null;
-    for r in select * from "Recebimentos" where "Grupo" = grupo loop
+    for r in select * from "Recebimentos" where "Grupo" = grupo order by "Parcela_Numero" nulls last, "Vencimento" loop
       perform cob_evento(r.id, 'nota-ligada', 'Ligado à NFS-e nº ' || coalesce(nota."Numero_NFSe", '?') || '.', 'nota-ligada:' || r.id);
       -- A descrição do boleto passa a citar a nota: "Referente à NFS-e nº X" (mudar a descrição não manda e-mail ao cliente).
       if coalesce(r."Asaas_Cobranca_Id", '') <> '' and r."Status" = 'Pendente' and coalesce(nota."Numero_NFSe", '') <> '' then
@@ -800,7 +824,7 @@ create or replace function cob_sinc_gravar(p jsonb) returns jsonb language plpgs
 declare x jsonb; ref jsonb; res jsonb; pay jsonb; rid text; r "Recebimentos"; st text; vis timestamptz; conta text; e jsonb;
   cli text; novo text; tx jsonb; pagos int := 0; importados int := 0; hoje date := cob_hoje(); ini timestamptz; n "Notas_Fiscais";
   a "Arquivos_Cliente"; cand record; ncand int; dinheiro jsonb := '[]'; conc "Conciliacao"; sugeridos int := 0; vinculados int := 0;
-  estado jsonb; taxa numeric; promo date;
+  estado jsonb; taxa numeric; promo date; pdf jsonb;
 begin
   select ("Valor" ->> 'quando')::timestamptz into ini from "Cobranca_Estado" where id = 'inicio';
   for x in select * from jsonb_array_elements(coalesce(p -> 'respostas', '[]')) loop
@@ -944,6 +968,18 @@ begin
     select * into n from "Notas_Fiscais" where id = r."Nota_Ref";
     dinheiro := dinheiro || cob_chamada_descricao(r, n."Numero_NFSe", cob_servico_da_nota(n."Descricao"));
   end loop;
+  -- PDF da nota na página do boleto (22/11/2026): boleto aberto, ligado a nota emitida com PDF, que ainda não recebeu.
+  -- Falhou: no máximo uma tentativa por dia.
+  for r in select x.* from "Recebimentos" x join "Notas_Fiscais" nf on nf.id = x."Nota_Ref"
+            where x."Status" = 'Pendente' and coalesce(x."Asaas_Cobranca_Id", '') <> ''
+              and coalesce(x."Asaas_Status", '') in ('PENDING', 'OVERDUE', 'AWAITING_RISK_ANALYSIS')
+              and nf."Status" = 'Emitida' and jsonb_array_length(nf."Pdf_Nota") > 0
+              and not exists (select 1 from "Cobranca_Eventos" e
+                               where e."Chave" in ('nf-pdf:' || x.id || ':' || nf.id, 'nf-pdf-erro:' || x.id || ':' || nf.id || ':' || hoje))
+            order by x."Criado_Em" desc limit 20 loop
+    pdf := cob_chamada_nf_pdf(r);
+    if pdf is not null then dinheiro := dinheiro || pdf; end if;
+  end loop;
   -- Nota cancelada: a conta sem boleto é cancelada junto; boleto aberto fica avisado para o dono decidir.
   for r in select x.* from "Recebimentos" x join "Notas_Fiscais" nf on nf.id = x."Nota_Ref"
             where nf."Status" = 'Cancelada' and x."Status" = 'Pendente' loop
@@ -1036,6 +1072,13 @@ begin
     if x -> 'ref' ->> 'tipo' = 'descricao' then
       perform cob_descricao_feita(x -> 'ref' ->> 'id', x -> 'ref' ->> 'numero',
         case when (x -> 'resposta') ? 'error' then coalesce(x -> 'resposta' -> 'error' ->> 'message', 'erro') end);
+      continue;
+    end if;
+    -- PDF da nota na página do boleto.
+    if x -> 'ref' ->> 'tipo' = 'nf-pdf' then
+      perform cob_nf_pdf_feito(x -> 'ref' ->> 'id', x -> 'ref' ->> 'nota', x -> 'ref' ->> 'numero',
+        case when (x -> 'resposta') ? 'error' then coalesce(x -> 'resposta' -> 'error' ->> 'message', 'erro')
+             when coalesce(x -> 'resposta' ->> 'id', '') = '' then 'resposta inesperada do Asaas' end);
       continue;
     end if;
     if (x -> 'resposta') ? 'error' then

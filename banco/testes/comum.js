@@ -96,6 +96,8 @@ async function copiaDeTeste(workflowId, { simulacoes = {}, ajustar, sincroniza }
   const wf = await n8n('GET', '/workflows/' + workflowId);
   const caminho = 'teste-migracao-' + crypto.randomBytes(4).toString('hex');
   const subsDoAsaas = await idsDosSubsDoAsaas();
+  // A sincronização de verdade chama o Asaas real: a cópia nunca pode dispará-la (22/11/2026).
+  const sincReal = ((await n8n('GET', '/workflows?limit=250')).data.find((w) => w.name === 'Cobrancas - Sincronizar') || {}).id || '';
   let nodes = wf.nodes.map((n) => {
     if (simulacoes[n.name] === undefined && subsDoAsaas.includes(alvoDoSub(n))) {
       if (sincroniza) return { ...n, parameters: { ...n.parameters, workflowId: { __rl: true, value: sincroniza, mode: 'id' } } };
@@ -122,6 +124,7 @@ async function copiaDeTeste(workflowId, { simulacoes = {}, ajustar, sincroniza }
     if (n.credentials && n.credentials.httpHeaderAuth) throw new Error('a cópia ainda tem a credencial do Asaas: ' + n.name);
     if (/emailSend|gmail|smtp/i.test(n.type)) throw new Error('a cópia ainda mandaria e-mail: ' + n.name);
     if (subsDoAsaas.includes(alvoDoSub(n))) throw new Error('a cópia ainda chamaria o sub-fluxo do Asaas: ' + n.name);
+    if (sincReal && alvoDoSub(n) === sincReal && workflowId !== sincReal) throw new Error('a cópia ainda dispararia a sincronização real: ' + n.name);
   }
   const novo = await n8n('POST', '/workflows', {
     name: 'TMP teste migracao - ' + wf.name, nodes, connections,

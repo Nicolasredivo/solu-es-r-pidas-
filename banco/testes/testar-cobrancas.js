@@ -260,6 +260,22 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
     confere('erro na descrição não mexe na cobrança (nem vira "pago por fora")', b2Final.Status === 'Pendente' && !/por fora/.test(b2Final.Aviso || ''), b2Final);
     const grD2 = await fn('cob_sinc_gravar', { respostas: [] });
     confere('não pede de novo a que deu certo, nem a que falhou hoje (tenta amanhã)', !(grD2.chamadas || []).some((ch) => ch.ref.tipo === 'descricao' && [b1.id, b2.id].includes(ch.ref.id)), grD2.chamadas);
+    // PDF da nota na página do boleto (22/11/2026): só depois que a nota tem PDF; um envio por boleto.
+    confere('nota ainda sem PDF: nada de anexo', !(grD2.chamadas || []).some((ch) => ch.ref.tipo === 'nf-pdf' && [b1.id, b2.id].includes(ch.ref.id)), grD2.chamadas);
+    const attTeste = 'att' + require('crypto').randomBytes(16).toString('hex');
+    await q(`update "Notas_Fiscais" set "Pdf_Nota" = $2::jsonb where id = $1`, [nota4, JSON.stringify([{ id: attTeste, url: '/webhook/anexo?id=' + attTeste, filename: 'NFS-e 9004.pdf', size: 10, type: 'application/pdf' }])]);
+    const grP = await fn('cob_sinc_gravar', { respostas: [] });
+    const pdfB = (grP.chamadas || []).filter((ch) => ch.ref.tipo === 'nf-pdf' && [b1.id, b2.id].includes(ch.ref.id));
+    confere('com o PDF: pede ao Asaas o anexo nas 2 parcelas (POST /payments/<id>/documents, conta e arquivo certos)', pdfB.length === 2
+      && pdfB.every((ch) => ch.metodo === 'POST' && ch.conta === 'CNPJ 2' && ch.anexo === attTeste && ch.ref.nota === nota4 && ch.ref.numero === '9004')
+      && pdfB.some((ch) => ch.url === 'https://api.asaas.com/v3/payments/' + b1.asaasId + '/documents'), pdfB);
+    const okP = pdfB.find((ch) => ch.ref.id === b1.id), erroP = pdfB.find((ch) => ch.ref.id === b2.id);
+    await fn('cob_sinc_final', { respostas: [{ ref: okP.ref, resposta: { id: 'doc_teste', name: 'NFS-e 9004.pdf' } }, { ref: erroP.ref, resposta: { error: { message: '400 - teste' } } }] });
+    const evP = await q(`select "Recebimento_Ref" as r, "Chave" as k, "Tipo" as t from "Cobranca_Eventos" where "Recebimento_Ref" = any($1) and "Chave" like 'nf-pdf%'`, [[b1.id, b2.id]]);
+    confere('PDF aceito fica anotado; recusado vira aviso com data', evP.some((e) => e.r === b1.id && e.k === 'nf-pdf:' + b1.id + ':' + nota4 && e.t === 'nf-pdf')
+      && evP.some((e) => e.r === b2.id && e.k === 'nf-pdf-erro:' + b2.id + ':' + nota4 + ':' + hoje), evP);
+    const grP2 = await fn('cob_sinc_gravar', { respostas: [] });
+    confere('não manda o PDF de novo (nem o que falhou hoje)', !(grP2.chamadas || []).some((ch) => ch.ref.tipo === 'nf-pdf' && [b1.id, b2.id].includes(ch.ref.id)), grP2.chamadas);
     await q(`delete from "Cobranca_Estado" where id = 'sinc:trava'`);
 
     // ---------- conta do Asaas nos dados de pagamento quando a chave PIX do CNPJ chega lá ----------

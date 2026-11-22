@@ -24,7 +24,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Só deixa passar chamada para o endereço do Asaas e para uma das duas contas.\nconst BASE = \"https://api.asaas.com/v3/\";\nconst METODOS = ['GET', 'POST', 'PUT', 'DELETE'];\nreturn $input.all().map((i) => {\n  const p = i.json || {};\n  const metodo = String(p.metodo || '').toUpperCase();\n  let rota = 'erro', erro = '';\n  if (p.pular) rota = 'pular';\n  else if (!['CNPJ 1', 'CNPJ 2'].includes(p.conta)) erro = 'conta desconhecida: ' + p.conta;\n  else if (!String(p.url || '').startsWith(BASE)) erro = 'endereço fora do Asaas';\n  else if (!METODOS.includes(metodo)) erro = 'método inválido';\n  else rota = p.conta + ((metodo === 'POST' || metodo === 'PUT') && p.corpo ? ' corpo' : '');\n  return { json: { ...p, metodo, rota, erroPedido: erro } };\n});"
+        "jsCode": "// Só deixa passar chamada para o endereço do Asaas e para uma das duas contas.\nconst BASE = \"https://api.asaas.com/v3/\";\nconst METODOS = ['GET', 'POST', 'PUT', 'DELETE'];\nreturn $input.all().map((i) => {\n  const p = i.json || {};\n  const metodo = String(p.metodo || '').toUpperCase();\n  let rota = 'erro', erro = '';\n  if (p.pular) rota = 'pular';\n  else if (!['CNPJ 1', 'CNPJ 2'].includes(p.conta)) erro = 'conta desconhecida: ' + p.conta;\n  else if (!String(p.url || '').startsWith(BASE)) erro = 'endereço fora do Asaas';\n  else if (!METODOS.includes(metodo)) erro = 'método inválido';\n  // Arquivo (22/11/2026): só o PDF guardado no sistema (att + 32 letras/números) e só para os documentos de um boleto.\n  else if (p.anexo !== undefined) {\n    if (metodo !== 'POST' || !/^https:\\/\\/api\\.asaas\\.com\\/v3\\/payments\\/pay_[A-Za-z0-9]+\\/documents$/.test(String(p.url))) erro = 'envio de arquivo fora do lugar';\n    else if (!/^att[0-9a-f]{32}$/.test(String(p.anexo))) erro = 'arquivo inválido';\n    else rota = p.conta + ' arquivo';\n  }\n  else rota = p.conta + ((metodo === 'POST' || metodo === 'PUT') && p.corpo ? ' corpo' : '');\n  return { json: { ...p, metodo, rota, erroPedido: erro } };\n});"
       }
     },
     {
@@ -327,6 +327,268 @@
           "timeout": 20000
         }
       }
+    },
+    {
+      "id": "13a1a15c-149d-4605-a605-633c67ae13a3",
+      "name": "Com arquivo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c4d0bc67-e951-4aa5-9440-e36bbbe432ff",
+              "leftValue": "={{ String($json.rota).endsWith(' arquivo') ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "47a887c1-b9e3-4813-b8a7-e8ef4aca119d",
+      "name": "Busca o PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        500
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "yzToTcui3yVtKT5d",
+          "name": "Airtable local (banco do PC)"
+        }
+      },
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'http://127.0.0.1:5690/anexos/' + $json.anexo }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "b86d048b-96ae-46b3-a3fc-cbc0137e6b1f",
+      "name": "PDF lido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        500
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e51545b0-0cf6-4f37-bf37-20bc7b8036a3",
+              "leftValue": "={{ ($binary && $binary.data) ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "f30831b2-a586-4baa-b554-da098ed98c55",
+      "name": "PDF nao lido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        700
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { error: { message: 'não li o PDF da nota no sistema' } } }];"
+      }
+    },
+    {
+      "id": "160147e2-8cc0-4537-ad2b-f95e1a85960d",
+      "name": "Arquivo do CNPJ 2?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1220,
+        500
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3ea712ae-274c-4f40-bd98-ed55a1082be5",
+              "leftValue": "={{ $('Confere pedido').item.json.rota === 'CNPJ 2 arquivo' ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "eeeb36e0-1d08-448a-a820-34a30c40a423",
+      "name": "Asaas do CNPJ 2 (arquivo)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1480,
+        420
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zu74V1t3VpbrGzBO",
+          "name": "Asaas API (CNPJ 2 - producao)"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Confere pedido').item.json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "solucoes-rapidas-sistema"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formData",
+              "name": "availableAfterPayment",
+              "value": "false"
+            },
+            {
+              "parameterType": "formData",
+              "name": "type",
+              "value": "INVOICE"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "19cab657-74e8-4c55-9e9d-db78b1854d29",
+      "name": "Asaas do CNPJ 1 (arquivo)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1480,
+        580
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "99sqJeNJjk6jJRgZ",
+          "name": "Asaas API (producao)"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Confere pedido').item.json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "solucoes-rapidas-sistema"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formData",
+              "name": "availableAfterPayment",
+              "value": "false"
+            },
+            {
+              "parameterType": "formData",
+              "name": "type",
+              "value": "INVOICE"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
     }
   ],
   "connections": {
@@ -345,7 +607,7 @@
       "main": [
         [
           {
-            "node": "Rota CNPJ 2 com corpo?",
+            "node": "Com arquivo?",
             "type": "main",
             "index": 0
           }
@@ -418,6 +680,71 @@
         [
           {
             "node": "Sem chamada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Com arquivo?": {
+      "main": [
+        [
+          {
+            "node": "Busca o PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rota CNPJ 2 com corpo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca o PDF": {
+      "main": [
+        [
+          {
+            "node": "PDF lido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF lido?": {
+      "main": [
+        [
+          {
+            "node": "Arquivo do CNPJ 2?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PDF nao lido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Arquivo do CNPJ 2?": {
+      "main": [
+        [
+          {
+            "node": "Asaas do CNPJ 2 (arquivo)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Asaas do CNPJ 1 (arquivo)",
             "type": "main",
             "index": 0
           }

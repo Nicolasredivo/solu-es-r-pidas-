@@ -576,6 +576,63 @@
         "responseBody": "={{ JSON.stringify(($json.r || {}).resposta || { ok: false, mensagem: 'Sem resposta.' }) }}",
         "options": {}
       }
+    },
+    {
+      "id": "21e58e34-944a-4c5b-8d12-c3f21ad91a71",
+      "name": "Boleto novo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3960,
+        520
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c4038ad3-09c7-4f8c-8d81-a0b7e2b9ba21",
+              "leftValue": "={{ ['criar', 'ligar-nota'].includes(($('Le entrada').first().json.p || {}).acao) ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "982c0925-d244-4df2-a5de-2142d7c5a0cd",
+      "name": "Dispara sincronizacao (PDF)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        4180,
+        520
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "Ix4CN4bzAxoxIo1M",
+          "mode": "id"
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      }
     }
   ],
   "connections": {
@@ -889,6 +946,40 @@
             "index": 0
           }
         ]
+      ]
+    },
+    "Responde 2": {
+      "main": [
+        [
+          {
+            "node": "Boleto novo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responde registrado": {
+      "main": [
+        [
+          {
+            "node": "Boleto novo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Boleto novo?": {
+      "main": [
+        [
+          {
+            "node": "Dispara sincronizacao (PDF)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     }
   },

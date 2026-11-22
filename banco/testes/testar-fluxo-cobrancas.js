@@ -61,7 +61,7 @@ async function criarSimulador() {
     await t.entrarComUsuarioDeTeste();
     const lista = (await t.n8n('GET', '/workflows?limit=250')).data;
     const idDe = (nome) => lista.find((w) => w.name === nome).id;
-    const app = await t.copiaDeTeste(idDe('App - Cobrancas'), { sincroniza: idSimulador, simulacoes: { 'Dispara sincronizacao': 'return [{ json: {} }];' } });
+    const app = await t.copiaDeTeste(idDe('App - Cobrancas'), { sincroniza: idSimulador, simulacoes: { 'Dispara sincronizacao': 'return [{ json: {} }];', 'Dispara sincronizacao (PDF)': 'return [{ json: { simulado: true } }];' } });
     copias.push(app);
     const caminhoSinc = 'teste-sinc-' + crypto.randomBytes(4).toString('hex');
     const sinc = await t.copiaDeTeste(idDe('Cobrancas - Sincronizar'), {
