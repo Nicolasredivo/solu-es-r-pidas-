@@ -61,7 +61,9 @@ async function criarSimulador() {
     await t.entrarComUsuarioDeTeste();
     const lista = (await t.n8n('GET', '/workflows?limit=250')).data;
     const idDe = (nome) => lista.find((w) => w.name === nome).id;
-    const app = await t.copiaDeTeste(idDe('App - Cobrancas'), { sincroniza: idSimulador, simulacoes: { 'Dispara sincronizacao': 'return [{ json: {} }];', 'Dispara sincronizacao (PDF)': 'return [{ json: { simulado: true } }];' } });
+    const app = await t.copiaDeTeste(idDe('App - Cobrancas'), { sincroniza: idSimulador, simulacoes: { 'Dispara sincronizacao': 'return [{ json: {} }];', 'Dispara sincronizacao (PDF)': 'return [{ json: { simulado: true } }];',
+      'Baixa anexos (e-mail)': 'return $input.all().map((i) => ({ json: { ...i.json, anexosOk: (i.json.anexos || []).length } }));',
+      'Manda e-mail': 'return $input.all().map((i) => ({ json: { accepted: [i.json.para], cc: i.json.cc, cco: i.json.cco } }));' } });
     copias.push(app);
     const caminhoSinc = 'teste-sinc-' + crypto.randomBytes(4).toString('hex');
     const sinc = await t.copiaDeTeste(idDe('Cobrancas - Sincronizar'), {
@@ -129,6 +131,22 @@ async function criarSimulador() {
     confere('sincronizar: dados de pagamento das empresas não mudam sem a chave do próprio CNPJ', JSON.stringify(empAntes) === JSON.stringify(empDepois), empDepois);
     const trava = (await q(`select "Valor" from "Cobranca_Estado" where id = 'sinc:trava'`))[0];
     confere('sincronizar: trava solta no fim', trava && new Date(trava.Valor.ate) <= new Date(Date.now() + 2000), trava);
+
+    // ---------- nota por e-mail ao financeiro (22/11/2026) ----------
+    await q(`update "Entidades_Cadastradas" set "Emails_Financeiro_NFE" = E'fin@example.com\nsindico@example.com\nadm@example.com' where id = $1`, [c1]);
+    const pe0 = await chamar(app.caminho, { acao: 'preparar-email', notaId: nota });
+    confere('preparar e-mail: Para/Cc/Cco na ordem do cadastro', pe0.ok === true && pe0.destinos.para === 'fin@example.com' && pe0.destinos.cc === 'sindico@example.com'
+      && pe0.destinos.cco === 'adm@example.com' && pe0.temPdf === false, pe0);
+    const semPdf = await chamar(app.caminho, { acao: 'enviar-nota', notaId: nota, documentos: '[]', pedido: crypto.randomUUID() });
+    confere('nota sem PDF ainda: não manda e avisa', semPdf.ok === false && /PDF da nota ainda não está pronto/.test(semPdf.mensagem), semPdf);
+    await q(`update "Notas_Fiscais" set "Pdf_Nota" = $2::jsonb where id = $1`, [nota, JSON.stringify([{ id: 'att' + crypto.randomBytes(16).toString('hex'), filename: 'NFS-e 9101.pdf', type: 'application/pdf', size: 10 }])]);
+    const pedidoE = crypto.randomUUID();
+    const en = await chamar(app.caminho, { acao: 'enviar-nota', notaId: nota, documentos: '[]', pedido: pedidoE });
+    confere('enviar a nota: e-mail sai com a nota anexa, para os 3 destinos', en.ok === true && en.anexos === 1 && en.para === 'fin@example.com' && en.cco === 'adm@example.com' && /E-mail enviado/.test(en.mensagem), en);
+    const en2 = await chamar(app.caminho, { acao: 'enviar-nota', notaId: nota, documentos: '[]', pedido: pedidoE });
+    confere('clique duplo (mesmo pedido): não manda de novo', en2.ok === false && /já foi pedido/.test(en2.mensagem), en2);
+    const evN = await q(`select e."Texto" from "Cobranca_Eventos" e join "Recebimentos" r on r.id = e."Recebimento_Ref" where r."Nota_Ref" = $1 and e."Tipo" = 'email-nota'`, [nota]);
+    confere('envio fica no histórico da conta', evN.length === 1 && /enviada por e-mail para fin@example\.com \(Cc: sindico@example\.com\) \(Cco: adm@example\.com\)/.test(evN[0].Texto), evN);
 
     // ---------- cancelar ----------
     const grupo2 = crypto.randomUUID();

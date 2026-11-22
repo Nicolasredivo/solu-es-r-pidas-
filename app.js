@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.22a";
+const APP_VERSION = "2026.11.22b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -13248,7 +13248,7 @@ desenharVeiculo();
 // do cliente por padrão. Nada é emitido sem passar pela conferência, e qualquer mudança no
 // formulário esconde a conferência (o que vai é sempre o que foi conferido).
 
-const NF_PAGAMENTO = "Dados para pagamento - ASAAS I.P S.A - 461 CIRLEI LUIS ZOMER Agência: 0001 Conta: 8023182-2 ou chave PIX CNPJ = 11338567000199";
+const NF_PAGAMENTO = "Dados para pagamento - chave PIX CNPJ = 11338567000199 ou ASAAS I.P S.A - 461 CIRLEI LUIS ZOMER Agência: 0001 Conta: 8023182-2";
 const NF_LIMITE = 1100;
 const formNota = document.getElementById("form-nota");
 const nfCampos = {
@@ -13347,7 +13347,7 @@ function nfBoletoAssinatura(plano) {
 // Fim da descrição da nota de cliente com boleto (ciclo do dono desde 21/11/2026: a nota sai ANTES do boleto, então
 // não leva link). Desde 22/11/2026 (dono): sem a chave PIX, só "boleto bancário" + os dados da conta do Asaas.
 function nfContaSemPix() {
-  return nfPagamentoTexto().replace(/\s+ou chave PIX.*$/i, "").replace(/^Dados para pagamento - /, "Dados da conta: ");
+  return nfPagamentoTexto().replace(/^Dados para pagamento - (?:chave PIX .*? ou )?/i, "Dados da conta: ");
 }
 function nfBoletoTexto(plano) {
   const c = nfCliente && cadastros.find((x) => x.id === nfCliente.id);
@@ -13467,9 +13467,10 @@ function nfPagamentoTexto() {
   const bancoTexto = m ? `${m[2].toUpperCase()} - ${m[1]}` : banco.toUpperCase();
   const pix = String(e.pix || "").trim();
   const pixDigitos = pix.replace(/\D/g, "");
+  // Desde 22/11/2026 (dono): a chave PIX vem primeiro, logo depois de "Dados para pagamento", nos dois CNPJs.
   const pixTexto = !pix ? "" : pixDigitos.length === 14 && pixDigitos === pix.replace(/[.\-/\s]/g, "")
-    ? ` ou chave PIX CNPJ = ${pixDigitos}` : ` ou chave PIX = ${pix}`;
-  return `Dados para pagamento - ${bancoTexto} ${String(e.titular || "").toUpperCase()} Agência: ${e.agencia || ""} Conta: ${e.conta || ""}${pixTexto}`;
+    ? `chave PIX CNPJ = ${pixDigitos} ou ` : `chave PIX = ${pix} ou `;
+  return `Dados para pagamento - ${pixTexto}${bancoTexto} ${String(e.titular || "").toUpperCase()} Agência: ${e.agencia || ""} Conta: ${e.conta || ""}`;
 }
 
 // Mostra (ou esconde) o aviso "cliente do CNPJ 2", que também decide a conta.
@@ -13891,6 +13892,8 @@ async function nfEmitir(pedido, tela) {
   } else if (r.ambiente !== "Testes") {
     // Nota sem boleto também vai para o A receber (sem previsão de pagamento).
     pedirAoN8n("cobrancas", { acao: "registrar-nota", notaId: r.nota.id }).then(() => cobCarregar({ sincronizar: false })).catch(() => {});
+    // E pergunta se manda a nota por e-mail ao financeiro do cliente (22/11/2026).
+    nfMontarEnvioEmail(boletoArea, { ...r.nota, clienteId: (nfCliente && nfCliente.id) || r.nota.clienteId });
   }
   const outra = nfBotao("Emitir outra nota", "botao-secundario", () => {
     nfLimparFormulario();
@@ -13950,6 +13953,111 @@ async function nfBoletoDaNota(nota, boleto, area) {
   await tentar();
 }
 
+// Nota por e-mail ao financeiro do cliente (pedido do dono, 22/11/2026). Cliente sem boleto: depois de emitir, o
+// sistema pergunta se manda a nota (PDF) e quais documentos da pasta do cliente vão junto. Sai do e-mail adm: 1º e-mail
+// no Para, 2º no Cc, 3º no Cco (cópia oculta), do 4º em diante no Cc. Também pela lista ("Enviar por e-mail").
+const NF_PASTAS_EMAIL = { orcamento: "Orçamento", recibo: "Recibo", comunicado: "Comunicado", laudo: "Laudo" };
+async function nfMontarEnvioEmail(area, nota) {
+  area.innerHTML = "";
+  const caixa = document.createElement("div");
+  caixa.className = "moldura nf-emitida nf-envio";
+  const titulo = document.createElement("div");
+  titulo.className = "moldura-titulo";
+  titulo.textContent = "Enviar a nota por e-mail ao financeiro?";
+  const carregando = document.createElement("div");
+  carregando.className = "status show loading";
+  carregando.textContent = "Vendo os e-mails do cliente e os documentos da pasta...";
+  caixa.append(titulo, carregando);
+  area.append(caixa);
+  let pe = null, arqs = null;
+  try {
+    [pe, arqs] = await Promise.all([
+      pedirAoN8n("cobrancas", { acao: "preparar-email", notaId: nota.id }),
+      nota.clienteId ? pedirAoN8n("arquivos", { acao: "cliente", clienteId: nota.clienteId }).catch(() => null) : null,
+    ]);
+  } catch (err) {
+    pe = { ok: false, mensagem: "Não consegui falar com o servidor. O n8n está ligado?" };
+  }
+  carregando.remove();
+  if (!pe || !pe.ok) {
+    caixa.append(nfAviso("Não dá para enviar: ", (pe && pe.mensagem) || "tente de novo em instantes."));
+    return;
+  }
+  const d = pe.destinos || {};
+  caixa.append(nfLinha("Para", d.para));
+  if (d.cc) caixa.append(nfLinha("Cc", d.cc));
+  if (d.cco) caixa.append(nfLinha("Cco (cópia oculta)", d.cco));
+  caixa.append(nfLinha("Sempre vai", `Nota fiscal nº ${pe.numero || nota.numeroNota || "?"} (PDF)`));
+  const docs = ((arqs && arqs.ok && arqs.itens) || [])
+    .filter((x) => NF_PASTAS_EMAIL[x.pasta] && x.arquivo && !x.substituidoPor)
+    .sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")))
+    .slice(0, 12);
+  const sub = document.createElement("div");
+  sub.className = "moldura-titulo nf-conf-sub";
+  sub.textContent = "Anexar também (opcional)";
+  caixa.append(sub);
+  const marcas = [];
+  if (!docs.length) {
+    const p = document.createElement("p");
+    p.className = "doc-hint";
+    p.textContent = arqs && arqs.ok ? "Nenhum outro documento na pasta deste cliente." : "Não consegui ler a pasta do cliente: dá para mandar só a nota.";
+    caixa.append(p);
+  }
+  for (const x of docs) {
+    const l = document.createElement("label");
+    l.className = "checkbox-linha";
+    const c = document.createElement("input");
+    c.type = "checkbox";
+    c.value = x.id;
+    const sp = document.createElement("span");
+    // O título do app já começa com o tipo ("Laudo · Cliente"); só acrescenta quando não começa.
+    const nomeTipo = NF_PASTAS_EMAIL[x.pasta];
+    const tituloDoc = x.titulo || "sem título";
+    sp.textContent = `${tituloDoc.startsWith(nomeTipo) ? tituloDoc : nomeTipo + " · " + tituloDoc}${x.data ? " · " + nfData(x.data) : ""}`;
+    l.append(c, sp);
+    caixa.append(l);
+    marcas.push(c);
+  }
+  const status = document.createElement("div");
+  status.className = "status";
+  const acoes = document.createElement("div");
+  acoes.className = "nf-acoes";
+  // Um pedido por painel: clique duplo não manda duas vezes; se falhar, o mesmo pedido tenta de novo.
+  const pedido = crypto.randomUUID();
+  const enviar = nfBotao("Enviar e-mail", "", async () => {
+    enviar.disabled = true;
+    naoAgora.disabled = true;
+    marcas.forEach((m) => (m.disabled = true));
+    status.className = "status show loading";
+    status.textContent = "Enviando o e-mail...";
+    let r;
+    try {
+      r = await pedirAoN8n("cobrancas", { acao: "enviar-nota", notaId: nota.id, pedido,
+        documentos: JSON.stringify(marcas.filter((m) => m.checked).map((m) => m.value)) });
+    } catch (err) {
+      r = { ok: false, mensagem: "A conexão caiu. Veja o histórico da conta em Financeiro › A receber antes de tentar de novo." };
+    }
+    status.className = `status show ${r && r.ok ? "ok" : "error"}`;
+    status.textContent = (r && r.mensagem) || "Não sei se o e-mail saiu.";
+    if (r && r.ok) {
+      acoes.remove();
+      mostrarToast("E-mail da nota enviado.");
+      return;
+    }
+    if (!/já foi pedido/.test((r && r.mensagem) || "")) {
+      enviar.disabled = false;
+      naoAgora.disabled = false;
+      marcas.forEach((m) => (m.disabled = false));
+    }
+  });
+  const naoAgora = nfBotao("Agora não", "botao-secundario", () => {
+    area.innerHTML = "";
+    mostrarToast("A nota não foi enviada. Dá para enviar depois pela lista de notas (Enviar por e-mail).");
+  });
+  acoes.append(enviar, naoAgora);
+  caixa.append(status, acoes);
+}
+
 // Os boletos que saíram junto com a nota, com o link para mandar.
 function nfQuadroBoleto(cobrancas) {
   const q = document.createElement("div");
@@ -13971,7 +14079,7 @@ function nfQuadroBoleto(cobrancas) {
   });
   const dica = document.createElement("p");
   dica.className = "doc-hint";
-  dica.textContent = "Já está em Financeiro › A receber, com a descrição \"Referente à NFS-e nº …\" desta nota. O Asaas manda o boleto por e-mail ao cliente agora; depois vai um lembrete 1 dia antes de vencer e, se atrasar, um aviso por dia.";
+  dica.textContent = "Já está em Financeiro › A receber, com a descrição \"Referente à NFS-e nº …\" desta nota. O sistema manda ao cliente, do e-mail adm, o boleto e a nota em PDF em instantes; depois um lembrete 1 dia antes de vencer e, se atrasar, um aviso a cada 3 dias.";
   q.append(dica);
   return q;
 }
@@ -14232,6 +14340,16 @@ async function carregarNotas() {
     if ((n.status === "Emitida" || cancelada) && n.chave) nfBotoesDaNota(acoes, n, n.ambiente);
     if ((n.status === "Emitida" || cancelada) && n.clienteId) {
       acoes.append(nfBotao("Emitir outra igual", "botao-secundario", () => nfRepetirNota(n)));
+    }
+    if (n.status === "Emitida" && n.chave && n.clienteId && n.ambiente !== "Testes") {
+      acoes.append(nfBotao("Enviar por e-mail", "botao-secundario", () => {
+        let area = li.querySelector(".nf-envio-area");
+        if (area) { area.remove(); return; }
+        area = document.createElement("div");
+        area.className = "nf-envio-area";
+        li.append(area);
+        nfMontarEnvioEmail(area, n);
+      }));
     }
     if (n.status === "Emitida" && n.chave) {
       const b = nfBotao("Cancelar nota", "botao-secundario botao-perigo nf-botao-cancelar", () => nfAbrirCancelamento(li, n, b));

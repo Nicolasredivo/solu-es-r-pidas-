@@ -127,15 +127,27 @@ begin
 end $$;
 
 -- E-mails do cliente: os do financeiro + os dos contatos ativos (os mesmos que vão para o Asaas).
+-- Na ordem do cadastro (22/11/2026): primeiro os e-mails do financeiro do cliente, depois os dos contatos; sem repetir.
 create or replace function cob_emails(cliente text) returns text[] language sql stable as $$
   with brutos as (
-    select lower(btrim(e)) as e from "Entidades_Cadastradas" c, regexp_split_to_table(coalesce(c."Emails_Financeiro_NFE", ''), '[\n\r,;]+') e
+    select lower(btrim(t.e)) as e, 1 as g, '' as k, t.n from "Entidades_Cadastradas" c,
+           regexp_split_to_table(coalesce(c."Emails_Financeiro_NFE", ''), '[\n\r,;]+') with ordinality as t(e, n)
      where c.id = cliente
     union all
-    select lower(btrim(e)) from "Contatos_Solicitantes" k, regexp_split_to_table(coalesce(k."Emails", ''), '[\n\r,;]+') e
+    select lower(btrim(t.e)), 2, k.id, t.n from "Contatos_Solicitantes" k,
+           regexp_split_to_table(coalesce(k."Emails", ''), '[\n\r,;]+') with ordinality as t(e, n)
      where cliente = any (k."Entidades_Vinculadas") and coalesce(k."Status", 'Ativo') not in ('Arquivado', 'Inativo')
+  ), unicos as (
+    select distinct on (e) e, g, k, n from brutos where e ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' order by e, g, k, n
   )
-  select coalesce(array_agg(distinct e) filter (where e ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$'), '{}') from brutos $$;
+  select coalesce(array_agg(e order by g, k, n), '{}') from unicos $$;
+
+-- Destinos dos e-mails do sistema (regra do dono, 22/11/2026): 1º no "Para", 2º no "Cc", 3º no "Cco" (cópia
+-- oculta); do 4º em diante, no "Cc", ao lado do 2º.
+create or replace function cob_destinos(emails text[]) returns jsonb language sql immutable as $$
+  select jsonb_build_object('para', coalesce(emails[1], ''),
+    'cc', coalesce(array_to_string(array_remove(array[emails[2]] || emails[4:], null), ', '), ''),
+    'cco', coalesce(emails[3], '')) $$;
 
 create or replace function cob_nome_cliente(c "Entidades_Cadastradas") returns text language sql immutable as $$
   select coalesce(nullif(btrim(c."Nome_Fantasia_Identificador"), ''), nullif(btrim(c."Razao_Social_Nome"), ''), 'Cliente sem nome') $$;
@@ -484,6 +496,8 @@ begin
 
   if acao = 'registrar-nota' then return jsonb_build_object('resposta', cob_registrar_nota(cob_txt(p, 'notaId'))); end if;
   if acao = 'registrar-recibo' then return jsonb_build_object('resposta', cob_registrar_recibo(cob_txt(p, 'arquivoId'))); end if;
+  if acao = 'preparar-email' then return jsonb_build_object('resposta', cob_preparar_email(p)); end if;
+  if acao = 'enviar-nota' then return cob_enviar_nota(p); end if;
 
   if acao in ('baixa', 'prorrogar', 'cancelar') then
     select * into r from "Recebimentos" where id = cob_txt(p, 'id');
@@ -813,6 +827,112 @@ create or replace function cob_email_html(r "Recebimentos", tipo text, parcelas 
 -- (nome antigo, usado pelos testes)
 create or replace function cob_email_lembrete(r "Recebimentos") returns text language sql stable as $$ select cob_email_html(r, 'vespera') $$;
 
+-- ========== Nota por e-mail ao financeiro do cliente (22/11/2026, pedido do dono) ==========
+-- Cliente sem boleto: depois de emitir, o sistema pergunta se manda a nota (PDF) e quais documentos da pasta do
+-- cliente vão junto. Sai do e-mail adm, para os e-mails do financeiro (Para/Cc/Cco), pelo fluxo "App - Cobrancas".
+
+-- O que o e-mail vai ter (para mostrar antes de enviar).
+create or replace function cob_preparar_email(p jsonb) returns jsonb language plpgsql stable as $$
+declare n "Notas_Fiscais"; emails text[];
+begin
+  select * into n from "Notas_Fiscais" where id = cob_txt(p, 'notaId');
+  if n.id is null or n."Status" <> 'Emitida' then return jsonb_build_object('ok', false, 'mensagem', 'Nota não encontrada ou não emitida.'); end if;
+  if n."Cliente_Ref" is null then return jsonb_build_object('ok', false, 'mensagem', 'Esta nota não está ligada a um cliente do sistema.'); end if;
+  emails := cob_emails(n."Cliente_Ref");
+  if coalesce(array_length(emails, 1), 0) = 0 then
+    return jsonb_build_object('ok', false, 'mensagem', 'O cliente não tem e-mail do financeiro: cadastre o e-mail ou mande a nota pelo WhatsApp.');
+  end if;
+  return jsonb_build_object('ok', true, 'numero', n."Numero_NFSe", 'clienteId', n."Cliente_Ref", 'destinos', cob_destinos(emails),
+    'temPdf', coalesce(n."Pdf_Nota" -> 0 ->> 'id', '') ~ '^att[0-9a-f]{32}$', 'teste', n."Ambiente" <> 'Producao');
+end $$;
+
+-- Texto do e-mail da nota (HTML simples, sem imagens).
+create or replace function cob_email_nota_html(n "Notas_Fiscais", cliente text, documentos text[]) returns text language sql stable as $$
+  select '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#1f2937;max-width:560px">'
+    || '<p style="margin:0 0 4px;font-size:18px;color:#0F2747"><strong>Soluções Rápidas</strong></p>'
+    || '<p style="margin:0 0 16px;color:#6b7280;font-size:13px">Manutenção predial</p>'
+    || '<p>Olá! Segue em anexo a nota fiscal do serviço prestado' || case when coalesce(array_length(documentos, 1), 0) > 0 then ', junto com '
+         || case when array_length(documentos, 1) = 1 then 'o documento abaixo' else 'os documentos abaixo' end else '' end || '.</p>'
+    || '<table style="border-collapse:collapse;margin:12px 0;font-size:14px">'
+    || '<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Nota fiscal</td><td style="padding:4px 0">NFS-e nº ' || cob_html(coalesce(n."Numero_NFSe", '?')) || '</td></tr>'
+    || '<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Cliente</td><td style="padding:4px 0">' || cob_html(coalesce(cliente, n."Tomador_Nome")) || '</td></tr>'
+    || '<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Serviço</td><td style="padding:4px 0">' || cob_html(cob_servico_da_nota(n."Descricao")) || '</td></tr>'
+    || '<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Valor</td><td style="padding:4px 0"><strong>' || cob_reais(n."Valor") || '</strong></td></tr>'
+    || coalesce('<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Pagamento</td><td style="padding:4px 0">'
+         || cob_html(nullif(btrim(substring(coalesce(n."Descricao", '') from 'Dados para pagamento - (.*)$')), '')) || '</td></tr>', '')
+    || coalesce((select string_agg('<tr><td style="padding:4px 16px 4px 0;color:#6b7280">Anexo</td><td style="padding:4px 0">' || cob_html(d) || '</td></tr>', '')
+         from unnest(documentos) d), '')
+    || '</table>'
+    || '<p style="font-size:13px;color:#6b7280">Dúvidas: (47) 99208-1047 · adm.solucoes.rapidas@gmail.com</p></div>' $$;
+
+-- Monta o e-mail e reserva o envio (um por pedido: clique duplo não manda duas vezes). Devolve { email } para o
+-- fluxo mandar, ou { resposta } com o motivo de não mandar.
+create or replace function cob_enviar_nota(p jsonb) returns jsonb language plpgsql as $$
+declare n "Notas_Fiscais"; emails text[]; pedido text := cob_txt(p, 'pedido'); rid text; ev text; dest jsonb; anexos jsonb; nomes text[];
+  docs text[]; cliente text;
+begin
+  if pedido is null or pedido !~ '^[A-Za-z0-9-]{8,64}$' then
+    return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'Pedido sem identificação: recarregue a página.'));
+  end if;
+  select * into n from "Notas_Fiscais" where id = cob_txt(p, 'notaId');
+  if n.id is null or n."Status" <> 'Emitida' then return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'Nota não encontrada ou não emitida.')); end if;
+  if n."Cliente_Ref" is null then return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'Esta nota não está ligada a um cliente do sistema.')); end if;
+  if coalesce(n."Pdf_Nota" -> 0 ->> 'id', '') !~ '^att[0-9a-f]{32}$' then
+    return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'O PDF da nota ainda não está pronto. Tente de novo em alguns segundos.'));
+  end if;
+  emails := cob_emails(n."Cliente_Ref");
+  if coalesce(array_length(emails, 1), 0) = 0 then
+    return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'O cliente não tem e-mail do financeiro: cadastre o e-mail ou mande a nota pelo WhatsApp.'));
+  end if;
+  dest := cob_destinos(emails);
+  -- A nota no A receber (a mesma conta de sempre; cria se ainda não existir) guarda o histórico do envio.
+  rid := (cob_registrar_nota(n.id)) ->> 'id';
+  -- Documentos escolhidos: só da pasta do mesmo cliente, com arquivo, no máximo 10.
+  docs := array(select jsonb_array_elements_text(coalesce(p -> 'documentos', '[]')) limit 10);
+  select coalesce(jsonb_agg(jsonb_build_object('url', 'http://localhost:5678/webhook/anexo?id=' || (a."Arquivo" -> 0 ->> 'id'),
+           'nome', coalesce(nullif(a."Arquivo" -> 0 ->> 'filename', ''), a."Titulo" || '.pdf')) order by a."Data_Documento" desc nulls last, a."Criado_Em" desc), '[]'::jsonb),
+         coalesce(array_agg(a."Titulo" order by a."Data_Documento" desc nulls last, a."Criado_Em" desc), '{}')
+    into anexos, nomes
+    from "Arquivos_Cliente" a
+   where a.id = any (docs) and a."Cliente_Ref" = n."Cliente_Ref" and coalesce(a."Arquivo" -> 0 ->> 'id', '') ~ '^att[0-9a-f]{32}$';
+  anexos := jsonb_build_array(jsonb_build_object('url', 'http://localhost:5678/webhook/anexo?id=' || (n."Pdf_Nota" -> 0 ->> 'id'),
+              'nome', coalesce(nullif(n."Pdf_Nota" -> 0 ->> 'filename', ''), 'NFS-e ' || coalesce(n."Numero_NFSe", '') || '.pdf'))) || anexos;
+  select cob_nome_cliente(c) into cliente from "Entidades_Cadastradas" c where c.id = n."Cliente_Ref";
+  insert into "Cobranca_Eventos" ("Recebimento_Ref", "Tipo", "Texto", "Chave", "Dados")
+  values (rid, 'email-enviando', 'Nota sendo enviada por e-mail.', 'email-nota:' || n.id || ':' || pedido,
+          jsonb_build_object('destinos', dest, 'numero', n."Numero_NFSe", 'anexos', jsonb_array_length(anexos)))
+  on conflict ("Chave") do nothing returning id into ev;
+  if ev is null then return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'Este envio já foi pedido. Veja o histórico da conta em Financeiro › A receber.')); end if;
+  return jsonb_build_object('email', jsonb_build_object('evento', ev, 'para', dest ->> 'para', 'cc', dest ->> 'cc', 'cco', dest ->> 'cco',
+    'assunto', 'Soluções Rápidas · NFS-e nº ' || coalesce(n."Numero_NFSe", '?'),
+    'html', cob_email_nota_html(n, cliente, nomes), 'anexos', anexos));
+end $$;
+
+-- Resultado do envio. p: { evento, ok, erro, anexos (os que foram), esperados }
+create or replace function cob_email_feito(p jsonb) returns jsonb language plpgsql as $$
+declare e "Cobranca_Eventos"; d jsonb; foram int := coalesce(cob_num(p, 'anexos')::int, 0); esperados int := coalesce(cob_num(p, 'esperados')::int, 0);
+  quem text; ok boolean := coalesce((p ->> 'ok')::boolean, false);
+begin
+  select * into e from "Cobranca_Eventos" where id = cob_txt(p, 'evento') and "Tipo" = 'email-enviando';
+  if e.id is null then return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'Envio não encontrado.')); end if;
+  d := e."Dados" -> 'destinos';
+  quem := (d ->> 'para') || case when coalesce(d ->> 'cc', '') <> '' then ' (Cc: ' || (d ->> 'cc') || ')' else '' end
+          || case when coalesce(d ->> 'cco', '') <> '' then ' (Cco: ' || (d ->> 'cco') || ')' else '' end;
+  if ok and foram >= 1 then
+    update "Cobranca_Eventos" set "Tipo" = 'email-nota', "Quando" = now(),
+           "Texto" = 'NFS-e nº ' || coalesce(e."Dados" ->> 'numero', '?') || ' enviada por e-mail para ' || quem || ', com ' || foram || ' anexo(s).'
+     where id = e.id;
+    return jsonb_build_object('resposta', jsonb_build_object('ok', true, 'para', d ->> 'para', 'cc', d ->> 'cc', 'cco', d ->> 'cco', 'anexos', foram,
+      'mensagem', 'E-mail enviado para ' || quem || ', com ' || foram || ' anexo(s).'
+        || case when foram < esperados then ' Atenção: ' || (esperados - foram) || ' documento(s) não foram (não consegui ler o arquivo).' else '' end));
+  end if;
+  update "Cobranca_Eventos" set "Tipo" = 'erro', "Quando" = now(), "Chave" = "Chave" || ':falhou:' || e.id,
+         "Texto" = 'Não consegui mandar a nota por e-mail (' || left(coalesce(nullif(cob_txt(p, 'erro'), ''), case when foram = 0 then 'o PDF da nota não foi lido' else 'erro' end), 150) || ').'
+   where id = e.id;
+  return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem',
+    'O e-mail não saiu: ' || coalesce(nullif(cob_txt(p, 'erro'), ''), case when foram = 0 then 'não consegui ler o PDF da nota' else 'erro no envio' end) || '. Nada foi enviado; tente de novo.'));
+end $$;
+
 -- Passo 1: trava (uma sincronização por vez), lista o que perguntar ao Asaas e reserva os lembretes da véspera.
 create or replace function cob_sinc_plano(p jsonb) returns jsonb language plpgsql as $$
 -- (p.hora só existe para o teste conferir o lembrete fora do horário; o fluxo nunca manda.)
@@ -944,6 +1064,8 @@ begin
       end loop;
     end if;
   end if;
+  lembretes := coalesce((select jsonb_agg(l || jsonb_build_object('destinos', cob_destinos(array(select jsonb_array_elements_text(l -> 'emails')))))
+                          from jsonb_array_elements(lembretes) l), '[]'::jsonb);
   return jsonb_build_object('ok', true, 'ocupado', false, 'chamadas', chamadas, 'lembretes', lembretes, 'hoje', hoje,
     'clientesConhecidos', coalesce((select jsonb_agg(jsonb_build_object('conta', coalesce(nullif("Asaas_Conta", ''), 'CNPJ 1'), 'asaas', "Asaas_Customer_Id"))
       from "Entidades_Cadastradas" where coalesce("Asaas_Customer_Id", '') <> ''), '[]'::jsonb));

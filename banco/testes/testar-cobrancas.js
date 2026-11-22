@@ -371,6 +371,24 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
     const prop = (await q(`select "Status", "Anotacao", "Sugestao_Ref" from "Conciliacao" where "Transacao_Id" like 'ft:ft_teste_proprio%'`))[0];
     confere('PIX do próprio dono: fica para classificar, já anotado, sem sugestão', prop && prop.Status === 'sem-par' && /contas próprias/.test(prop.Anotacao || '') && !prop.Sugestao_Ref, prop);
     await q(`delete from "Cobranca_Estado" where id in ('sinc:trava', 'emails-sistema')`);
+    // Para/Cc/Cco (22/11/2026): 1º Para, 2º Cc, 3º Cco, do 4º em diante no Cc.
+    const ds = (await q(`select cob_destinos(array['a@x.com','b@x.com','c@x.com','d@x.com']) as d, cob_destinos(array['a@x.com']) as u, cob_emails($1) as e`, [c1]))[0];
+    confere('destinos: Para, Cc, Cco e o 4º no Cc', ds.d.para === 'a@x.com' && ds.d.cc === 'b@x.com, d@x.com' && ds.d.cco === 'c@x.com' && ds.u.cc === '' && ds.u.cco === '', ds);
+    confere('e-mails do cliente na ordem do cadastro', JSON.stringify(ds.e) === JSON.stringify(['financeiro@example.com', 'outro@example.com']), ds.e);
+    // Nota por e-mail: a nota + só os documentos do mesmo cliente.
+    const docMeu = (await q(`insert into "Arquivos_Cliente" ("Cliente_Ref", "Cliente_Nome", "Tipo", "Titulo", "Data_Documento", "Emissor", "Origem", "Arquivo")
+        values ($1, 'TESTE COBRANCAS', 'laudo', 'TESTE laudo da caixa', $2, 'CNPJ 2', 'gerado', $3::jsonb) returning id`,
+      [c1, hoje, JSON.stringify([{ id: 'att' + require('crypto').randomBytes(16).toString('hex'), filename: 'laudo teste.pdf', type: 'application/pdf', size: 10 }])]))[0].id;
+    const docOutro = (await q(`insert into "Arquivos_Cliente" ("Cliente_Ref", "Cliente_Nome", "Tipo", "Titulo", "Data_Documento", "Emissor", "Origem", "Arquivo")
+        values ($1, 'TESTE OUTRO', 'laudo', 'TESTE laudo de outro cliente', $2, 'CNPJ 1', 'gerado', $3::jsonb) returning id`,
+      [c2, hoje, JSON.stringify([{ id: 'att' + require('crypto').randomBytes(16).toString('hex'), filename: 'outro.pdf', type: 'application/pdf', size: 10 }])]))[0].id;
+    ids.arquivos = (ids.arquivos || []).concat([docMeu, docOutro]);
+    const env = await fn('cob_enviar_nota', { notaId: notaE, documentos: [docMeu, docOutro], pedido: 'teste-' + Date.now() });
+    confere('nota por e-mail: a nota + o laudo do cliente (o de outro cliente fica de fora), Para/Cc certos',
+      env.email && env.email.anexos.length === 2 && env.email.anexos[0].nome === 'NFS-e 9007.pdf' && env.email.anexos[1].nome === 'laudo teste.pdf'
+      && env.email.para === 'financeiro@example.com' && env.email.cc === 'outro@example.com' && /NFS-e nº 9007/.test(env.email.assunto) && /TESTE laudo da caixa/.test(env.email.html), env);
+    const fe = await fn('cob_email_feito', { evento: env.email.evento, ok: false, erro: 'teste de falha', anexos: 2, esperados: 2 });
+    confere('falha no envio: avisa e deixa tentar de novo', fe.resposta.ok === false && /não saiu/.test(fe.resposta.mensagem), fe);
 
     // ---------- segurança ----------
     const inv = await fn('cob_acao', { acao: 'apagar-tudo' });

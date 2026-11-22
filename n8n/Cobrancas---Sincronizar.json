@@ -340,7 +340,7 @@
         660
       ],
       "parameters": {
-        "jsCode": "// E-mails ao cliente pelo sistema (22/11/2026): boleto criado, lembrete de véspera e aviso de atraso, com os PDFs.\nconst r = $('Plano').first().json.r || {};\nconst l = (r.lembretes || []).filter((x) => Array.isArray(x.emails) && x.emails.length);\nreturn l.length ? l.map((x) => ({ json: { evento: x.evento, tipo: x.tipo || 'vespera', para: x.emails.join(', '), quantos: x.emails.length,\n  assunto: x.assunto, html: x.html, anexos: Array.isArray(x.anexos) ? x.anexos : [] } })) : [{ json: { nada: true } }];"
+        "jsCode": "// E-mails ao cliente pelo sistema (22/11/2026): boleto criado, lembrete de véspera e aviso de atraso, com os PDFs.\nconst r = $('Plano').first().json.r || {};\nconst l = (r.lembretes || []).filter((x) => Array.isArray(x.emails) && x.emails.length);\nreturn l.length ? l.map((x) => ({ json: { evento: x.evento, tipo: x.tipo || 'vespera', para: x.destinos ? x.destinos.para : x.emails.join(', '), cc: x.destinos ? x.destinos.cc : '', cco: x.destinos ? x.destinos.cco : '', quantos: x.emails.length,\n  assunto: x.assunto, html: x.html, anexos: Array.isArray(x.anexos) ? x.anexos : [] } })) : [{ json: { nada: true } }];"
       }
     },
     {
@@ -396,7 +396,9 @@
         "html": "={{ $json.html }}",
         "options": {
           "appendAttribution": false,
-          "fileAttachments": "={{ Object.keys($binary || {}).join(',') }}"
+          "fileAttachments": "={{ Object.keys($binary || {}).join(',') }}",
+          "ccEmail": "={{ $json.cc || '' }}",
+          "bccEmail": "={{ $json.cco || '' }}"
         }
       },
       "credentials": {

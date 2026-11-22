@@ -107,7 +107,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "// Tudo chega como texto (o app manda formulário simples). Só passa o que tem o formato certo; o banco confere o resto.\nconst b = $('Recebe pedido do app').first().json.body || {};\nconst t = (v) => String(v ?? '').replace(/[\\u0000-\\u001f\\u007f]/g, ' ').trim();\nconst ACOES = ['painel', 'historico', 'preparar', 'criar', 'ligar-nota', 'registrar-nota', 'registrar-recibo', 'baixa', 'prorrogar', 'cancelar', 'conciliar', 'ignorar', 'incluir-antigas', 'sincronizar'];\nconst acao = ACOES.includes(t(b.acao)) ? t(b.acao) : '';\nconst REC = /^rec[A-Za-z0-9]{14}$/;\nconst GRUPO = /^[A-Za-z0-9-]{8,64}$/;\nconst id = (v) => (REC.test(t(v)) ? t(v) : '');\nconst data = (v) => (/^\\d{4}-\\d{2}-\\d{2}$/.test(t(v)) ? t(v) : '');\nconst num = (v) => { let s = t(v); if (s.includes(',')) s = s.replace(/\\./g, '').replace(',', '.'); return /^\\d{1,9}(\\.\\d{1,2})?$/.test(s) ? Number(s) : null; };\nconst lista = (v, f) => { try { const a = JSON.parse(t(v) || '[]'); return Array.isArray(a) ? a.map(f).filter(Boolean).slice(0, 60) : []; } catch (e) { return []; } };\nconst p = { acao };\nlet erro = '';\nif (!acao) erro = 'Ação inválida.';\nif (['historico', 'baixa', 'prorrogar', 'cancelar'].includes(acao)) { p.id = id(b.id); if (!p.id) erro = 'Cobrança inválida.'; }\nif (acao === 'preparar' || acao === 'criar') {\n  p.clienteId = id(b.clienteId); p.valor = num(b.valor); p.material = num(b.material) || 0;\n  p.parcelas = Math.max(1, Math.min(12, parseInt(t(b.parcelas), 10) || 1));\n  p.vencimentos = lista(b.vencimentos, data);\n  if (!p.clienteId) erro = 'Escolha o cliente.'; else if (!p.valor) erro = 'Confira o valor.';\n  if (acao === 'criar') {\n    p.grupo = GRUPO.test(t(b.grupo)) ? t(b.grupo) : '';\n    p.origem = ['nota', 'recibo'].includes(t(b.origem)) ? t(b.origem) : 'avulsa';\n    // Desde 21/11/2026 o boleto nasce da conta que a nota (ou o recibo) já criou no A receber.\n    if (t(b.recebimentoId)) { p.recebimentoId = id(b.recebimentoId); if (!erro && !p.recebimentoId) erro = 'Conta inválida.'; }\n    p.servico = t(b.servico).replace(/\\s+/g, ' ').slice(0, 300);\n    if (!erro && !p.grupo) erro = 'Pedido sem identificação: recarregue a página.';\n    if (!erro && !p.servico) erro = 'Escreva o serviço.';\n  }\n}\nif (acao === 'ligar-nota') { p.grupo = GRUPO.test(t(b.grupo)) ? t(b.grupo) : ''; p.notaId = id(b.notaId); if (!p.grupo || !p.notaId) erro = 'Faltou a nota ou o boleto.'; }\nif (acao === 'registrar-nota') { p.notaId = id(b.notaId); if (!p.notaId) erro = 'Nota inválida.'; }\nif (acao === 'registrar-recibo') { p.arquivoId = id(b.arquivoId); if (!p.arquivoId) erro = 'Recibo inválido.'; }\nif (acao === 'baixa') { p.data = data(b.data); p.valor = num(b.valor); p.forma = ['PIX', 'Boleto', 'Dinheiro', 'Transferência', 'Cartão'].includes(t(b.forma)) ? t(b.forma) : ''; if (!erro && !p.valor) erro = 'Falta o valor recebido.'; }\nif (acao === 'prorrogar') { p.vencimento = data(b.vencimento); if (!erro && !p.vencimento) erro = 'Escolha a data nova.'; }\nif (acao === 'conciliar') { p.conciliacaoId = id(b.conciliacaoId); p.id = id(b.id); if (!p.conciliacaoId || !p.id) erro = 'Escolha a cobrança desta entrada.'; }\nif (acao === 'ignorar') { p.conciliacaoId = id(b.conciliacaoId); p.texto = t(b.texto).replace(/\\s+/g, ' ').slice(0, 300); if (!p.conciliacaoId) erro = 'Entrada inválida.'; }\nif (acao === 'incluir-antigas') { p.receber = lista(b.receber, id); p.recebidas = lista(b.recebidas, id); if (!p.receber.length && !p.recebidas.length) erro = 'Escolha as notas.'; }\nreturn [{ json: { ok: !erro, erro, p } }];"
+        "jsCode": "// Tudo chega como texto (o app manda formulário simples). Só passa o que tem o formato certo; o banco confere o resto.\nconst b = $('Recebe pedido do app').first().json.body || {};\nconst t = (v) => String(v ?? '').replace(/[\\u0000-\\u001f\\u007f]/g, ' ').trim();\nconst ACOES = ['painel', 'historico', 'preparar', 'criar', 'ligar-nota', 'registrar-nota', 'registrar-recibo', 'baixa', 'prorrogar', 'cancelar', 'conciliar', 'ignorar', 'incluir-antigas', 'sincronizar', 'preparar-email', 'enviar-nota'];\nconst acao = ACOES.includes(t(b.acao)) ? t(b.acao) : '';\nconst REC = /^rec[A-Za-z0-9]{14}$/;\nconst GRUPO = /^[A-Za-z0-9-]{8,64}$/;\nconst id = (v) => (REC.test(t(v)) ? t(v) : '');\nconst data = (v) => (/^\\d{4}-\\d{2}-\\d{2}$/.test(t(v)) ? t(v) : '');\nconst num = (v) => { let s = t(v); if (s.includes(',')) s = s.replace(/\\./g, '').replace(',', '.'); return /^\\d{1,9}(\\.\\d{1,2})?$/.test(s) ? Number(s) : null; };\nconst lista = (v, f) => { try { const a = JSON.parse(t(v) || '[]'); return Array.isArray(a) ? a.map(f).filter(Boolean).slice(0, 60) : []; } catch (e) { return []; } };\nconst p = { acao };\nlet erro = '';\nif (!acao) erro = 'Ação inválida.';\nif (['historico', 'baixa', 'prorrogar', 'cancelar'].includes(acao)) { p.id = id(b.id); if (!p.id) erro = 'Cobrança inválida.'; }\nif (acao === 'preparar' || acao === 'criar') {\n  p.clienteId = id(b.clienteId); p.valor = num(b.valor); p.material = num(b.material) || 0;\n  p.parcelas = Math.max(1, Math.min(12, parseInt(t(b.parcelas), 10) || 1));\n  p.vencimentos = lista(b.vencimentos, data);\n  if (!p.clienteId) erro = 'Escolha o cliente.'; else if (!p.valor) erro = 'Confira o valor.';\n  if (acao === 'criar') {\n    p.grupo = GRUPO.test(t(b.grupo)) ? t(b.grupo) : '';\n    p.origem = ['nota', 'recibo'].includes(t(b.origem)) ? t(b.origem) : 'avulsa';\n    // Desde 21/11/2026 o boleto nasce da conta que a nota (ou o recibo) já criou no A receber.\n    if (t(b.recebimentoId)) { p.recebimentoId = id(b.recebimentoId); if (!erro && !p.recebimentoId) erro = 'Conta inválida.'; }\n    p.servico = t(b.servico).replace(/\\s+/g, ' ').slice(0, 300);\n    if (!erro && !p.grupo) erro = 'Pedido sem identificação: recarregue a página.';\n    if (!erro && !p.servico) erro = 'Escreva o serviço.';\n  }\n}\nif (acao === 'ligar-nota') { p.grupo = GRUPO.test(t(b.grupo)) ? t(b.grupo) : ''; p.notaId = id(b.notaId); if (!p.grupo || !p.notaId) erro = 'Faltou a nota ou o boleto.'; }\nif (acao === 'registrar-nota') { p.notaId = id(b.notaId); if (!p.notaId) erro = 'Nota inválida.'; }\nif (acao === 'registrar-recibo') { p.arquivoId = id(b.arquivoId); if (!p.arquivoId) erro = 'Recibo inválido.'; }\nif (acao === 'baixa') { p.data = data(b.data); p.valor = num(b.valor); p.forma = ['PIX', 'Boleto', 'Dinheiro', 'Transferência', 'Cartão'].includes(t(b.forma)) ? t(b.forma) : ''; if (!erro && !p.valor) erro = 'Falta o valor recebido.'; }\nif (acao === 'prorrogar') { p.vencimento = data(b.vencimento); if (!erro && !p.vencimento) erro = 'Escolha a data nova.'; }\nif (acao === 'conciliar') { p.conciliacaoId = id(b.conciliacaoId); p.id = id(b.id); if (!p.conciliacaoId || !p.id) erro = 'Escolha a cobrança desta entrada.'; }\nif (acao === 'ignorar') { p.conciliacaoId = id(b.conciliacaoId); p.texto = t(b.texto).replace(/\\s+/g, ' ').slice(0, 300); if (!p.conciliacaoId) erro = 'Entrada inválida.'; }\n// Nota por e-mail (22/11/2026): a nota e os documentos escolhidos da pasta do cliente.\nif (acao === 'preparar-email') { p.notaId = id(b.notaId); if (!p.notaId) erro = 'Nota inválida.'; }\nif (acao === 'enviar-nota') { p.notaId = id(b.notaId); p.documentos = lista(b.documentos, id).slice(0, 10); p.pedido = GRUPO.test(t(b.pedido)) ? t(b.pedido) : ''; if (!p.notaId) erro = 'Nota inválida.'; else if (!p.pedido) erro = 'Pedido sem identificação: recarregue a página.'; }\nif (acao === 'incluir-antigas') { p.receber = lista(b.receber, id); p.recebidas = lista(b.recebidas, id); if (!p.receber.length && !p.recebidas.length) erro = 'Escolha as notas.'; }\nreturn [{ json: { ok: !erro, erro, p } }];"
       }
     },
     {
@@ -633,6 +633,137 @@
           "waitForSubWorkflow": false
         }
       }
+    },
+    {
+      "id": "485c16b3-b02c-4047-9054-6a90f7e06ca2",
+      "name": "Tem e-mail?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        700
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4884aebc-2b31-401f-99df-fc22982f7746",
+              "leftValue": "={{ (($json.r || {}).email) && (($json.r || {}).email.evento) ? 'sim' : 'nao' }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "da8c8cbf-8651-4666-babf-7ab7046215f5",
+      "name": "Monta e-mail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        600
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: $json.r.email }];"
+      }
+    },
+    {
+      "id": "6e4dc4b8-0535-47af-bb62-2cc9fec88f5e",
+      "name": "Baixa anexos (e-mail)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        600
+      ],
+      "parameters": {
+        "jsCode": "// Baixa os PDFs (boleto no Asaas, nota ou recibo no sistema) para irem anexos. Só desses dois endereços e só PDF.\n// O que falhar fica de fora: o link do boleto vai sempre no texto do e-mail.\nconst OK = /^(https:\\/\\/[a-z0-9.-]*asaas\\.com\\/|http:\\/\\/localhost:5678\\/webhook\\/anexo\\?id=att[0-9a-f]{32}$)/;\nconst out = [];\nfor (const it of $input.all()) {\n  const binary = {};\n  let i = 0;\n  for (const a of (it.json.anexos || []).slice(0, 15)) {\n    if (!OK.test(String(a.url || ''))) continue;\n    try {\n      const b = Buffer.from(await this.helpers.httpRequest({ url: a.url, encoding: 'arraybuffer', timeout: 30000 }));\n      if (b.length < 100 || b.subarray(0, 4).toString() !== '%PDF') continue;\n      binary['anexo' + i] = await this.helpers.prepareBinaryData(b, String(a.nome || 'documento.pdf').replace(/[\\\\/:*?\"<>|]/g, '_'), 'application/pdf');\n      i++;\n    } catch (e) { /* fica de fora */ }\n  }\n  out.push({ json: { ...it.json, anexosOk: i }, binary });\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "526babe2-14ee-4b39-a625-bf1ab095b212",
+      "name": "Manda e-mail",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2200,
+        600
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "smtp": {
+          "id": "Nro05J2y8zTXUFXp",
+          "name": "Gmail - Recuperacao de senha (Solucoes Rapidas)"
+        }
+      },
+      "parameters": {
+        "fromEmail": "Soluções Rápidas <adm.solucoes.rapidas@gmail.com>",
+        "toEmail": "={{ $json.para }}",
+        "subject": "={{ $json.assunto }}",
+        "emailFormat": "html",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false,
+          "ccEmail": "={{ $json.cc || '' }}",
+          "bccEmail": "={{ $json.cco || '' }}",
+          "fileAttachments": "={{ Object.keys($binary || {}).join(',') }}"
+        }
+      },
+      "webhookId": "3ab25ea7-d84d-4ed0-aacc-c2db1d6da09c"
+    },
+    {
+      "id": "5c6a0662-469e-4ab9-9a12-6696434c700c",
+      "name": "Registra e-mail",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2420,
+        600
+      ],
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "postgres": {
+          "id": "TkRgR5fLjBCec0VE",
+          "name": "Banco local - n8n_app (cobrancas)"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select cob_email_feito($1::jsonb) as r",
+        "options": {
+          "queryReplacement": "={{ [ { evento: $('Monta e-mail').first().json.evento, ok: !$json.error, erro: $json.error ? String($json.error.message || 'erro').slice(0, 200) : '', anexos: $('Baixa anexos (e-mail)').first().json.anexosOk || 0, esperados: ($('Monta e-mail').first().json.anexos || []).length } ] }}"
+        }
+      }
+    },
+    {
+      "id": "c8d76f8d-e25d-42a9-ad2e-200742ebd25d",
+      "name": "Responde e-mail",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2640,
+        600
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify(($json.r || {}).resposta || { ok: false, mensagem: 'Sem resposta.' }) }}",
+        "options": {}
+      }
     }
   ],
   "connections": {
@@ -738,7 +869,7 @@
       "main": [
         [
           {
-            "node": "Tem chamadas?",
+            "node": "Tem e-mail?",
             "type": "main",
             "index": 0
           }
@@ -980,6 +1111,75 @@
           }
         ],
         []
+      ]
+    },
+    "Tem e-mail?": {
+      "main": [
+        [
+          {
+            "node": "Monta e-mail",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tem chamadas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta e-mail": {
+      "main": [
+        [
+          {
+            "node": "Baixa anexos (e-mail)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixa anexos (e-mail)": {
+      "main": [
+        [
+          {
+            "node": "Manda e-mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manda e-mail": {
+      "main": [
+        [
+          {
+            "node": "Registra e-mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registra e-mail": {
+      "main": [
+        [
+          {
+            "node": "Responde e-mail",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde erro do banco",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
