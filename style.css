@@ -8280,16 +8280,13 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
    pagar) | (limite do MEI + faturamento) | últimas notas; mais respiro entre os blocos.
    ===================================================================================================== */
 @media (min-width: 1280px) {
-  /* Todas as telas (22/11/2026, "faz nas outras abas tbm"): a mesma largura do Início. */
+  /* Todas as telas (22/11/2026, "faz nas outras abas tbm" e "ainda ta sobrando uma porrada de espaço"): a página
+     ocupa a largura toda que sobra ao lado do menu, em qualquer monitor (o dono usa um ultrawide de 3440px). */
   .page,
+  #page-inicio,
   #page-contatos,
   #page-veiculo {
-    max-width: 1640px;
-    padding: 32px 36px;
-  }
-
-  #page-inicio {
-    max-width: 1640px;
+    max-width: none;
     padding: 32px 36px;
   }
 
@@ -8527,5 +8524,188 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
   /* Digitando: o teclado sobe e a barra sairia por cima do campo. Some enquanto um campo está em uso. */
   body:has(input:focus, textarea:focus, select:focus) .barra-baixo {
     display: none;
+  }
+}
+
+/* =====================================================================================================
+   TELA LARGA DE VERDADE (22/11/2026, "ainda ta sobrando uma porrada de espaço vazio na tela do pc"): o dono usa
+   um monitor ultrawide (3440px). A página já ocupa a largura toda (bloco "INÍCIO NO COMPUTADOR"); aqui cada tela
+   ganha mais colunas para o espaço ser usado com sentido, sem campo nem linha esticados de ponta a ponta.
+   Tudo em "min-width": celular e tablet não mudam.
+   ===================================================================================================== */
+
+/* PDFs e Notas: abaixo de 1800px tudo continua um embaixo do outro; a prévia do PDF só existe na tela larga. */
+.doc-previa {
+  display: none;
+}
+
+@media (min-width: 1280px) {
+  /* "Ir direto para": os atalhos se esticam e enchem a linha (antes sobrava o fim dela vazio). */
+  #page-inicio .inicio-atalhos {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  }
+}
+
+@media (min-width: 1600px) {
+  /* Cadastros de contatos, administradoras, sindicaturas e e-mails: de uma faixa por linha para uma grade de cartões. */
+  .contatos-lista {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
+    align-items: start;
+  }
+}
+
+@media (min-width: 1800px) {
+  /* A receber: três colunas — boletos por dia + total a receber | notas e recibos sem boleto | todas as cobranças.
+     A última linha é flexível (1fr): as colunas compridas crescem para baixo sem abrir vão entre os cartões da 1ª. */
+  #cob-conteudo:not(.hidden) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr);
+    grid-template-rows: auto auto auto 1fr;
+    grid-template-areas:
+      "asaas asaas asaas"
+      "fila fila fila"
+      "dias sem lista"
+      "periodo sem lista";
+    column-gap: 18px;
+    align-items: start;
+  }
+
+  #cob-conteudo .cob-grade {
+    display: contents;
+  }
+
+  #cob-conteudo #cob-asaas { grid-area: asaas; }
+  #cob-conteudo #cob-fila { grid-area: fila; }
+  #cob-conteudo #cob-dias { grid-area: dias; margin-bottom: 18px; }
+  #cob-conteudo #cob-sem-boleto { grid-area: sem; }
+  #cob-conteudo #cob-periodo { grid-area: periodo; grid-column: auto; }
+  #cob-conteudo #cob-lista-bloco { grid-area: lista; }
+
+  /* PDFs: o formulário e, ao lado, a prévia do PDF (folha A4 inteira à vista, acompanhando a rolagem). */
+  .doc-lado-a-lado {
+    display: grid;
+    grid-template-columns: minmax(0, 1200px) min(46%, calc((100vh - 150px) * 0.72));
+    justify-content: center;
+    gap: 36px;
+    align-items: start;
+  }
+
+  .doc-lado-a-lado #form-documento {
+    max-width: none;
+    margin: 0;
+  }
+
+  .doc-previa {
+    display: block;
+    position: sticky;
+    top: 96px;
+  }
+
+  .doc-previa-cab {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .doc-previa iframe {
+    display: block;
+    width: 100%;
+    aspect-ratio: 210 / 297;
+    border: 1px solid var(--borda);
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  /* Notas fiscais: formulário (e a conferência) à esquerda, notas emitidas à direita. */
+  .nf-lado-a-lado {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 36px;
+    align-items: start;
+  }
+
+  .nf-lado-a-lado #form-nota {
+    max-width: none;
+    margin: 0;
+  }
+
+  .nf-col-lista .nf-lista-titulo {
+    margin-top: 0;
+  }
+
+  /* Cadastro de cliente (Adicionar): as molduras lado a lado em vez de uma embaixo da outra. */
+  #form-entidade:not(.hidden) {
+    max-width: none;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 18px;
+    align-items: start;
+  }
+
+  #form-entidade > .lado-a-lado {
+    grid-column: span 2;
+  }
+}
+
+@media (min-width: 2000px) {
+  /* Veículo: o custo do km numa coluna e os cartões (combustível, pneus, manutenção, IPVA, seguro) em duas. */
+  .veiculo-custos-topo {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+
+  .veiculo-custos-coluna {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+@media (min-width: 2200px) {
+  /* Início: os cinco cartões numa linha só (agenda | contas a pagar | limite do MEI | faturamento | últimas notas). */
+  #page-inicio .painel-grade {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-areas: "hoje contas mei fat notas";
+  }
+
+  /* Chamados: a lista e o "Criar chamado" lado a lado, sem precisar trocar de aba. */
+  #page-chamados:not(.hidden) {
+    display: grid;
+    grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr);
+    column-gap: 36px;
+    align-items: start;
+  }
+
+  #page-chamados > * {
+    grid-column: 1 / -1;
+  }
+
+  #page-chamados > .subtabs {
+    display: none;
+  }
+
+  #page-chamados > #subpage-ch-consultar {
+    grid-column: 1;
+  }
+
+  #page-chamados > #subpage-ch-criar {
+    grid-column: 2;
+  }
+
+  #page-chamados > #subpage-ch-consultar.hidden,
+  #page-chamados > #subpage-ch-criar.hidden {
+    display: block !important;
+  }
+
+  #page-chamados > #subpage-ch-criar::before {
+    content: "Novo chamado";
+    display: block;
+    margin: 0 0 12px;
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+
+  #page-chamados #chamado-form {
+    max-width: none;
   }
 }

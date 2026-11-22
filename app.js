@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.22k";
+const APP_VERSION = "2026.11.22l";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -11929,6 +11929,46 @@ formDocumento.addEventListener("submit", async (evento) => {
     docGerar.disabled = false;
   }
 });
+
+// ----- Prévia do PDF ao lado do formulário (tela larga, 22/11/2026) -----
+// O mesmo gerador do "Gerar PDF", só que sem baixar nem guardar nada: a prévia é refeita 0,7 s depois da última
+// mudança no formulário. Só trabalha quando a prévia está à vista (tela de 1800px ou mais, aba PDFs aberta).
+const docPrevia = document.getElementById("doc-previa");
+const docPreviaQuadro = document.getElementById("doc-previa-quadro");
+const docPreviaStatus = document.getElementById("doc-previa-status");
+let docPreviaUrl = "";
+let docPreviaTimer = null;
+let docPreviaVez = 0;
+const docPreviaVisivel = () => docPrevia.offsetParent !== null;
+async function docAtualizarPrevia() {
+  if (!docPreviaVisivel()) return;
+  const vez = ++docPreviaVez;
+  try {
+    const tipo = tipoDocumento();
+    const dados = dadosDoDocumento();
+    try { dados.emissor = await emissorDoDocumento(); } catch (err) { dados.emissor = null; }
+    const logos = await carregarGeradorPdf();
+    if (vez !== docPreviaVez) return;
+    const { doc } = DocumentosPdf.gerar(tipo, dados, logos);
+    const url = URL.createObjectURL(doc.output("blob"));
+    if (vez !== docPreviaVez) { URL.revokeObjectURL(url); return; }
+    const antiga = docPreviaUrl;
+    docPreviaUrl = url;
+    docPreviaQuadro.src = url + "#toolbar=0&navpanes=0&view=FitH";
+    if (antiga) setTimeout(() => URL.revokeObjectURL(antiga), 3000);
+    docPreviaStatus.textContent = "atualiza enquanto você preenche";
+  } catch (err) {
+    docPreviaStatus.textContent = "não consegui montar a prévia agora (o Gerar PDF continua valendo)";
+  }
+}
+function docPreviaAgendar() {
+  clearTimeout(docPreviaTimer);
+  docPreviaTimer = setTimeout(docAtualizarPrevia, 700);
+}
+["input", "change", "click"].forEach((ev) => formDocumento.addEventListener(ev, docPreviaAgendar));
+document.getElementById("doc-tipo").addEventListener("click", docPreviaAgendar);
+// Apareceu (abriu a aba, alargou a janela): monta a prévia.
+if (typeof ResizeObserver === "function") new ResizeObserver(() => { if (docPreviaVisivel()) docPreviaAgendar(); }).observe(docPrevia);
 
 // Taxa do boleto no recibo (22/11/2026): cliente com "Gera boletos" ganha a taxa de UM boleto somada ao valor
 // (à vista, o padrão). Parcelado: desmarque e ponha o valor à mão, se quiser somar mais taxas.

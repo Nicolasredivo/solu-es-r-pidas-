@@ -2091,6 +2091,9 @@
           <button type="button" class="opcao" data-valor="laudo">Laudo</button>
         </div>
 
+        <!-- Tela larga (22/11/2026): o formulário e, ao lado, a prévia do PDF que se atualiza enquanto você preenche.
+             Abaixo de 1800px a prévia não aparece (fica igual a antes). -->
+        <div class="doc-lado-a-lado">
         <form id="form-documento" novalidate autocomplete="off">
           <label for="doc-cliente-busca">Puxar dados de um cliente</label>
           <input type="text" id="doc-cliente-busca" placeholder="Buscar cliente (opcional)" />
@@ -2187,6 +2190,11 @@
           <button type="button" id="doc-limpar" class="botao-secundario doc-limpar">Limpar campos</button>
           <div id="doc-status" class="status" role="status"></div>
         </form>
+        <aside id="doc-previa" class="doc-previa" aria-label="Prévia do PDF">
+          <div class="doc-previa-cab"><strong>Prévia do PDF</strong><span class="doc-hint" id="doc-previa-status">atualiza enquanto você preenche</span></div>
+          <iframe id="doc-previa-quadro" title="Prévia do PDF" tabindex="-1"></iframe>
+        </aside>
+        </div>
 
         <!-- Uma linha de item do orçamento. -->
         <template id="modelo-doc-item">
@@ -2209,6 +2217,9 @@
         <p class="subtitle">Emite a NFS-e direto no governo, com o certificado digital, sem abrir o portal.</p>
         <div id="nf-aviso-testes" class="aviso-caixa hidden"><strong>Ambiente de testes</strong>As notas emitidas aqui não têm validade.</div>
 
+        <!-- Tela larga (22/11/2026): formulário e conferência à esquerda, notas emitidas à direita. -->
+        <div class="nf-lado-a-lado">
+        <div class="nf-col-form">
         <form id="form-nota" novalidate autocomplete="off">
           <label for="nf-cliente-busca">Cliente</label>
           <input type="text" id="nf-cliente-busca" placeholder="Buscar cliente cadastrado" />
@@ -2293,10 +2304,14 @@
         </form>
 
         <div id="nf-conferencia" class="hidden"></div>
+        </div>
 
+        <div class="nf-col-lista">
         <h2 class="nf-lista-titulo">Notas emitidas pelo sistema</h2>
         <p id="nf-lista-status" class="placeholder-text"></p>
         <ul id="nf-lista" class="nf-lista"></ul>
+        </div>
+        </div>
       </div>
 
         <!-- Arquivos por cliente (13/11/2026): lista de clientes, pastas de cada um e visualizar. -->
