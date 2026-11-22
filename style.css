@@ -8360,3 +8360,172 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
     gap: 14px;
   }
 }
+
+/* =====================================================================================================
+   22/11/2026 — três técnicas escolhidas pelo dono:
+   1) Letra que cresce com a tela no computador (clamp) + texto cinza um pouco mais claro (contraste).
+   2) Barra de baixo no celular com as telas mais usadas e o "+" de novo chamado (Bottom Tab Bar + FAB).
+   3) Aviso de servidor fora do ar, em qualquer tela, dizendo o que fazer (Offline State).
+   ===================================================================================================== */
+
+/* 1) Quase tudo no sistema é medido em rem: mudar a letra-base aumenta o texto todo junto, na proporção.
+      16px até 1280px de largura (celular e notebook pequeno ficam como estão); ~18px em 1920; teto de 20px. */
+@media (min-width: 1280px) {
+  html {
+    font-size: clamp(16px, 0.25vw + 13px, 20px);
+  }
+
+  :root {
+    --muted: #aab0c4;
+    /* O menu cresce junto com a letra (senão "MANUTENÇÃO PREDIAL" quebra em duas linhas). */
+    --largura-menu: 16.5rem;
+  }
+}
+
+/* 3) Aviso do servidor: ocupa a linha de baixo da barra do topo (fica grudado nela ao rolar). */
+.topbar {
+  flex-wrap: wrap;
+}
+
+.aviso-servidor {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(229, 72, 77, 0.45);
+  background: rgba(229, 72, 77, 0.12);
+  color: var(--text);
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.aviso-servidor.hidden {
+  display: none;
+}
+
+.aviso-servidor svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--error);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.aviso-servidor span {
+  flex: 1;
+}
+
+.aviso-servidor button {
+  flex: none;
+  width: auto;
+  padding: 6px 12px;
+}
+
+/* 2) Barra de baixo: só no celular (abaixo de 768px, onde o menu vira ☰). */
+.barra-baixo {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .barra-baixo {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: end;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    background: rgba(22, 26, 46, 0.92);
+    -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    backdrop-filter: blur(14px) saturate(1.3);
+    border-top: 1px solid var(--borda-suave);
+  }
+
+  .barra-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    width: auto;
+    min-height: 52px;
+    padding: 6px 2px;
+    border: none;
+    border-radius: 12px;
+    background: none;
+    box-shadow: none;
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .barra-item.hidden {
+    display: none;
+  }
+
+  .barra-item .sidebar-icone {
+    width: 22px;
+    height: 22px;
+    margin: 0;
+  }
+
+  .barra-item.active {
+    color: var(--text);
+    background: rgba(91, 141, 239, 0.14);
+  }
+
+  .barra-item.active .sidebar-icone {
+    color: var(--accent);
+    stroke: var(--accent);
+  }
+
+  /* O "+" no meio, maior e destacado (FAB): a ação mais comum do dia. */
+  .barra-mais {
+    justify-self: center;
+    width: 54px;
+    height: 54px;
+    margin-bottom: 4px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--grad-accent);
+    box-shadow: 0 8px 20px -6px rgba(91, 141, 239, 0.7);
+    display: grid;
+    place-items: center;
+  }
+
+  .barra-mais svg {
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: #fff;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+  }
+
+  /* Espaço no fim de cada tela para nada ficar escondido atrás da barra; avisos e o sino sobem junto. */
+  .main-content {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .toast {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .lembrete-balao,
+  .lembrete-pill {
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Digitando: o teclado sobe e a barra sairia por cima do campo. Some enquanto um campo está em uso. */
+  body:has(input:focus, textarea:focus, select:focus) .barra-baixo {
+    display: none;
+  }
+}

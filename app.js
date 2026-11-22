@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.22j";
+const APP_VERSION = "2026.11.22k";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -5636,7 +5636,56 @@ function marcarConexao(ok) {
   conexaoBox.title = online
     ? "O app está falando com o n8n"
     : "Sem resposta do n8n — confira se ele e o túnel estão ligados";
+  // Aviso claro do que fazer (22/11/2026): sem internet no aparelho, ou o servidor do PC sem responder.
+  document.getElementById("aviso-servidor").classList.toggle("hidden", online);
+  if (!online) {
+    document.getElementById("aviso-servidor-texto").textContent = !navigator.onLine
+      ? "Sem internet neste aparelho. Os números na tela podem estar desatualizados."
+      : "O servidor do PC não está respondendo. Se o computador estiver ligado, abra o atalho \"Servidor n8n\". Os números na tela podem estar desatualizados.";
+  }
 }
+
+const avisoServidor = document.getElementById("aviso-servidor");
+// "Tentar de novo": um pedido leve; se o servidor respondeu, recarrega a tela para tudo vir atualizado.
+async function servidorTentarDeNovo() {
+  const botao = document.getElementById("aviso-servidor-tentar");
+  botao.disabled = true;
+  botao.textContent = "Tentando...";
+  try {
+    await fetchN8n("cobrancas", { acao: "painel" });
+    location.reload();
+  } catch (err) {
+    marcarConexao(false);
+  } finally {
+    botao.disabled = false;
+    botao.textContent = "Tentar de novo";
+  }
+}
+document.getElementById("aviso-servidor-tentar").addEventListener("click", servidorTentarDeNovo);
+// A internet voltou: tenta sozinho uma vez.
+window.addEventListener("online", () => { if (!avisoServidor.classList.contains("hidden")) servidorTentarDeNovo(); });
+
+// ----- Barra de baixo no celular (22/11/2026) -----
+// Mesmo toque do menu (com o aviso de "salvar antes de sair?" que ele já tem); os ícones são os do próprio menu.
+// Some o que o menu esconde (permissão) e acende a tela aberta.
+const barraBaixo = document.getElementById("barra-baixo");
+const barraItemDoMenu = (b) => document.querySelector(`.sidebar-item[data-page="${b.dataset.ir}"]`);
+barraBaixo.querySelectorAll("[data-ir]").forEach((b) => {
+  const item = barraItemDoMenu(b);
+  const icone = item && item.querySelector(".sidebar-icone");
+  if (icone) b.prepend(icone.cloneNode(true));
+  b.addEventListener("click", () => { if (item) item.click(); });
+});
+document.getElementById("barra-novo-chamado").addEventListener("click", () => painelAcao("novo-chamado"));
+function barraSincronizar() {
+  barraBaixo.querySelectorAll("[data-ir]").forEach((b) => {
+    const item = barraItemDoMenu(b);
+    b.classList.toggle("active", Boolean(item) && item.classList.contains("active"));
+    b.classList.toggle("hidden", !item || item.classList.contains("hidden"));
+  });
+}
+new MutationObserver(barraSincronizar).observe(document.getElementById("sidebar"), { subtree: true, attributes: true, attributeFilter: ["class"] });
+barraSincronizar();
 
 // Ficar sem internet é motivo suficiente para avisar, sem esperar uma chamada
 // falhar. Voltar a ter internet não garante que o n8n subiu, então a volta ao

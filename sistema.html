@@ -32,6 +32,12 @@
         <span class="conexao-ponto"></span>
         <span class="conexao-texto">conectado</span>
       </span>
+      <!-- Servidor fora (22/11/2026): aviso claro, em qualquer tela, do que fazer. Some sozinho quando volta. -->
+      <div id="aviso-servidor" class="aviso-servidor hidden" role="status">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17v.5"/></svg>
+        <span id="aviso-servidor-texto"></span>
+        <button type="button" id="aviso-servidor-tentar" class="botao-secundario">Tentar de novo</button>
+      </div>
     </div>
 
     <!-- Atendimento em andamento: visível em qualquer aba, um toque volta pra
@@ -136,6 +142,16 @@
         </button>
         <p id="versao-app" class="versao-app"></p>
       </div>
+    </nav>
+
+    <!-- Barra de baixo no celular (22/11/2026): as telas mais usadas a um toque e o "+" de novo chamado no meio.
+         Só faz o mesmo toque do menu; no computador não aparece. Os ícones vêm do menu (app.js). -->
+    <nav id="barra-baixo" class="barra-baixo" aria-label="Telas principais">
+      <button type="button" class="barra-item" data-ir="inicio"><span>Início</span></button>
+      <button type="button" class="barra-item" data-ir="chamados"><span>Chamados</span></button>
+      <button type="button" class="barra-mais" id="barra-novo-chamado" aria-label="Novo chamado"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button type="button" class="barra-item" data-ir="agenda"><span>Agenda</span></button>
+      <button type="button" class="barra-item" data-ir="financeiro"><span>Financeiro</span></button>
     </nav>
 
     <main class="main-content">
