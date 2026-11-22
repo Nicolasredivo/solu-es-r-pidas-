@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.21a";
+const APP_VERSION = "2026.11.22a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -11452,6 +11452,7 @@ docCampos.cnpjCliente.addEventListener("input", () => {
 
 function mostrarCamposDoTipo() {
   const tipo = tipoDocumento();
+  docAtualizarTaxa();
   formDocumento.querySelectorAll("[data-tipos]").forEach((bloco) => {
     bloco.classList.toggle("hidden", !bloco.dataset.tipos.split(" ").includes(tipo));
   });
@@ -11637,6 +11638,7 @@ function codigoEmissorDoDocumento() {
 }
 function atualizarEmissorDoDocumento() {
   docEmissor.textContent = codigoEmissorDoDocumento();
+  docAtualizarTaxa(); // muda de cliente: a taxa do boleto no recibo vale (ou não) e pode ser outra
 }
 
 // Dados do CNPJ escolhido no formato do PDF. CNPJ 1 = null (o gerador já sabe os dados de sempre, do Inter) até a
@@ -11689,7 +11691,7 @@ function dadosDoDocumento() {
     caixa: tipoDocumento() === "laudo" && laudoParaEmpresa() && texto(docCampos.caixa) ? (/^(da|do|de|das|dos)\s/i.test(texto(docCampos.caixa)) ? texto(docCampos.caixa) : "da " + texto(docCampos.caixa)) : "",
     solicitante: texto(docCampos.solicitante),
     endereco: texto(docCampos.endereco),
-    valor: valorDoCampo(docCampos.valor),
+    valor: docValorComTaxa(),
     itens: itensDoDocumento(),
     validade: texto(docCampos.validade),
     semValidade: docCampos.semValidade.checked,
@@ -11878,6 +11880,32 @@ formDocumento.addEventListener("submit", async (evento) => {
     docGerar.disabled = false;
   }
 });
+
+// Taxa do boleto no recibo (22/11/2026): cliente com "Gera boletos" ganha a taxa de UM boleto somada ao valor
+// (à vista, o padrão). Parcelado: desmarque e ponha o valor à mão, se quiser somar mais taxas.
+// (Elementos lidos na hora: estas funções também rodam na abertura da tela, antes desta linha.)
+function docTaxaVale() {
+  const cli = docClienteId && cadastros.find((c) => c.id === docClienteId);
+  return tipoDocumento() === "recibo" && Boolean(cli && cli.geraBoleto);
+}
+function docAtualizarTaxa() {
+  const linha = document.getElementById("doc-taxa-linha");
+  if (!linha) return;
+  const vale = docTaxaVale();
+  linha.classList.toggle("hidden", !vale);
+  if (!vale) return;
+  const t = taxaBoletoDoCliente(docClienteId);
+  const v = valorDoCampo(docCampos.valor);
+  document.getElementById("doc-taxa-texto").textContent =
+    `Somar a taxa do boleto (${dinheiro(t)})${v > 0 && document.getElementById("doc-taxa").checked ? ` · o recibo sai com ${dinheiro(v + t)}` : ""}`;
+}
+function docValorComTaxa() {
+  const v = valorDoCampo(docCampos.valor);
+  if (!(v > 0) || !docTaxaVale() || !document.getElementById("doc-taxa").checked) return v;
+  return Math.round((v + taxaBoletoDoCliente(docClienteId)) * 100) / 100;
+}
+document.getElementById("doc-taxa").addEventListener("change", docAtualizarTaxa);
+docCampos.valor.addEventListener("input", docAtualizarTaxa);
 
 // Recibo antes do boleto (regra do dono, 21/11/2026): o recibo entra no A receber na hora e, se o cliente tem
 // "Gera boletos", já abre o "Gerar boleto" desta conta ("Referente ao recibo de <data>"). Falhar aqui não atrapalha
@@ -13253,6 +13281,8 @@ const nfBoleto = {
   dica: document.getElementById("nf-boleto-dica"),
   lista: document.getElementById("nf-boleto-lista"),
   desligado: document.getElementById("nf-boleto-desligado"),
+  taxa: document.getElementById("nf-boleto-taxa"),
+  taxaTexto: document.getElementById("nf-boleto-taxa-texto"),
 };
 // Identificação do pedido de boleto: a mesma em toda nova tentativa, então uma queda de internet no meio nunca cria
 // boleto em dobro (o servidor devolve o que já existe). Zera depois que nota e boleto saem.
@@ -13274,8 +13304,37 @@ function nfBoletoPixDaConta() {
   const estado = typeof cobDados !== "undefined" && cobDados && cobDados.contas && cobDados.contas[conta];
   return estado && estado.pix !== undefined ? Boolean(estado.pix) : null;
 }
+// Taxa do boleto somada ao valor (pedido do dono, 22/11/2026): o valor digitado é o do serviço; com boleto, entra a taxa
+// de cada boleto da conta do cliente (o Asaas informa todo dia; sem a leitura, R$ 1,99). Na nota ela fica dentro do
+// total (e da mão de obra), sem linha própria; só o dono vê a conta, na conferência.
+const TAXA_BOLETO_PADRAO = 1.99;
+let nfTaxasPedidas = false;
+function taxaBoletoDoCliente(clienteId) {
+  const c = clienteId && cadastros.find((x) => x.id === clienteId);
+  const conta = (c && c.atendidoPor) || "CNPJ 1";
+  const estado = typeof cobDados !== "undefined" && cobDados && cobDados.contas && cobDados.contas[conta];
+  const v = estado && estado.taxaBoleto != null ? Number(estado.taxaBoleto) : NaN;
+  if (!(v >= 0) && !nfTaxasPedidas && typeof cobCarregar === "function") {
+    // Lê as taxas uma vez (sem conferir com o Asaas) e redesenha o que depende delas.
+    nfTaxasPedidas = true;
+    cobCarregar({ sincronizar: false }).then(() => { nfBoletoDesenhar(); nfAtualizarPrevia(); docAtualizarTaxa(); }).catch(() => {});
+  }
+  return v >= 0 ? v : TAXA_BOLETO_PADRAO;
+}
+function nfBoletoQuantos() {
+  return escolhaDoGrupo(nfBoleto.forma) === "parcelado" ? Number(nfBoleto.parcelas.value) || 2 : 1;
+}
+function nfTaxaEmbutida() {
+  if (!nfBoletoAtivo() || !nfBoleto.taxa.checked) return 0;
+  return Math.round(nfBoletoQuantos() * taxaBoletoDoCliente(nfCliente && nfCliente.id) * 100) / 100;
+}
+// Valor da nota: o do serviço + a taxa do boleto (quando somada).
+function nfValorTotal() {
+  const v = valorDoCampo(nfCampos.valor);
+  return v > 0 ? Math.round((v + nfTaxaEmbutida()) * 100) / 100 : v;
+}
 function nfBoletoPlano() {
-  const total = valorDoCampo(nfCampos.valor);
+  const total = nfValorTotal();
   const n = escolhaDoGrupo(nfBoleto.forma) === "parcelado" ? Number(nfBoleto.parcelas.value) || 2 : 1;
   const primeiro = nfBoleto.venc.value || cobDiaUtil(cobSomaDias(hojeISO(), 7));
   const vencimentos = [];
@@ -13286,15 +13345,19 @@ function nfBoletoAssinatura(plano) {
   return JSON.stringify([nfCliente && nfCliente.id, Number(plano.total || 0).toFixed(2), plano.vencimentos]);
 }
 // Fim da descrição da nota de cliente com boleto (ciclo do dono desde 21/11/2026: a nota sai ANTES do boleto, então
-// não leva link): o aviso do boleto + os dados e a chave PIX da conta do CNPJ do cliente.
+// não leva link). Desde 22/11/2026 (dono): sem a chave PIX, só "boleto bancário" + os dados da conta do Asaas.
+function nfContaSemPix() {
+  return nfPagamentoTexto().replace(/\s+ou chave PIX.*$/i, "").replace(/^Dados para pagamento - /, "Dados da conta: ");
+}
 function nfBoletoTexto(plano) {
   const c = nfCliente && cadastros.find((x) => x.id === nfCliente.id);
   const envio = c && String(c.emails || "").trim() ? "enviado por e-mail" : "enviado pelo WhatsApp";
   const datas = plano.vencimentos.map(dataBonita);
   const aviso = plano.n === 1
-    ? `Pagamento por boleto (vence ${datas[0]}), ${envio}, ou PIX/transferência.`
-    : `Pagamento em ${plano.n} boletos (vencimentos ${datas.slice(0, -1).join(", ")} e ${datas[datas.length - 1]}), ${envio.replace("enviado", "enviados")}.`;
-  return [aviso, nfPagamentoTexto()].filter(Boolean).join(" ");
+    ? `Pagamento por boleto bancário (vence ${datas[0]}), ${envio}.`
+    : `Pagamento em ${plano.n} boletos bancários (vencimentos ${datas.slice(0, -1).join(", ")} e ${datas[datas.length - 1]}), ${envio.replace("enviado", "enviados")}.`;
+  const conta = nfContaSemPix();
+  return [aviso, conta ? conta + "." : ""].filter(Boolean).join(" ");
 }
 function nfBoletoDesenhar() {
   const mostrar = nfBoletoDoCliente();
@@ -13315,8 +13378,10 @@ function nfBoletoDesenhar() {
   dicas.push(nfBoletoPixDaConta() === false
     ? "Sai sem PIX por enquanto: a chave PIX desta conta ainda não está pronta no Asaas (quando ficar, entra sozinha)."
     : "Multa de 2% e juros de 1% ao mês depois do vencimento; dá para pagar até 30 dias depois.");
-  dicas.push("O cliente recebe o boleto por e-mail na hora, um lembrete 1 dia antes e, se atrasar, um aviso por dia.");
+  dicas.push("O sistema manda ao cliente, do e-mail adm, o boleto e a nota na hora, um lembrete 1 dia antes e, se atrasar, um aviso a cada 3 dias.");
   nfBoleto.dica.textContent = dicas.join(" ");
+  const taxaUm = taxaBoletoDoCliente(nfCliente && nfCliente.id);
+  nfBoleto.taxaTexto.textContent = `Somar a taxa do boleto ao valor da nota (${nfReais(taxaUm)}${plano.n > 1 ? " por boleto, " + nfReais(nfTaxaEmbutida() || plano.n * taxaUm) + " no total" : ""})`;
   nfBoleto.lista.innerHTML = "";
   if (plano.total > 0) {
     plano.vencimentos.forEach((v, i) => {
@@ -13426,7 +13491,7 @@ function nfMostrarStatus(tipo, mensagem) {
 function nfDescricao(pagamento) {
   const servico = nfCampos.servico.value.trim().replace(/\s+/g, " ");
   const frase = servico && !/[.!?]$/.test(servico) ? servico + "." : servico;
-  const total = valorDoCampo(nfCampos.valor);
+  const total = nfValorTotal();
   const tipo = escolhaDoGrupo(nfTipoValor);
   let valores = "";
   if (total > 0) {
@@ -13520,6 +13585,7 @@ document.getElementById("nf-cliente-tirar").addEventListener("click", () => {
   nfCampos.busca.focus();
 });
 ligarMascaraDinheiro(nfCampos.valor);
+nfBoleto.taxa.addEventListener("change", () => { nfDesfazerConferencia(); nfBoletoDesenhar(); nfAtualizarPrevia(); });
 ligarMascaraDinheiro(nfCampos.material);
 configurarGrupo(nfTipoValor, () => {
   document.getElementById("nf-material-bloco").classList.toggle("hidden", escolhaDoGrupo(nfTipoValor) !== "separado");
@@ -13644,7 +13710,7 @@ function nfQuadroEmitida(nota, ambiente) {
 async function nfConferir(evento) {
   evento.preventDefault();
   if (nfEnviando) return;
-  const total = valorDoCampo(nfCampos.valor);
+  const total = nfValorTotal();
   const material = valorDoCampo(nfCampos.material);
   const descricao = nfDescricao();
   let erro = "";
@@ -13690,7 +13756,8 @@ async function nfConferir(evento) {
     return;
   }
   nfMostrarStatus("", "");
-  nfMostrarConferencia(r, pedido, comBoleto ? { rb, plano, material: escolhaDoGrupo(nfTipoValor) === "separado" ? material : 0 } : null);
+  nfMostrarConferencia(r, pedido, comBoleto ? { rb, plano, material: escolhaDoGrupo(nfTipoValor) === "separado" ? material : 0,
+    taxa: nfTaxaEmbutida(), servico: valorDoCampo(nfCampos.valor) } : null);
 }
 
 function nfMostrarConferencia(r, pedido, boleto) {
@@ -13732,10 +13799,12 @@ function nfMostrarConferencia(r, pedido, boleto) {
       `${nfReais(Number(p.valor))} · vence ${cobDiaCurto(String(p.vencimento))}/${String(p.vencimento).slice(0, 4)}`)));
     const emails = (rb.cliente && rb.cliente.emails) || [];
     caixa.append(
-      nfLinha("E-mails do boleto", emails.length ? `${emails.join(", ")} (o boleto na hora, um lembrete 1 dia antes e, se atrasar, um aviso por dia)` : "Cliente sem e-mail: mande o link pelo WhatsApp"),
+      nfLinha("E-mails do boleto", emails.length ? `${emails.join(", ")} (pelo sistema, do e-mail adm: boleto e nota anexos na hora, lembrete 1 dia antes e, se atrasar, um aviso a cada 3 dias)` : "Cliente sem e-mail: mande o link pelo WhatsApp"),
       nfLinha("Descrição no boleto", "Referente à NFS-e nº (o desta nota) e o serviço; o boleto sai logo depois da nota"),
       nfLinha("Regras", "Multa de 2% e juros de 1% ao mês depois do vencimento; dá para pagar até 30 dias depois"),
-      nfLinha("Taxa do Asaas", conta.taxaBoleto != null ? `${nfReais(Number(conta.taxaBoleto))} por boleto pago, mais ${nfReais(Number(conta.taxaAviso || 0.99))} do aviso` : "Só se for pago"));
+      nfLinha("Taxa do boleto", boleto.taxa > 0
+        ? `${nfReais(boleto.servico)} do serviço + ${nfReais(boleto.taxa)} da taxa${plano.n > 1 ? ` (${plano.n} boletos)` : ""} = ${nfReais(boleto.servico + boleto.taxa)} na nota (só você vê esta conta)`
+        : `Não somada: ${conta.taxaBoleto != null ? nfReais(Number(conta.taxaBoleto)) + " por boleto pago" : "cobrada só se for pago"}, descontada do que entrar`));
     if (rb.problemas && rb.problemas.length) {
       const p = document.createElement("div");
       p.className = "status show error";
@@ -16230,7 +16299,7 @@ function cobValorHoje(x) {
   const v = Number(x.valor || 0);
   return dias ? Math.round((v + v * 0.02 + (v * 0.01 * dias) / 30) * 100) / 100 : v;
 }
-const COB_TEL = "(47) 99667-0900";
+const COB_TEL = "(47) 99208-1047";
 
 // --- Situação de cada cobrança ---
 function cobTemBoleto(x) { return Boolean(x.asaasId) || x.asaasStatus === "CRIANDO" || x.asaasStatus === "ERRO"; }
@@ -16470,9 +16539,10 @@ function cobFilaItens(d) {
     const s = c.sugestao && porId[c.sugestao];
     if (c.status === "pendente" && s) {
       add("info", `Entrou ${de}. É de ${s.cliente || "?"} · ${cobOrigemTexto(s)}?`,
-        [["Sim, dar baixa", (b) => cobConciliar(c, s, b)], ["É de outra", () => cobEscolherPar(c)], ["Não é de nenhuma", (b) => cobIgnorar(c, b)]], 4);
+        [["Sim, dar baixa", (b) => cobConciliar(c, s, b)], ["É de outra", () => cobEscolherPar(c)], ["Não é de nenhuma", () => cobAnotar(c)]], 4);
     } else {
-      add("info", `Entrou ${de} sem cobrança no sistema.`, [["Ligar a uma cobrança", () => cobEscolherPar(c)], ["Deixar de lado", (b) => cobIgnorar(c, b)]], 5);
+      add("info", `Entrou ${de} sem cobrança no sistema.${c.anotacao ? ` Parece: ${c.anotacao}.` : ""}`,
+        [["Ligar a uma cobrança", () => cobEscolherPar(c)], ["Anotar", () => cobAnotar(c)]], 5);
     }
   }
   if ((d.notasSemConta || []).length) {
@@ -16724,6 +16794,25 @@ async function cobTentarDeNovo(x, botao) {
 async function cobConciliar(c, x, botao) {
   await cobPedir({ acao: "conciliar", conciliacaoId: c.id, id: x.id }, botao, "Baixa feita.");
 }
+// Entrada sem cobrança (22/11/2026): o dono escreve de onde e por que veio o dinheiro (ex.: "saldo do Inter").
+// Fica guardada e sai da fila, sem entrar no faturamento.
+function cobAnotar(c) {
+  let campo;
+  cobAbrirDialogo({
+    titulo: "De onde veio este dinheiro?",
+    texto: `Entrou ${dinheiro(c.valor)} no Asaas do ${c.conta}${c.pagador ? ` (${c.pagador})` : ""} em ${dataBonita(c.data)}. Escreva de onde e por que veio. Não entra no faturamento; se for pagamento de uma nota, use "Ligar a uma cobrança".`,
+    botaoOk: "Guardar",
+    montar: (campos) => {
+      campo = cobCampo(campos, "De onde e por quê", "text", c.anotacao || "", { maxLength: 300, placeholder: "Ex.: saldo do Inter; pagamento da NF 438 recebido no Inter" });
+    },
+    aoConfirmar: async () => {
+      const texto = campo.value.trim();
+      if (!texto) return "Escreva de onde veio o dinheiro.";
+      const r = await cobPedir({ acao: "ignorar", conciliacaoId: c.id, texto }, null, "Entrada anotada.");
+      return r ? "" : "Não deu certo: tente de novo.";
+    },
+  });
+}
 async function cobIgnorar(c, botao) {
   await cobPedir({ acao: "ignorar", conciliacaoId: c.id }, botao, "Deixada de lado.");
 }
@@ -16812,7 +16901,7 @@ function cobAbrirProrrogar(x) {
   let campo, dica;
   cobAbrirDialogo({
     titulo: "Mudar o vencimento",
-    texto: `Hoje vence em ${dataBonita(x.vencimento)}. O Asaas troca a data no mesmo boleto (sem taxa), e os avisos passam a seguir a data nova: lembrete 1 dia antes e aviso todo dia depois que vencer.`,
+    texto: `Hoje vence em ${dataBonita(x.vencimento)}. O Asaas troca a data no mesmo boleto (sem taxa), e os avisos do sistema passam a seguir a data nova: lembrete 1 dia antes e, se atrasar, um aviso a cada 3 dias.`,
     botaoOk: "Trocar a data",
     montar: (campos) => {
       campo = cobCampo(campos, "Nova data de vencimento", "date", cobDiaUtil(cobSomaDias(hojeISO(), 7)), { min: hojeISO() });
@@ -16837,7 +16926,7 @@ function cobAbrirGerarBoleto(x) {
   const grupo = crypto.randomUUID();
   cobAbrirDialogo({
     titulo: "Gerar boleto",
-    texto: `${x.cliente} · ${cobOrigemTexto(x)} · ${dinheiro(x.valor)}. O Asaas manda o boleto por e-mail na hora; lembrete 1 dia antes e aviso todo dia se atrasar. Multa 2% e juros 1% ao mês; dá para pagar até 30 dias depois.`,
+    texto: `${x.cliente} · ${cobOrigemTexto(x)} · ${dinheiro(x.valor)}. O sistema manda o boleto por e-mail na hora (com o ${x.origem === "recibo" ? "recibo" : "PDF da nota"}); lembrete 1 dia antes e, se atrasar, um aviso a cada 3 dias. Multa 2% e juros 1% ao mês; dá para pagar até 30 dias depois.`,
     botaoOk: "Gerar boleto",
     montar: (campos) => {
       venc = cobCampo(campos, "Vencimento (1º boleto)", "date", cobDiaUtil(cobSomaDias(hojeISO(), 7)), { min: hojeISO() });
