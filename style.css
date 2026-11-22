@@ -8143,7 +8143,23 @@ body:has(#page-inicio:not(.hidden)) .busca-gatilho-topo + .conexao {
 .cob-asaas { margin-bottom: 12px; }
 .cob-kpis { margin-bottom: 8px; }
 .cob-contas-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 0 0 14px; font-size: 0.8rem; color: var(--muted); }
-.cob-contas-sinc { margin-left: auto; }
+.cob-contas-sinc { margin-left: auto; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+/* "Conferir agora" (22/11/2026): botão à vista, com o símbolo de atualizar (gira enquanto confere). */
+button.cob-conferir {
+  display: inline-flex; align-items: center; gap: 6px; width: auto; flex: none;
+  padding: 5px 12px; border: 1px solid var(--accent); border-radius: 999px; box-shadow: none;
+  background: rgba(91, 141, 239, 0.12); color: var(--accent);
+  font-size: 0.8rem; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+button.cob-conferir svg { flex: none; }
+button.cob-conferir.girando svg { animation: v2-gira 0.9s linear infinite; }
+button.cob-conferir:disabled { opacity: 0.85; cursor: default; }
+@media (hover: hover) and (pointer: fine) {
+  button.cob-conferir:not(:disabled):hover { background: rgba(91, 141, 239, 0.24); filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  button.cob-conferir.girando svg { animation-duration: 2.5s; }
+}
 .cob-link,
 button.cob-link {
   width: auto; padding: 0; border: none; background: none; box-shadow: none;

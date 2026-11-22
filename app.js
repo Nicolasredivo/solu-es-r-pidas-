@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.22d";
+const APP_VERSION = "2026.11.22e";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -16565,6 +16565,19 @@ async function cobSincronizar(avisar) {
   }
   if (avisar) mostrarToast("Conferindo com o Asaas: os números se atualizam em alguns segundos.");
   setTimeout(() => cobCarregar({ sincronizar: false }), 20000);
+  return true;
+}
+
+const COB_IC_ATUALIZAR = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
+// O botão gira até os números novos chegarem (a linha é redesenhada e o botão volta ao normal sozinho).
+async function cobConferirAgora(b) {
+  const rotulo = b.querySelector("span");
+  const volta = () => { b.disabled = false; b.classList.remove("girando"); rotulo.textContent = "Conferir agora"; };
+  b.disabled = true;
+  b.classList.add("girando");
+  rotulo.textContent = "Conferindo...";
+  if (await cobSincronizar(true)) setTimeout(volta, 30000);
+  else volta();
 }
 
 function cobDesenhar() {
@@ -16652,7 +16665,10 @@ function cobDesenharAsaas(d) {
   // Sem a taxa do aviso: os avisos do Asaas estão desligados desde 22/11/2026 (quem manda os e-mails é o sistema).
   if (taxas) linha.append(cobEl("span", "", `Taxa por boleto pago: ${taxas} (já somada no valor da nota; vira gasto em "Taxas do Asaas" quando o boleto é pago).`));
   const conferido = cobEl("span", "cob-contas-sinc", ha === null ? "Ainda não conferido com o Asaas." : ha < 1 ? "Conferido com o Asaas agora." : `Conferido com o Asaas há ${ha < 60 ? cobPlural(ha, "minuto", "minutos") : cobPlural(Math.round(ha / 60), "hora", "horas")}.`);
-  conferido.append(" ", cobBotao("Conferir agora", () => cobSincronizar(true), "cob-link"));
+  // "Conferir agora" bem à vista (pedido do dono, 22/11/2026): botão com o símbolo de atualizar, que gira enquanto confere.
+  const conferir = cobBotao("", (b) => cobConferirAgora(b), "cob-conferir");
+  conferir.innerHTML = COB_IC_ATUALIZAR + "<span>Conferir agora</span>";
+  conferido.append(conferir);
   linha.append(conferido);
   destino.append(linha);
 }

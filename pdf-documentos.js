@@ -162,8 +162,7 @@
       ["CNPJ: " + p.emissor.cnpj, "Helvetica-Bold", 8, GRAY, 0.42 * CM],
       ["E-mail: solucoes-rapidas@hotmail.com", "Helvetica-Bold", 8, GRAY, 0.36 * CM],
       ["           adm.solucoes.rapidas@gmail.com", "Helvetica-Bold", 8, GRAY, 0.42 * CM],
-      ["Fone: (47) 99667-0900", "Helvetica-Bold", 8, GRAY, 0.36 * CM],
-      ["           (47) 99208-1047", "Helvetica-Bold", 8, GRAY, 0],
+      ["Fone: (47) 99208-1047", "Helvetica-Bold", 8, GRAY, 0],
     ];
     let cy = top;
     for (const [texto, fonte, tamanho, c, passo] of linhas) {
