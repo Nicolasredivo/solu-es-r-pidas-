@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.22g";
+const APP_VERSION = "2026.11.22h";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -16141,10 +16141,8 @@ const BUSCA_TELAS = [
   { nome: "Administradoras", chaves: "cadastro", pagina: "administradoras" },
   { nome: "Sindicatura", chaves: "cadastro sindicos", pagina: "sindicatura" },
   { nome: "E-mails", chaves: "cadastro email", pagina: "emails" },
-  { nome: "Financeiro · Painel", chaves: "caixa saldo", pagina: "financeiro", aba: '.subtab-fin[data-subfin="painel"]' },
-  { nome: "Financeiro · A pagar", chaves: "contas despesas vencidas", pagina: "financeiro", aba: '.subtab-fin[data-subfin="despesas"]' },
-  { nome: "Financeiro · A receber", chaves: "contas recebimentos", pagina: "financeiro", aba: '.subtab-fin[data-subfin="receber"]' },
-  { nome: "Financeiro · Contas fixas", chaves: "recorrentes mensais", pagina: "financeiro", aba: '.subtab-fin[data-subfin="fixas"]' },
+  // Painel, A pagar e Contas fixas saíram do Financeiro (22/11/2026): fica só o A receber.
+  { nome: "Financeiro · A receber", chaves: "contas recebimentos boletos", pagina: "financeiro", aba: '.subtab-fin[data-subfin="receber"]' },
   { nome: "Chamados", chaves: "consultar servicos", pagina: "chamados", aba: '#page-chamados .subtab[data-subpage="ch-consultar"]' },
   { nome: "Agenda", chaves: "calendario horarios", pagina: "agenda" },
   { nome: "Atendimento", chaves: "servico em andamento visita", pagina: "atendimento" },

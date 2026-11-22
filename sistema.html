@@ -872,13 +872,11 @@
       <div id="page-financeiro" class="card page hidden">
         <h1>Financeiro <button type="button" class="botao-secundario botao-atualizar-tudo" title="Confere com o Asaas agora e atualiza todos os números (o sistema também confere sozinho a cada 30 minutos).">↻ Atualizar</button></h1>
 
-        <div class="subtabs">
-          <button type="button" class="subtab-fin active" data-subfin="painel">Painel</button>
-          <button type="button" class="subtab-fin" data-subfin="despesas">A pagar</button>
-          <button type="button" class="subtab-fin" data-subfin="receber">A receber</button>
-          <button type="button" class="subtab-fin" data-subfin="fixas">Contas fixas</button>
-          <button type="button" class="subtab-fin" data-subfin="divisao">Divisão</button>
-          <button type="button" class="subtab-fin" data-subfin="ajustes">Ajustes</button>
+        <!-- 22/11/2026, pedido do dono: o Financeiro fica só com o A receber (Painel, A pagar, Contas fixas, Divisão e
+             Ajustes saíram da tela para serem refeitos de outra forma; os dados continuam no banco e os blocos abaixo
+             ficam guardados, escondidos, para reaproveitar). Com uma aba só, a barra de abas não aparece. -->
+        <div class="subtabs hidden">
+          <button type="button" class="subtab-fin active" data-subfin="receber">A receber</button>
         </div>
 
         <!-- Listas que alimentam os campos de digitar: são preenchidas com o que
@@ -893,7 +891,7 @@
              A visão de cima: quanto existe, quanto já tem dono, quanto sobra,
              e se vai faltar dinheiro nos próximos meses. Tudo calculado a
              partir do que já está lançado — nada aqui se digita. -->
-        <div id="subfin-painel" class="subpage-fin">
+        <div id="subfin-painel" class="subpage-fin hidden">
           <p id="painel-status" class="doc-hint"></p>
 
           <div id="painel-configurar" class="aviso-caixa hidden">
@@ -1326,7 +1324,7 @@
         <!-- ====================== A receber ======================
              Item 5. Mesma estrutura da aba "A pagar", de propósito: quem
              aprendeu uma sabe usar a outra. -->
-        <div id="subfin-receber" class="subpage-fin hidden">
+        <div id="subfin-receber" class="subpage-fin">
           <!-- Central de cobranças (20/11/2026): as duas contas do Asaas somadas como uma só, o que precisa de ação,
                os boletos por dia de vencimento, as notas e recibos sem boleto (sem previsão) e o total a receber por
                dia, semana ou mês. Dados do fluxo "App - Cobrancas"; as regras ficam no banco (banco/cobrancas.sql). -->
