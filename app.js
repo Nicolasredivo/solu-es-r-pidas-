@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.22f";
+const APP_VERSION = "2026.11.22g";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -16515,6 +16515,8 @@ function cobDescricaoCurta(x) {
 }
 function cobOrigemTexto(x) {
   if (x.notaNumero) return `NFS-e nº ${x.notaNumero}`;
+  const deFora = x.arquivoId && x.origem === "nota" ? /^NFS-e nº (\S+)/.exec(x.descricao || "") : null; // NFS-e adicionada de fora
+  if (deFora) return `NFS-e nº ${deFora[1]}`;
   if (x.origem === "recibo") return "Recibo";
   if (x.origem === "asaas") return "Feito no Asaas";
   if (x.origem === "avulsa") return "Boleto avulso";
@@ -16770,7 +16772,7 @@ function cobFilaItens(d) {
       const quando = x.vencimento === hoje ? "vence hoje" : x.vencimento === cobSomaDias(hoje, 1) ? "vence amanhã" : `vence ${cobDiaCurto(x.vencimento)}`;
       add("aviso", `${quem}: ${quando} e ninguém abriu o boleto ainda.`, [["Mandar no WhatsApp", () => cobWhatsapp(x)]], 3);
     }
-    if (x.asaasId && x.origem === "nota" && !x.notaId && Date.now() - new Date(x.criadoEm).getTime() > 10 * 60000) {
+    if (x.asaasId && x.origem === "nota" && !x.notaId && !x.arquivoId && Date.now() - new Date(x.criadoEm).getTime() > 10 * 60000) {
       add("aviso", `${quem}: boleto de ${dinheiro(x.valor)} criado, mas a nota fiscal não saiu.`,
         [["Emitir a nota", () => cobEmitirNotaDoBoleto(x)], ["Cancelar o boleto", (b) => cobCancelar(x, b)]], 1);
     }
@@ -16787,8 +16789,12 @@ function cobFilaItens(d) {
     }
   }
   if ((d.notasSemConta || []).length) {
+    // Também as NFS-e trazidas de fora (PDF adicionado na pasta do cliente, 22/11/2026).
     const n = d.notasSemConta.length;
-    add("info", `${cobPlural(n, "nota emitida", "notas emitidas")} antes das cobranças ${n === 1 ? "ainda não está" : "ainda não estão"} no A receber. Diga o que já recebeu.`,
+    const fora = d.notasSemConta.filter((x) => x.importada).length;
+    const quais = fora === n ? cobPlural(n, "nota adicionada de fora", "notas adicionadas de fora")
+      : fora ? `${cobPlural(n, "nota", "notas")} (${fora} adicionada${fora === 1 ? "" : "s"} de fora)` : cobPlural(n, "nota emitida antes das cobranças", "notas emitidas antes das cobranças");
+    add("info", `${quais} ${n === 1 ? "ainda não está" : "ainda não estão"} no A receber. Diga o que já recebeu.`,
       [["Organizar", () => cobOrganizarAntigas()]], 6);
   }
   return fila.sort((a, b) => a.ordem - b.ordem);
@@ -17227,14 +17233,14 @@ function cobOrganizarAntigas() {
   const notas = (cobDados && cobDados.notasSemConta) || [];
   const escolhas = new Map();
   cobAbrirDialogo({
-    titulo: "Notas de antes das cobranças",
-    texto: "Estas notas foram emitidas antes de o A receber começar a se montar sozinho. Para cada uma, diga se ainda vai receber ou se já recebeu.",
+    titulo: "Notas fora do A receber",
+    texto: "Estas notas não entraram sozinhas no A receber (emitidas antes das cobranças ou adicionadas de fora). Para cada uma, diga se ainda vai receber ou se já recebeu.",
     botaoOk: "Organizar",
     montar: (campos) => {
       const lista = cobEl("div", "cob-antigas");
       for (const n of notas) {
         const linha = cobEl("div", "cob-antiga");
-        linha.append(cobEl("span", "cob-antiga-txt", `Nº ${n.numero} · ${n.cliente || "Cliente"} · ${dinheiro(n.valor)} · ${dataBonita(String(n.emitidaEm).slice(0, 10))}`));
+        linha.append(cobEl("span", "cob-antiga-txt", `Nº ${n.numero} · ${n.cliente || "Cliente"} · ${dinheiro(n.valor)} · ${dataBonita(String(n.emitidaEm).slice(0, 10))}${n.importada ? " · adicionada de fora" : ""}`));
         const s = cobEl("select", "cob-antiga-sel");
         [["", "Deixar como está"], ["receber", "Ainda vou receber"], ["recebida", "Já recebi"]].forEach(([v, r]) => s.append(new Option(r, v)));
         s.addEventListener("change", () => escolhas.set(n.id, s.value));

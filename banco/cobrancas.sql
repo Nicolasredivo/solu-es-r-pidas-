@@ -307,12 +307,22 @@ begin
           'pagador', c."Pagador", 'documento', c."Pagador_Documento", 'clienteId', c."Cliente_Ref", 'descricao', c."Descricao",
           'status', c."Status", 'confianca', c."Confianca", 'sugestao', c."Sugestao_Ref", 'anotacao', c."Anotacao") order by c."Data" desc)
         from "Conciliacao" c where c."Status" in ('pendente', 'sem-par') and c."Data" >= hoje - 60), '[]'::jsonb),
-    'notasSemConta', coalesce((select jsonb_agg(jsonb_build_object('id', n.id, 'numero', n."Numero_NFSe", 'cliente', n."Tomador_Nome",
-          'clienteId', n."Cliente_Ref", 'valor', n."Valor", 'emitidaEm', n."Emitida_Em", 'emissor', n."Emissor") order by n."Emitida_Em" desc)
-        from "Notas_Fiscais" n
-       where n."Ambiente" = 'Producao' and n."Status" = 'Emitida'
-         and not exists (select 1 from "Recebimentos" r where r."Nota_Ref" = n.id)
-         and (ini is null or n."Emitida_Em" < ini)), '[]'::jsonb),
+    -- Também as NFS-e trazidas de fora (PDF importado na pasta NFS-e do cliente, com valor; 22/11/2026), até o dono
+    -- dizer se vai receber ou se já recebeu.
+    'notasSemConta', coalesce((select jsonb_agg(x.j order by x.quando desc) from (
+        select jsonb_build_object('id', n.id, 'numero', n."Numero_NFSe", 'cliente', n."Tomador_Nome",
+          'clienteId', n."Cliente_Ref", 'valor', n."Valor", 'emitidaEm', n."Emitida_Em", 'emissor', n."Emissor") j, n."Emitida_Em" quando
+          from "Notas_Fiscais" n
+         where n."Ambiente" = 'Producao' and n."Status" = 'Emitida'
+           and not exists (select 1 from "Recebimentos" r where r."Nota_Ref" = n.id)
+           and (ini is null or n."Emitida_Em" < ini)
+        union all
+        select jsonb_build_object('id', a.id, 'numero', coalesce(substring(a."Titulo" from '\d+'), a."Titulo"), 'cliente', a."Cliente_Nome",
+          'clienteId', a."Cliente_Ref", 'valor', a."Valor", 'emitidaEm', a."Data_Documento", 'emissor', a."Emissor", 'importada', true), a."Data_Documento"::timestamptz
+          from "Arquivos_Cliente" a
+         where a."Tipo" = 'nfs' and a."Origem" = 'importado' and coalesce(a."Valor", 0) > 0
+           and coalesce(a."Dados_Json", '') not like '%"substituidoPor"%'
+           and not exists (select 1 from "Recebimentos" r where r."Arquivo_Ref" = a.id)) x), '[]'::jsonb),
     -- notasPeloAsaas: a linha do CNPJ em Empresas_Emissoras já é a conta do Asaas (notas e recibos saem com ela).
     'contas', coalesce((select jsonb_object_agg(substr(e.id, 7), e."Valor" || jsonb_build_object('notasPeloAsaas',
         exists (select 1 from "Empresas_Emissoras" x where x."Codigo" = substr(e.id, 7) and coalesce(x."Banco", '') ~ '^\s*461\M')))
@@ -570,13 +580,17 @@ begin
 
   if acao = 'incluir-antigas' then
     -- Notas de antes das cobranças: o dono diz quais ainda vai receber e quais já recebeu.
+    -- O id pode ser de uma nota do sistema ou de uma NFS-e trazida de fora (PDF na pasta do cliente).
     ids := array(select jsonb_array_elements_text(coalesce(p -> 'receber', '[]')));
-    for i in 1..coalesce(array_length(ids, 1), 0) loop perform cob_registrar_nota(ids[i]); end loop;
+    for i in 1..coalesce(array_length(ids, 1), 0) loop
+      if exists (select 1 from "Arquivos_Cliente" where id = ids[i]) then perform cob_registrar_arquivo(ids[i]); else perform cob_registrar_nota(ids[i]); end if;
+    end loop;
     ids := array(select jsonb_array_elements_text(coalesce(p -> 'recebidas', '[]')));
     for i in 1..coalesce(array_length(ids, 1), 0) loop
-      item := cob_registrar_nota(ids[i]);
+      item := case when exists (select 1 from "Arquivos_Cliente" where id = ids[i]) then cob_registrar_arquivo(ids[i]) else cob_registrar_nota(ids[i]) end;
       if coalesce(item ->> 'id', '') <> '' then
-        perform cob_baixar(item ->> 'id', coalesce((select ("Emitida_Em" at time zone 'America/Sao_Paulo')::date from "Notas_Fiscais" where id = ids[i]), hoje),
+        perform cob_baixar(item ->> 'id', coalesce((select ("Emitida_Em" at time zone 'America/Sao_Paulo')::date from "Notas_Fiscais" where id = ids[i]),
+            (select "Data_Documento" from "Arquivos_Cliente" where id = ids[i]), hoje),
           (select "Valor" from "Recebimentos" where id = item ->> 'id'), 'manual', null, null);
       end if;
     end loop;
@@ -648,6 +662,31 @@ begin
   returning id into novo;
   if novo is null then select id into novo from "Recebimentos" where "Arquivo_Ref" = a.id limit 1;
   else perform cob_evento(novo, 'recibo', 'Recibo gerado: entra no A receber sem previsão de pagamento.'); end if;
+  return jsonb_build_object('ok', novo is not null, 'id', novo);
+end $$;
+
+-- A receber de uma NFS-e trazida de fora (PDF importado na pasta NFS-e do cliente, com valor; 22/11/2026), sem
+-- previsão, como as notas do sistema. Recibo vai pelo cob_registrar_recibo. Repetir não duplica.
+create or replace function cob_registrar_arquivo(aid text) returns jsonb language plpgsql as $$
+declare a "Arquivos_Cliente"; novo text; num text;
+begin
+  select * into a from "Arquivos_Cliente" where id = aid;
+  if a.id is not null and a."Tipo" = 'recibo' then return cob_registrar_recibo(aid); end if;
+  if a.id is null or a."Tipo" <> 'nfs' or a."Origem" <> 'importado' or coalesce(a."Valor", 0) <= 0 then
+    return jsonb_build_object('ok', false, 'mensagem', 'Nota não encontrada (ou sem valor).');
+  end if;
+  select id into novo from "Recebimentos" where "Arquivo_Ref" = a.id limit 1;
+  if novo is not null then return jsonb_build_object('ok', true, 'existente', true, 'id', novo); end if;
+  num := substring(a."Titulo" from '\d+');
+  insert into "Recebimentos" ("Descricao", "Valor", "Cliente_Nome", "Cliente_Documento", "Cliente_Ref", "Status", "Origem", "Emissor", "Arquivo_Ref", "Atualizado_Em")
+  select left(case when num is not null then 'NFS-e nº ' || num || ' · ' else 'NFS-e · ' end || coalesce(nullif(btrim(a."Descricao"), ''), a."Titulo"), 140),
+         a."Valor", coalesce(cob_nome_cliente(c), a."Cliente_Nome"), cob_digitos(c."CPF_CNPJ"), c.id, 'Pendente', 'nota',
+         coalesce(a."Emissor", c."Atendido_Por", 'CNPJ 1'), a.id, now()
+    from (select 1) z left join "Entidades_Cadastradas" c on c.id = a."Cliente_Ref"
+  on conflict do nothing
+  returning id into novo;
+  if novo is null then select id into novo from "Recebimentos" where "Arquivo_Ref" = a.id limit 1;
+  else perform cob_evento(novo, 'nota', 'NFS-e trazida de fora: entra no A receber sem previsão de pagamento.'); end if;
   return jsonb_build_object('ok', novo is not null, 'id', novo);
 end $$;
 
