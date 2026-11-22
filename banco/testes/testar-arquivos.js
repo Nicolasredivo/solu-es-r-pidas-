@@ -193,6 +193,40 @@ const hashDe = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
     confere('importar: aparece na pasta NFS-e como PDF (tem arquivo, sem dados de nota do sistema)', lerC.itens.length === 1 && itemC.pasta === 'nfs' && itemC.arquivo && !itemC.nota && /nota antiga|Nota 123/.test(itemC.titulo + itemC.texto), itemC);
     const resC = await app({ acao: 'resumo' });
     confere('importar: o resumo conta na pasta NFS-e', resC.clientes[cliC.id] && resC.clientes[cliC.id].pastas.nfs === 1, resC.clientes[cliC.id]);
+    // ---- corrigir os dados de um documento (22/11/2026) ----
+    const editar = (id, cli, extra) => app({ acao: 'editar', clienteId: cli, id, titulo: 'Nota nº 123', descricao: 'Instalação de bomba', valor: '1.306,00',
+      dataDocumento: '2025-03-11', emissor: 'CNPJ 2', ...extra });
+    const regEd = async (id) => (await local('GET', `/v0/${CAD}/${T}/${id}`)).fields;
+    const recusaEd = async (nome, r, rx) => confere(`editar recusa: ${nome}`, r.ok === false && rx.test(r.mensagem || ''), r);
+    await recusaEd('documento inválido', await editar('abc', cliC.id), /Documento inválido/);
+    await recusaEd('sem título', await editar(rI.id, cliC.id, { titulo: '  ' }), /título/);
+    await recusaEd('data inválida', await editar(rI.id, cliC.id, { dataDocumento: '11/03/2025' }), /Data/);
+    await recusaEd('valor inválido', await editar(rI.id, cliC.id, { valor: 'mil' }), /Valor/);
+    await recusaEd('documento de outro cliente', await editar(rI.id, cliA.id), /Não achei/);
+    confere('editar: recusas não mudaram nada', (await regEd(rI.id)).Titulo === 'Nota 123 (portal)');
+    const ed = await editar(rI.id, cliC.id);
+    const fI = await regEd(rI.id);
+    const dI = JSON.parse(fI.Dados_Json);
+    confere('editar importado: ok', ed.ok === true && /corrigidos/.test(ed.mensagem), ed);
+    confere('editar importado: muda título, descrição, data, valor e emissor', fI.Titulo === 'Nota nº 123' && fI.Descricao === 'Instalação de bomba' && fI.Data_Documento === '2025-03-11' && fI.Valor === 1306 && fI.Emissor === 'CNPJ 2', fI);
+    confere('editar importado: busca com o título novo e o nome do arquivo', fI.Texto_Busca === 'Nota nº 123 | Instalação de bomba | nota-123.pdf', fI.Texto_Busca);
+    confere('editar importado: guarda o antes', dI.arquivoOriginal === 'nota-123.pdf' && dI.edicoes.length === 1 && dI.edicoes[0].antes.titulo === 'Nota 123 (portal)' && dI.edicoes[0].antes.valor === 350 && dI.edicoes[0].antes.data === '2025-03-10', dI);
+    const igual = await editar(rI.id, cliC.id);
+    confere('editar: sem mudança não grava', igual.ok === true && /Nada mudou/.test(igual.mensagem) && JSON.parse((await regEd(rI.id)).Dados_Json).edicoes.length === 1, igual);
+    const semValor = await editar(rI.id, cliC.id, { valor: '' });
+    const fSV = await regEd(rI.id);
+    confere('editar: valor vazio tira o valor', semValor.ok === true && fSV.Valor === undefined && JSON.parse(fSV.Dados_Json).edicoes.length === 2, fSV);
+    const lerC2 = await app({ acao: 'cliente', clienteId: cliC.id });
+    confere('editar: a pasta mostra o novo e diz que é importado', lerC2.itens[0].titulo === 'Nota nº 123' && lerC2.itens[0].origem === 'importado' && lerC2.itens[0].valor === null, lerC2.itens[0]);
+    const antesG = await regEd(r1.id);
+    const edG = await editar(r1.id, cliA.id, { titulo: 'Orçamento revisto', descricao: 'Limpeza e desinfecção', valor: '999', dataDocumento: '2026-01-01', emissor: 'CNPJ 2' });
+    const fG = await regEd(r1.id);
+    confere('editar gerado: só título e descrição (data, valor e emissor estão no PDF)', edG.ok === true && fG.Titulo === 'Orçamento revisto' && fG.Descricao === 'Limpeza e desinfecção'
+      && fG.Valor === antesG.Valor && fG.Data_Documento === antesG.Data_Documento && fG.Emissor === antesG.Emissor && fG.Texto_Busca === antesG.Texto_Busca, { antesG, fG });
+    const dG = JSON.parse(fG.Dados_Json);
+    confere('editar gerado: mantém os dados do PDF e guarda o antes', dG.a === 1 && dG.edicoes.length === 1 && dG.edicoes[0].antes.titulo === antesG.Titulo, dG);
+    const lerAEd = await app({ acao: 'cliente', clienteId: cliA.id });
+    confere('editar: a leitura diz que o gerado é gerado', lerAEd.itens.find((i) => i.id === r1.id).origem === 'gerado', lerAEd.itens.find((i) => i.id === r1.id));
   } finally {
     // apaga os registros de teste e os PDFs que eles deixaram na pasta de anexos
     for (const r of (await lista(CAD, T))) {

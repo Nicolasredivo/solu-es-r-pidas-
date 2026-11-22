@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.22e";
+const APP_VERSION = "2026.11.22f";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -14557,7 +14557,10 @@ function arqLinha(it, termos, mostrarPasta) {
   const sub = it.substituidoPor || it.substitui;
   const troca = sub ? (it.substituidoPor ? `<span class="nf-selo nf-selo-substituido">Substituído</span> pelo de ` : "Substitui o de ")
     + escapeHtml(nfData(sub.data) + (sub.motivo ? " · " + sub.motivo : "")) : "";
-  return `<div class="arq-arquivo${it.cancelada ? " arq-cancelada" : ""}${it.substituidoPor ? " arq-substituido" : ""}"><div class="arq-ic ${p.cls}">${arqIcone(p)}</div>
+  // Tocar no documento corrige os dados dele (22/11/2026, sem botão "Editar"); nota do sistema só explica por que não muda.
+  const toque = it.nota ? ` data-arq-nota="${escapeHtml(it.id)}"`
+    : ` data-arq-editar="${escapeHtml(it.id)}" title="${it.origem === "importado" ? "Toque para corrigir título, data, valor ou descrição" : "Toque para corrigir o título ou a descrição"}"`;
+  return `<div class="arq-arquivo${it.nota ? "" : " arq-editavel"}${it.cancelada ? " arq-cancelada" : ""}${it.substituidoPor ? " arq-substituido" : ""}"${toque}><div class="arq-ic ${p.cls}">${arqIcone(p)}</div>
     <div class="arq-texto"><div class="arq-titulo">${arqMarcar(it.titulo, termos)}${selo}${mostrarPasta ? `<span class="arq-pasta-tag">${p.nome}</span>` : ""}</div><div class="arq-meta">${escapeHtml(meta)}</div>
     ${troca ? `<div class="arq-troca${it.substituidoPor ? " arq-troca-antigo" : ""}">${troca}</div>` : ""}
     ${it.descricao ? `<div class="arq-desc">${arqMarcar(it.descricao, termos)}</div>` : ""}</div>
@@ -14577,6 +14580,70 @@ function arqLigarBotoesDaLista() {
   arqTela.querySelectorAll("[data-arq-ver]").forEach((b) => b.addEventListener("click", () => arqVisualizar(b.dataset.arqVer)));
   arqTela.querySelectorAll("[data-arq-sub]").forEach((b) => b.addEventListener("click", () => arqAbrirSubstituicao(b.dataset.arqSub)));
   arqTela.querySelectorAll("[data-arq-desfazer]").forEach((b) => b.addEventListener("click", () => arqAbrirDesfazerTroca(b.dataset.arqDesfazer)));
+  arqTela.querySelectorAll("[data-arq-editar], [data-arq-nota]").forEach((el) => el.addEventListener("click", (ev) => {
+    if (ev.target.closest("button, a, input, select, textarea")) return;
+    if (String(window.getSelection && window.getSelection()).trim()) return;
+    if (el.dataset.arqNota) mostrarToast("Nota emitida não se altera: valor, data e descrição são os registrados na Prefeitura. Para corrigir, cancele em Notas fiscais e emita outra.");
+    else arqAbrirEdicao(el.dataset.arqEditar);
+  }));
+}
+
+// ---- corrigir os dados de um documento (22/11/2026, pedido do dono) ----
+//
+// Tocar no documento abre a correção. Importado: título, data, valor, descrição e emissor. Gerado pelo sistema: só
+// título e descrição (data, valor e emissor estão escritos no PDF; para mudar, gerar outro e usar "Substituir").
+// Muda só o que aparece na pasta e na busca: o PDF guardado continua o mesmo. O fluxo guarda o "antes" de cada correção.
+function arqAbrirEdicao(id) {
+  const it = arq.itens.find((i) => i.id === id);
+  if (!it || it.nota) return;
+  const p = arqPasta(it.pasta) || ARQ_PASTAS[0];
+  const importado = it.origem === "importado";
+  const comValor = ["nfs", "orcamento", "recibo"].includes(p.id);
+  const dataAtual = String(it.data || "").slice(0, 10);
+  const valorTexto = it.valor != null ? it.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
+  const fixos = [nfData(it.data), it.valor != null ? nfReais(it.valor) : "", it.emissor].filter(Boolean).join(" · ");
+  arqModal.innerHTML = `<div class="arq-caixa"><header><div class="arq-tt">Corrigir documento · ${escapeHtml(p.nome)}</div></header>
+    <form class="arq-form" id="arq-e-form" novalidate autocomplete="off">
+      <div><label for="arq-e-titulo">Título</label><input type="text" id="arq-e-titulo" maxlength="200" value="${escapeHtml(it.titulo)}" /></div>
+      ${importado ? `<div><label for="arq-e-data">Data do documento</label><input type="date" id="arq-e-data" value="${escapeHtml(dataAtual)}" /></div>
+      ${comValor ? `<div><label for="arq-e-valor">Valor (vazio = sem valor)</label><input type="text" id="arq-e-valor" inputmode="decimal" placeholder="Ex: 1.290,50" value="${escapeHtml(valorTexto)}" /></div>` : ""}
+      <div><label for="arq-e-emissor">Emitido por</label><select id="arq-e-emissor"><option>CNPJ 1</option><option>CNPJ 2</option></select></div>`
+      : `<p class="arq-form-aviso">${escapeHtml(fixos)}: estão escritos no PDF gerado pelo sistema, por isso não mudam aqui. Para mudar, gere outro e use "Substituir".</p>`}
+      <div><label for="arq-e-desc">Descrição (ajuda na busca)</label><textarea id="arq-e-desc" maxlength="500" rows="3">${escapeHtml(it.descricao)}</textarea></div>
+      <p class="arq-form-aviso">Muda só o que aparece na pasta e na busca: o PDF guardado continua o mesmo.</p>
+      <p class="status" id="arq-e-status" role="status"></p>
+      <div class="arq-form-acoes"><button type="submit" id="arq-e-guardar">Guardar</button><button type="button" class="botao-secundario" id="arq-e-cancelar">Cancelar</button></div>
+    </form></div>`;
+  arqModal.dataset.item = "edicao";
+  arqModal.classList.remove("hidden");
+  const el = (x) => document.getElementById(x);
+  if (el("arq-e-emissor")) el("arq-e-emissor").value = it.emissor === "CNPJ 2" ? "CNPJ 2" : "CNPJ 1";
+  const status = (tipo, msg) => { el("arq-e-status").textContent = msg; el("arq-e-status").className = msg ? `status show ${tipo}` : "status"; };
+  el("arq-e-cancelar").addEventListener("click", arqFecharModal);
+  el("arq-e-form").addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    const titulo = el("arq-e-titulo").value.trim();
+    if (!titulo) { status("error", "Escreva um título."); return; }
+    const data = importado ? el("arq-e-data").value : dataAtual || hojeParaCampoData();
+    if (!data) { status("error", "Escolha a data do documento."); return; }
+    const botao = el("arq-e-guardar");
+    botao.disabled = true;
+    status("neutral", "Guardando...");
+    try {
+      const r = await pedirAoN8n("arquivos", {
+        acao: "editar", clienteId: arq.cliente.id, id: it.id, titulo, descricao: el("arq-e-desc").value.trim(), dataDocumento: data,
+        valor: el("arq-e-valor") ? el("arq-e-valor").value.trim() : (it.valor != null ? String(it.valor) : ""),
+        emissor: el("arq-e-emissor") ? el("arq-e-emissor").value : it.emissor,
+      });
+      if (!r || !r.ok) { status("error", (r && r.mensagem) || "Não consegui guardar agora."); botao.disabled = false; return; }
+      await arqAtualizarCliente();
+      arqFecharModal();
+      mostrarToast(r.mensagem || "Pronto.");
+    } catch (err) {
+      status("error", "Não consegui falar com o servidor. Tente de novo.");
+      botao.disabled = false;
+    }
+  });
 }
 
 function arqDesenharCliente() {
@@ -14658,7 +14725,7 @@ function arqDesenharPasta() {
   const canceladas = itens.filter((i) => i.cancelada).length;
   const substituidos = itens.filter((i) => !i.cancelada && i.substituidoPor && i.valor != null).length;
   const fora = [canceladas ? arqPlural(canceladas, "cancelada", "canceladas") : "", substituidos ? arqPlural(substituidos, "substituído", "substituídos") : ""].filter(Boolean).join(" e ");
-  html += `<div class="arq-conta">${itens.length} de ${arqPlural(base.length, "arquivo", "arquivos")}${itens.some((i) => i.valor != null) ? " · soma " + escapeHtml(nfReais(soma)) + (fora ? ` (sem ${fora})` : "") : ""}</div>`;
+  html += `<div class="arq-conta">${itens.length} de ${arqPlural(base.length, "arquivo", "arquivos")}${itens.some((i) => i.valor != null) ? " · soma " + escapeHtml(nfReais(soma)) + (fora ? ` (sem ${fora})` : "") : ""}${itens.some((i) => !i.nota) ? '<span class="arq-dica-toque"> · toque no documento para corrigir</span>' : ""}</div>`;
   if (!itens.length) {
     html += `<div class="arq-vazio">${base.length ? 'Nenhum arquivo com esses filtros.<br><button type="button" class="arq-limpar" id="arq-f-limpar2">Limpar filtros</button>'
       : (p.id === "nfs" ? "Nenhuma nota emitida pelo sistema para este cliente ainda." : "Nada guardado nesta pasta ainda. Os PDFs gerados na aba PDFs, com este cliente escolhido na busca, aparecem aqui.")}</div>`;

@@ -6185,7 +6185,11 @@ div.lembrete-item:hover {
 .arq-adicionar { width: auto; padding: 9px 14px; }
 .arq-form { padding: 14px 16px; display: grid; gap: 12px; }
 .arq-form label { font-size: 0.8rem; color: var(--muted); display: block; margin: 0 0 4px 2px; }
-.arq-form input, .arq-form select { width: 100%; }
+.arq-form input, .arq-form select, .arq-form textarea { width: 100%; }
+.arq-form textarea { resize: vertical; min-height: 72px; }
+/* Tocar no documento corrige os dados (22/11/2026). */
+.arq-arquivo.arq-editavel, .arq-arquivo[data-arq-nota] { cursor: pointer; }
+.arq-dica-toque { color: var(--muted); font-weight: 400; }
 .arq-form-aviso { color: var(--muted); font-size: 0.85rem; line-height: 1.4; }
 .arq-form-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
 .arq-form-acoes button { width: auto; padding: 9px 16px; }
