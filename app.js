@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.22b";
+const APP_VERSION = "2026.11.22c";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -16515,6 +16515,45 @@ async function cobCarregar({ sincronizar = true } = {}) {
   })();
   return cobPedido;
 }
+
+// Botão "Atualizar" do Início e do Financeiro (pedido do dono, 22/11/2026): confere com o Asaas agora (saldos,
+// pagamentos, entradas de PIX), espera essa conferência terminar e recarrega todos os números das duas telas.
+// A conferência automática de 30 em 30 minutos continua a mesma.
+let atualizandoTudo = false;
+async function atualizarTudo() {
+  if (atualizandoTudo) return;
+  atualizandoTudo = true;
+  const botoes = [...document.querySelectorAll(".botao-atualizar-tudo")];
+  botoes.forEach((b) => { b.disabled = true; b.textContent = "Atualizando..."; });
+  const inicio = Date.now();
+  let conferiu = false;
+  try {
+    try {
+      await pedirAoN8n("cobrancas", { acao: "sincronizar" });
+      cobUltimaSinc = Date.now();
+    } catch (err) { /* sem conferência agora: recarrega o que já está no banco */ }
+    // A conferência leva uns 20 a 60 segundos; olha a cada 3 segundos se terminou (no máximo 90 segundos).
+    for (let i = 0; i < 30; i++) {
+      await new Promise((ok) => setTimeout(ok, 3000));
+      let r = null;
+      try { r = await pedirAoN8n("cobrancas", { acao: "painel" }); } catch (err) { r = null; }
+      const fim = r && r.sinc && r.sinc.fim ? new Date(r.sinc.fim).getTime() : 0;
+      if (fim >= inicio - 2000) { conferiu = true; break; }
+    }
+    await Promise.all([
+      financeiroCarregado ? carregarFinanceiro() : Promise.resolve(),
+      cobCarregar({ sincronizar: false }),
+    ].map((p) => Promise.resolve(p).catch(() => {})));
+    painelCarregar(true);
+    painelCarregarFaturamento(true);
+    const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    mostrarToast(conferiu ? `Tudo atualizado às ${hora}, já com o Asaas.` : `Números recarregados às ${hora}. A conferência com o Asaas ainda não terminou: toque de novo daqui a pouco.`);
+  } finally {
+    atualizandoTudo = false;
+    botoes.forEach((b) => { b.disabled = false; b.textContent = "↻ Atualizar"; });
+  }
+}
+document.querySelectorAll(".botao-atualizar-tudo").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); atualizarTudo(); }));
 
 async function cobSincronizar(avisar) {
   cobUltimaSinc = Date.now();

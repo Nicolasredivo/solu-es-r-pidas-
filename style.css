@@ -6327,6 +6327,17 @@ body::before {
   letter-spacing: -0.01em;
 }
 
+/* Botão "Atualizar" no título (Início e Financeiro, 22/11/2026): à direita, no tamanho dos botões normais. */
+.page h1 .botao-atualizar-tudo {
+  margin-left: auto;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  padding: 7px 14px;
+  width: auto;
+  flex: none;
+}
+
 .page h1::before {
   content: "";
   flex: none;
