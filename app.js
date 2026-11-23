@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.23h";
+const APP_VERSION = "2026.11.23i";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -1469,6 +1469,8 @@ formEntidade.addEventListener("submit", async (event) => {
       salvarStatus.className = /Atenção:/.test(dados.mensagem || "") ? "status show error" : "status show ok";
       // Contatos novos ou ligados agora: as sugestões e a tela de contatos buscam de novo.
       contatosCarregados = false;
+      // O cliente novo já aparece no resto do sistema (Chamados, Documentos, Notas...), sem "Atualizar".
+      cadastrosMudaram({ redesenhar: true });
       formEntidade.classList.add("hidden");
       documentoInput.value = "";
       documentoAtual = "";
@@ -1551,6 +1553,26 @@ async function garantirCadastrosCarregados() {
     }
   } catch (err) {
     // Sugestão é um extra -- não trava o formulário se o n8n estiver fora.
+  }
+}
+
+// Cadastro novo, alterado ou excluído (23/11/2026, pedido do dono): todas as listas de clientes do sistema (Consulta,
+// Chamados, Documentos, Notas, Arquivos, Financeiro, busca rápida) buscam de novo sozinhas, em segundo plano, sem
+// precisar tocar em "Atualizar". A Consulta só é redesenhada quando pedido (com um cadastro aberto, fecharia ele).
+async function cadastrosMudaram(opcoes = {}) {
+  chamadosCadastrosCarregados = false;
+  carregarCadastrosParaChamados();
+  try {
+    const dados = await pedirAoN8n("listar-cadastros", {});
+    if (!dados || !dados.ok) { listaCarregada = false; return; } // na próxima vez que precisar, busca de novo
+    cadastros = dados.cadastros || [];
+    if (Array.isArray(dados.empresas)) empresasEmissoras = dados.empresas;
+    listaCarregada = true;
+    atualizaFiltrosCadastro();
+    try { atualizarListaDeClientes(); } catch (err) { /* lista do Financeiro ainda não montada */ }
+    if (opcoes.redesenhar && listaBox.offsetParent !== null) desenharLista();
+  } catch (err) {
+    listaCarregada = false;
   }
 }
 
@@ -2256,6 +2278,7 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
       atualizarResumo(linha, resumo);
       // Contatos novos, ligados ou tirados agora: sugestões e tela de contatos buscam de novo.
       contatosCarregados = false;
+      cadastrosMudaram(); // nome, CNPJ... novos no resto do sistema (a Consulta aberta fica como está)
 
       // Relê do n8n: é o que traz os códigos dos endereços e contatos recém
       // criados. Sem isso, salvar duas vezes seguidas criaria tudo de novo.
@@ -2302,6 +2325,7 @@ function montarDetalhe(linha, resumo, dados, avisoDepois) {
 
       cadastros = cadastros.filter((item) => item.id !== cadastro.id);
       desenharLista();
+      cadastrosMudaram(); // sai também das outras listas (Chamados...)
       mostrarListaStatus("ok", resposta.mensagem || "Cadastro excluído.");
     } catch (err) {
       mostrarStatus("error", "Não foi possível falar com o n8n.");
