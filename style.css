@@ -8790,21 +8790,55 @@ button.cob-abre-lista svg { flex: none; transition: transform var(--transicao); 
 button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
 .cob-lista-recolhe[hidden] { display: none; }
 
-/* A receber mais arejado no computador (23/11/2026, pedido do dono: "menos grudado"). Celular não muda. */
+/* A receber simétrico no computador (23/11/2026, pedido do dono: "mais simétrico, espaçamentos organizados").
+   Um espaço só (--cob-vao) entre tudo. Os quatro blocos ficam nas mesmas colunas dos quatro números de cima, com a
+   mesma altura e a seta "Ver a lista" alinhada no pé de cada um. Lista aberta: cada bloco volta à altura dele.
+   Celular não muda. */
 @media (min-width: 1280px) {
-  #subfin-receber .cob-kpis { gap: 18px; margin-bottom: 18px; }
-  #subfin-receber .cob-contas-linha { margin-bottom: 36px; }
-  #cob-conteudo #cob-fila { margin-bottom: 32px; }
-  #cob-conteudo .painel-grade.cob-grade { gap: 28px; margin-bottom: 28px; }
-  #cob-conteudo .painel-cartao { padding: 24px 26px; }
-  #cob-conteudo .painel-cab { margin-bottom: 14px; }
-  #cob-conteudo .cob-sem-previsao { margin: 0 0 6px; line-height: 1.55; }
-  #cob-conteudo button.cob-abre-lista { margin-top: 14px; padding: 10px; }
-  #cob-conteudo .cob-lista-recolhe { margin-top: 12px; }
-  #subfin-receber .cob-manual-titulo { margin-top: 56px; }
-  #subfin-receber .cob-manual-titulo + .doc-hint { margin-bottom: 18px; }
+  #subfin-receber { --cob-vao: 22px; }
+  #cob-conteudo:not(.hidden) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-template-areas:
+      "asaas asaas"
+      "fila fila"
+      "dias sem"
+      "periodo lista";
+    gap: var(--cob-vao);
+    align-items: stretch;
+  }
+  #cob-conteudo:has(.cob-lista-recolhe:not([hidden])) { align-items: start; }
+  #cob-conteudo .cob-grade { display: contents; }
+  #cob-conteudo #cob-asaas { grid-area: asaas; }
+  #cob-conteudo #cob-fila { grid-area: fila; margin: 0; }
+  /* Sem "Precisa de você", a linha dele não pode deixar vão dobrado. */
+  #cob-conteudo:has(#cob-fila.hidden) #cob-asaas { margin-bottom: calc(10px - var(--cob-vao)); }
+  #cob-conteudo #cob-dias { grid-area: dias; }
+  #cob-conteudo #cob-sem-boleto { grid-area: sem; }
+  #cob-conteudo #cob-periodo { grid-area: periodo; grid-column: auto; }
+  #cob-conteudo #cob-lista-bloco { grid-area: lista; }
+  #cob-conteudo #cob-dias, #cob-conteudo #cob-sem-boleto, #cob-conteudo #cob-periodo, #cob-conteudo #cob-lista-bloco {
+    display: flex; flex-direction: column; margin: 0; padding: 22px 24px;
+  }
+  #cob-conteudo .painel-cab { margin-bottom: 12px; min-height: 34px; }
+  #cob-conteudo .cob-sem-previsao { margin: 0 0 18px; line-height: 1.55; }
+  #cob-conteudo .cob-sem-previsao + .doc-hint { margin: -8px 0 18px; }
+  #cob-conteudo button.cob-abre-lista { margin: auto 0 0; padding: 10px; }
+  #cob-conteudo .cob-lista-recolhe { margin-top: 14px; }
+  #subfin-receber .cob-kpis { gap: var(--cob-vao); margin-bottom: 14px; }
+  #subfin-receber .cob-contas-linha { margin: 0; }
+  #subfin-receber .cob-manual-titulo { margin-top: 44px; padding-top: 32px; border-top: 1px solid var(--borda-suave); }
+  #subfin-receber .cob-manual-titulo + .doc-hint { margin: 4px 0 18px; }
+  #subfin-receber #nova-receita, #subfin-receber .busca-linha, #subfin-receber .filtros-linha { margin-bottom: 12px; }
 }
-@media (min-width: 1800px) {
-  #cob-conteudo:not(.hidden) { column-gap: 28px; }
-  #cob-conteudo #cob-dias { margin-bottom: 28px; }
+/* Tela larga: os quatro blocos lado a lado, um embaixo de cada número. */
+@media (min-width: 2200px) {
+  #cob-conteudo:not(.hidden) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-areas:
+      "asaas asaas asaas asaas"
+      "fila fila fila fila"
+      "dias sem periodo lista";
+  }
 }
