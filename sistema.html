@@ -1925,7 +1925,13 @@
           <label for="orcamento-forma-pagamento">Forma de pagamento combinada (opcional)</label>
           <input type="text" id="orcamento-forma-pagamento" placeholder="Ex: 50% entrada, resto na entrega · Pix" autocomplete="off" />
 
-          <label for="orcamento-detalhes">O que está incluso</label>
+          <div class="rotulo-com-acao">
+            <label for="orcamento-detalhes">O que está incluso</label>
+            <button type="button" class="botao-aprimorar" data-aprimorar="orcamento-detalhes" title="Corrige a escrita e deixa o texto mais técnico">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
+                <span>Aprimorar descrição</span>
+              </button>
+          </div>
           <textarea id="orcamento-detalhes" rows="3" placeholder="O que será feito por esse valor -- ajuda a evitar mal-entendido depois"></textarea>
 
           <button type="button" id="orcamento-salvar">Finalizar orçamento</button>
@@ -2175,7 +2181,13 @@
           </div>
 
           <div data-tipos="orcamento">
-            <label>Itens</label>
+            <div class="rotulo-com-acao">
+              <label>Itens</label>
+              <button type="button" class="botao-aprimorar" data-aprimorar-lista="#doc-itens .doc-item-desc" title="Corrige a escrita e deixa o texto mais técnico">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
+                <span>Aprimorar descrições</span>
+              </button>
+            </div>
             <ul id="doc-itens" class="doc-itens"></ul>
             <button type="button" id="doc-adicionar-item" class="botao-secundario doc-adicionar-item">+ Adicionar item</button>
             <p id="doc-total" class="doc-total">Total geral: R$ 0,00</p>
@@ -2256,7 +2268,13 @@
                (pedido do dono, 19/11/2026; antes dava para escolher a conta do CNPJ 1). -->
           <p id="nf-pagamento-bloco" class="doc-hint hidden">Este cliente é do CNPJ 2: a nota sai pelo CNPJ 2, com a conta do CNPJ 2 (Asaas) para pagamento.</p>
 
-          <label for="nf-servico">Serviço feito</label>
+          <div class="rotulo-com-acao">
+            <label for="nf-servico">Serviço feito</label>
+            <button type="button" class="botao-aprimorar" data-aprimorar="nf-servico" title="Corrige a escrita e deixa o texto mais técnico">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
+                <span>Aprimorar descrição</span>
+              </button>
+          </div>
           <textarea id="nf-servico" class="auto-altura" rows="2" placeholder="Ex: Troca de 2 lâmpadas na garagem."></textarea>
 
           <label>Valores</label>

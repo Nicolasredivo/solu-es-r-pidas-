@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.23j";
+const APP_VERSION = "2026.11.23k";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -17805,36 +17805,54 @@ iniciarComLogin();
 // ----- "Aprimorar descrição" (23/11/2026, pedido do dono) -----
 // Só ao clicar: o texto vai ao fluxo "App - Aprimorar texto" (Claude Haiku 5.5, o modelo mais barato, resposta curta)
 // e volta corrigido e mais técnico, direto no campo. "Desfazer" no aviso devolve o que estava escrito. Para não gastar
-// à toa: não manda se o campo estiver vazio, nem de novo o texto que acabou de voltar aprimorado.
+// à toa: não manda campo vazio, nem de novo o texto que acabou de voltar aprimorado. Vale para o recibo, a nota
+// (Serviço feito), os itens do orçamento (um por um, de uma vez só) e o "O que está incluso" do orçamento do chamado.
 const aprimorados = new WeakMap(); // campo -> último texto que voltou aprimorado
-document.querySelectorAll("[data-aprimorar]").forEach((botao) => {
-  const campo = document.getElementById(botao.dataset.aprimorar);
-  if (!campo) return;
+function ligarAprimorar(botao, campos) {
   const rotulo = botao.querySelector("span");
+  const rotuloOriginal = rotulo.textContent;
   botao.addEventListener("click", async () => {
-    const original = campo.value.trim();
-    if (original.length < 3) { mostrarToast("Escreva a descrição primeiro.", null, "erro"); campo.focus(); return; }
-    if (aprimorados.get(campo) === original) { mostrarToast("Este texto já foi aprimorado."); return; }
+    const lista = campos().filter((c) => c.value.trim().length >= 3 && aprimorados.get(c) !== c.value.trim());
+    if (!lista.length) {
+      const algum = campos().some((c) => c.value.trim().length >= 3);
+      if (algum) mostrarToast(campos().length > 1 ? "Estas descrições já foram aprimoradas." : "Este texto já foi aprimorado.");
+      else { mostrarToast("Escreva a descrição primeiro.", null, "erro"); const c = campos()[0]; if (c) c.focus(); }
+      return;
+    }
     botao.disabled = true;
     botao.classList.add("trabalhando");
     rotulo.textContent = "Aprimorando...";
+    const antes = new Map();
+    let erro = "";
     try {
-      const r = await pedirAoN8n("aprimorar-texto", { texto: original });
-      if (!r || !r.ok || !r.texto) { mostrarToast((r && r.mensagem) || "Não consegui aprimorar agora.", null, "erro"); return; }
-      if (campo.value.trim() !== original) return; // mudou enquanto aprimorava: não atropela
-      campo.value = r.texto;
-      aprimorados.set(campo, r.texto);
-      campo.dispatchEvent(new Event("input", { bubbles: true }));
-      mostrarToast("Descrição aprimorada.", { rotulo: "Desfazer", aoClicar: () => {
-        campo.value = original;
+      for (const campo of lista) {
+        const original = campo.value.trim();
+        let r;
+        try { r = await pedirAoN8n("aprimorar-texto", { texto: original }); } catch (err) { erro = "Não foi possível falar com o servidor do PC."; break; }
+        if (!r || !r.ok || !r.texto) { erro = (r && r.mensagem) || "Não consegui aprimorar agora."; break; }
+        if (campo.value.trim() !== original) continue; // mudou enquanto aprimorava: não atropela
+        antes.set(campo, campo.value);
+        campo.value = r.texto;
+        aprimorados.set(campo, r.texto);
         campo.dispatchEvent(new Event("input", { bubbles: true }));
-      } });
-    } catch (err) {
-      mostrarToast("Não foi possível falar com o servidor do PC.", null, "erro");
+      }
+      if (antes.size) {
+        mostrarToast(antes.size > 1 ? `${antes.size} descrições aprimoradas.` : "Descrição aprimorada.", { rotulo: "Desfazer", aoClicar: () => {
+          for (const [campo, valor] of antes) { campo.value = valor; campo.dispatchEvent(new Event("input", { bubbles: true })); }
+        } });
+      }
+      if (erro) setTimeout(() => mostrarToast(erro, null, "erro"), antes.size ? 2500 : 0);
     } finally {
       botao.disabled = false;
       botao.classList.remove("trabalhando");
-      rotulo.textContent = "Aprimorar descrição";
+      rotulo.textContent = rotuloOriginal;
     }
   });
+}
+document.querySelectorAll("[data-aprimorar]").forEach((botao) => {
+  const campo = document.getElementById(botao.dataset.aprimorar);
+  if (campo) ligarAprimorar(botao, () => [campo]);
+});
+document.querySelectorAll("[data-aprimorar-lista]").forEach((botao) => {
+  ligarAprimorar(botao, () => [...document.querySelectorAll(botao.dataset.aprimorarLista)]);
 });
