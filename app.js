@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.23g";
+const APP_VERSION = "2026.11.23h";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -685,6 +685,78 @@ function cepDoEndereco(texto) {
   return m ? `${m[1]}${m[2]}-${m[3]}` : "";
 }
 
+// Endereço colado do Google Maps (ou parecido) vira o padrão do sistema (23/11/2026, pedido do dono):
+// "R. Anita Garibaldi, 2259 - Anita GaribaldiJoinville - SC, 89203-332" →
+// endereço "RUA ANITA GARIBALDI, 2259, CEP 89203-332" e bairro/cidade "ANITA GARIBALDI / JOINVILLE - SC".
+// Maiúsculas sem acento, como vem da Receita. Bairro, cidade e UF são confirmados pelo CEP (ViaCEP); sem internet,
+// valem os do texto. Endereço já no padrão ("..., CEP 00000-000") não é mexido.
+const LOGRADOURO_SIGLAS = [[/^R\.?\s+/i, "RUA "], [/^AV\.?\s+/i, "AVENIDA "], [/^AL\.?\s+/i, "ALAMEDA "], [/^TV\.?\s+/i, "TRAVESSA "],
+  [/^ROD\.?\s+/i, "RODOVIA "], [/^EST\.?\s+/i, "ESTRADA "], [/^P(C|Ç)A\.?\s+/i, "PRACA "], [/^SERV\.?\s+/i, "SERVIDAO "]];
+function enderecoPadrao(t) {
+  return String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+}
+function entenderEndereco(texto) {
+  const t = String(texto || "").replace(/\s*\n\s*/g, ", ").replace(/\s+/g, " ").trim(); // quebra de linha = "Bairro, Cidade"
+  const cep = cepDoEndereco(t);
+  if (!cep || /,\s*CEP\s*:?\s*\d/i.test(t)) return null; // sem CEP, ou já está no padrão
+  let resto = t.replace(/[,\s-]*(CEP\s*:?\s*)?\d{2}\.?\d{3}-?\d{3}\s*$/i, "").trim();
+  let uf = "";
+  const mUf = resto.match(/[-,]\s*([A-Za-z]{2})\s*$/);
+  if (mUf) { uf = mUf[1].toUpperCase(); resto = resto.slice(0, mUf.index).trim(); }
+  const partes = resto.split(/\s+-\s+/).map((p) => p.trim()).filter(Boolean);
+  if (!partes.length) return null;
+  const [ruaNumero, ...meio] = partes;
+  const local = meio.length ? meio.pop() : "";
+  const complemento = meio.join(" - ");
+  const virgula = ruaNumero.indexOf(",");
+  let rua = virgula >= 0 ? ruaNumero.slice(0, virgula) : ruaNumero;
+  const numero = virgula >= 0 ? ruaNumero.slice(virgula + 1).trim() : "";
+  for (const [sigla, nome] of LOGRADOURO_SIGLAS) if (sigla.test(rua)) { rua = rua.replace(sigla, nome); break; }
+  // "Bairro, Cidade" ou colados ("Anita GaribaldiJoinville", quando a cópia perde a quebra de linha).
+  let bairro = "", cidade = local, bairroSeguro = false;
+  if (local.includes(",")) { const i = local.lastIndexOf(","); bairro = local.slice(0, i); cidade = local.slice(i + 1); bairroSeguro = true; }
+  else {
+    const m = [...local.matchAll(/[a-zà-ÿ](?=[A-ZÀ-Þ])/g)].pop();
+    if (m) { bairro = local.slice(0, m.index + 1); cidade = local.slice(m.index + 1); }
+  }
+  return { rua: enderecoPadrao(rua), numero: enderecoPadrao(numero), complemento: enderecoPadrao(complemento), cep,
+    bairro: enderecoPadrao(bairro), cidade: enderecoPadrao(cidade), uf, bairroSeguro };
+}
+async function confirmarPeloCep(e) {
+  try {
+    const ctrl = new AbortController();
+    const espera = setTimeout(() => ctrl.abort(), 5000);
+    const r = await fetch(`https://viacep.com.br/ws/${e.cep.replace(/\D/g, "")}/json/`, { signal: ctrl.signal });
+    clearTimeout(espera);
+    const v = r.ok ? await r.json() : null;
+    if (!v || v.erro) return e;
+    // Bairro escrito à parte no texto ("Bairro, Cidade") vale mais: CEP geral de cidade nem sempre traz o bairro certo.
+    return { ...e, rua: e.rua || enderecoPadrao(v.logradouro), bairro: (e.bairroSeguro && e.bairro) || enderecoPadrao(v.bairro) || e.bairro,
+      cidade: enderecoPadrao(v.localidade) || e.cidade, uf: String(v.uf || e.uf).toUpperCase() };
+  } catch (err) {
+    return e; // sem internet ou ViaCEP fora: fica o que veio no texto
+  }
+}
+async function organizarEnderecoDoLocal(bloco) {
+  const campo = bloco.querySelector(".local-endereco");
+  const bairroCampo = bloco.querySelector(".local-bairro");
+  const original = campo.value;
+  let e = entenderEndereco(original);
+  if (!e) return;
+  e = await confirmarPeloCep(e);
+  if (campo.value !== original) return; // mudou enquanto consultava o CEP: não atropela
+  campo.value = [e.rua, e.numero, e.complemento, `CEP ${e.cep}`].filter(Boolean).join(", ");
+  campo.dispatchEvent(new Event("input", { bubbles: true }));
+  const bc = [e.bairro, [e.cidade, e.uf].filter(Boolean).join(" - ")].filter(Boolean).join(" / ");
+  // Bairro/Cidade: preenche se estiver vazio ou se foi o próprio sistema que preencheu antes.
+  if (bc && (!bairroCampo.value.trim() || bairroCampo.value === bairroCampo.dataset.auto)) {
+    bairroCampo.value = bc;
+    bairroCampo.dataset.auto = bc;
+    bairroCampo.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  mostrarToast("Endereço organizado: rua, número, CEP, bairro e cidade separados.");
+}
+
 function adicionarLocal(caixa, comFoco, dados) {
   const bloco = modeloLocal.content.firstElementChild.cloneNode(true);
 
@@ -715,6 +787,9 @@ function adicionarLocal(caixa, comFoco, dados) {
   campoEndereco.addEventListener("keydown", (evento) => {
     if (evento.key === "Enter") evento.preventDefault();
   });
+  // Colou ou saiu do campo: tenta separar o endereço sozinho (ver entenderEndereco).
+  campoEndereco.addEventListener("paste", () => setTimeout(() => organizarEnderecoDoLocal(bloco), 0));
+  campoEndereco.addEventListener("change", () => organizarEnderecoDoLocal(bloco));
 
   caixa.appendChild(bloco);
   renumerarLocais(caixa);
