@@ -46,9 +46,15 @@
 
     <!-- Voltar para a tela anterior (página, aba e pasta), em qualquer lugar do sistema (16/11/2026). O app.js
          põe este botão no alto do bloco da página aberta (pedido do dono: no topo da tela ficava longe). -->
-    <button type="button" id="nav-voltar" class="nav-voltar hidden" aria-label="Voltar para a tela anterior">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>Voltar</span>
-    </button>
+    <!-- 23/11/2026: e "Avançar" ao lado (refaz o caminho desfeito pelo Voltar), igual às setas do navegador. -->
+    <div id="nav-setas" class="nav-setas hidden">
+      <button type="button" id="nav-voltar" class="nav-voltar hidden" aria-label="Voltar para a tela anterior">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>Voltar</span>
+      </button>
+      <button type="button" id="nav-avancar" class="nav-voltar nav-avancar hidden" aria-label="Avançar para a tela seguinte">
+        <span>Avançar</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
 
     <!-- Busca rápida (16/11/2026): uma caixa só para achar cliente, chamado, nota, tela ou ação, de qualquer
          lugar. Escolher um cliente mostra o que dá para fazer com ele (abrir cadastro, emitir nota, gerar

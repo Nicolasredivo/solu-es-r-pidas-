@@ -8842,3 +8842,9 @@ button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
       "dias sem periodo lista";
   }
 }
+
+/* Voltar e Avançar lado a lado no alto da página (23/11/2026). */
+.nav-setas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.nav-setas.hidden { display: none; }
+.nav-setas .nav-voltar { margin: 0; }
+.nav-setas .nav-avancar { padding: 6px 8px 6px 12px; }

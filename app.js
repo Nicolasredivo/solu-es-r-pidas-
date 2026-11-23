@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.23f";
+const APP_VERSION = "2026.11.23g";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -9689,6 +9689,9 @@ function desempilharCamada() {
 }
 
 window.addEventListener("popstate", (ev) => {
+  navPopVeio = true;
+  // Volta/avança feito pelo próprio app para acertar o histórico: não é um pedido de quem usa.
+  if (navIgnorarPop) { navIgnorarPop = false; return; }
   // Voltar disparado pelo próprio app ao fechar algo: já está tudo fechado.
   if (voltandoSozinho) {
     voltandoSozinho = false;
@@ -9704,9 +9707,13 @@ window.addEventListener("popstate", (ev) => {
   if (aberto && aberto.offsetParent !== null) { fecharLinhaSemVoltar(aberto); return; }
   // Voltar do navegador = o mesmo "Voltar" do sistema (23/11/2026): volta para a tela anterior (página, aba, pasta,
   // Recebidos...). O "avançar" do navegador não refaz nada (cai numa tela de número maior que a pilha): é ignorado.
-  // Entradas de antes de recarregar a página não são desta pilha (outra "sessão"): contam como voltar.
+  // Número da tela maior que a pilha = "avançar" do navegador; igual = nada a fazer. Entradas de antes de recarregar
+  // a página não são desta pilha (outra "sessão"): contam como voltar.
   const st = ev.state || {};
-  if (st.s === NAV_SESSAO && typeof st.tela === "number" && st.tela >= navPilha.length) return;
+  if (st.s === NAV_SESSAO && typeof st.tela === "number") {
+    if (st.tela > navPilha.length) { navAvancar({ doNavegador: true }); return; }
+    if (st.tela === navPilha.length) return;
+  }
   navVoltar({ doNavegador: true });
 });
 
@@ -15181,6 +15188,11 @@ document.getElementById("aba-doc-arquivos").addEventListener("click", arqAbrirAb
 // ele ainda fecha o menu e o cadastro aberto. Também entram as telas de dentro da página (ex.: Recebidos do Financeiro).
 const navBotaoVoltar = document.getElementById("nav-voltar");
 const navPilha = [];
+const navFrente = []; // telas desfeitas pelo Voltar, para o Avançar refazer
+const navBotaoAvancar = document.getElementById("nav-avancar");
+const navSetas = document.getElementById("nav-setas");
+let navIgnorarPop = false;
+let navPopVeio = false;
 const NAV_SESSAO = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 history.replaceState({ tela: 0, s: NAV_SESSAO }, "");
 let navAtual = null;
@@ -15212,8 +15224,10 @@ const navChave = (f) => JSON.stringify({ ...f, rec: Boolean(f.rec) });
 // O botão mora no alto do bloco da página aberta, logo acima do título.
 function navAtualizarBotao() {
   const pagina = [...document.querySelectorAll(".page")].find((p) => !p.classList.contains("hidden"));
-  if (pagina && navBotaoVoltar.parentElement !== pagina) pagina.prepend(navBotaoVoltar);
+  if (pagina && navSetas.parentElement !== pagina) pagina.prepend(navSetas);
   navBotaoVoltar.classList.toggle("hidden", !navPilha.length || !pagina);
+  navBotaoAvancar.classList.toggle("hidden", !navFrente.length || !pagina);
+  navSetas.classList.toggle("hidden", !pagina || (!navPilha.length && !navFrente.length));
 }
 
 function navConferir() {
@@ -15223,6 +15237,7 @@ function navConferir() {
   if (navAtual && navChave(agora) !== navChave(navAtual)) {
     navPilha.push(navAtual);
     if (navPilha.length > 40) navPilha.shift();
+    navFrente.length = 0; // caminho novo: o que tinha para avançar deixa de valer (igual ao navegador)
     history.pushState({ tela: navPilha.length, s: NAV_SESSAO }, "");
   }
   navAtual = agora;
@@ -15230,51 +15245,68 @@ function navConferir() {
 }
 
 // Depois de cada toque (e de cada tecla que aciona botão), confere se a tela mudou. A espera deixa terminar a troca.
-document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("#nav-voltar")) return; setTimeout(navConferir, 350); });
+document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("#nav-setas")) return; setTimeout(navConferir, 350); });
 document.addEventListener("keyup", (e) => { if (e.key === "Enter" || e.key === " ") setTimeout(navConferir, 350); });
 
 const navEsperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function navVoltar(opcoes = {}) {
-  if (navRestaurando || !navPilha.length) return;
-  const alvo = navPilha.pop();
+// Refaz uma tela guardada (página, abas, pasta de Arquivos, Recebidos). Devolve false se ficou parado na pergunta
+// "salvar antes de sair?" (a pessoa decide; nada muda de lugar).
+async function navIrPara(alvo) {
+  const pagina = document.getElementById(alvo.pagina);
+  if (!pagina) return false;
+  if (pagina.classList.contains("hidden")) {
+    const item = document.querySelector(`.sidebar-item[data-page="${alvo.pagina.replace(/^page-/, "")}"]`);
+    if (item) item.click();
+    // A troca de página pode levar um instante (algumas abas carregam algo antes): espera até 1,5 s.
+    for (let i = 0; i < 30 && pagina.classList.contains("hidden"); i++) await navEsperar(50);
+    if (pagina.classList.contains("hidden")) return false;
+  }
+  for (const seletor of alvo.abas) {
+    const aba = pagina.querySelector(seletor);
+    if (aba && !aba.classList.contains("active")) { aba.click(); await navEsperar(30); }
+  }
+  if (alvo.arq) {
+    const a = alvo.arq;
+    if (a.view === "lista") {
+      if (arq.view !== "lista") { arq.view = "lista"; arq.erro = ""; arqDesenhar(); arqCarregarResumo().then(arqDesenhar); }
+    } else {
+      if (!arq.cliente || arq.cliente.id !== a.cliente) await arqAbrirCliente(a.cliente);
+      if (a.view === "pasta") { arq.pasta = a.pasta; arq.f = arqFiltrosLimpos(); }
+      arq.view = a.view;
+      arqDesenhar();
+    }
+  }
+  // Recebidos (Financeiro): abre no mês em que estava, ou fecha.
+  if (alvo.pagina === "page-financeiro") {
+    const aberta = !recEls.pagina.classList.contains("hidden");
+    if (alvo.rec && (!aberta || recMes !== alvo.rec)) recAbrir(alvo.rec);
+    else if (!alvo.rec && aberta) recFechar();
+  }
+  window.scrollTo({ top: 0 });
+  return true;
+}
+
+// Voltar (direcao -1) ou Avançar (+1). A tela de onde se sai vai para a outra pilha. Se o navegador já andou e a
+// troca não aconteceu (pergunta de salvar), ele é devolvido ao lugar sem virar um novo pedido.
+async function navAndar(direcao, opcoes = {}) {
+  const de = direcao < 0 ? navPilha : navFrente;
+  const para = direcao < 0 ? navFrente : navPilha;
+  if (navRestaurando || !de.length) return;
+  const alvo = de.pop();
+  const saindo = navAtual;
   navRestaurando = true;
   try {
-    const pagina = document.getElementById(alvo.pagina);
-    if (pagina && pagina.classList.contains("hidden")) {
-      const item = document.querySelector(`.sidebar-item[data-page="${alvo.pagina.replace(/^page-/, "")}"]`);
-      if (item) item.click();
-      // A troca de página pode levar um instante (algumas abas carregam algo antes): espera até 1,5 s.
-      for (let i = 0; i < 30 && pagina.classList.contains("hidden"); i++) await navEsperar(50);
-      // Ficou parado na pergunta "salvar antes de sair?": a tela anterior volta para a pilha e a pessoa decide.
-      if (pagina.classList.contains("hidden")) {
-        navPilha.push(alvo);
-        if (opcoes.doNavegador) history.pushState({ tela: navPilha.length, s: NAV_SESSAO }, ""); // o navegador já tinha voltado: repõe
-        return;
+    if (await navIrPara(alvo)) {
+      if (saindo) para.push(saindo);
+    } else {
+      de.push(alvo);
+      if (opcoes.doNavegador) {
+        navIgnorarPop = true;
+        if (direcao < 0) history.forward(); else history.back();
+        setTimeout(() => { navIgnorarPop = false; }, 1000);
       }
     }
-    for (const seletor of alvo.abas) {
-      const aba = pagina.querySelector(seletor);
-      if (aba && !aba.classList.contains("active")) { aba.click(); await navEsperar(30); }
-    }
-    if (alvo.arq) {
-      const a = alvo.arq;
-      if (a.view === "lista") {
-        if (arq.view !== "lista") { arq.view = "lista"; arq.erro = ""; arqDesenhar(); arqCarregarResumo().then(arqDesenhar); }
-      } else {
-        if (!arq.cliente || arq.cliente.id !== a.cliente) await arqAbrirCliente(a.cliente);
-        if (a.view === "pasta") { arq.pasta = a.pasta; arq.f = arqFiltrosLimpos(); }
-        arq.view = a.view;
-        arqDesenhar();
-      }
-    }
-    // Recebidos (Financeiro): abre no mês em que estava, ou fecha.
-    if (alvo.pagina === "page-financeiro") {
-      const aberta = !recEls.pagina.classList.contains("hidden");
-      if (alvo.rec && (!aberta || recMes !== alvo.rec)) recAbrir(alvo.rec);
-      else if (!alvo.rec && aberta) recFechar();
-    }
-    window.scrollTo({ top: 0 });
   } finally {
     await navEsperar(400);
     navAtual = navFoto();
@@ -15282,12 +15314,23 @@ async function navVoltar(opcoes = {}) {
     navAtualizarBotao();
   }
 }
+const navVoltar = (opcoes) => navAndar(-1, opcoes);
+const navAvancar = (opcoes) => navAndar(1, opcoes);
 
-// O "Voltar" do sistema anda junto com o histórico do navegador: se a tela anterior está nele, volta por ele (o
-// popstate chama navVoltar), assim o voltar do navegador e o do sistema nunca se desencontram.
+// Os botões andam junto com o histórico do navegador (o popstate chama navAndar), assim as setas do navegador e as
+// do sistema nunca se desencontram. Se o histórico não tiver a entrada (raro), anda direto.
+function navPeloHistorico(direcao) {
+  navPopVeio = false;
+  if (direcao < 0) history.back(); else history.forward();
+  setTimeout(() => { if (!navPopVeio) navAndar(direcao); }, 400);
+}
 navBotaoVoltar.addEventListener("click", () => {
-  if (history.state && history.state.s === NAV_SESSAO && history.state.tela > 0) history.back();
+  if (history.state && history.state.s === NAV_SESSAO && history.state.tela > 0) navPeloHistorico(-1);
   else navVoltar();
+});
+navBotaoAvancar.addEventListener("click", () => {
+  if (history.state && history.state.s === NAV_SESSAO) navPeloHistorico(1);
+  else navAvancar();
 });
 setTimeout(() => { navAtual = navFoto(); }, 1500);
 
