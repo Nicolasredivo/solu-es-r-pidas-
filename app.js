@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.23k";
+const APP_VERSION = "2026.11.23l";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -15841,6 +15841,7 @@ const PAINEL_IC = {
 const painelSvg = (nome) => `<svg viewBox="0 0 24 24" aria-hidden="true">${PAINEL_IC[nome] || ""}</svg>`;
 
 const painelInicio = {
+  meiAberto: false, // o Limite do MEI começa fechado: abre pelo cartão "Cabe no MEI"
   dono: false,
   chamados: "", // "" = ainda carregando | "ok" | "erro"
   fat: null, // { ano, ambiente, emissores, quando }: a última soma do governo
@@ -16065,12 +16066,12 @@ const painelVazio = (icone, texto, extra) => `<div class="painel-vazio">${painel
 // ---- números-chave ----
 
 function painelDesenharKpis(d) {
-  const kpi = (k) => `<button type="button" class="kpi" style="--cor: ${k.cor}" data-ir="${k.ir}"${k.aba ? ` data-aba="${escapeHtml(k.aba)}"` : ""}>
-      <span class="kpi-rotulo">${escapeHtml(k.rotulo)}</span>
-      ${k.carregando ? '<span class="esqueleto kpi-esqueleto"></span>'
+  const kpi = (k) => `<button type="button" class="kpi${k.abre ? " kpi-abre" : ""}" style="--cor: ${k.cor}" data-ir="${k.ir}"${k.aba ? ` data-aba="${escapeHtml(k.aba)}"` : ""}${k.abre ? ` aria-expanded="${painelInicio.meiAberto ? "true" : "false"}" aria-controls="painel-mei" title="${painelInicio.meiAberto ? "Esconder" : "Ver"} o limite do MEI"` : ""}>
+      ${k.abre ? `<span class="kpi-seta" aria-hidden="true">${painelSvg("seta")}</span>` : ""}<span class="kpi-rotulo">${escapeHtml(k.rotulo)}</span>
+      ${k.html ? k.html : k.carregando ? '<span class="esqueleto kpi-esqueleto"></span>'
     : `<strong class="kpi-valor"${k.contar !== undefined ? ` data-contar="${k.contar}"${k.moeda ? ' data-moeda="1"' : ""}` : ""}>${
       k.moeda && k.contar !== undefined ? `<span class="kpi-moeda">R$</span><span class="kpi-num">${escapeHtml(painelNumero(k.contar))}</span>` : `<span class="kpi-num">${escapeHtml(k.valor)}</span>`}</strong>`}
-      <span class="kpi-nota${k.classe ? " " + k.classe : ""}">${escapeHtml(k.nota || "")}</span>
+      ${k.html ? "" : `<span class="kpi-nota${k.classe ? " " + k.classe : ""}">${escapeHtml(k.nota || "")}</span>`}
     </button>`;
 
   const pendentesHoje = d.doDia.filter((c) => c.status !== "Concluído").length + d.emAndamento.length;
@@ -16107,9 +16108,26 @@ function painelDesenharKpis(d) {
       nota: f ? `${notasMes} nota${notasMes === 1 ? "" : "s"} emitida${notasMes === 1 ? "" : "s"}` : semFat ? "veja o cartão do MEI" : "",
     });
     const e1 = f && f.emissores[0];
-    itens.push({
+    // Com os dois CNPJs, o mesmo cartão mostra quanto cabe em cada um, lado a lado (pedido do dono, 23/11/2026).
+    // A cor do cartão é a do CNPJ mais apertado.
+    const NIVEL_COR = { perigo: "229, 72, 77", aviso: "245, 166, 35" };
+    const nivelClasse = (e) => (e.nivel === "perigo" ? "kpi-perigo" : e.nivel === "aviso" ? "kpi-aviso" : "");
+    if (f && f.emissores.length > 1) {
+      const pior = f.emissores.find((e) => e.nivel === "perigo") || f.emissores.find((e) => e.nivel === "aviso");
+      itens.push({
+        rotulo: "Cabe no MEI", cor: pior ? NIVEL_COR[pior.nivel] : "52, 211, 153", ir: "inicio", abre: true,
+        html: `<span class="kpi-mei">${f.emissores.slice(0, 2).map((e) => {
+          const sobra = Math.max(0, e.sobra);
+          return `<span class="kpi-mei-col">
+            <span class="kpi-mei-nome">${escapeHtml(e.nome)}</span>
+            <strong class="kpi-valor" data-contar="${sobra}" data-moeda="1"><span class="kpi-moeda">R$</span><span class="kpi-num">${escapeHtml(painelNumero(sobra))}</span></strong>
+            <span class="kpi-nota ${nivelClasse(e)}">${Math.round(e.usado * 100)}% do limite usado</span>
+          </span>`;
+        }).join("")}</span>`,
+      });
+    } else itens.push({
       rotulo: e1 ? `Cabe no MEI · ${e1.nome}` : "Cabe no MEI", cor: e1 && e1.nivel === "perigo" ? "229, 72, 77" : e1 && e1.nivel === "aviso" ? "245, 166, 35" : "52, 211, 153",
-      ir: "inicio",
+      ir: "inicio", abre: true,
       carregando: !f && painelInicio.fatCarregando, valor: e1 ? dinheiro(Math.max(0, e1.sobra)) : "—",
       contar: e1 ? Math.max(0, e1.sobra) : undefined, moeda: true,
       nota: e1 ? `${Math.round(e1.usado * 100)}% do limite usado` : semFat ? "veja o cartão do MEI" : "",
@@ -16204,7 +16222,7 @@ function painelDesenharMei(d) {
   } else {
     const C = 2 * Math.PI * 50;
     const selo = { ok: "dentro do limite", aviso: "atenção", perigo: "no limite" };
-    corpo = f.emissores.map((e) => {
+    corpo = '<div class="mei-itens">' + f.emissores.map((e) => {
       const pct = Math.round(e.usado * 100);
       return `<div class="mei-item mei-${e.nivel}">
           <svg class="mei-anel" viewBox="0 0 120 120" role="img" aria-label="${pct}% do limite usado">
@@ -16219,7 +16237,7 @@ function painelDesenharMei(d) {
             <div class="mei-ritmo">${escapeHtml(painelTextoDoRitmo(e))}</div>
           </div>
         </div>`;
-    }).join("");
+    }).join("") + "</div>";
     const notas = f.emissores.reduce((s, e) => s + e.notas, 0);
     const canceladas = f.emissores.reduce((s, e) => s + e.canceladas, 0);
     const quando = f.emissores.map((e) => e.sincronizadoEm).filter(Boolean).sort()[0] || "";
@@ -16229,7 +16247,8 @@ function painelDesenharMei(d) {
         <button type="button" class="painel-atualizar${painelInicio.fatCarregando ? " girando" : ""}" data-fat-atualizar title="Ler de novo no governo"${painelInicio.fatCarregando ? " disabled" : ""}>${painelSvg("atualizar")}Atualizar</button>
       </footer>${erro ? `<p class="painel-aviso">${escapeHtml(erro)}</p>` : ""}`;
   }
-  painelPor("painel-mei", painelCab("medidor", "Limite do MEI", f ? `<span class="painel-etiqueta">${f.ano}</span>` : "") + corpo);
+  painelPor("painel-mei", painelCab("medidor", "Limite do MEI", (f ? `<span class="painel-etiqueta">${f.ano}</span>` : "")
+    + '<button type="button" class="painel-fechar" data-mei-fechar title="Esconder o limite do MEI" aria-label="Esconder o limite do MEI">×</button>') + corpo);
 }
 
 // ---- faturamento por mês ----
@@ -16321,7 +16340,9 @@ function painelDesenhar() {
   const dono = painelInicio.dono;
   document.querySelectorAll("#page-inicio [data-so-dono]").forEach((b) => b.classList.toggle("hidden", !dono));
   // Quem não tem acesso total não recebe os cartões de dinheiro e de notas (o servidor também não entrega).
-  ["painel-mei", "painel-contas", "painel-fat", "painel-notas"].forEach((id) => document.getElementById(id).classList.toggle("hidden", !dono));
+  ["painel-contas", "painel-fat", "painel-notas"].forEach((id) => document.getElementById(id).classList.toggle("hidden", !dono));
+  // O Limite do MEI só aparece quando o dono toca no cartão "Cabe no MEI".
+  document.getElementById("painel-mei").classList.toggle("hidden", !dono || !painelInicio.meiAberto);
   const d = painelDados();
   painelDesenharKpis(d);
   painelDesenharHoje(d);
@@ -16365,9 +16386,23 @@ paginaInicio.addEventListener("click", (evento) => {
   const chamado = alvo("[data-chamado]");
   if (chamado) return void painelAbrirChamado(chamado.dataset.chamado);
   const ir = alvo("[data-ir]");
+  if (alvo("[data-mei-fechar]")) return void painelAlternarMei(false);
   if (ir && ir.dataset.ir !== "inicio") painelIr(ir.dataset.ir, ir.dataset.aba || "");
-  else if (ir) document.getElementById("painel-mei").scrollIntoView({ behavior: "smooth", block: "center" });
+  else if (ir) painelAlternarMei(!painelInicio.meiAberto);
 });
+
+// "Cabe no MEI" abre e fecha o Limite do MEI logo abaixo dos números-chave (pedido do dono, 23/11/2026).
+function painelAlternarMei(abrir) {
+  painelInicio.meiAberto = abrir;
+  // Sem redesenhar o painel todo: os números de cima não podem "contar de novo" a cada toque.
+  document.getElementById("painel-mei").classList.toggle("hidden", !abrir || !painelInicio.dono);
+  document.querySelectorAll("#painel-kpis .kpi-abre").forEach((k) => {
+    k.setAttribute("aria-expanded", abrir ? "true" : "false");
+    k.title = (abrir ? "Esconder" : "Ver") + " o limite do MEI";
+  });
+  if (abrir) document.getElementById("painel-mei").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  else { const k = document.querySelector("#painel-kpis .kpi-abre"); if (k) k.focus({ preventScroll: true }); }
+}
 
 // Linha da lista de hoje também abre pelo teclado (Enter), como um botão.
 paginaInicio.addEventListener("keydown", (evento) => {

@@ -8337,7 +8337,8 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
      (fica alinhado, sem vão): agenda | limite do MEI | últimas notas (alta) / contas a pagar | faturamento. */
   #page-inicio .painel-grade {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr);
-    grid-template-areas: "hoje mei notas" "contas fat notas";
+    /* Sem o Limite do MEI (agora abre pelo cartão "Cabe no MEI"): o faturamento ganha a largura de duas colunas. */
+    grid-template-areas: "hoje contas notas" "fat fat notas";
     align-items: stretch;
     gap: 18px;
   }
@@ -8347,7 +8348,6 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
   }
 
   #page-inicio #painel-hoje { grid-area: hoje; }
-  #page-inicio #painel-mei { grid-area: mei; }
   #page-inicio #painel-contas { grid-area: contas; }
   #page-inicio #painel-fat { grid-area: fat; }
   #page-inicio #painel-notas { grid-area: notas; grid-column: auto; }
@@ -8664,8 +8664,8 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
 @media (min-width: 2200px) {
   /* Início: os cinco cartões numa linha só (agenda | contas a pagar | limite do MEI | faturamento | últimas notas). */
   #page-inicio .painel-grade {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    grid-template-areas: "hoje contas mei fat notas";
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-areas: "hoje contas fat notas";
   }
 
   /* Chamados: a lista e o "Criar chamado" lado a lado, sem precisar trocar de aba. */
@@ -8860,3 +8860,99 @@ button.botao-aprimorar {
 button.botao-aprimorar:hover:not(:disabled) { background: rgba(167, 139, 250, 0.24); filter: none; }
 button.botao-aprimorar:disabled { opacity: 0.75; cursor: default; }
 button.botao-aprimorar.trabalhando svg { animation: v2-gira 1.2s linear infinite; }
+
+/* --- "Cabe no MEI" com os dois CNPJs (23/11/2026): duas colunas iguais no mesmo cartão, um risco fino entre elas.
+   No celular (cartão estreito) uma embaixo da outra. --- */
+.kpi-mei {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+}
+.kpi-mei-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.kpi-mei-col + .kpi-mei-col {
+  padding-left: 14px;
+  margin-left: 14px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+.kpi-mei-nome {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text);
+  opacity: 0.85;
+}
+.kpi-mei .kpi-nota { font-size: 0.75rem; }
+@media (max-width: 600px) {
+  .kpi-mei { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .kpi-mei-col + .kpi-mei-col { padding: 8px 0 0; margin: 0; border-left: 0; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+}
+
+/* Tela grande (23/11/2026): os números-chave um pouco mais altos e, no "Cabe no MEI", o vão de cima do cartão até
+   "CNPJ 1 / CNPJ 2" igual ao vão de baixo (pedido do dono). Vão de baixo = respiro de cima + linha do rótulo + espaço. */
+@media (min-width: 901px) {
+  /* O rótulo de cima fica mais perto da borda e mais longe dos números (pedido do dono, 23/11/2026). */
+  .painel-kpis .kpi {
+    --kpi-respiro: 12px;
+    --kpi-vao-rotulo: 14px;
+    padding: var(--kpi-respiro) 16px 18px 18px;
+  }
+  .painel-kpis .kpi-rotulo { line-height: 14px; margin-bottom: calc(var(--kpi-vao-rotulo) - 4px); }
+  /* Espaço de baixo menor (pedido do dono, 23/11/2026): o "Cabe no MEI" usa o mesmo pé dos outros cartões. */
+}
+
+/* Os dois valores do "Cabe no MEI" diminuem junto com o cartão: em tela média o do CNPJ 2 saía cortado na direita. */
+.painel-kpis .kpi:has(.kpi-mei) { container-type: inline-size; }
+.kpi-mei .kpi-valor { font-size: clamp(0.9rem, 6.2cqi, 1.5rem); }
+/* Cartão estreito (notebook pequeno, tablet deitado): os dois CNPJs um embaixo do outro, como no celular. */
+@container (max-width: 240px) {
+  .kpi-mei { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .kpi-mei-col + .kpi-mei-col { padding: 8px 0 0; margin: 0; border-left: 0; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+  .kpi-mei .kpi-valor { font-size: clamp(1rem, 11cqi, 1.5rem); }
+}
+
+/* --- Limite do MEI aberto pelo cartão "Cabe no MEI" (23/11/2026): fica entre os números-chave e a grade. --- */
+.painel-mei-detalhe { margin-bottom: 12px; }
+.kpi-abre { cursor: pointer; }
+.kpi-seta {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(var(--cor), 0.16);
+  color: rgb(var(--cor));
+  transform: rotate(90deg);
+  transition: transform var(--transicao);
+}
+.kpi-seta svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.kpi-abre[aria-expanded="true"] { border-color: rgba(var(--cor), 0.7); }
+.kpi-abre[aria-expanded="true"] .kpi-seta { transform: rotate(-90deg); }
+.painel-fechar {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--borda-suave);
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+.painel-fechar:hover { color: var(--text); border-color: var(--text); }
+@media (min-width: 901px) {
+  /* Aberto na largura toda: os dois CNPJs lado a lado, com um risco entre eles. */
+  .painel-mei-detalhe .mei-itens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; }
+  .painel-mei-detalhe .mei-item + .mei-item { margin-top: 0; padding-top: 0; border-top: 0; padding-left: 28px; border-left: 1px dashed var(--borda-suave); }
+}
+@media (min-width: 1280px) {
+  #page-inicio .painel-mei-detalhe { margin-bottom: 20px; }
+}
