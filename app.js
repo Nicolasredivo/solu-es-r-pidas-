@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.23a";
+const APP_VERSION = "2026.11.23b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -17091,6 +17091,31 @@ function cobLinha(x) {
 }
 
 // --- 3. Boletos: a receber por dia de vencimento ---
+// Lista que abre e fecha (23/11/2026, pedido do dono): o cartão mostra só a frase de cima; a seta logo abaixo abre
+// a lista (empurrando o resto para baixo) e vira para cima quando está aberta. Fica como estava ao atualizar a tela.
+const cobListaAberta = { dias: false, sem: false };
+try { Object.assign(cobListaAberta, JSON.parse(localStorage.getItem("cob_listas_abertas") || "{}")); } catch (err) { /* sem memória: começa fechada */ }
+function cobRecolher(destino, chave, quantos) {
+  const botao = cobEl("button", "cob-abre-lista");
+  botao.type = "button";
+  const caixa = cobEl("div", "cob-lista-recolhe");
+  const mostrar = () => {
+    const aberta = Boolean(cobListaAberta[chave]);
+    caixa.hidden = !aberta;
+    botao.setAttribute("aria-expanded", String(aberta));
+    botao.innerHTML = `<span>${aberta ? "Esconder a lista" : "Ver a lista (" + escapeHtml(quantos) + ")"}</span>`
+      + '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+    botao.classList.toggle("aberta", aberta);
+  };
+  botao.addEventListener("click", () => {
+    cobListaAberta[chave] = !cobListaAberta[chave];
+    try { localStorage.setItem("cob_listas_abertas", JSON.stringify(cobListaAberta)); } catch (err) { /* só não lembra */ }
+    mostrar();
+  });
+  mostrar();
+  destino.append(botao, caixa);
+  return caixa;
+}
 function cobDesenharDias(d) {
   const destino = cobEls.dias;
   destino.innerHTML = "";
@@ -17101,6 +17126,10 @@ function cobDesenharDias(d) {
     destino.append(cobEl("p", "doc-hint", "Nenhum boleto em aberto. Os boletos gerados com a nota aparecem aqui, no dia em que vencem."));
     return;
   }
+  const vencidosQtd = abertos.filter((x) => x.vencimento < hoje).length;
+  destino.append(cobEl("p", "doc-hint cob-sem-previsao", `${cobPlural(abertos.length, "boleto em aberto", "boletos em aberto")}, somando ${dinheiro(cobSoma(abertos))}.`
+    + (vencidosQtd ? ` ${cobPlural(vencidosQtd, "já venceu", "já venceram")}.` : " Nenhum vencido.")));
+  const caixa = cobRecolher(destino, "dias", cobPlural(abertos.length, "boleto", "boletos"));
   const grupos = new Map();
   for (const x of abertos.sort((a, b) => a.vencimento.localeCompare(b.vencimento))) {
     const chave = x.vencimento < hoje ? "vencidos" : x.vencimento;
@@ -17115,7 +17144,7 @@ function cobDesenharDias(d) {
     sum.append(cobEl("strong", "", rotulo), cobEl("span", "cob-dia-qtd", cobPlural(lista.length, "boleto", "boletos")), cobEl("span", "cob-dia-total", dinheiro(cobSoma(lista))));
     det.append(sum);
     lista.forEach((x) => det.append(cobLinha(x)));
-    destino.append(det);
+    caixa.append(det);
   }
 }
 
@@ -17133,11 +17162,12 @@ function cobDesenharSemBoleto(d) {
     destino.append(cobEl("p", "doc-hint", "Nada pendente. Toda nota emitida de cliente sem boleto (e todo recibo) entra aqui."));
     return;
   }
+  const caixa = cobRecolher(destino, "sem", cobPlural(lista.length, "item", "itens"));
   for (const x of lista.sort((a, b) => String(a.criadoEm).localeCompare(String(b.criadoEm)))) {
     const linha = cobLinha(x);
     const dias = Math.max(0, cobDias(String(x.criadoEm).slice(0, 10), hojeISO()));
     linha.querySelector(".cob-linha-sub").textContent += ` · há ${cobPlural(dias, "dia", "dias")}`;
-    destino.append(linha);
+    caixa.append(linha);
   }
 }
 

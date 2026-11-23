@@ -8778,3 +8778,14 @@ button.rec-doc:hover { border-color: var(--accent); filter: none; }
   .rec-data { align-items: flex-start; padding-top: 0; }
   .rec-docs { margin-top: 0; }
 }
+
+/* Lista que abre e fecha nos cartões "Boletos por dia" e "Notas e recibos sem boleto" (23/11/2026). */
+button.cob-abre-lista {
+  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin: 2px 0 4px; padding: 7px 10px;
+  border: 1px dashed var(--borda); border-radius: 10px; background: transparent; box-shadow: none;
+  color: var(--accent); font-size: 0.8rem; font-weight: 600;
+}
+button.cob-abre-lista:hover { border-color: var(--accent); background: rgba(91, 141, 239, 0.08); filter: none; }
+button.cob-abre-lista svg { flex: none; transition: transform var(--transicao); }
+button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
+.cob-lista-recolhe[hidden] { display: none; }
