@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.23i";
+const APP_VERSION = "2026.11.23j";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -17801,3 +17801,40 @@ document.querySelectorAll('.subtab-fin[data-subfin="receber"]').forEach((b) => b
 // Toda abertura passa pelo login por e-mail e senha (conta.html). O endereço
 // antigo sistema.html#senha cai aqui também, e é levado para o Entrar.
 iniciarComLogin();
+
+// ----- "Aprimorar descrição" (23/11/2026, pedido do dono) -----
+// Só ao clicar: o texto vai ao fluxo "App - Aprimorar texto" (Claude Haiku 5.5, o modelo mais barato, resposta curta)
+// e volta corrigido e mais técnico, direto no campo. "Desfazer" no aviso devolve o que estava escrito. Para não gastar
+// à toa: não manda se o campo estiver vazio, nem de novo o texto que acabou de voltar aprimorado.
+const aprimorados = new WeakMap(); // campo -> último texto que voltou aprimorado
+document.querySelectorAll("[data-aprimorar]").forEach((botao) => {
+  const campo = document.getElementById(botao.dataset.aprimorar);
+  if (!campo) return;
+  const rotulo = botao.querySelector("span");
+  botao.addEventListener("click", async () => {
+    const original = campo.value.trim();
+    if (original.length < 3) { mostrarToast("Escreva a descrição primeiro.", null, "erro"); campo.focus(); return; }
+    if (aprimorados.get(campo) === original) { mostrarToast("Este texto já foi aprimorado."); return; }
+    botao.disabled = true;
+    botao.classList.add("trabalhando");
+    rotulo.textContent = "Aprimorando...";
+    try {
+      const r = await pedirAoN8n("aprimorar-texto", { texto: original });
+      if (!r || !r.ok || !r.texto) { mostrarToast((r && r.mensagem) || "Não consegui aprimorar agora.", null, "erro"); return; }
+      if (campo.value.trim() !== original) return; // mudou enquanto aprimorava: não atropela
+      campo.value = r.texto;
+      aprimorados.set(campo, r.texto);
+      campo.dispatchEvent(new Event("input", { bubbles: true }));
+      mostrarToast("Descrição aprimorada.", { rotulo: "Desfazer", aoClicar: () => {
+        campo.value = original;
+        campo.dispatchEvent(new Event("input", { bubbles: true }));
+      } });
+    } catch (err) {
+      mostrarToast("Não foi possível falar com o servidor do PC.", null, "erro");
+    } finally {
+      botao.disabled = false;
+      botao.classList.remove("trabalhando");
+      rotulo.textContent = "Aprimorar descrição";
+    }
+  });
+});

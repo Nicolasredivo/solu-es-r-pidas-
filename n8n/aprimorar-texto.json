@@ -1,0 +1,324 @@
+{
+  "name": "App - Aprimorar texto",
+  "nodes": [
+    {
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "b4f0c3a2-6d1e-4c8a-9e57-5a1b2c3d4e5f",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "aprimorar-texto",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      },
+      "id": "206fda53-29b9-47d7-a9da-e7fe08a80c3a"
+    },
+    {
+      "name": "Confere acesso",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        200
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "acesso",
+            "senha": "={{ $json.body.senha }}",
+            "tokenAcesso": "={{ $json.body.tokenAcesso }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "14ca56db-1d83-4078-a2dd-1a9affdaf0fe"
+    },
+    {
+      "name": "Acesso permitido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a1",
+              "leftValue": "={{ $json.permitido === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "29699765-4492-41f3-a2d0-0a11f90aacfd"
+    },
+    {
+      "name": "Responde acesso negado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        380
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"ok\": false, \"acessoNegado\": true, \"mensagem\": \"Acesso não autorizado. Entre de novo.\" }",
+        "options": {}
+      },
+      "id": "f5c34bf0-2b85-4a68-a0c9-ae5fee8a15d8"
+    },
+    {
+      "name": "Le entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        200
+      ],
+      "parameters": {
+        "jsCode": "// Só texto, curto (o que vai num recibo). Nada de chamada à toa: vazio ou grande demais volta com aviso.\nconst b = $('Recebe pedido do app').first().json.body || {};\nconst texto = String(b.texto ?? '').replace(/[\\u0000-\\u001f\\u007f]/g, ' ').replace(/\\s+/g, ' ').trim();\nlet erro = '';\nif (texto.length < 3) erro = 'Escreva a descrição primeiro.';\nelse if (texto.length > 800) erro = 'Texto grande demais para aprimorar de uma vez (máximo 800 letras).';\nreturn [{ json: { ok: !erro, erro, texto } }];"
+      },
+      "id": "fca1fce4-37d2-42ef-8532-b2cdf9c21d06"
+    },
+    {
+      "name": "Entrada ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a2",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "84406a2b-7fd7-4707-aa77-17747407495b"
+    },
+    {
+      "name": "Responde entrada invalida",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        380
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, mensagem: $json.erro }) }}",
+        "options": {}
+      },
+      "id": "87ceeceb-7ebd-40cd-86ac-2f44ac4a76a9"
+    },
+    {
+      "name": "Chama Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        200
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2026-10-21"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-haiku-5-5',\n  max_tokens: 500,\n  thinking: { type: 'disabled' },\n  output_config: { effort: 'low' },\n  system: \"Você revisa textos curtos de documentos de uma empresa de manutenção predial (recibos, notas, orçamentos). Corrija ortografia, acentuação, concordância e pontuação e deixe o texto técnico, formal e enxuto, com os termos certos do ofício. Não invente nada e não tire informação: mantenha quantidades, locais, materiais, medidas e valores. Expanda abreviações óbvias. Responda só com o texto final, numa linha, sem aspas, título ou comentário.\",\n  messages: [{ role: 'user', content: $json.texto }]\n}) }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "725a6755-9d2f-454c-82d8-c16f4fc551b6"
+    },
+    {
+      "name": "Monta resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        200
+      ],
+      "parameters": {
+        "jsCode": "// Resposta do Claude: só o texto. Recusa, erro ou chave faltando viram um aviso simples (nada muda no campo).\nconst r = $json || {};\nconst e = $('Le entrada').first().json;\nif (r.error || r.type === 'error') {\n  const msg = JSON.stringify(r.error || r).toLowerCase();\n  const semChave = /authentication|api[_ -]?key|401|credential/.test(msg);\n  return [{ json: { ok: false, mensagem: semChave ? 'Falta a chave da Anthropic no n8n (credencial \"Anthropic\").' : 'O aprimorador não respondeu agora. Tente de novo em instantes.' } }];\n}\nif (r.stop_reason === 'refusal') return [{ json: { ok: false, mensagem: 'O aprimorador não quis mexer neste texto. Ajuste à mão.' } }];\nconst texto = (Array.isArray(r.content) ? r.content : []).filter((c) => c.type === 'text').map((c) => c.text).join(' ')\n  .replace(/\\s+/g, ' ').trim().replace(/^[\"'“”]+|[\"'“”]+$/g, '');\nif (!texto) return [{ json: { ok: false, mensagem: 'O aprimorador voltou vazio. Tente de novo.' } }];\nreturn [{ json: { ok: true, texto: texto.slice(0, 1200), original: e.texto,\n  custo: { entrada: (r.usage || {}).input_tokens || 0, saida: (r.usage || {}).output_tokens || 0 } } }];"
+      },
+      "id": "504cfb13-d532-4a00-91fa-3b73076bb694"
+    },
+    {
+      "name": "Responde",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        200
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "e5b4319c-fdf0-4957-a554-cfe22d41685a"
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Confere acesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere acesso": {
+      "main": [
+        [
+          {
+            "node": "Acesso permitido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acesso permitido?": {
+      "main": [
+        [
+          {
+            "node": "Le entrada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde acesso negado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le entrada": {
+      "main": [
+        [
+          {
+            "node": "Entrada ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada ok?": {
+      "main": [
+        [
+          {
+            "node": "Chama Claude",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde entrada invalida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chama Claude": {
+      "main": [
+        [
+          {
+            "node": "Monta resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta": {
+      "main": [
+        [
+          {
+            "node": "Responde",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none"
+  }
+}

@@ -2115,7 +2115,14 @@
             <span class="doc-hint">Segue o cliente: só cliente cadastrado no CNPJ 2 sai pelo CNPJ 2, com a conta dele.</span></p>
 
           <div data-tipos="recibo">
-            <label for="doc-referente">Referente a</label>
+            <!-- "Aprimorar descrição" (23/11/2026): só ao clicar, o Claude corrige a escrita e deixa o texto técnico. -->
+            <div class="rotulo-com-acao">
+              <label for="doc-referente">Referente a</label>
+              <button type="button" class="botao-aprimorar" data-aprimorar="doc-referente" title="Corrige a escrita e deixa o texto mais técnico">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
+                <span>Aprimorar descrição</span>
+              </button>
+            </div>
             <input type="text" id="doc-referente" placeholder="Ex: Limpeza de caixa d'água" />
           </div>
 
