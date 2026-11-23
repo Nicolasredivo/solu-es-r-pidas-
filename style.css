@@ -8789,3 +8789,22 @@ button.cob-abre-lista:hover { border-color: var(--accent); background: rgba(91, 
 button.cob-abre-lista svg { flex: none; transition: transform var(--transicao); }
 button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
 .cob-lista-recolhe[hidden] { display: none; }
+
+/* A receber mais arejado no computador (23/11/2026, pedido do dono: "menos grudado"). Celular não muda. */
+@media (min-width: 1280px) {
+  #subfin-receber .cob-kpis { gap: 18px; margin-bottom: 18px; }
+  #subfin-receber .cob-contas-linha { margin-bottom: 36px; }
+  #cob-conteudo #cob-fila { margin-bottom: 32px; }
+  #cob-conteudo .painel-grade.cob-grade { gap: 28px; margin-bottom: 28px; }
+  #cob-conteudo .painel-cartao { padding: 24px 26px; }
+  #cob-conteudo .painel-cab { margin-bottom: 14px; }
+  #cob-conteudo .cob-sem-previsao { margin: 0 0 6px; line-height: 1.55; }
+  #cob-conteudo button.cob-abre-lista { margin-top: 14px; padding: 10px; }
+  #cob-conteudo .cob-lista-recolhe { margin-top: 12px; }
+  #subfin-receber .cob-manual-titulo { margin-top: 56px; }
+  #subfin-receber .cob-manual-titulo + .doc-hint { margin-bottom: 18px; }
+}
+@media (min-width: 1800px) {
+  #cob-conteudo:not(.hidden) { column-gap: 28px; }
+  #cob-conteudo #cob-dias { margin-bottom: 28px; }
+}
