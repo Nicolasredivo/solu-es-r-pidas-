@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.22l";
+const APP_VERSION = "2026.11.23a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -16801,6 +16801,15 @@ function cobDesenharAsaas(d) {
     kpi("91, 141, 239", "Vai entrar", cobSoma(abertos) + cobSoma(semBoleto), `${cobPlural(abertos.length, "boleto", "boletos")} + ${cobPlural(semBoleto.length, "sem boleto", "sem boleto")}`),
     kpi("229, 72, 77", "Vencido", cobSoma(vencidos), vencidos.length ? `${cobPlural(vencidos.length, "boleto", "boletos")} · hoje ${dinheiro(cobSoma(vencidos, cobValorHoje))}` : "nenhum boleto vencido", vencidos.length ? "kpi-perigo" : ""),
     kpi("167, 139, 250", "Recebido no mês", recebido, recebido ? `líquido ${dinheiro(liquido)}` : "nada ainda neste mês"));
+  // Tocar no "Recebido no mês" abre a página dos recebidos (23/11/2026).
+  const kRec = grade.lastElementChild;
+  kRec.classList.add("kpi-clicavel");
+  kRec.setAttribute("role", "button");
+  kRec.tabIndex = 0;
+  kRec.title = "Ver todos os recebidos do mês";
+  kRec.append(cobEl("span", "kpi-ver", "Ver todos ›"));
+  kRec.addEventListener("click", () => recAbrir(mes));
+  kRec.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); recAbrir(mes); } });
   destino.append(grade);
   // Linha das contas: PIX, taxa e a última conferência com o Asaas.
   const pix1 = (contas["CNPJ 1"] || {}).pix, pix2 = (contas["CNPJ 2"] || {}).pix;
@@ -16828,6 +16837,156 @@ function cobDesenharAsaas(d) {
   linha.append(conferido);
   destino.append(linha);
 }
+
+// --- Recebidos do mês (23/11/2026, pedido do dono) ---
+// Página aberta pelo cartão "Recebido no mês": todos os recebidos do mês, com a nota, como e quando foi pago e os
+// PDFs (boleto, comprovante do Asaas e nota). As setas trocam de mês. Dados: ação "recebidos" (cob_recebidos no banco).
+const REC_MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const REC_SETA = (d) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+const recEls = { pagina: document.getElementById("cob-recebidos"), receber: document.getElementById("subfin-receber") };
+let recMes = "";
+let recPrimeiro = "";
+let recVez = 0;
+function recSomaMes(mes, n) {
+  const [a, m] = mes.split("-").map(Number);
+  const d = new Date(a, m - 1 + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+function recNomeMes(mes) { const [a, m] = mes.split("-"); return `${REC_MESES[Number(m) - 1]} de ${a}`; }
+function recUrl(u) { return String(u || "").startsWith("/") ? baseUrlN8n() + u : u; }
+function recComoPagou(x) {
+  const forma = x.forma || "";
+  if (x.baixaPor === "asaas") return forma === "PIX" ? "PIX do boleto, no Asaas" : "Boleto pago, no Asaas";
+  if (x.baixaPor === "conciliacao") return `${forma ? forma + " · " : ""}entrada no Asaas${x.pagador ? " de " + x.pagador : ""}`;
+  return forma ? `${forma} · marcado por você` : "Marcado como recebido por você";
+}
+function recQuandoMarcou(x) {
+  if (!x.registradoEm) return "";
+  const q = new Date(x.registradoEm);
+  const dd = (n) => String(n).padStart(2, "0");
+  return `${x.baixaPor === "manual" ? "marcado" : "baixa"} em ${dd(q.getDate())}/${dd(q.getMonth() + 1)} às ${dd(q.getHours())}:${dd(q.getMinutes())}`;
+}
+function recFechar() {
+  recVez++;
+  recEls.receber.classList.remove("vendo-recebidos");
+  recEls.pagina.classList.add("hidden");
+}
+async function recAbrir(mes) {
+  recMes = /^\d{4}-\d{2}$/.test(mes || "") ? mes : hojeISO().slice(0, 7);
+  const vez = ++recVez;
+  const estavaFechada = recEls.pagina.classList.contains("hidden");
+  recEls.receber.classList.add("vendo-recebidos");
+  recEls.pagina.classList.remove("hidden");
+  recDesenhar(null);
+  if (estavaFechada) recEls.pagina.scrollIntoView({ block: "start" });
+  let r;
+  try { r = await pedirAoN8n("cobrancas", { acao: "recebidos", mes: recMes }); } catch (err) { r = null; }
+  if (vez !== recVez) return;
+  recDesenhar(r || { ok: false, mensagem: "Não consegui buscar os recebidos agora. Confira a internet e o servidor do PC e tente de novo." });
+}
+function recDesenhar(r) {
+  const p = recEls.pagina;
+  p.innerHTML = "";
+  const esteMes = hojeISO().slice(0, 7);
+  if (r && r.primeiroMes) recPrimeiro = r.primeiroMes;
+  // Cabeçalho: voltar, título e o mês com as setas.
+  const cab = cobEl("div", "rec-cab");
+  const voltar = cobBotao("", recFechar, "rec-voltar");
+  voltar.innerHTML = REC_SETA("M15 18l-6-6 6-6") + "<span>A receber</span>";
+  const nav = cobEl("div", "rec-nav");
+  const ant = cobBotao("", () => recAbrir(recSomaMes(recMes, -1)), "rec-seta");
+  ant.innerHTML = REC_SETA("M15 18l-6-6 6-6");
+  ant.setAttribute("aria-label", "Mês anterior");
+  ant.disabled = recMes <= "2026-01"; // dá para voltar mesmo antes do primeiro registro (o mês aparece vazio)
+  const prox = cobBotao("", () => recAbrir(recSomaMes(recMes, 1)), "rec-seta");
+  prox.innerHTML = REC_SETA("M9 18l6-6-6-6");
+  prox.setAttribute("aria-label", "Próximo mês");
+  prox.disabled = recMes >= esteMes;
+  const nomeMes = recNomeMes(recMes);
+  nav.append(ant, cobEl("strong", "rec-mes", nomeMes[0].toUpperCase() + nomeMes.slice(1)), prox);
+  cab.append(voltar, cobEl("h2", "rec-titulo", "Recebidos"), nav);
+  p.append(cab);
+  if (!r) { p.append(cobEl("p", "doc-hint", `Buscando os recebidos de ${recNomeMes(recMes)}...`)); return; }
+  if (!r.ok) {
+    const erro = cobEl("p", "doc-hint cob-vermelho", r.mensagem || "Não consegui buscar os recebidos agora.");
+    erro.append(" ", cobBotao("Tentar de novo", () => recAbrir(recMes), "cob-link"));
+    p.append(erro);
+    return;
+  }
+  const itens = r.itens || [];
+  // Números do mês: quanto entrou, quanto ficou depois das taxas e quanto foi de taxa.
+  const bruto = cobSoma(itens, (x) => x.valorPago ?? x.valor);
+  const liquido = cobSoma(itens, (x) => x.valorLiquido ?? x.valorPago ?? x.valor);
+  const taxas = cobSoma(itens, (x) => x.taxa);
+  const multa = cobSoma(itens, (x) => x.multaJuros);
+  const grade = cobEl("div", "painel-kpis rec-kpis");
+  const kpi = (cor, rotulo, valor, nota) => {
+    const k = cobEl("div", "kpi");
+    k.style.setProperty("--cor", cor);
+    k.append(cobEl("span", "kpi-rotulo", rotulo), cobEl("span", "kpi-valor", dinheiro(valor)), cobEl("span", "kpi-nota", nota));
+    return k;
+  };
+  grade.append(
+    kpi("167, 139, 250", "Recebido", bruto, itens.length ? cobPlural(itens.length, "recebimento", "recebimentos") : "nada neste mês"),
+    kpi("62, 207, 142", "Ficou na conta", liquido, "depois das taxas"),
+    kpi("245, 166, 35", "Taxas do Asaas", taxas, multa ? `multa e juros recebidos: ${dinheiro(multa)}` : taxas ? "dos boletos pagos" : "nenhuma neste mês"));
+  p.append(grade);
+  const bloco = cobEl("div", "painel-cartao rec-bloco");
+  if (!itens.length) {
+    bloco.append(cobEl("p", "rec-vazio", `Nenhum recebimento registrado em ${recNomeMes(recMes)}.`));
+    if (recPrimeiro && recMes < recPrimeiro) bloco.append(cobEl("p", "doc-hint", `O sistema passou a registrar os recebimentos em ${recNomeMes(recPrimeiro)}.`));
+    p.append(bloco);
+    return;
+  }
+  // Tabela: no computador, colunas; no celular, cada recebimento vira um cartão.
+  const tabela = cobEl("div", "rec-tabela");
+  const topo = cobEl("div", "rec-linha rec-topo");
+  ["Pago em", "Cliente", "Nota", "Como foi pago", "Valor", "Documentos"].forEach((t) => topo.append(cobEl("span", "", t)));
+  tabela.append(topo);
+  for (const x of itens) {
+    const linha = cobEl("div", "rec-linha rec-item");
+    linha.tabIndex = 0;
+    linha.setAttribute("role", "button");
+    linha.title = "Ver os detalhes e o histórico";
+    const data = cobEl("span", "rec-data");
+    data.append(cobEl("strong", "", dataBonita(x.dataRecebimento).slice(0, 5)), cobEl("small", "", COB_SEMANA[cobData(x.dataRecebimento).getDay()]));
+    const cli = cobEl("span", "rec-cliente");
+    const nome = cobEl("span", "rec-cliente-nome");
+    nome.append(cobEl("strong", "", x.cliente || "Cliente"));
+    if (x.emissor) nome.append(cobEl("span", "cob-tag", x.emissor));
+    cli.append(nome);
+    const desc = cobDescricaoCurta(x);
+    if (desc) cli.append(cobEl("small", "", desc + (x.parcelas > 1 ? ` · parcela ${x.parcela} de ${x.parcelas}` : "")));
+    const nota = cobEl("span", "rec-nota", cobOrigemTexto(x));
+    const como = cobEl("span", "rec-como");
+    como.append(cobEl("span", "", recComoPagou(x)));
+    const marcou = recQuandoMarcou(x);
+    if (marcou) como.append(cobEl("small", "", marcou));
+    const valor = cobEl("span", "rec-valor");
+    valor.append(cobEl("strong", "", dinheiro(x.valorPago ?? x.valor)));
+    const liq = x.valorLiquido ?? x.valorPago ?? x.valor;
+    if (Number(liq) !== Number(x.valorPago ?? x.valor)) valor.append(cobEl("small", "", `ficou ${dinheiro(liq)}`));
+    const docs = cobEl("span", "rec-docs");
+    const doc = (rotulo, abrir) => docs.append(cobBotao(rotulo, abrir, "rec-doc"));
+    if (x.boletoUrl) doc("Boleto", () => window.open(x.boletoUrl, "_blank", "noopener"));
+    if (x.baixaPor === "asaas" && x.link) doc("Comprovante", () => window.open(x.link, "_blank", "noopener"));
+    if (x.notaPdf) doc("Nota", () => abrirPdfEmNovaAba(recUrl(x.notaPdf)));
+    else if (x.arquivoPdf) doc(x.arquivoTipo === "recibo" ? "Recibo" : "Nota", () => abrirPdfEmNovaAba(recUrl(x.arquivoPdf)));
+    if (!docs.childElementCount) docs.append(cobEl("span", "rec-sem", "—"));
+    linha.append(data, cli, nota, como, valor, docs);
+    linha.addEventListener("click", () => cobAbrir(x));
+    linha.addEventListener("keydown", (ev) => { if (ev.target === linha && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); cobAbrir(x); } });
+    tabela.append(linha);
+  }
+  const soma = cobEl("div", "rec-linha rec-soma");
+  soma.append(cobEl("span", "", `Total de ${recNomeMes(recMes)}`), cobEl("strong", "", dinheiro(bruto)));
+  tabela.append(soma);
+  bloco.append(tabela);
+  p.append(bloco);
+}
+// Trocar de tela pelo menu (ou pela barra de baixo) fecha a página dos recebidos.
+document.getElementById("sidebar").addEventListener("click", (ev) => { if (ev.target.closest(".sidebar-item")) recFechar(); });
+document.getElementById("barra-baixo").addEventListener("click", (ev) => { if (ev.target.closest(".barra-item")) recFechar(); });
 
 // --- 2. Precisa de você ---
 function cobFilaItens(d) {

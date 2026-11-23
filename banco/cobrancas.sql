@@ -334,6 +334,28 @@ create or replace function cob_historico(p jsonb) returns jsonb language sql sta
   select jsonb_build_object('ok', true, 'eventos', coalesce((select jsonb_agg(jsonb_build_object('tipo', e."Tipo", 'texto', e."Texto", 'quando', e."Quando")
     order by e."Quando") from "Cobranca_Eventos" e where e."Recebimento_Ref" = cob_txt(p, 'id')), '[]'::jsonb)) $$;
 
+-- Recebidos de um mês (23/11/2026, pedido do dono: tocar em "Recebido no mês" abre todos, com a nota, como e quando
+-- foi pago e o boleto; dá para andar entre os meses). p: { mes: 'AAAA-MM' } (sem mês = o mês de hoje).
+-- Junto: o PDF da nota (do sistema ou trazida de fora), quem pagou (entrada do Asaas ligada) e quando foi registrado.
+create or replace function cob_recebidos(p jsonb) returns jsonb language plpgsql stable as $$
+declare hoje date := cob_hoje(); mes text := cob_txt(p, 'mes'); ini date; fim date;
+begin
+  if mes is null or mes !~ '^[0-9]{4}-(0[1-9]|1[0-2])$' then mes := to_char(hoje, 'YYYY-MM'); end if;
+  ini := (mes || '-01')::date;
+  fim := (ini + interval '1 month')::date;
+  return jsonb_build_object('ok', true, 'mes', mes, 'hoje', hoje,
+    'primeiroMes', (select to_char(min("Data_Recebimento"), 'YYYY-MM') from "Recebimentos" where "Status" = 'Recebido'),
+    'itens', coalesce((select jsonb_agg(cob_item(r) || jsonb_build_object(
+        'notaPdf', (select n."Pdf_Nota" -> 0 ->> 'url' from "Notas_Fiscais" n where n.id = r."Nota_Ref"),
+        'arquivoPdf', (select a."Arquivo" -> 0 ->> 'url' from "Arquivos_Cliente" a where a.id = r."Arquivo_Ref"),
+        'arquivoTipo', (select a."Tipo" from "Arquivos_Cliente" a where a.id = r."Arquivo_Ref"),
+        'pagador', (select c."Pagador" from "Conciliacao" c where c.id = r."Baixa_Ref"),
+        'registradoEm', (select max(e."Quando") from "Cobranca_Eventos" e where e."Recebimento_Ref" = r.id and e."Tipo" = 'pago'))
+      order by r."Data_Recebimento" desc, r."Cliente_Nome")
+      from "Recebimentos" r
+     where r."Status" = 'Recebido' and r."Data_Recebimento" >= ini and r."Data_Recebimento" < fim), '[]'::jsonb));
+end $$;
+
 -- ========================= conferir antes de gerar =========================
 -- p: { clienteId, valor, material, parcelas, vencimentos: [AAAA-MM-DD...] }
 create or replace function cob_preparar(p jsonb) returns jsonb language plpgsql stable as $$
@@ -402,6 +424,7 @@ declare
 begin
   if acao = 'painel' then return jsonb_build_object('resposta', cob_painel(p)); end if;
   if acao = 'historico' then return jsonb_build_object('resposta', cob_historico(p)); end if;
+  if acao = 'recebidos' then return jsonb_build_object('resposta', cob_recebidos(p)); end if;
   if acao = 'preparar' then return jsonb_build_object('resposta', cob_preparar(p)); end if;
 
   if acao = 'criar' then
