@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.23e";
+const APP_VERSION = "2026.11.23f";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -9688,7 +9688,7 @@ function desempilharCamada() {
   }
 }
 
-window.addEventListener("popstate", () => {
+window.addEventListener("popstate", (ev) => {
   // Voltar disparado pelo próprio app ao fechar algo: já está tudo fechado.
   if (voltandoSozinho) {
     voltandoSozinho = false;
@@ -9701,7 +9701,13 @@ window.addEventListener("popstate", () => {
   }
 
   const aberto = listaBox.querySelector(".cadastro.aberto");
-  if (aberto) fecharLinhaSemVoltar(aberto);
+  if (aberto && aberto.offsetParent !== null) { fecharLinhaSemVoltar(aberto); return; }
+  // Voltar do navegador = o mesmo "Voltar" do sistema (23/11/2026): volta para a tela anterior (página, aba, pasta,
+  // Recebidos...). O "avançar" do navegador não refaz nada (cai numa tela de número maior que a pilha): é ignorado.
+  // Entradas de antes de recarregar a página não são desta pilha (outra "sessão"): contam como voltar.
+  const st = ev.state || {};
+  if (st.s === NAV_SESSAO && typeof st.tela === "number" && st.tela >= navPilha.length) return;
+  navVoltar({ doNavegador: true });
 });
 
 // ----- Cadastro de contatos -----
@@ -11934,7 +11940,7 @@ formDocumento.addEventListener("submit", async (evento) => {
 // O mesmo gerador do "Gerar PDF", só que sem baixar nem guardar nada: a prévia é refeita 0,7 s depois da última
 // mudança no formulário. Só trabalha quando a prévia está à vista (tela de 1800px ou mais, aba PDFs aberta).
 const docPrevia = document.getElementById("doc-previa");
-const docPreviaQuadro = document.getElementById("doc-previa-quadro");
+let docPreviaQuadro = document.getElementById("doc-previa-quadro");
 const docPreviaStatus = document.getElementById("doc-previa-status");
 let docPreviaUrl = "";
 let docPreviaTimer = null;
@@ -11954,7 +11960,12 @@ async function docAtualizarPrevia() {
     if (vez !== docPreviaVez) { URL.revokeObjectURL(url); return; }
     const antiga = docPreviaUrl;
     docPreviaUrl = url;
-    docPreviaQuadro.src = url + "#toolbar=0&navpanes=0&view=FitH";
+    // Quadro novo a cada prévia (23/11/2026): trocar o src do mesmo quadro cria entradas no histórico do navegador e
+    // o "Voltar" passava a voltar a prévia em vez da tela. O primeiro endereço de um quadro novo não entra no histórico.
+    const novo = docPreviaQuadro.cloneNode(false);
+    novo.src = url + "#toolbar=0&navpanes=0&view=FitH";
+    docPreviaQuadro.replaceWith(novo);
+    docPreviaQuadro = novo;
     if (antiga) setTimeout(() => URL.revokeObjectURL(antiga), 3000);
     docPreviaStatus.textContent = "atualiza enquanto você preenche";
   } catch (err) {
@@ -15166,9 +15177,12 @@ document.getElementById("aba-doc-arquivos").addEventListener("click", arqAbrirAb
 // pastas dela). Cada "tela" é uma foto: a página aberta, as abas ativas dela e, em Documentos > Arquivos, a lista,
 // o cliente ou a pasta. Depois de cada toque, se a tela mudou, a anterior entra na pilha; "Voltar" tira da pilha
 // e refaz os mesmos toques (menu, abas), então os avisos de "salvar antes de sair?" continuam valendo.
-// Não mexe no voltar do celular (history), que segue fechando o menu e o cadastro aberto.
+// Desde 23/11/2026 o voltar do navegador/celular faz o mesmo (cada tela nova vira uma entrada do histórico); antes
+// ele ainda fecha o menu e o cadastro aberto. Também entram as telas de dentro da página (ex.: Recebidos do Financeiro).
 const navBotaoVoltar = document.getElementById("nav-voltar");
 const navPilha = [];
+const NAV_SESSAO = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+history.replaceState({ tela: 0, s: NAV_SESSAO }, "");
 let navAtual = null;
 let navRestaurando = false;
 const NAV_ABAS = [["subtab", "subpage"], ["subtab-fin", "subfin"], ["subtab-doc", "subdoc"]];
@@ -15184,13 +15198,16 @@ function navFoto() {
     });
   }
   const arquivosAberto = pagina.id === "page-documentos" && !document.getElementById("subdoc-arquivos").classList.contains("hidden");
+  const recebidosAberto = pagina.id === "page-financeiro" && !recEls.pagina.classList.contains("hidden");
   return {
     pagina: pagina.id, abas,
     arq: arquivosAberto ? { view: arq.view, cliente: arq.cliente ? arq.cliente.id : "", pasta: arq.view === "pasta" ? arq.pasta : "" } : null,
+    rec: recebidosAberto ? recMes || hojeISO().slice(0, 7) : "",
   };
 }
 
-const navChave = (f) => JSON.stringify(f);
+// Trocar o mês dentro de Recebidos não conta como outra tela (o Voltar sai de Recebidos de uma vez).
+const navChave = (f) => JSON.stringify({ ...f, rec: Boolean(f.rec) });
 
 // O botão mora no alto do bloco da página aberta, logo acima do título.
 function navAtualizarBotao() {
@@ -15206,6 +15223,7 @@ function navConferir() {
   if (navAtual && navChave(agora) !== navChave(navAtual)) {
     navPilha.push(navAtual);
     if (navPilha.length > 40) navPilha.shift();
+    history.pushState({ tela: navPilha.length, s: NAV_SESSAO }, "");
   }
   navAtual = agora;
   navAtualizarBotao();
@@ -15213,10 +15231,11 @@ function navConferir() {
 
 // Depois de cada toque (e de cada tecla que aciona botão), confere se a tela mudou. A espera deixa terminar a troca.
 document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("#nav-voltar")) return; setTimeout(navConferir, 350); });
+document.addEventListener("keyup", (e) => { if (e.key === "Enter" || e.key === " ") setTimeout(navConferir, 350); });
 
 const navEsperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function navVoltar() {
+async function navVoltar(opcoes = {}) {
   if (navRestaurando || !navPilha.length) return;
   const alvo = navPilha.pop();
   navRestaurando = true;
@@ -15225,9 +15244,14 @@ async function navVoltar() {
     if (pagina && pagina.classList.contains("hidden")) {
       const item = document.querySelector(`.sidebar-item[data-page="${alvo.pagina.replace(/^page-/, "")}"]`);
       if (item) item.click();
-      await navEsperar(60);
+      // A troca de página pode levar um instante (algumas abas carregam algo antes): espera até 1,5 s.
+      for (let i = 0; i < 30 && pagina.classList.contains("hidden"); i++) await navEsperar(50);
       // Ficou parado na pergunta "salvar antes de sair?": a tela anterior volta para a pilha e a pessoa decide.
-      if (pagina.classList.contains("hidden")) { navPilha.push(alvo); return; }
+      if (pagina.classList.contains("hidden")) {
+        navPilha.push(alvo);
+        if (opcoes.doNavegador) history.pushState({ tela: navPilha.length, s: NAV_SESSAO }, ""); // o navegador já tinha voltado: repõe
+        return;
+      }
     }
     for (const seletor of alvo.abas) {
       const aba = pagina.querySelector(seletor);
@@ -15244,6 +15268,12 @@ async function navVoltar() {
         arqDesenhar();
       }
     }
+    // Recebidos (Financeiro): abre no mês em que estava, ou fecha.
+    if (alvo.pagina === "page-financeiro") {
+      const aberta = !recEls.pagina.classList.contains("hidden");
+      if (alvo.rec && (!aberta || recMes !== alvo.rec)) recAbrir(alvo.rec);
+      else if (!alvo.rec && aberta) recFechar();
+    }
     window.scrollTo({ top: 0 });
   } finally {
     await navEsperar(400);
@@ -15253,7 +15283,12 @@ async function navVoltar() {
   }
 }
 
-navBotaoVoltar.addEventListener("click", navVoltar);
+// O "Voltar" do sistema anda junto com o histórico do navegador: se a tela anterior está nele, volta por ele (o
+// popstate chama navVoltar), assim o voltar do navegador e o do sistema nunca se desencontram.
+navBotaoVoltar.addEventListener("click", () => {
+  if (history.state && history.state.s === NAV_SESSAO && history.state.tela > 0) history.back();
+  else navVoltar();
+});
 setTimeout(() => { navAtual = navFoto(); }, 1500);
 
 // ----- Aviso de e-mail e telefone com jeito de errado -----
