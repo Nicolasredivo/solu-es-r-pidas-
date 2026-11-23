@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.23b";
+const APP_VERSION = "2026.11.23c";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -17093,7 +17093,7 @@ function cobLinha(x) {
 // --- 3. Boletos: a receber por dia de vencimento ---
 // Lista que abre e fecha (23/11/2026, pedido do dono): o cartão mostra só a frase de cima; a seta logo abaixo abre
 // a lista (empurrando o resto para baixo) e vira para cima quando está aberta. Fica como estava ao atualizar a tela.
-const cobListaAberta = { dias: false, sem: false };
+const cobListaAberta = { dias: false, sem: false, periodo: false, todas: false };
 try { Object.assign(cobListaAberta, JSON.parse(localStorage.getItem("cob_listas_abertas") || "{}")); } catch (err) { /* sem memória: começa fechada */ }
 function cobRecolher(destino, chave, quantos) {
   const botao = cobEl("button", "cob-abre-lista");
@@ -17223,12 +17223,15 @@ function cobDesenharPeriodo(d) {
     destino.append(cobEl("p", "doc-hint", "Nada a receber agora."));
     return;
   }
+  destino.append(cobEl("p", "doc-hint cob-sem-previsao", `${cobPlural(itens.length, "conta", "contas")} a receber, somando ${dinheiro(cobSoma(itens))}`
+    + (vencidos.length ? `; ${dinheiro(cobSoma(vencidos))} já vencido.` : ".")));
+  const caixaPeriodo = cobRecolher(destino, "periodo", cobPlural(itens.length, "conta", "contas"));
   linhas.forEach(poe);
   if (semPrevisao.length) poe({ rotulo: "Sem previsão (notas e recibos sem boleto)", qtd: semPrevisao.length, qtdTexto: cobPlural(semPrevisao.length, "conta", "contas"), total: cobSoma(semPrevisao), classe: "cob-l-sem" });
   const total = cobEl("div", "cob-t-linha cob-t-soma");
   total.append(cobEl("span", "cob-t-nome", "Total a receber"), cobEl("span", "cob-t-qtd", cobPlural(itens.length, "conta", "contas")), cobEl("strong", "cob-t-total", dinheiro(cobSoma(itens))));
   tabela.append(total);
-  destino.append(tabela);
+  caixaPeriodo.append(tabela);
 }
 
 // --- 6. Lista completa com filtros ---
@@ -17252,10 +17255,14 @@ function cobDesenharLista(d) {
   busca.value = cobFiltro.busca;
   busca.addEventListener("input", () => { cobFiltro.busca = busca.value; cobDesenharLinhasDaLista(cobDados, caixa, rodape); });
   filtros.append(busca);
-  destino.append(filtros);
+  const abertas = (d.recebimentos || []).filter(cobAberta);
+  const recebidas = (d.recebimentos || []).filter((x) => x.status === "Recebido").length;
+  destino.append(cobEl("p", "doc-hint cob-sem-previsao", `${cobPlural(abertas.length, "cobrança", "cobranças")} a receber, somando ${dinheiro(cobSoma(abertas))}`
+    + (recebidas ? `, e ${cobPlural(recebidas, "recebida", "recebidas")} nos últimos meses.` : ".")));
+  const recolhe = cobRecolher(destino, "todas", "com filtros e busca");
   const caixa = cobEl("div", "cob-lista");
   const rodape = cobEl("p", "doc-hint cob-rodape");
-  destino.append(caixa, rodape);
+  recolhe.append(filtros, caixa, rodape);
   cobDesenharLinhasDaLista(d, caixa, rodape);
 }
 function cobDesenharLinhasDaLista(d, caixa, rodape) {
