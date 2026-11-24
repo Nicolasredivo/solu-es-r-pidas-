@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.24a";
+const APP_VERSION = "2026.11.24b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -11280,7 +11280,15 @@ const cadastroEmails = (() => {
       }
       mudar({ acao: "excluir", id: x.id }, excluir, avisoItem);
     });
-    acoes.appendChild(excluir);
+    // Copiar o e-mail (dono, 24/11/2026): o mesmo botão dos e-mails do financeiro no cadastro do cliente.
+    const copiar = document.createElement("button");
+    copiar.type = "button";
+    copiar.className = "emails-fin-copiar em-copiar";
+    copiar.title = "Copiar";
+    copiar.setAttribute("aria-label", `Copiar ${x.email}`);
+    copiar.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>';
+    copiar.addEventListener("click", (ev) => { ev.stopPropagation(); copiarTexto(x.email, "E-mail copiado."); });
+    acoes.append(copiar, excluir);
     topo.append(editavel("sind-item-nome", x.email, "em-editor-email"), acoes);
 
     const dono = editavel("sind-item-vazio", x.pertence ? `Pertence a: ${x.pertence}` : "A quem pertence: —", "em-editor-pertence");
@@ -15983,6 +15991,7 @@ function painelChamadosChegaram(estado) {
 // Chamado pelo desenharInicio, quando a pessoa entra no sistema.
 function painelIniciar(dono) {
   painelInicio.dono = dono;
+  setTimeout(() => cobSinoVigiar(dono), 0); // depois: as variáveis das cobranças ficam mais abaixo no arquivo
   try {
     const guardado = JSON.parse(localStorage.getItem(CHAVE_PAINEL_FAT) || "null");
     if (dono && guardado && guardado.emissores) painelInicio.fat = guardado;
@@ -17273,10 +17282,29 @@ function cobFilaItens(d) {
   return fila.sort((a, b) => a.ordem - b.ordem);
 }
 
+// Sininho do menu Financeiro (dono, 24/11/2026): aparece quando o "Precisa de você" tem algo e some quando zera.
+function cobSinoDoMenu(n) {
+  document.querySelectorAll("[data-sino-financeiro]").forEach((el) => {
+    el.classList.toggle("hidden", !n);
+    el.title = n ? `${n === 1 ? "1 coisa precisa" : n + " coisas precisam"} de você no Financeiro` : "";
+  });
+}
+// O dono vê o sininho sem abrir o Financeiro: lê as cobranças ao entrar e de 5 em 5 minutos (só a leitura do banco;
+// a conferência com o Asaas continua a de sempre).
+let cobSinoTimer = null;
+function cobSinoVigiar(dono) {
+  clearInterval(cobSinoTimer);
+  cobSinoTimer = null;
+  if (!dono) { cobSinoDoMenu(0); return; }
+  cobCarregar({ sincronizar: false }).catch(() => {});
+  cobSinoTimer = setInterval(() => { if (!document.hidden) cobCarregar({ sincronizar: false }).catch(() => {}); }, 5 * 60000);
+}
+
 function cobDesenharFila(d) {
   const destino = cobEls.fila;
   destino.innerHTML = "";
   const fila = cobFilaItens(d);
+  cobSinoDoMenu(fila.length);
   destino.classList.toggle("hidden", !fila.length);
   if (!fila.length) return;
   destino.className = "painel-cartao cob-fila";

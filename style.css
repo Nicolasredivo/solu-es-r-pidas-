@@ -8956,3 +8956,44 @@ button.botao-aprimorar.trabalhando svg { animation: v2-gira 1.2s linear infinite
 @media (min-width: 1280px) {
   #page-inicio .painel-mei-detalhe { margin-bottom: 20px; }
 }
+
+/* Sininho do Financeiro (24/11/2026): algo no "Precisa de você". Mesma cor laranja do cartão. */
+.menu-sino {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 8px;
+  border-radius: 999px;
+  background: rgba(245, 166, 35, 0.18);
+  color: rgb(245, 166, 35);
+  flex: none;
+  animation: menu-sino-balanca 2.4s ease-in-out 2;
+}
+.menu-sino.hidden { display: none; }
+.menu-sino svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.barra-item { position: relative; }
+.barra-sino { position: absolute; top: 2px; right: 50%; margin: 0 -26px 0 0; width: 18px; height: 18px; }
+.barra-sino svg { width: 11px; height: 11px; }
+@keyframes menu-sino-balanca {
+  0%, 70%, 100% { transform: rotate(0); }
+  75% { transform: rotate(14deg); }
+  85% { transform: rotate(-12deg); }
+  95% { transform: rotate(6deg); }
+}
+@media (prefers-reduced-motion: reduce) { .menu-sino { animation: none; } }
+
+/* Copiar no Cadastro de e-mails (24/11/2026): ao lado do Excluir, sem aumentar a linha. */
+.sind-item-acoes:has(.em-copiar) { align-items: center; gap: 8px; }
+.sind-item-acoes .em-copiar { margin: -6px 0; }
+
+/* Cadastro de e-mails (dono, 24/11/2026): todos os cartões com a altura do maior que existir, com o mesmo
+   espaçamento por dentro (o texto fica no alto e o resto do cartão fica vazio). Só na grade do computador. */
+@media (min-width: 1600px) {
+  #em-lista.contatos-lista {
+    grid-auto-rows: 1fr;
+    align-items: stretch;
+  }
+  #em-lista > li { justify-content: flex-start; }
+}
