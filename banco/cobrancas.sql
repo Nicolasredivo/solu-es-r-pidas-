@@ -1395,21 +1395,34 @@ begin
 end $$;
 
 -- Passo 3: lembretes que saíram (ou não) e baixas de boleto pago por fora.
--- p: { lembretes: [{ evento, ok, erro, emails }], respostas: [{ ref, resposta }] }
+-- p: { lembretes: [{ evento, tipo, ok, erro, para, cc, cco, quantos, anexos }], respostas: [{ ref, resposta }] }
+-- 24/11/2026 (dono): o histórico diz PARA QUEM foi (o app mostra essa confirmação depois de gerar o boleto) e, se não
+-- saiu, fica o motivo no histórico e um aviso em "Precisa de você" (some sozinho quando o envio dá certo).
 create or replace function cob_sinc_final(p jsonb) returns jsonb language plpgsql as $$
-declare x jsonb; ok int := 0; falhou int := 0;
+declare x jsonb; ok int := 0; falhou int := 0; rid text; qual text;
 begin
   for x in select * from jsonb_array_elements(coalesce(p -> 'lembretes', '[]')) loop
+    select "Recebimento_Ref" into rid from "Cobranca_Eventos" where id = x ->> 'evento';
+    qual := case x ->> 'tipo' when 'criado' then 'do boleto' when 'atraso' then 'de aviso de atraso' else 'do lembrete de véspera' end;
     if coalesce((x ->> 'ok')::boolean, false) then
       update "Cobranca_Eventos" set "Tipo" = case x ->> 'tipo' when 'criado' then 'email-criado' when 'atraso' then 'email-atraso' else 'lembrete' end, "Quando" = now(),
-             "Texto" = case x ->> 'tipo' when 'criado' then 'Boleto enviado por e-mail pelo sistema' when 'atraso' then 'Aviso de atraso enviado por e-mail'
+             "Texto" = case x ->> 'tipo' when 'criado' then 'Boleto enviado por e-mail' when 'atraso' then 'Aviso de atraso enviado por e-mail'
                        else 'Lembrete de véspera enviado por e-mail' end
-                       || ' (' || coalesce(x ->> 'quantos', '?') || ' endereço(s)' || coalesce(', ' || nullif(x ->> 'anexos', '') || ' anexo(s)', '') || ').'
+                       || coalesce(' para ' || nullif(x ->> 'para', ''), ' (' || coalesce(x ->> 'quantos', '?') || ' endereço(s))')
+                       || coalesce(' (Cc: ' || nullif(x ->> 'cc', '') || ')', '') || coalesce(' (Cco: ' || nullif(x ->> 'cco', '') || ')', '')
+                       || coalesce(', com ' || nullif(nullif(x ->> 'anexos', ''), '0') || ' anexo(s)', '') || '.'
        where id = x ->> 'evento';
+      update "Recebimentos" set "Aviso" = null where id = rid and "Aviso" like 'O e-mail % não saiu%';
       ok := ok + 1;
     else
-      -- Falhou: libera a chave para tentar de novo na próxima volta.
+      -- Falhou: libera a chave para tentar de novo na próxima volta, e conta para o dono (uma vez por dia).
       delete from "Cobranca_Eventos" where id = x ->> 'evento' and "Tipo" = 'lembrete-reservado';
+      if rid is not null then
+        perform cob_evento(rid, 'erro', 'O e-mail ' || qual || ' não saiu (' || left(coalesce(nullif(x ->> 'erro', ''), 'erro no envio'), 150)
+          || '). O sistema tenta de novo na próxima conferência (até 30 min).', 'email-falhou:' || coalesce(x ->> 'tipo', '') || ':' || rid || ':' || cob_hoje());
+        update "Recebimentos" set "Aviso" = 'O e-mail ' || qual || ' não saiu: o sistema tenta de novo sozinho. Se continuar, confira o e-mail do financeiro no cadastro.'
+         where id = rid and "Aviso" is null;
+      end if;
       falhou := falhou + 1;
     end if;
   end loop;

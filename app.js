@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.24c";
+const APP_VERSION = "2026.11.24d";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -14185,6 +14185,8 @@ async function nfBoletoDaNota(nota, boleto, area) {
       area.append(nfQuadroBoleto(rb.cobrancas));
       nfBoletoZerar();
       cobCarregar({ sincronizar: false });
+      // Boleto novo: o e-mail sai sozinho; aqui aparece a confirmação (ou o motivo de não ter saído).
+      if (!existente) cobConfirmarEmail((cobBaseDoGrupo(rb.cobrancas) || {}).id, area);
       return;
     }
     const erro = document.createElement("div");
@@ -17563,6 +17565,46 @@ function cobWhatsapp(x) {
 }
 
 // --- Pedidos ao servidor ---
+// Confirmação do e-mail automático (24/11/2026, dono): depois de criar o boleto, o sistema manda o e-mail ao
+// financeiro do cliente em segundo plano. Aqui o app acompanha o histórico da conta e avisa se SAIU (e para quem),
+// se o cliente não tem e-mail ou se deu erro. Nada aqui muda dados: só lê (e, se demorar, pede uma conferência).
+function cobBaseDoGrupo(cobrancas) {
+  const lista = (cobrancas || []).filter((c) => c && c.id);
+  return lista.find((c) => c.parcela == null) || lista.sort((a, b) => Number(a.parcela) - Number(b.parcela))[0] || null;
+}
+async function cobConfirmarEmail(id, onde) {
+  if (!id) return;
+  const inicio = Date.now();
+  let linha = null;
+  if (onde) {
+    linha = document.createElement("div");
+    linha.className = "status show loading";
+    linha.textContent = "Enviando o e-mail ao financeiro do cliente...";
+    onde.append(linha);
+  }
+  const fim = (tipo, texto) => {
+    if (linha) { linha.className = "status show " + (tipo === "ok" ? "ok" : "error"); linha.textContent = texto; }
+    mostrarToast(texto, { rotulo: "Ok", aoClicar() {} }, tipo === "ok" ? "" : "erro");
+  };
+  let pediuConferencia = false;
+  while (Date.now() - inicio < 4 * 60000) {
+    await new Promise((r) => setTimeout(r, 10000));
+    if (!pediuConferencia && Date.now() - inicio > 70000) {
+      pediuConferencia = true;
+      pedirAoN8n("cobrancas", { acao: "sincronizar" }).catch(() => {});
+    }
+    let r;
+    try { r = await pedirAoN8n("cobrancas", { acao: "historico", id }); } catch (err) { continue; }
+    const novos = ((r && r.eventos) || []).filter((e) => new Date(e.quando).getTime() >= inicio - 5 * 60000);
+    const saiu = novos.find((e) => e.tipo === "email-criado");
+    if (saiu) return fim("ok", "✓ " + saiu.texto);
+    if (novos.some((e) => e.tipo === "sem-email")) return fim("erro", "O e-mail NÃO foi enviado: o cliente não tem e-mail do financeiro. Mande o boleto pelo WhatsApp.");
+    const falhou = novos.find((e) => e.tipo === "erro" && /e-mail/i.test(e.texto || ""));
+    if (falhou) return fim("erro", falhou.texto);
+  }
+  fim("erro", "O e-mail do boleto ainda não saiu. O sistema tenta de novo sozinho: a confirmação aparece no histórico da conta (Financeiro › A receber) e, se der erro, em Precisa de você.");
+}
+
 async function cobPedir(dados, botao, ok) {
   if (botao) botao.disabled = true;
   try {
@@ -17755,6 +17797,8 @@ function cobAbrirGerarBoleto(x) {
       const r = await cobPedir({ acao: "criar", grupo, clienteId: x.clienteId, origem: x.origem, recebimentoId: x.id,
         servico: cobDescricaoCurta(x) || cobOrigemTexto(x), valor: Number(x.valor).toFixed(2), material: "0.00",
         parcelas: String(n), vencimentos: JSON.stringify(vencimentos) }, null, n > 1 ? "Boletos criados no Asaas." : "Boleto criado no Asaas.");
+      // Confirmação do e-mail automático (aparece em aviso no canto, mesmo com o diálogo já fechado).
+      if (r && r.ok) cobConfirmarEmail((cobBaseDoGrupo(r.cobrancas) || x).id);
       return r ? "" : "O boleto não saiu: tente de novo (nunca cria em dobro).";
     },
   });
