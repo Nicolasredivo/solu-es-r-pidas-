@@ -2178,6 +2178,17 @@
           <input type="date" id="doc-data" />
 
           <div data-tipos="recibo">
+            <!-- 24/11/2026 (dono): as mesmas opções da nota; no PDF só muda o texto da linha "Valor total". -->
+            <label>Valores</label>
+            <div class="opcoes nf-tipo-valor" id="doc-tipo-valor">
+              <button type="button" class="opcao active" data-valor="total">Só o total</button>
+              <button type="button" class="opcao" data-valor="incluso">Material incluso</button>
+              <button type="button" class="opcao" data-valor="separado">Separar material</button>
+            </div>
+            <div id="doc-material-bloco" class="hidden">
+              <label for="doc-material">Valor do material</label>
+              <input type="text" id="doc-material" inputmode="numeric" placeholder="R$ 0,00" />
+            </div>
             <label for="doc-valor">Valor total</label>
             <input type="text" id="doc-valor" inputmode="numeric" placeholder="R$ 0,00" />
             <!-- Cliente com "Gera boletos" (22/11/2026): a taxa de um boleto entra no valor do recibo, sem aparecer. -->

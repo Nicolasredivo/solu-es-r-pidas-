@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.24b";
+const APP_VERSION = "2026.11.24c";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -11792,6 +11792,14 @@ docCampos.cliente.addEventListener("input", () => {
   atualizarEmissorDoDocumento();
 });
 ligarMascaraDinheiro(docCampos.valor);
+// Valores do recibo (24/11/2026, dono): as mesmas três opções da nota. "Separar material" pede o valor do
+// material; a mão de obra é o resto (com a taxa do boleto, se somada). No PDF só muda o texto do "Valor total".
+const docTipoValor = document.getElementById("doc-tipo-valor");
+const docMaterial = document.getElementById("doc-material");
+ligarMascaraDinheiro(docMaterial);
+configurarGrupo(docTipoValor, () => {
+  document.getElementById("doc-material-bloco").classList.toggle("hidden", escolhaDoGrupo(docTipoValor) !== "separado");
+});
 
 // ---- gerar ----
 
@@ -11861,6 +11869,8 @@ function dadosDoDocumento() {
     solicitante: texto(docCampos.solicitante),
     endereco: texto(docCampos.endereco),
     valor: docValorComTaxa(),
+    tipoValor: tipoDocumento() === "recibo" ? escolhaDoGrupo(docTipoValor) : "total",
+    material: tipoDocumento() === "recibo" && escolhaDoGrupo(docTipoValor) === "separado" ? valorDoCampo(docMaterial) : 0,
     itens: itensDoDocumento(),
     validade: texto(docCampos.validade),
     semValidade: docCampos.semValidade.checked,
@@ -11882,6 +11892,8 @@ function camposFaltando(tipo, dados) {
   const faltando = CAMPOS_DO_DOCUMENTO[tipo].filter(([chave]) => !dados[chave]).map(([, nome]) => nome);
   if (tipo === "laudo" && !dados.edificio && !dados.empresa) faltando.splice(1, 0, laudoParaEmpresa() ? "nome da empresa" : "nome do edifício");
   if (tipo === "laudo" && dados.cnpjCliente && !cnpjValido(dados.cnpjCliente.replace(/\D/g, ""))) faltando.push("CNPJ do cliente válido (ou deixe em branco)");
+  if (tipo === "recibo" && dados.tipoValor === "separado" && dados.valor > 0 && !(dados.material > 0 && dados.material < dados.valor))
+    faltando.push("valor do material (maior que zero e menor que o total)");
   if (tipo === "orcamento") {
     if (!dados.itens.length) faltando.push("pelo menos um item");
     else if (dados.itens.some((item) => !item.desc || !item.unit || !item.qtd)) faltando.push("descrição, quantidade e valor de cada item");
@@ -12154,6 +12166,8 @@ function limparDocumento() {
   docCampos.validade.value = "10 dias";
   docCampos.semValidade.checked = false;
   document.getElementById("doc-boletos").value = "1";
+  docTipoValor.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === "total"));
+  document.getElementById("doc-material-bloco").classList.add("hidden");
   docCampos.data.value = hojeParaCampoData();
   docEnderecosCliente = [];
   docContatosCliente = [];

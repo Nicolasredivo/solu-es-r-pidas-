@@ -359,7 +359,13 @@
     ny = campo(p, "Endereço do serviço prestado:", a.endereco, ny - 0.3 * CM);
 
     ny -= 0.5 * CM;
-    const valor = a.valor ? reais(paraNumero(a.valor)) : "R$ ______________";
+    let valor = a.valor ? reais(paraNumero(a.valor)) : "R$ ______________";
+    // Valores (24/11/2026): mesmas opções da nota, só no texto desta linha (o layout não muda).
+    if (a.valor && a.tipoValor === "incluso") valor += " (materiais incluídos)";
+    else if (a.valor && a.tipoValor === "separado" && paraNumero(a.material) > 0) {
+      const material = paraNumero(a.material);
+      valor += ` (material ${reais(material)} + mão de obra ${reais(paraNumero(a.valor) - material)})`;
+    }
     campo(p, "Valor total:", valor, ny);
 
     ny -= 1.1 * CM;

@@ -147,6 +147,15 @@ create or replace function cob_destinos(emails text[]) returns jsonb language sq
 create or replace function cob_nome_cliente(c "Entidades_Cadastradas") returns text language sql immutable as $$
   select coalesce(nullif(btrim(c."Nome_Fantasia_Identificador"), ''), nullif(btrim(c."Razao_Social_Nome"), ''), 'Cliente sem nome') $$;
 
+-- Nome do cliente para o ASSUNTO dos e-mails (24/11/2026, contra spam): assunto com o nome do cliente e sem letras
+-- maiúsculas gritando ("CONDOMINIO EDIFICIO X" vira "Condominio Edificio X"; de/da/do/e ficam minúsculos).
+create or replace function cob_nome_assunto(cliente text) returns text language sql stable as $$
+  select coalesce((select
+    regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(
+      initcap(lower(btrim(cob_nome_cliente(c)))),
+      '\mDe\M', 'de', 'g'), '\mDa\M', 'da', 'g'), '\mDo\M', 'do', 'g'), '\mDas\M', 'das', 'g'), '\mDos\M', 'dos', 'g'), '\mE\M', 'e', 'g')
+    from "Entidades_Cadastradas" c where c.id = cliente), 'Soluções Rápidas') $$;
+
 -- Valor em reais no jeito brasileiro (R$ 1.306,00), para textos e e-mails.
 create or replace function cob_reais(v numeric) returns text language sql immutable as $$
   select 'R$ ' || replace(replace(replace(to_char(coalesce(v, 0), 'FM999,999,990.00'), ',', '#'), '.', ','), '#', '.') $$;
@@ -964,7 +973,7 @@ begin
   on conflict ("Chave") do nothing returning id into ev;
   if ev is null then return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'Este envio já foi pedido. Veja o histórico da conta em Financeiro › A receber.')); end if;
   return jsonb_build_object('email', jsonb_build_object('evento', ev, 'para', dest ->> 'para', 'cc', dest ->> 'cc', 'cco', dest ->> 'cco',
-    'assunto', 'Soluções Rápidas · NFS-e nº ' || coalesce(n."Numero_NFSe", '?'),
+    'assunto', cob_nome_assunto(n."Cliente_Ref") || ' · NFS-e nº ' || coalesce(n."Numero_NFSe", '?') || ' · Soluções Rápidas',
     'html', cob_email_nota_html(n, cliente, nomes), 'anexos', anexos));
 end $$;
 
@@ -1063,7 +1072,7 @@ begin
       on conflict ("Chave") do nothing returning id into reservado;
       if reservado is not null then
         lembretes := lembretes || (select jsonb_build_object('evento', reservado, 'tipo', 'criado', 'id', base.id, 'emails', to_jsonb(cob_emails(base."Cliente_Ref")),
-          'assunto', 'Soluções Rápidas · boleto' || coalesce(' e NFS-e nº ' || nullif(btrim((select nf."Numero_NFSe" from "Notas_Fiscais" nf where nf.id = base."Nota_Ref" and nf."Status" = 'Emitida')), ''), '')
+          'assunto', cob_nome_assunto(base."Cliente_Ref") || ' · boleto' || coalesce(' e NFS-e nº ' || nullif(btrim((select nf."Numero_NFSe" from "Notas_Fiscais" nf where nf.id = base."Nota_Ref" and nf."Status" = 'Emitida')), ''), '')
                      || case when count(*) > 1 then ' · ' || count(*) || ' parcelas' else ' · vence ' || to_char(base."Vencimento", 'DD/MM') end,
           'html', cob_email_html(base, 'criado', case when count(*) > 1 then jsonb_agg(jsonb_build_object('n', y."Parcela_Numero", 'valor', y."Valor", 'vencimento', y."Vencimento", 'link', y."Asaas_Link")) end),
           'anexos', (select coalesce(jsonb_agg(a.v), '[]'::jsonb) from (
@@ -1102,7 +1111,7 @@ begin
       if reservado is not null then
         select * into base from "Recebimentos" where id = r.id;
         lembretes := lembretes || jsonb_build_object('evento', reservado, 'tipo', 'vespera', 'id', r.id, 'emails', to_jsonb(r.emails),
-          'assunto', 'Lembrete: boleto de ' || cob_reais(r."Valor") || ' vence amanhã (' || to_char(r."Vencimento", 'DD/MM') || ')',
+          'assunto', cob_nome_assunto(r."Cliente_Ref") || ' · lembrete: boleto de ' || cob_reais(r."Valor") || ' vence amanhã (' || to_char(r."Vencimento", 'DD/MM') || ')',
           'html', cob_email_html(base, 'vespera'), 'anexos', case when emails_desde is not null then cob_anexos(base) else '[]'::jsonb end);
       end if;
     end loop;
@@ -1128,7 +1137,7 @@ begin
         if reservado is not null then
           select * into base from "Recebimentos" where id = r.id;
           lembretes := lembretes || jsonb_build_object('evento', reservado, 'tipo', 'atraso', 'id', r.id, 'emails', to_jsonb(r.emails),
-            'assunto', 'Boleto em aberto: ' || cob_reais(r."Valor") || ', venceu em ' || to_char(r."Vencimento", 'DD/MM'),
+            'assunto', cob_nome_assunto(r."Cliente_Ref") || ' · boleto em aberto de ' || cob_reais(r."Valor") || ', venceu em ' || to_char(r."Vencimento", 'DD/MM'),
             'html', cob_email_html(base, 'atraso'), 'anexos', cob_anexos(base));
         end if;
       end loop;
