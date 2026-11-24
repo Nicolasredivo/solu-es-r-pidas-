@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.23l";
+const APP_VERSION = "2026.11.24a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -12008,6 +12008,7 @@ formDocumento.addEventListener("submit", async (evento) => {
   evento.preventDefault();
   const tipo = tipoDocumento();
   const dados = dadosDoDocumento();
+  const boletosDoRecibo = docBoletosQuantos(); // lido já, antes de qualquer espera (o formulário pode mudar)
   const faltando = camposFaltando(tipo, dados);
   if (faltando.length) {
     mostrarDocStatus("error", `Falta preencher: ${faltando.join(", ")}.`);
@@ -12033,7 +12034,7 @@ formDocumento.addEventListener("submit", async (evento) => {
       // dados.emissor: dados da conta do CNPJ (null = os de sempre, no gerador); quem emite é codigoEmissorDoDocumento().
       const copia = await guardarCopiaDoDocumento(tipo, dados, blob, nomeArquivo);
       mostrarDocStatus(copia.ok ? "ok" : "error", `PDF pronto: ${nomeArquivo}. ${copia.mensagem}`);
-      if (tipo === "recibo" && copia.ok && copia.id) docReciboNoAReceber(copia.id, dados);
+      if (tipo === "recibo" && copia.ok && copia.id) docReciboNoAReceber(copia.id, dados, boletosDoRecibo);
     }
   } catch (err) {
     mostrarDocStatus("error", "Não consegui gerar o PDF. Confira a internet e tente de novo.");
@@ -12094,36 +12095,49 @@ function docTaxaVale() {
   const cli = docClienteId && cadastros.find((c) => c.id === docClienteId);
   return tipoDocumento() === "recibo" && Boolean(cli && cli.geraBoleto);
 }
+// Quantos boletos (24/11/2026, dono): a taxa de CADA boleto entra no recibo, e o "Gerar boleto" já abre com esse número.
+function docBoletosQuantos() {
+  const sel = document.getElementById("doc-boletos");
+  return Math.min(12, Math.max(1, Number(sel && sel.value) || 1));
+}
+function docTaxaTotal() {
+  return Math.round(docBoletosQuantos() * taxaBoletoDoCliente(docClienteId) * 100) / 100;
+}
 function docAtualizarTaxa() {
   const linha = document.getElementById("doc-taxa-linha");
   if (!linha) return;
   const vale = docTaxaVale();
   linha.classList.toggle("hidden", !vale);
+  document.getElementById("doc-boletos-bloco").classList.toggle("hidden", !vale);
   if (!vale) return;
-  const t = taxaBoletoDoCliente(docClienteId);
+  const n = docBoletosQuantos();
+  const t = docTaxaTotal();
   const v = valorDoCampo(docCampos.valor);
+  const quais = n > 1 ? `das ${n} taxas de boleto (${n} × ${dinheiro(taxaBoletoDoCliente(docClienteId))} = ${dinheiro(t)})` : `da taxa do boleto (${dinheiro(t)})`;
   document.getElementById("doc-taxa-texto").textContent =
-    `Somar a taxa do boleto (${dinheiro(t)})${v > 0 && document.getElementById("doc-taxa").checked ? ` · o recibo sai com ${dinheiro(v + t)}` : ""}`;
+    `Somar o valor ${quais}${v > 0 && document.getElementById("doc-taxa").checked ? ` · o recibo sai com ${dinheiro(v + t)}` : ""}`;
 }
 function docValorComTaxa() {
   const v = valorDoCampo(docCampos.valor);
   if (!(v > 0) || !docTaxaVale() || !document.getElementById("doc-taxa").checked) return v;
-  return Math.round((v + taxaBoletoDoCliente(docClienteId)) * 100) / 100;
+  return Math.round((v + docTaxaTotal()) * 100) / 100;
 }
 document.getElementById("doc-taxa").addEventListener("change", docAtualizarTaxa);
+document.getElementById("doc-boletos").addEventListener("change", docAtualizarTaxa);
 docCampos.valor.addEventListener("input", docAtualizarTaxa);
 
 // Recibo antes do boleto (regra do dono, 21/11/2026): o recibo entra no A receber na hora e, se o cliente tem
 // "Gera boletos", já abre o "Gerar boleto" desta conta ("Referente ao recibo de <data>"). Falhar aqui não atrapalha
 // o recibo: a conferência com o Asaas põe ele no A receber de qualquer jeito.
-async function docReciboNoAReceber(arquivoId, dados) {
+async function docReciboNoAReceber(arquivoId, dados, boletos) {
   try {
     const r = await pedirAoN8n("cobrancas", { acao: "registrar-recibo", arquivoId });
     if (!r || !r.ok || !r.id) return;
     const cli = cadastros.find((c) => c.id === docClienteId);
     if (!cli || !cli.geraBoleto) return;
     cobAbrirGerarBoleto({ id: r.id, clienteId: docClienteId, cliente: dados.cliente || cli.nomeFantasia || cli.razaoSocial || "Cliente",
-      valor: Number(dados.valor || 0), origem: "recibo", descricao: "Recibo · " + (dados.referente || "serviço"), status: "Pendente" });
+      valor: Number(dados.valor || 0), origem: "recibo", descricao: "Recibo · " + (dados.referente || "serviço"), status: "Pendente",
+      boletos: boletos || 1 });
   } catch (err) { /* fica para a conferência */ }
 }
 
@@ -12131,6 +12145,7 @@ function limparDocumento() {
   formDocumento.querySelectorAll('input[type="text"], textarea').forEach((campo) => (campo.value = ""));
   docCampos.validade.value = "10 dias";
   docCampos.semValidade.checked = false;
+  document.getElementById("doc-boletos").value = "1";
   docCampos.data.value = hojeParaCampoData();
   docEnderecosCliente = [];
   docContatosCliente = [];
@@ -17674,6 +17689,7 @@ function cobAbrirGerarBoleto(x) {
       venc = cobCampo(campos, "Vencimento (1º boleto)", "date", cobDiaUtil(cobSomaDias(hojeISO(), 7)), { min: hojeISO() });
       parcelas = cobCampo(campos, "Quantos boletos", "select");
       for (let i = 1; i <= 12; i++) parcelas.append(new Option(i === 1 ? "1 (à vista)" : `${i} (mês a mês)`, String(i)));
+      if (x.boletos > 1) parcelas.value = String(Math.min(12, x.boletos)); // recibo com "Quantos boletos" (24/11/2026)
       dica = cobEl("p", "doc-hint");
       campos.append(dica);
       const mostrar = () => {

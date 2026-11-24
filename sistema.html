@@ -2179,6 +2179,16 @@
             <label for="doc-valor">Valor total</label>
             <input type="text" id="doc-valor" inputmode="numeric" placeholder="R$ 0,00" />
             <!-- Cliente com "Gera boletos" (22/11/2026): a taxa de um boleto entra no valor do recibo, sem aparecer. -->
+            <div id="doc-boletos-bloco" class="hidden">
+              <!-- 24/11/2026 (dono): quantos boletos; a taxa de cada um entra no recibo e o "Gerar boleto" já abre com esse número. -->
+              <label for="doc-boletos">Quantos boletos</label>
+              <select id="doc-boletos">
+                <option value="1">1 (à vista)</option><option value="2">2 (mês a mês)</option><option value="3">3 (mês a mês)</option>
+                <option value="4">4 (mês a mês)</option><option value="5">5 (mês a mês)</option><option value="6">6 (mês a mês)</option>
+                <option value="7">7 (mês a mês)</option><option value="8">8 (mês a mês)</option><option value="9">9 (mês a mês)</option>
+                <option value="10">10 (mês a mês)</option><option value="11">11 (mês a mês)</option><option value="12">12 (mês a mês)</option>
+              </select>
+            </div>
             <label id="doc-taxa-linha" class="checkbox-linha hidden"><input type="checkbox" id="doc-taxa" checked /><span id="doc-taxa-texto">Somar a taxa do boleto ao valor</span></label>
           </div>
 

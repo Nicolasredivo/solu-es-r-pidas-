@@ -126,21 +126,17 @@ begin
   return x;
 end $$;
 
--- E-mails do cliente: os do financeiro + os dos contatos ativos (os mesmos que vão para o Asaas).
--- Na ordem do cadastro (22/11/2026): primeiro os e-mails do financeiro do cliente, depois os dos contatos; sem repetir.
+-- E-mails do cliente (regra do dono, 24/11/2026): SÓ os do financeiro do cadastro do cliente, nunca os dos contatos.
+-- Na ordem do cadastro, sem repetir.
 create or replace function cob_emails(cliente text) returns text[] language sql stable as $$
   with brutos as (
-    select lower(btrim(t.e)) as e, 1 as g, '' as k, t.n from "Entidades_Cadastradas" c,
+    select lower(btrim(t.e)) as e, t.n from "Entidades_Cadastradas" c,
            regexp_split_to_table(coalesce(c."Emails_Financeiro_NFE", ''), '[\n\r,;]+') with ordinality as t(e, n)
      where c.id = cliente
-    union all
-    select lower(btrim(t.e)), 2, k.id, t.n from "Contatos_Solicitantes" k,
-           regexp_split_to_table(coalesce(k."Emails", ''), '[\n\r,;]+') with ordinality as t(e, n)
-     where cliente = any (k."Entidades_Vinculadas") and coalesce(k."Status", 'Ativo') not in ('Arquivado', 'Inativo')
   ), unicos as (
-    select distinct on (e) e, g, k, n from brutos where e ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' order by e, g, k, n
+    select distinct on (e) e, n from brutos where e ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' order by e, n
   )
-  select coalesce(array_agg(e order by g, k, n), '{}') from unicos $$;
+  select coalesce(array_agg(e order by n), '{}') from unicos $$;
 
 -- Destinos dos e-mails do sistema (regra do dono, 22/11/2026): o 1º no "Para" e todos os outros no "Cc", juntos,
 -- sem cópia oculta ("cco" fica sempre vazio).
@@ -1095,6 +1091,8 @@ begin
     loop
       if coalesce(array_length(r.emails, 1), 0) = 0 then
         perform cob_evento(r.id, 'sem-email', 'Vence amanhã, mas o cliente não tem e-mail: mande o link pelo WhatsApp.', 'sem-email:' || r."Asaas_Cobranca_Id" || ':' || r."Vencimento");
+        -- Dono (24/11/2026): e-mail que não sai tem que aparecer para ele no "Precisa de você".
+        update "Recebimentos" set "Aviso" = 'Cliente sem e-mail do financeiro: o lembrete de véspera não foi enviado. Mande o link pelo WhatsApp.' where id = r.id and "Aviso" is null;
         continue;
       end if;
       reservado := null;
@@ -1118,7 +1116,11 @@ begin
         select c.*, cob_emails(c."Cliente_Ref") as emails from candidatos c
       loop
         dias := hoje - r."Vencimento";
-        if coalesce(array_length(r.emails, 1), 0) = 0 then continue; end if;
+        if coalesce(array_length(r.emails, 1), 0) = 0 then
+          perform cob_evento(r.id, 'sem-email', 'Atrasado, mas o cliente não tem e-mail: cobre pelo WhatsApp.', 'sem-email:atraso:' || r."Asaas_Cobranca_Id" || ':' || r."Vencimento" || ':' || dias);
+          update "Recebimentos" set "Aviso" = 'Cliente sem e-mail do financeiro: o aviso de atraso não foi enviado. Cobre pelo WhatsApp.' where id = r.id and "Aviso" is null;
+          continue;
+        end if;
         reservado := null;
         insert into "Cobranca_Eventos" ("Recebimento_Ref", "Tipo", "Texto", "Chave", "Dados")
         values (r.id, 'lembrete-reservado', 'Aviso de atraso sendo enviado.', 'atraso:' || r."Asaas_Cobranca_Id" || ':' || r."Vencimento" || ':' || dias, '{}')
