@@ -192,6 +192,15 @@ create or replace function cob_item(r "Recebimentos") returns jsonb language sql
             and coalesce(k."WhatsApps", '') <> '' order by k."Criado_Em" limit 1))
       from "Entidades_Cadastradas" c where c.id = r."Cliente_Ref"),
     'lembrete', (select max(e."Quando") from "Cobranca_Eventos" e where e."Recebimento_Ref" = r.id and e."Tipo" = 'lembrete'),
+    -- 25/11/2026: o último e-mail do sistema (automático ou manual), ou o motivo de não ter saído. O do boleto criado
+    -- e o da nota ficam na 1ª parcela: valem para o grupo todo.
+    'email', (select jsonb_build_object('tipo', case when e."Tipo" = 'erro' then 'falhou' else e."Tipo" end, 'quando', e."Quando")
+                from "Cobranca_Eventos" e
+               where (e."Recebimento_Ref" = r.id
+                      or (r."Grupo" is not null and e."Recebimento_Ref" in (select g.id from "Recebimentos" g where g."Grupo" = r."Grupo")
+                          and (e."Tipo" in ('email-criado', 'email-nota') or e."Chave" like 'sem-email:criado:%')))
+                 and (e."Tipo" in ('email-criado', 'email-nota', 'email-atraso', 'lembrete', 'sem-email') or e."Chave" like 'email-falhou:%')
+               order by e."Quando" desc limit 1),
     'ultimo', (select jsonb_build_object('tipo', e."Tipo", 'texto', e."Texto", 'quando', e."Quando")
                  from "Cobranca_Eventos" e where e."Recebimento_Ref" = r.id order by e."Quando" desc limit 1))
   from (select 1) x left join "Notas_Fiscais" n on n.id = r."Nota_Ref" $$;

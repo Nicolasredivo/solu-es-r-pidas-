@@ -8194,6 +8194,9 @@ button.cob-link {
 .cob-linha-sub { font-size: 0.78rem; color: var(--muted); }
 .cob-linha-valor { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cob-linha-valor span { font-size: 0.75rem; color: var(--muted); }
+.cob-linha-valor span.cob-linha-vence { padding: 2px 8px; border: 1px solid rgba(91, 141, 239, 0.45); border-radius: 999px; background: rgba(91, 141, 239, 0.12); color: #a9c3ff; font-size: 0.78rem; font-weight: 600; }
+.cob-linha-valor:has(.cob-linha-vence) { align-self: flex-start; gap: 8px; }
+.cob-linha-valor span.cob-linha-vence.vencido { border-color: rgba(255, 123, 127, 0.5); background: rgba(255, 123, 127, 0.12); color: #ff9a9d; }
 .cob-pilula { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.68rem; font-weight: 700; white-space: nowrap; }
 .cob-p-ok { background: rgba(62, 207, 142, 0.16); color: var(--ok); }
 .cob-p-erro { background: rgba(229, 72, 77, 0.16); color: #ff7b7f; }
@@ -8233,6 +8236,24 @@ button.cob-link {
 .cob-t-qtd { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
 .cob-t-total { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cob-t-soma { border-top: 2px solid var(--borda); font-weight: 700; }
+/* 25/11/2026: cada dia (semana, mês) abre a lista das contas dele ao tocar. */
+.cob-t-abre { cursor: pointer; margin: 0 -8px; padding-left: 8px; padding-right: 8px; border-radius: 8px; }
+.cob-t-abre:hover, .cob-t-abre:focus-visible { background: rgba(255, 255, 255, 0.04); outline: none; }
+.cob-t-abre.aberta { background: rgba(91, 141, 239, 0.08); }
+/* Os dois retângulos do "Tudo a receber" (25/11/2026): Previstos para receber e Sem previsão. */
+.cob-t-caixas { display: flex; flex-direction: column; gap: 10px; margin-top: auto; }
+.cob-t-caixa { border: 1px solid var(--borda); border-radius: 12px; background: rgba(255, 255, 255, 0.02); overflow: hidden; }
+.cob-t-caixa > .cob-t-linha.cob-t-abre { margin: 0; padding: 12px 14px; border-top: none; border-radius: 0; }
+.cob-t-caixa > .cob-t-corpo { padding: 0 14px 8px; }
+.cob-t-caixa > .cob-t-corpo[hidden] { display: none; }
+.cob-l-sem > .cob-t-linha .cob-t-barra { background: var(--aviso); }
+.cob-l-previsto > .cob-t-linha .cob-t-barra { background: rgba(62, 207, 142, 0.7); }
+.cob-t-explica { margin: 0 0 6px; font-size: 0.8rem; line-height: 1.5; }
+.cob-t-detalhe { margin: 0 0 6px; padding-left: 10px; border-left: 2px solid rgba(91, 141, 239, 0.35); }
+.cob-t-detalhe[hidden] { display: none; }
+.cob-linha-email { display: block; margin-top: 3px; font-size: 0.76rem; color: var(--muted); }
+.cob-linha-email.ok { color: #6ee7b7; }
+.cob-linha-email.erro { color: #ff9a9d; }
 
 .cob-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
 .cob-busca { flex: 1; min-width: 180px; }
@@ -8560,13 +8581,12 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
      A última linha é flexível (1fr): as colunas compridas crescem para baixo sem abrir vão entre os cartões da 1ª. */
   #cob-conteudo:not(.hidden) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr);
-    grid-template-rows: auto auto auto 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    grid-template-rows: auto auto 1fr;
     grid-template-areas:
-      "asaas asaas asaas"
-      "fila fila fila"
-      "dias sem lista"
-      "periodo sem lista";
+      "asaas asaas"
+      "fila fila"
+      "periodo lista";
     column-gap: 18px;
     align-items: start;
   }
@@ -8577,8 +8597,6 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
 
   #cob-conteudo #cob-asaas { grid-area: asaas; }
   #cob-conteudo #cob-fila { grid-area: fila; }
-  #cob-conteudo #cob-dias { grid-area: dias; margin-bottom: 18px; }
-  #cob-conteudo #cob-sem-boleto { grid-area: sem; }
   #cob-conteudo #cob-periodo { grid-area: periodo; grid-column: auto; }
   #cob-conteudo #cob-lista-bloco { grid-area: lista; }
 
@@ -8803,7 +8821,6 @@ button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
     grid-template-areas:
       "asaas asaas"
       "fila fila"
-      "dias sem"
       "periodo lista";
     gap: var(--cob-vao);
     align-items: stretch;
@@ -8814,11 +8831,9 @@ button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
   #cob-conteudo #cob-fila { grid-area: fila; margin: 0; }
   /* Sem "Precisa de você", a linha dele não pode deixar vão dobrado. */
   #cob-conteudo:has(#cob-fila.hidden) #cob-asaas { margin-bottom: calc(10px - var(--cob-vao)); }
-  #cob-conteudo #cob-dias { grid-area: dias; }
-  #cob-conteudo #cob-sem-boleto { grid-area: sem; }
   #cob-conteudo #cob-periodo { grid-area: periodo; grid-column: auto; }
   #cob-conteudo #cob-lista-bloco { grid-area: lista; }
-  #cob-conteudo #cob-dias, #cob-conteudo #cob-sem-boleto, #cob-conteudo #cob-periodo, #cob-conteudo #cob-lista-bloco {
+  #cob-conteudo #cob-periodo, #cob-conteudo #cob-lista-bloco {
     display: flex; flex-direction: column; margin: 0; padding: 22px 24px;
   }
   #cob-conteudo .painel-cab { margin-bottom: 12px; min-height: 34px; }
@@ -8835,11 +8850,11 @@ button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
 /* Tela larga: os quatro blocos lado a lado, um embaixo de cada número. */
 @media (min-width: 2200px) {
   #cob-conteudo:not(.hidden) {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
-      "asaas asaas asaas asaas"
-      "fila fila fila fila"
-      "dias sem periodo lista";
+      "asaas asaas"
+      "fila fila"
+      "periodo lista";
   }
 }
 

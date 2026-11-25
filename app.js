@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.24d";
+const APP_VERSION = "2026.11.25a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -16828,6 +16828,8 @@ const COB_TEL = "(47) 99208-1047";
 // --- Situação de cada cobrança ---
 function cobTemBoleto(x) { return Boolean(x.asaasId) || x.asaasStatus === "CRIANDO" || x.asaasStatus === "ERRO"; }
 function cobAberta(x) { return (x.status || "Pendente") === "Pendente"; }
+// Sem previsão = em aberto sem boleto com vencimento. Desde 25/11/2026 ficam só no "Tudo a receber" (linha que abre a lista).
+function cobSemPrevisao(x) { return cobAberta(x) && !(x.asaasId && x.vencimento); }
 function cobVencida(x) { return cobAberta(x) && Boolean(x.asaasId) && Boolean(x.vencimento) && x.vencimento < hojeISO(); }
 function cobSoma(lista, f) { return lista.reduce((s, x) => s + Number((f ? f(x) : x.valor) || 0), 0); }
 function cobPlural(n, um, varios) { return `${n} ${n === 1 ? um : varios}`; }
@@ -16881,8 +16883,6 @@ const cobEls = {
   conteudo: document.getElementById("cob-conteudo"),
   asaas: document.getElementById("cob-asaas"),
   fila: document.getElementById("cob-fila"),
-  dias: document.getElementById("cob-dias"),
-  semBoleto: document.getElementById("cob-sem-boleto"),
   periodo: document.getElementById("cob-periodo"),
   lista: document.getElementById("cob-lista-bloco"),
 };
@@ -16997,8 +16997,6 @@ function cobDesenhar() {
   document.getElementById("resumo-receber").classList.add("cob-escondido");
   cobDesenharAsaas(d);
   cobDesenharFila(d);
-  cobDesenharDias(d);
-  cobDesenharSemBoleto(d);
   cobDesenharPeriodo(d);
   cobDesenharLista(d);
   // A lista de baixo (lançadas à mão) deixa de mostrar o que agora está aqui.
@@ -17337,6 +17335,19 @@ function cobDesenharFila(d) {
   if (fila.length > 6) destino.append(cobBotao(cobFilaTudo ? "Mostrar menos" : `Mostrar todos (${fila.length})`, () => { cobFilaTudo = !cobFilaTudo; cobDesenharFila(cobDados); }, "cob-link"));
 }
 
+// --- Se foi por e-mail (25/11/2026): o último envio pelo sistema, automático ou manual ---
+function cobEmailTexto(x) {
+  if (x.status !== "Pendente") return null;
+  const e = x.email;
+  const dia = e && e.quando ? " em " + dataBonita(String(e.quando).slice(0, 10)).slice(0, 5) : "";
+  if (!e) return cobTemBoleto(x) || x.origem === "nota" ? { texto: "✉ Não enviado por e-mail pelo sistema", classe: "" } : null;
+  const t = { "email-criado": ["Boleto enviado por e-mail", "automático"], "lembrete": ["Lembrete de véspera enviado por e-mail", "automático"],
+    "email-atraso": ["Aviso de atraso enviado por e-mail", "automático"], "email-nota": ["Nota enviada por e-mail", "manual"] }[e.tipo];
+  if (t) return { texto: `✉ ${t[0]}${dia} · ${t[1]}`, classe: "ok" };
+  if (e.tipo === "sem-email") return { texto: "✉ Não enviado: cliente sem e-mail do financeiro", classe: "erro" };
+  return { texto: `✉ O e-mail falhou${dia} · o sistema tenta de novo`, classe: "erro" };
+}
+
 // --- Linha de uma cobrança (usada nas listas) ---
 function cobLinha(x) {
   const s = cobSituacao(x);
@@ -17350,9 +17361,12 @@ function cobLinha(x) {
   const descricao = cobDescricaoCurta(x);
   if (descricao) partes.push(descricao);
   if (x.parcelas > 1) partes.push(`parcela ${x.parcela} de ${x.parcelas}`);
-  if (x.vencimento && x.status === "Pendente" && x.asaasId) partes.push(`vence ${cobDiaCurto(x.vencimento)}`);
   txt.append(topo, cobEl("span", "cob-linha-sub", partes.join(" · ")));
+  const email = cobEmailTexto(x);
+  if (email) txt.append(cobEl("span", "cob-linha-email " + email.classe, email.texto));
   const valor = cobEl("span", "cob-linha-valor");
+  // 25/11/2026 (dono): o vencimento fica em destaque no canto, em cima do valor (é a data que ordena as listas).
+  if (x.vencimento && x.status === "Pendente" && x.asaasId) valor.append(cobEl("span", "cob-linha-vence" + (cobVencida(x) ? " vencido" : ""), `Vence ${cobDiaCurto(x.vencimento)}`));
   valor.append(cobEl("strong", "", dinheiro(x.valor)));
   if (cobVencida(x)) valor.append(cobEl("span", "cob-vermelho", `hoje ${dinheiro(cobValorHoje(x))}`));
   else if (x.status === "Recebido" && x.valorLiquido != null && Number(x.valorLiquido) !== Number(x.valorPago ?? x.valor)) valor.append(cobEl("span", "", `líquido ${dinheiro(x.valorLiquido)}`));
@@ -17361,7 +17375,8 @@ function cobLinha(x) {
   return linha;
 }
 
-// --- 3. Boletos: a receber por dia de vencimento ---
+// --- 3. Listas que abrem e fecham ---
+// (25/11/2026: o cartão "Boletos por dia de vencimento" saiu; cada dia do "Tudo a receber" abre a lista dele.)
 // Lista que abre e fecha (23/11/2026, pedido do dono): o cartão mostra só a frase de cima; a seta logo abaixo abre
 // a lista (empurrando o resto para baixo) e vira para cima quando está aberta. Fica como estava ao atualizar a tela.
 const cobListaAberta = { dias: false, sem: false, periodo: false, todas: false };
@@ -17387,62 +17402,10 @@ function cobRecolher(destino, chave, quantos) {
   destino.append(botao, caixa);
   return caixa;
 }
-function cobDesenharDias(d) {
-  const destino = cobEls.dias;
-  destino.innerHTML = "";
-  cobCab(destino, "Boletos por dia de vencimento", "91, 141, 239", COB_IC.calendario);
-  const hoje = hojeISO();
-  const abertos = (d.recebimentos || []).filter((x) => cobAberta(x) && x.asaasId && x.vencimento);
-  if (!abertos.length) {
-    destino.append(cobEl("p", "doc-hint", "Nenhum boleto em aberto. Os boletos gerados com a nota aparecem aqui, no dia em que vencem."));
-    return;
-  }
-  const vencidosQtd = abertos.filter((x) => x.vencimento < hoje).length;
-  destino.append(cobEl("p", "doc-hint cob-sem-previsao", `${cobPlural(abertos.length, "boleto em aberto", "boletos em aberto")}, somando ${dinheiro(cobSoma(abertos))}.`
-    + (vencidosQtd ? ` ${cobPlural(vencidosQtd, "já venceu", "já venceram")}.` : " Nenhum vencido.")));
-  const caixa = cobRecolher(destino, "dias", cobPlural(abertos.length, "boleto", "boletos"));
-  const grupos = new Map();
-  for (const x of abertos.sort((a, b) => a.vencimento.localeCompare(b.vencimento))) {
-    const chave = x.vencimento < hoje ? "vencidos" : x.vencimento;
-    if (!grupos.has(chave)) grupos.set(chave, []);
-    grupos.get(chave).push(x);
-  }
-  for (const [chave, lista] of grupos) {
-    const det = cobEl("details", "cob-dia" + (chave === "vencidos" ? " cob-dia-vencido" : ""));
-    if (chave === "vencidos" || chave === hoje) det.open = true;
-    const sum = cobEl("summary");
-    const rotulo = chave === "vencidos" ? "Vencidos" : chave === hoje ? `Hoje, ${dataBonita(chave).slice(0, 5)}` : chave === cobSomaDias(hoje, 1) ? `Amanhã, ${dataBonita(chave).slice(0, 5)}` : cobDiaCurto(chave);
-    sum.append(cobEl("strong", "", rotulo), cobEl("span", "cob-dia-qtd", cobPlural(lista.length, "boleto", "boletos")), cobEl("span", "cob-dia-total", dinheiro(cobSoma(lista))));
-    det.append(sum);
-    lista.forEach((x) => det.append(cobLinha(x)));
-    caixa.append(det);
-  }
-}
-
-// --- 4. Notas e recibos sem boleto (sem previsão de pagamento) ---
-function cobDesenharSemBoleto(d) {
-  const destino = cobEls.semBoleto;
-  destino.innerHTML = "";
-  const lista = (d.recebimentos || []).filter((x) => cobAberta(x) && !cobTemBoleto(x));
-  cobCab(destino, "Notas e recibos sem boleto", "245, 166, 35", COB_IC.nota, cobEl("span", "cob-cab-total", dinheiro(cobSoma(lista))));
-  // Enquanto o CNPJ 1 recebe pelo Inter (chave PIX ainda não foi para o Asaas), o que cai lá é baixa à mão.
-  const interAinda = !((d.contas || {})["CNPJ 1"] || {}).notasPeloAsaas;
-  destino.append(cobEl("p", "doc-hint cob-sem-previsao", "Sem previsão de pagamento. Dá baixa sozinho quando o próprio cliente paga no Asaas o valor exato; se quem paga é outro (a administradora, por exemplo), aparece em \"Precisa de você\" para você confirmar"
-    + (interAinda ? "; o que cai no Inter, marque você." : ".")));
-  if (!lista.length) {
-    destino.append(cobEl("p", "doc-hint", "Nada pendente. Toda nota emitida de cliente sem boleto (e todo recibo) entra aqui."));
-    return;
-  }
-  const caixa = cobRecolher(destino, "sem", cobPlural(lista.length, "item", "itens"));
-  for (const x of lista.sort((a, b) => String(a.criadoEm).localeCompare(String(b.criadoEm)))) {
-    const linha = cobLinha(x);
-    const dias = Math.max(0, cobDias(String(x.criadoEm).slice(0, 10), hojeISO()));
-    linha.querySelector(".cob-linha-sub").textContent += ` · há ${cobPlural(dias, "dia", "dias")}`;
-    caixa.append(linha);
-  }
-}
+// --- 4. (25/11/2026) O cartão "Notas e recibos sem boleto" saiu: tudo dele está no "Sem previsão" do Tudo a receber. ---
 
 // --- 5. Tudo a receber por dia, semana ou mês ---
+const cobPeriodoAbertos = new Set();
 function cobChavePeriodo(iso) {
   if (cobPeriodo === "mes") return iso.slice(0, 7);
   if (cobPeriodo === "semana") {
@@ -17468,8 +17431,8 @@ function cobDesenharPeriodo(d) {
   cobCab(destino, "Tudo a receber", "62, 207, 142", COB_IC.barras, seletor);
   const hoje = hojeISO();
   const itens = (d.recebimentos || []).filter(cobAberta);
-  const comData = itens.filter((x) => x.asaasId && x.vencimento);
-  const semPrevisao = itens.filter((x) => !(x.asaasId && x.vencimento));
+  const comData = itens.filter((x) => !cobSemPrevisao(x));
+  const semPrevisao = itens.filter(cobSemPrevisao);
   const vencidos = comData.filter((x) => x.vencimento < hoje);
   const grupos = new Map();
   for (const x of comData.filter((y) => y.vencimento >= hoje).sort((a, b) => a.vencimento.localeCompare(b.vencimento))) {
@@ -17477,32 +17440,72 @@ function cobDesenharPeriodo(d) {
     grupos.set(k, (grupos.get(k) || []).concat(x));
   }
   const linhas = [];
-  if (vencidos.length) linhas.push({ rotulo: "Vencidos (cobrar)", qtd: vencidos.length, total: cobSoma(vencidos), classe: "cob-l-vencido" });
-  for (const [k, lista] of grupos) linhas.push({ rotulo: cobRotuloPeriodo(k), qtd: lista.length, total: cobSoma(lista) });
-  const maior = Math.max(1, ...linhas.map((l) => l.total), cobSoma(semPrevisao));
-  const tabela = cobEl("div", "cob-tabela");
-  const poe = (l) => {
-    const row = cobEl("div", "cob-t-linha " + (l.classe || ""));
-    const barra = cobEl("span", "cob-t-barra");
-    barra.style.width = `${Math.max(2, Math.round((l.total / maior) * 100))}%`;
-    const nome = cobEl("span", "cob-t-nome");
-    nome.append(cobEl("span", "", l.rotulo), barra);
-    row.append(nome, cobEl("span", "cob-t-qtd", l.qtdTexto || cobPlural(l.qtd, "boleto", "boletos")), cobEl("strong", "cob-t-total", dinheiro(l.total)));
-    tabela.append(row);
+  if (vencidos.length) linhas.push({ chave: "vencidos", lista: vencidos, rotulo: "Vencidos (cobrar)", qtd: vencidos.length, total: cobSoma(vencidos), classe: "cob-l-vencido" });
+  for (const [k, lista] of grupos) linhas.push({ chave: k, lista, rotulo: cobRotuloPeriodo(k), qtd: lista.length, total: cobSoma(lista) });
+  // Toque abre e fecha o que está embaixo; fica como estava ao atualizar a tela.
+  const abreFecha = (row, corpo, chave) => {
+    row.classList.add("cob-t-abre");
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    const mostrar = () => { const ab = cobPeriodoAbertos.has(chave); corpo.hidden = !ab; row.classList.toggle("aberta", ab); row.setAttribute("aria-expanded", String(ab)); };
+    const alternar = () => { if (cobPeriodoAbertos.has(chave)) cobPeriodoAbertos.delete(chave); else cobPeriodoAbertos.add(chave); mostrar(); };
+    row.addEventListener("click", alternar);
+    row.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); alternar(); } });
+    mostrar();
   };
-  if (!linhas.length && !semPrevisao.length) {
+  const linhaDe = (rotulo, qtdTexto, total, maior, classe) => {
+    const row = cobEl("div", "cob-t-linha " + (classe || ""));
+    const barra = cobEl("span", "cob-t-barra");
+    barra.style.width = `${Math.max(2, Math.round((total / Math.max(1, maior)) * 100))}%`;
+    const nome = cobEl("span", "cob-t-nome");
+    nome.append(cobEl("span", "", rotulo), barra);
+    row.append(nome, cobEl("span", "cob-t-qtd", qtdTexto), cobEl("strong", "cob-t-total", dinheiro(total)));
+    return row;
+  };
+  const porData = (a, b) => String(a.vencimento || a.criadoEm).localeCompare(String(b.vencimento || b.criadoEm));
+  if (!comData.length && !semPrevisao.length) {
     destino.append(cobEl("p", "doc-hint", "Nada a receber agora."));
     return;
   }
   destino.append(cobEl("p", "doc-hint cob-sem-previsao", `${cobPlural(itens.length, "conta", "contas")} a receber, somando ${dinheiro(cobSoma(itens))}`
     + (vencidos.length ? `; ${dinheiro(cobSoma(vencidos))} já vencido.` : ".")));
-  const caixaPeriodo = cobRecolher(destino, "periodo", cobPlural(itens.length, "conta", "contas"));
-  linhas.forEach(poe);
-  if (semPrevisao.length) poe({ rotulo: "Sem previsão (notas e recibos sem boleto)", qtd: semPrevisao.length, qtdTexto: cobPlural(semPrevisao.length, "conta", "contas"), total: cobSoma(semPrevisao), classe: "cob-l-sem" });
-  const total = cobEl("div", "cob-t-linha cob-t-soma");
-  total.append(cobEl("span", "cob-t-nome", "Total a receber"), cobEl("span", "cob-t-qtd", cobPlural(itens.length, "conta", "contas")), cobEl("strong", "cob-t-total", dinheiro(cobSoma(itens))));
-  tabela.append(total);
-  caixaPeriodo.append(tabela);
+  // 25/11/2026 (dono): no lugar de "Ver a lista", dois retângulos, um embaixo do outro. "Previstos para receber" abre os
+  // dias (semana, mês), e cada dia abre os boletos dele; "Sem previsão" abre as notas e recibos sem boleto.
+  const caixas = cobEl("div", "cob-t-caixas");
+  const totalGeral = cobSoma(itens);
+  const caixa = (chave, row, corpo, classe) => {
+    const box = cobEl("div", "cob-t-caixa " + classe);
+    box.append(row, corpo);
+    abreFecha(row, corpo, "caixa:" + chave);
+    caixas.append(box);
+  };
+  if (comData.length) {
+    const tabela = cobEl("div", "cob-tabela cob-t-corpo");
+    const maiorDia = Math.max(1, ...linhas.map((l) => l.total));
+    for (const l of linhas) {
+      const row = linhaDe(l.rotulo, cobPlural(l.qtd, "boleto", "boletos"), l.total, maiorDia, l.classe);
+      const detalhe = cobEl("div", "cob-t-detalhe");
+      l.lista.slice().sort(porData).forEach((x) => detalhe.append(cobLinha(x)));
+      tabela.append(row, detalhe);
+      abreFecha(row, detalhe, cobPeriodo + ":" + l.chave);
+    }
+    caixa("previstos", linhaDe("Previstos para receber (boletos)", cobPlural(comData.length, "boleto", "boletos"), cobSoma(comData), totalGeral), tabela, "cob-l-previsto");
+  }
+  if (semPrevisao.length) {
+    const corpo = cobEl("div", "cob-t-corpo");
+    // Igual ao cartão "Notas e recibos sem boleto": a explicação da baixa e "há N dias" em cada conta.
+    const interAinda = !((d.contas || {})["CNPJ 1"] || {}).notasPeloAsaas;
+    corpo.append(cobEl("p", "doc-hint cob-t-explica", "Dá baixa sozinho quando o próprio cliente paga no Asaas o valor exato; se quem paga é outro (a administradora, por exemplo), aparece em \"Precisa de você\" para você confirmar"
+      + (interAinda ? "; o que cai no Inter, marque você." : ".")));
+    semPrevisao.slice().sort(porData).forEach((x) => {
+      const linha = cobLinha(x);
+      const dias = Math.max(0, cobDias(String(x.criadoEm).slice(0, 10), hojeISO()));
+      linha.querySelector(".cob-linha-sub").textContent += ` · há ${cobPlural(dias, "dia", "dias")}`;
+      corpo.append(linha);
+    });
+    caixa("sem", linhaDe("Sem previsão (notas e recibos sem boleto)", cobPlural(semPrevisao.length, "conta", "contas"), cobSoma(semPrevisao), totalGeral), corpo, "cob-l-sem");
+  }
+  destino.append(caixas);
 }
 
 // --- 6. Lista completa com filtros ---
@@ -17526,10 +17529,12 @@ function cobDesenharLista(d) {
   busca.value = cobFiltro.busca;
   busca.addEventListener("input", () => { cobFiltro.busca = busca.value; cobDesenharLinhasDaLista(cobDados, caixa, rodape); });
   filtros.append(busca);
-  const abertas = (d.recebimentos || []).filter(cobAberta);
+  const abertas = (d.recebimentos || []).filter((x) => cobAberta(x) && !cobSemPrevisao(x));
+  const semPrev = (d.recebimentos || []).filter(cobSemPrevisao).length;
   const recebidas = (d.recebimentos || []).filter((x) => x.status === "Recebido").length;
-  destino.append(cobEl("p", "doc-hint cob-sem-previsao", `${cobPlural(abertas.length, "cobrança", "cobranças")} a receber, somando ${dinheiro(cobSoma(abertas))}`
-    + (recebidas ? `, e ${cobPlural(recebidas, "recebida", "recebidas")} nos últimos meses.` : ".")));
+  destino.append(cobEl("p", "doc-hint cob-sem-previsao", `${cobPlural(abertas.length, "boleto", "boletos")} a receber, somando ${dinheiro(cobSoma(abertas))}`
+    + (recebidas ? `, e ${cobPlural(recebidas, "recebida", "recebidas")} nos últimos meses.` : ".")
+    + (semPrev ? (semPrev === 1 ? ' A conta sem previsão fica no "Tudo a receber".' : ` As ${semPrev} contas sem previsão ficam no "Tudo a receber".`) : "")));
   const recolhe = cobRecolher(destino, "todas", "com filtros e busca");
   const caixa = cobEl("div", "cob-lista");
   const rodape = cobEl("p", "doc-hint cob-rodape");
@@ -17539,6 +17544,7 @@ function cobDesenharLista(d) {
 function cobDesenharLinhasDaLista(d, caixa, rodape) {
   const termo = normalizarTexto(cobFiltro.busca || "");
   const lista = (d.recebimentos || []).filter((x) => {
+    if (cobSemPrevisao(x)) return false; // ficam no "Tudo a receber"
     if (cobFiltro.cnpj && x.emissor !== cobFiltro.cnpj) return false;
     if (cobFiltro.status === "abertas" && !cobAberta(x)) return false;
     if (cobFiltro.status === "vencidas" && !cobVencida(x)) return false;
