@@ -321,6 +321,10 @@ begin
           'pagador', c."Pagador", 'documento', c."Pagador_Documento", 'clienteId', c."Cliente_Ref", 'descricao', c."Descricao",
           'status', c."Status", 'confianca', c."Confianca", 'sugestao', c."Sugestao_Ref", 'anotacao', c."Anotacao") order by c."Data" desc)
         from "Conciliacao" c where c."Status" in ('pendente', 'sem-par') and c."Data" >= hoje - 60), '[]'::jsonb),
+    -- Entradas que o dono anotou (de onde e por que veio) sem ligar a uma cobrança (25/11/2026): só para ver.
+    'anotadas', coalesce((select jsonb_agg(jsonb_build_object('id', c.id, 'conta', c."Conta", 'data', c."Data", 'valor', c."Valor",
+          'pagador', c."Pagador", 'descricao', c."Descricao", 'anotacao', c."Anotacao") order by c."Data" desc)
+        from "Conciliacao" c where c."Status" = 'anotado'), '[]'::jsonb),
     -- Também as NFS-e trazidas de fora (PDF importado na pasta NFS-e do cliente, com valor; 22/11/2026), até o dono
     -- dizer se vai receber ou se já recebeu.
     'notasSemConta', coalesce((select jsonb_agg(x.j order by x.quando desc) from (

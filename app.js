@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.25b";
+const APP_VERSION = "2026.11.25c";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -16885,6 +16885,7 @@ const cobEls = {
   fila: document.getElementById("cob-fila"),
   periodo: document.getElementById("cob-periodo"),
   lista: document.getElementById("cob-lista-bloco"),
+  anotadas: document.getElementById("cob-anotadas"),
 };
 let cobDados = null;
 let cobPedido = null;
@@ -16999,6 +17000,7 @@ function cobDesenhar() {
   cobDesenharFila(d);
   cobDesenharPeriodo(d);
   cobDesenharLista(d);
+  cobDesenharAnotadas(d);
   // A lista de baixo (lançadas à mão) deixa de mostrar o que agora está aqui.
   if (financeiroCarregado) desenharReceitas();
 }
@@ -17549,6 +17551,34 @@ function cobRotuloPeriodo(chave) {
   if (cobPeriodo === "semana") return `semana de ${dataBonita(chave).slice(0, 5)} a ${dataBonita(cobSomaDias(chave, 6)).slice(0, 5)}`;
   return cobDiaCurto(chave);
 }
+// Entradas anotadas (25/11/2026): o que entrou no Asaas sem cobrança e o dono escreveu de onde veio. Só para ver;
+// o que fazer com elas ainda vai ser decidido. Mesmas linhas do extrato (data | quem + CNPJ + anotação | valor).
+function cobDesenharAnotadas(d) {
+  const destino = cobEls.anotadas;
+  const itens = d.anotadas || [];
+  destino.innerHTML = "";
+  destino.classList.toggle("hidden", !itens.length);
+  if (!itens.length) return;
+  cobCab(destino, "Entradas anotadas", "245, 166, 35", COB_IC.barras);
+  destino.append(cobEl("p", "doc-hint", `${cobPlural(itens.length, "entrada", "entradas")} no Asaas sem cobrança, com a sua anotação de onde veio. Não entram no faturamento.`));
+  const tabela = cobEl("div", "rec-tabela");
+  for (const x of itens) {
+    const linha = cobEl("div", "ext-item");
+    const data = cobEl("span", "rec-data");
+    data.append(cobEl("strong", "", dataBonita(x.data).slice(0, 5)), cobEl("small", "", COB_SEMANA[cobData(x.data).getDay()]));
+    const meio = cobEl("span", "rec-cliente");
+    const nome = cobEl("span", "rec-cliente-nome");
+    nome.append(cobEl("strong", "", x.pagador || x.descricao || "Entrada"), cobEl("span", "cob-tag", x.conta));
+    meio.append(nome, cobEl("span", "cob-anotacao", "📝 " + (x.anotacao || "")));
+    linha.append(data, meio, cobEl("span", "ext-valor ext-credito", "+ " + dinheiro(Number(x.valor))));
+    tabela.append(linha);
+  }
+  const soma = cobEl("div", "rec-linha rec-soma");
+  soma.append(cobEl("span", "", "Total anotado"), cobEl("strong", "", dinheiro(itens.reduce((t, x) => t + Number(x.valor || 0), 0))));
+  tabela.append(soma);
+  destino.append(tabela);
+}
+
 function cobDesenharPeriodo(d) {
   const destino = cobEls.periodo;
   destino.innerHTML = "";
