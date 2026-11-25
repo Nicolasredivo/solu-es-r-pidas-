@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.25a";
+const APP_VERSION = "2026.11.25b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -17047,7 +17047,7 @@ function cobDesenharAsaas(d) {
   };
   const erros = ["CNPJ 1", "CNPJ 2"].filter((k) => contas[k] && contas[k].erro);
   grade.append(
-    kpi("62, 207, 142", "Saldo no Asaas", saldo, erros.length ? `sem leitura do ${erros.join(" e ")}` : "CNPJ 1 + CNPJ 2 somados", erros.length ? "kpi-aviso" : ""),
+    kpi("62, 207, 142", "Saldo no Asaas", saldo, erros.length ? `sem leitura do ${erros.join(" e ")}` : "CNPJ 1 + CNPJ 2", erros.length ? "kpi-aviso" : ""),
     kpi("91, 141, 239", "Vai entrar", cobSoma(abertos) + cobSoma(semBoleto), `${cobPlural(abertos.length, "boleto", "boletos")} + ${cobPlural(semBoleto.length, "sem boleto", "sem boleto")}`),
     kpi("229, 72, 77", "Vencido", cobSoma(vencidos), vencidos.length ? `${cobPlural(vencidos.length, "boleto", "boletos")} · hoje ${dinheiro(cobSoma(vencidos, cobValorHoje))}` : "nenhum boleto vencido", vencidos.length ? "kpi-perigo" : ""),
     kpi("167, 139, 250", "Recebido no mês", recebido, recebido ? `líquido ${dinheiro(liquido)}` : "nada ainda neste mês"));
@@ -17188,8 +17188,8 @@ function recDesenhar(r) {
   };
   grade.append(
     kpi("167, 139, 250", "Recebido", bruto, itens.length ? cobPlural(itens.length, "recebimento", "recebimentos") : "nada neste mês"),
-    kpi("62, 207, 142", "Ficou na conta", liquido, "depois das taxas"),
-    kpi("245, 166, 35", "Taxas do Asaas", taxas, multa ? `multa e juros recebidos: ${dinheiro(multa)}` : taxas ? "dos boletos pagos" : "nenhuma neste mês"));
+    kpi("245, 166, 35", "Taxas do Asaas", taxas, multa ? `multa e juros recebidos: ${dinheiro(multa)}` : taxas ? "dos boletos pagos" : "nenhuma neste mês"),
+    kpi("62, 207, 142", "Ficou na conta", liquido, "depois das taxas"));
   p.append(grade);
   const bloco = cobEl("div", "painel-cartao rec-bloco");
   if (!itens.length) {
