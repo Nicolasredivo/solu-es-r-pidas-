@@ -17060,6 +17060,15 @@ function cobDesenharAsaas(d) {
   kRec.append(cobEl("span", "kpi-ver", "Ver todos ›"));
   kRec.addEventListener("click", () => recAbrir(mes));
   kRec.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); recAbrir(mes); } });
+  // Tocar no "Saldo no Asaas" abre o extrato das duas contas juntas (25/11/2026).
+  const kSaldo = grade.firstElementChild;
+  kSaldo.classList.add("kpi-clicavel");
+  kSaldo.setAttribute("role", "button");
+  kSaldo.tabIndex = 0;
+  kSaldo.title = "Ver o extrato do Asaas (CNPJ 1 + CNPJ 2)";
+  kSaldo.append(cobEl("span", "kpi-ver", "Ver extrato ›"));
+  kSaldo.addEventListener("click", () => extAbrir());
+  kSaldo.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); extAbrir(); } });
   destino.append(grade);
   // Linha das contas: PIX, taxa e a última conferência com o Asaas.
   const pix1 = (contas["CNPJ 1"] || {}).pix, pix2 = (contas["CNPJ 2"] || {}).pix;
@@ -17122,6 +17131,7 @@ function recFechar() {
   recEls.pagina.classList.add("hidden");
 }
 async function recAbrir(mes) {
+  extFechar();
   recMes = /^\d{4}-\d{2}$/.test(mes || "") ? mes : hojeISO().slice(0, 7);
   const vez = ++recVez;
   const estavaFechada = recEls.pagina.classList.contains("hidden");
@@ -17234,9 +17244,128 @@ function recDesenhar(r) {
   bloco.append(tabela);
   p.append(bloco);
 }
-// Trocar de tela pelo menu (ou pela barra de baixo) fecha a página dos recebidos.
-document.getElementById("sidebar").addEventListener("click", (ev) => { if (ev.target.closest(".sidebar-item")) recFechar(); });
-document.getElementById("barra-baixo").addEventListener("click", (ev) => { if (ev.target.closest(".barra-item")) recFechar(); });
+// --- Extrato do Asaas (25/11/2026, pedido do dono) ---
+// Página aberta pelo cartão "Saldo no Asaas": as movimentações das duas contas (CNPJ 1 e CNPJ 2) numa lista só,
+// mais nova primeiro, com o que entrou, o que saiu e o saldo do período. Só leitura: o fluxo "App - Asaas Extrato"
+// (webhook asaas-extrato) só consulta o extrato do Asaas e o nome do cliente no banco. Padrão: últimos 30 dias.
+const extEls = { pagina: document.getElementById("cob-extrato"), receber: document.getElementById("subfin-receber") };
+let extPeriodo = { inicio: "", fim: "" };
+let extVez = 0;
+function extPadrao() { const hoje = hojeISO(); return { inicio: cobSomaDias(hoje, -29), fim: hoje }; }
+function extFechar() {
+  extVez++;
+  extEls.receber.classList.remove("vendo-extrato");
+  extEls.pagina.classList.add("hidden");
+}
+async function extAbrir(periodo) {
+  recFechar();
+  extPeriodo = periodo || (extPeriodo.inicio ? extPeriodo : extPadrao());
+  const vez = ++extVez;
+  const estavaFechada = extEls.pagina.classList.contains("hidden");
+  extEls.receber.classList.add("vendo-extrato");
+  extEls.pagina.classList.remove("hidden");
+  extDesenhar(null);
+  if (estavaFechada) extEls.pagina.scrollIntoView({ block: "start" });
+  let r;
+  try { r = await pedirAoN8n("asaas-extrato", { inicio: extPeriodo.inicio, fim: extPeriodo.fim }); } catch (err) { r = null; }
+  if (vez !== extVez) return;
+  extDesenhar(r || { ok: false, mensagem: "Não consegui buscar o extrato agora. Confira a internet e o servidor do PC e tente de novo." });
+}
+function extDesenhar(r) {
+  const p = extEls.pagina;
+  p.innerHTML = "";
+  // Cabeçalho: voltar e título.
+  const cab = cobEl("div", "rec-cab");
+  const voltar = cobBotao("", extFechar, "rec-voltar");
+  voltar.innerHTML = REC_SETA("M15 18l-6-6 6-6") + "<span>A receber</span>";
+  cab.append(voltar, cobEl("h2", "rec-titulo", "Extrato do Asaas"));
+  p.append(cab);
+  // Filtro: data de início e de fim, qualquer período.
+  const filtro = cobEl("form", "ext-filtro");
+  const campo = (rotulo, id, valor) => {
+    const d = cobEl("div");
+    const l = cobEl("label", "", rotulo);
+    l.htmlFor = id;
+    const i = cobEl("input");
+    i.type = "date";
+    i.id = id;
+    i.value = valor;
+    i.max = hojeISO();
+    d.append(l, i);
+    return [d, i];
+  };
+  const [dDe, iDe] = campo("De", "ext-de", extPeriodo.inicio);
+  const [dAte, iAte] = campo("Até", "ext-ate", extPeriodo.fim);
+  const aplicar = cobEl("button", "botao-secundario ext-aplicar", "Aplicar");
+  aplicar.type = "submit";
+  const aviso = cobEl("p", "doc-hint cob-vermelho ext-aviso hidden");
+  filtro.append(dDe, dAte, aplicar);
+  filtro.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const de = iDe.value, ate = iAte.value;
+    let erro = "";
+    if (!de || !ate) erro = "Escolha as duas datas.";
+    else if (de > ate) erro = "A data de início vem depois da data de fim.";
+    if (erro) { aviso.textContent = erro; aviso.classList.remove("hidden"); return; }
+    extAbrir({ inicio: de, fim: ate });
+  });
+  p.append(filtro, aviso);
+  const periodoTexto = `${dataBonita(extPeriodo.inicio)} a ${dataBonita(extPeriodo.fim)}`;
+  if (!r) { p.append(cobEl("p", "doc-hint", `Buscando as movimentações de ${periodoTexto}...`)); return; }
+  if (!r.ok) {
+    const erro = cobEl("p", "doc-hint cob-vermelho", r.mensagem || "Não consegui buscar o extrato agora.");
+    erro.append(" ", cobBotao("Tentar de novo", () => extAbrir(extPeriodo), "cob-link"));
+    p.append(erro);
+    return;
+  }
+  const itens = r.itens || [];
+  const tot = r.totais || {};
+  const grade = cobEl("div", "painel-kpis rec-kpis");
+  const kpi = (cor, rotulo, valor, nota, classeValor) => {
+    const k = cobEl("div", "kpi");
+    k.style.setProperty("--cor", cor);
+    k.append(cobEl("span", "kpi-rotulo", rotulo), cobEl("span", "kpi-valor" + (classeValor ? " " + classeValor : ""), dinheiro(valor)), cobEl("span", "kpi-nota", nota));
+    return k;
+  };
+  const nEntradas = itens.filter((x) => x.valor > 0).length, nSaidas = itens.filter((x) => x.valor < 0).length;
+  grade.append(
+    kpi("62, 207, 142", "Entrou", tot.entrou, nEntradas ? cobPlural(nEntradas, "entrada", "entradas") : "nada no período"),
+    kpi("229, 72, 77", "Saiu", tot.saiu, nSaidas ? cobPlural(nSaidas, "saída", "saídas") : "nada no período"),
+    kpi("91, 141, 239", "Saldo do período", tot.saldo, "entrou − saiu", Number(tot.saldo) < 0 ? "cob-vermelho" : ""));
+  p.append(grade);
+  const erros = r.erros || [];
+  if (erros.length) p.append(cobEl("p", "doc-hint cob-vermelho", `Sem leitura do ${erros.join(" e ")} agora: a lista e os totais mostram só a outra conta.`));
+  if (r.incompleto) p.append(cobEl("p", "doc-hint cob-vermelho", "Período grande demais: nem todas as movimentações couberam. Escolha um período menor."));
+  const bloco = cobEl("div", "painel-cartao rec-bloco");
+  if (!itens.length) {
+    bloco.append(cobEl("p", "rec-vazio", `Nenhuma movimentação de ${periodoTexto}.`));
+    p.append(bloco);
+    return;
+  }
+  const tabela = cobEl("div", "rec-tabela");
+  for (const x of itens) {
+    const linha = cobEl("div", "ext-item");
+    const data = cobEl("span", "rec-data");
+    data.append(cobEl("strong", "", dataBonita(x.data).slice(0, 5)), cobEl("small", "", COB_SEMANA[cobData(x.data).getDay()]));
+    const meio = cobEl("span", "rec-cliente");
+    const nome = cobEl("span", "rec-cliente-nome");
+    nome.append(cobEl("strong", "", x.cliente || x.descricao || "Movimentação"), cobEl("span", "cob-tag", x.conta));
+    meio.append(nome);
+    if (x.cliente && x.descricao) meio.append(cobEl("small", "", x.descricao));
+    const valor = cobEl("span", "ext-valor " + (x.valor < 0 ? "ext-debito" : "ext-credito"), (x.valor < 0 ? "− " : "+ ") + dinheiro(Math.abs(x.valor)));
+    linha.append(data, meio, valor);
+    tabela.append(linha);
+  }
+  const soma = cobEl("div", "rec-linha rec-soma");
+  soma.append(cobEl("span", "", `Saldo de ${periodoTexto} · ${cobPlural(itens.length, "movimentação", "movimentações")}`), cobEl("strong", Number(tot.saldo) < 0 ? "cob-vermelho" : "", dinheiro(tot.saldo)));
+  tabela.append(soma);
+  bloco.append(tabela);
+  p.append(bloco);
+}
+
+// Trocar de tela pelo menu (ou pela barra de baixo) fecha a página dos recebidos e a do extrato.
+document.getElementById("sidebar").addEventListener("click", (ev) => { if (ev.target.closest(".sidebar-item")) { recFechar(); extFechar(); } });
+document.getElementById("barra-baixo").addEventListener("click", (ev) => { if (ev.target.closest(".barra-item")) { recFechar(); extFechar(); } });
 
 // --- 2. Precisa de você ---
 function cobFilaItens(d) {

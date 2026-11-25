@@ -8797,6 +8797,33 @@ button.rec-doc:hover { border-color: var(--accent); filter: none; }
   .rec-docs { margin-top: 0; }
 }
 
+/* ===== Extrato do Asaas (25/11/2026) =====
+   Aberto pelo cartão "Saldo no Asaas": as duas contas numa lista só. Mesmo cabeçalho, cartões e linhas dos
+   Recebidos; cada linha é data | cliente ou descrição (+ CNPJ) | valor (verde entrou, vermelho saiu). */
+#subfin-receber.vendo-extrato > :not(#cob-extrato) { display: none !important; }
+.ext-filtro { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; align-items: end; gap: 10px; margin: 0 0 14px; }
+.ext-filtro label { display: block; margin: 0 0 4px 2px; font-size: 0.75rem; color: var(--muted); }
+.ext-filtro input[type="date"] { margin-bottom: 0; }
+button.ext-aplicar { width: auto; padding: 12px 18px; color: var(--accent); border-color: var(--accent); font-weight: 600; }
+.ext-aviso { margin: -6px 0 12px; }
+.ext-item {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: start; gap: 0 12px;
+  padding: 12px 4px; border-top: 1px solid var(--borda-suave);
+}
+.ext-item:first-child { border-top: none; }
+.ext-item .rec-cliente small { white-space: normal; }
+.ext-valor { padding-top: 1px; white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.ext-credito { color: var(--ok); }
+.ext-debito { color: #ff7b7f; }
+@media (max-width: 480px) {
+  .ext-filtro { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  button.ext-aplicar { grid-column: 1 / -1; }
+}
+@media (min-width: 1024px) {
+  .ext-item { grid-template-columns: 72px minmax(0, 1fr) 150px; align-items: center; gap: 0 18px; }
+  .ext-item .rec-data { align-items: flex-start; padding-top: 0; }
+}
+
 /* Lista que abre e fecha nos cartões "Boletos por dia" e "Notas e recibos sem boleto" (23/11/2026). */
 button.cob-abre-lista {
   display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin: 2px 0 4px; padding: 7px 10px;

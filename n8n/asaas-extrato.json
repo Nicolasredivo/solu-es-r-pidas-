@@ -1,0 +1,506 @@
+{
+  "name": "App - Asaas Extrato",
+  "nodes": [
+    {
+      "id": "1a881248-a8e9-4769-bfd7-0bfef8d64384",
+      "name": "Recebe pedido do app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "397e5338-75af-4f08-b9fd-bacaa836c9e2",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "asaas-extrato",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://nicolasredivo.github.io,http://localhost:8099,http://127.0.0.1:8099"
+        }
+      }
+    },
+    {
+      "id": "3b450c8a-79f2-4651-9c02-92d77895009f",
+      "name": "Confere acesso",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MRo9WbkWmQQ2gUr7",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operacao": "acesso",
+            "senha": "={{ $json.body.senha }}",
+            "tokenAcesso": "={{ $json.body.tokenAcesso }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "eeb77294-abb8-4677-9ebb-a140484f986d",
+      "name": "Acesso permitido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cff49f4f-014a-4228-a9bd-ca95fd356a14",
+              "leftValue": "={{ $json.permitido === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "2c21e57b-92ce-45a7-8855-076f37469270",
+      "name": "Responde acesso negado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        520
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": false,\n  \"acessoNegado\": true,\n  \"mensagem\": \"Acesso não autorizado. Entre de novo.\"\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "95d3fb06-bf00-4234-996c-543b262094e6",
+      "name": "Le entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Período do extrato: inicio e fim (AAAA-MM-DD). Vazio = últimos 30 dias (hoje entra), no horário de Brasília.\nconst b = $('Recebe pedido do app').first().json.body || {};\nconst t = (v) => String(v ?? '').trim();\nconst hoje = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);\nconst menos = (iso, n) => new Date(Date.parse(iso + 'T12:00:00Z') - n * 86400000).toISOString().slice(0, 10);\nconst valida = (s) => /^\\d{4}-\\d{2}-\\d{2}$/.test(s) && !isNaN(Date.parse(s + 'T12:00:00Z')) && new Date(Date.parse(s + 'T12:00:00Z')).toISOString().slice(0, 10) === s;\nlet inicio = t(b.inicio), fim = t(b.fim), erro = '';\nif (!inicio && !fim) { fim = hoje; inicio = menos(hoje, 29); }\nelse if (!valida(inicio) || !valida(fim)) erro = 'Confira as datas.';\nelse if (inicio > fim) erro = 'A data de início vem depois da data de fim.';\nelse if (inicio < '2000-01-01') erro = 'Confira a data de início.';\nreturn [{ json: { ok: !erro, erro, inicio, fim } }];"
+      }
+    },
+    {
+      "id": "8cde2e8a-47ab-4642-8b86-8c7bc6195682",
+      "name": "Entrada ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "76944a2b-1f3e-4659-830a-a12db2e66bb3",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "0872fbdc-c5ac-4733-b070-21c61dcbea01",
+      "name": "Responde entrada invalida",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        520
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, mensagem: $json.erro }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "f0ede840-0436-43b2-b209-e144202530a0",
+      "name": "Extrato CNPJ 1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "99sqJeNJjk6jJRgZ",
+          "name": "Asaas API (producao)"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.asaas.com/v3/financialTransactions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "startDate",
+              "value": "={{ $('Le entrada').first().json.inicio }}"
+            },
+            {
+              "name": "finishDate",
+              "value": "={{ $('Le entrada').first().json.fim }}"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "solucoes-rapidas-sistema"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "pagination": {
+            "pagination": {
+              "paginationMode": "updateAParameterInEachRequest",
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "qs",
+                    "name": "offset",
+                    "value": "={{ $pageCount * 100 }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ $response.body.hasMore !== true }}",
+              "limitPagesFetched": true,
+              "maxRequests": 100
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "5f22fd6f-8587-4c07-86f3-5c8ef88457f8",
+      "name": "Extrato CNPJ 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zu74V1t3VpbrGzBO",
+          "name": "Asaas API (CNPJ 2 - producao)"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.asaas.com/v3/financialTransactions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "startDate",
+              "value": "={{ $('Le entrada').first().json.inicio }}"
+            },
+            {
+              "name": "finishDate",
+              "value": "={{ $('Le entrada').first().json.fim }}"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "solucoes-rapidas-sistema"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "pagination": {
+            "pagination": {
+              "paginationMode": "updateAParameterInEachRequest",
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "qs",
+                    "name": "offset",
+                    "value": "={{ $pageCount * 100 }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ $response.body.hasMore !== true }}",
+              "limitPagesFetched": true,
+              "maxRequests": 100
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "ef2986b0-90e1-4d40-8ff6-ff982879f82a",
+      "name": "Junta as contas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Junta as páginas das duas contas numa lista só. Uma conta que não respondeu fica de fora (e vai em \"erros\").\nconst CONTAS = [['CNPJ 1', 'Extrato CNPJ 1'], ['CNPJ 2', 'Extrato CNPJ 2']];\nconst itens = [], erros = [], vistos = new Set();\nlet incompleto = false;\nfor (const [conta, no] of CONTAS) {\n  let pags = [];\n  try { pags = $(no).all().map((i) => i.json || {}); } catch (e) { erros.push(conta); continue; }\n  if (!pags.length || pags.some((p) => p.error || (Array.isArray(p.errors) && p.errors.length) || !Array.isArray(p.data))) { erros.push(conta); continue; }\n  if (pags[pags.length - 1].hasMore === true) incompleto = true;\n  pags.forEach((p, pi) => p.data.forEach((tx, i) => {\n    if (!tx || !tx.id) return;\n    const chave = conta + ':' + tx.id;\n    if (vistos.has(chave)) return;\n    vistos.add(chave);\n    itens.push({\n      id: tx.id, conta, data: String(tx.date || '').slice(0, 10), tipo: String(tx.type || ''),\n      descricao: String(tx.description || '').replace(/\\s+/g, ' ').trim().slice(0, 300),\n      paymentId: String(tx.paymentId || ''), centavos: Math.round(Number(tx.value || 0) * 100), ordem: pi * 100000 + i,\n    });\n  }));\n}\nconst pays = [...new Set(itens.map((x) => x.paymentId).filter(Boolean))];\nconst conc = [...pays.map((p) => 'pay:' + p), ...itens.filter((x) => !x.paymentId).map((x) => 'ft:' + x.id)];\nconst e = $('Le entrada').first().json;\nreturn [{ json: { inicio: e.inicio, fim: e.fim, itens, erros, incompleto, busca: { pays, conc } } }];"
+      }
+    },
+    {
+      "id": "d722953e-9717-44a6-9010-7b7bb19d07ba",
+      "name": "Nomes no banco",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1760,
+        300
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with e as (select $1::jsonb as j)\nselect jsonb_build_object(\n  'pay', coalesce((select jsonb_object_agg(r.\"Asaas_Cobranca_Id\", r.\"Cliente_Nome\")\n      from \"Recebimentos\" r, e\n     where r.\"Asaas_Cobranca_Id\" in (select jsonb_array_elements_text(e.j -> 'pays'))\n       and coalesce(btrim(r.\"Cliente_Nome\"), '') <> ''), '{}'::jsonb),\n  'conc', coalesce((select jsonb_object_agg(c.\"Transacao_Id\", coalesce(nullif(btrim(rr.\"Cliente_Nome\"), ''), nullif(btrim(c.\"Pagador\"), '')))\n      from \"Conciliacao\" c left join \"Recebimentos\" rr on rr.id = c.\"Recebimento_Ref\", e\n     where c.\"Transacao_Id\" in (select jsonb_array_elements_text(e.j -> 'conc'))\n       and coalesce(nullif(btrim(rr.\"Cliente_Nome\"), ''), nullif(btrim(c.\"Pagador\"), '')) is not null), '{}'::jsonb)\n) as r",
+        "options": {
+          "queryReplacement": "={{ [ $json.busca ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "TkRgR5fLjBCec0VE",
+          "name": "Banco local - n8n_app (cobrancas)"
+        }
+      }
+    },
+    {
+      "id": "f27d8c21-03d5-47c2-aa4c-aa01b70c5d12",
+      "name": "Monta resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Nome do cliente: da cobrança do sistema (Recebimentos) ou da entrada já conhecida (Conciliacao). Sem chamar o Asaas de novo.\nconst base = $('Junta as contas').first().json;\nconst n = ($input.first().json || {}).r || {};\nconst pay = n.pay || {}, conc = n.conc || {};\nif (base.erros.length === 2) return [{ json: { resposta: { ok: false, mensagem: 'Não consegui ler o extrato do Asaas agora. Tente de novo daqui a pouco.' } } }];\nconst itens = base.itens\n  .map((x) => ({ ...x, cliente: (x.paymentId && (pay[x.paymentId] || conc['pay:' + x.paymentId])) || conc['ft:' + x.id] || '' }))\n  .sort((a, b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : a.conta === b.conta ? b.ordem - a.ordem : a.conta < b.conta ? -1 : 1));\nlet entrou = 0, saiu = 0;\nfor (const x of itens) { if (x.centavos > 0) entrou += x.centavos; else saiu -= x.centavos; }\nreturn [{ json: { resposta: {\n  ok: true, inicio: base.inicio, fim: base.fim, erros: base.erros, incompleto: base.incompleto,\n  totais: { entrou: entrou / 100, saiu: saiu / 100, saldo: (entrou - saiu) / 100, quantidade: itens.length },\n  itens: itens.map((x) => ({ id: x.id, conta: x.conta, data: x.data, descricao: x.descricao, cliente: x.cliente, tipo: x.tipo, valor: x.centavos / 100 })),\n} } }];"
+      }
+    },
+    {
+      "id": "fa41c3f1-37c4-49c1-8981-91caebe4ce06",
+      "name": "Responde extrato",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2200,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.resposta) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Recebe pedido do app": {
+      "main": [
+        [
+          {
+            "node": "Confere acesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confere acesso": {
+      "main": [
+        [
+          {
+            "node": "Acesso permitido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acesso permitido?": {
+      "main": [
+        [
+          {
+            "node": "Le entrada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde acesso negado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Le entrada": {
+      "main": [
+        [
+          {
+            "node": "Entrada ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada ok?": {
+      "main": [
+        [
+          {
+            "node": "Extrato CNPJ 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde entrada invalida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrato CNPJ 1": {
+      "main": [
+        [
+          {
+            "node": "Extrato CNPJ 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrato CNPJ 2": {
+      "main": [
+        [
+          {
+            "node": "Junta as contas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta as contas": {
+      "main": [
+        [
+          {
+            "node": "Nomes no banco",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nomes no banco": {
+      "main": [
+        [
+          {
+            "node": "Monta resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resposta": {
+      "main": [
+        [
+          {
+            "node": "Responde extrato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "timezone": "America/Sao_Paulo"
+  }
+}
