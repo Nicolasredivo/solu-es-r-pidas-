@@ -2129,10 +2129,17 @@
             <!-- "Aprimorar descrição" (23/11/2026): só ao clicar, o Claude corrige a escrita e deixa o texto técnico. -->
             <div class="rotulo-com-acao">
               <label for="doc-referente">Referente a</label>
+              <div class="rotulo-acoes">
+              <!-- Falar em vez de digitar (27/11/2026): toca para gravar, toca de novo para parar; ao parar, já aprimora. -->
+              <button type="button" class="botao-microfone" data-microfone="doc-referente" data-depois="[data-aprimorar=&quot;doc-referente&quot;]" title="Falar o serviço em vez de digitar" aria-pressed="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+                <span>Falar</span>
+              </button>
               <button type="button" class="botao-aprimorar" data-aprimorar="doc-referente" title="Corrige a escrita e deixa o texto mais técnico">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
                 <span>Aprimorar descrição</span>
               </button>
+              </div>
             </div>
             <input type="text" id="doc-referente" placeholder="Ex: Limpeza de caixa d'água" />
           </div>
