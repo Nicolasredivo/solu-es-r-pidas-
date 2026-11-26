@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.25c";
+const APP_VERSION = "2026.11.26a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -13509,6 +13509,18 @@ const nfListaStatus = document.getElementById("nf-lista-status");
 let nfCliente = null; // { id, nome, documento }
 let nfAmbiente = "";
 let nfEnviando = false;
+// Texto do serviço para o qual os valores (campos escondidos) foram lidos. Mexeu no texto: valores pendentes.
+let nfValoresDoTexto = null;
+function nfAplicarValores(v, texto) {
+  const tipo = v && ["total", "incluso", "separado"].includes(v.tipo) ? v.tipo : "total";
+  nfTipoValor.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === tipo));
+  porValorNoCampo(nfCampos.valor, Number((v && v.total) || 0));
+  porValorNoCampo(nfCampos.material, tipo === "separado" ? Number(v.material || 0) : 0);
+  nfValoresDoTexto = v && Number(v.total) > 0 ? String(texto || "").trim() : null;
+}
+function nfValoresValidos() {
+  return nfValoresDoTexto !== null && nfCampos.servico.value.trim() === nfValoresDoTexto;
+}
 
 // Boleto junto com a nota (20/11/2026): para cliente com "Gera boletos". Primeiro sai o boleto (o link vai na
 // descrição, no lugar dos dados do banco, como o dono aprovou), depois a nota; o boleto entra sozinho no A receber.
@@ -13755,6 +13767,18 @@ function nfAtualizarPrevia() {
   const contador = document.getElementById("nf-contador");
   contador.textContent = `${texto.length} de ${NF_LIMITE} caracteres`;
   contador.classList.toggle("nf-contador-passou", texto.length > NF_LIMITE);
+  const lidos = document.getElementById("nf-valores-lidos");
+  if (nfValoresValidos()) {
+    const total = valorDoCampo(nfCampos.valor);
+    const tipo = escolhaDoGrupo(nfTipoValor);
+    const material = valorDoCampo(nfCampos.material);
+    lidos.textContent = tipo === "separado" ? `Valores lidos: material ${nfReais(material)} · mão de obra ${nfReais(total - material)} · total ${nfReais(total)}`
+      : `Valores lidos: total ${nfReais(total)}${tipo === "incluso" ? " (material incluso)" : ""}`;
+    lidos.classList.remove("nf-valores-pendentes");
+  } else {
+    lidos.textContent = nfCampos.servico.value.trim() ? "Valores: toque em \"Aprimorar e ler valores\" para ler o valor escrito no texto." : "";
+    lidos.classList.add("nf-valores-pendentes");
+  }
 }
 
 // Qualquer mudança invalida a conferência.
@@ -13838,6 +13862,7 @@ configurarGrupo(nfTipoValor, () => {
 });
 formNota.addEventListener("input", () => {
   if (document.activeElement === nfCampos.busca) return;
+  if (nfValoresDoTexto !== null && !nfValoresValidos()) nfAplicarValores(null);
   nfBoletoDesenhar();
   nfAtualizarPrevia();
   nfDesfazerConferencia();
@@ -13960,6 +13985,7 @@ async function nfConferir(evento) {
   let erro = "";
   if (!nfCliente) erro = "Escolha o cliente.";
   else if (!nfCampos.servico.value.trim()) erro = "Escreva o serviço feito.";
+  else if (!nfValoresValidos()) erro = "Toque em \"Aprimorar e ler valores\" para ler o valor escrito no texto.";
   else if (!(total > 0)) erro = "Falta o valor total.";
   else if (escolhaDoGrupo(nfTipoValor) === "separado" && !(material > 0 && material < total)) erro = "O material precisa ser maior que zero e menor que o total.";
   else if (!nfPagamentoTexto()) erro = `Não achei os dados da conta do ${nfContaDoCnpj2() ? "CNPJ 2" : "CNPJ 1"} (servidor fora?). Tente de novo daqui a pouco.`;
@@ -14335,6 +14361,7 @@ function nfLimparFormulario() {
   nfCampos.servico.value = "";
   nfCampos.valor.value = "";
   nfCampos.material.value = "";
+  nfValoresDoTexto = null;
   nfTipoValor.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === "total"));
   document.getElementById("nf-material-bloco").classList.add("hidden");
   ajustarAlturaAuto(nfCampos.servico);
@@ -14383,6 +14410,8 @@ async function nfRepetirNota(n) {
   nfTipoValor.querySelectorAll(".opcao").forEach((b) => b.classList.toggle("active", b.dataset.valor === partes.tipo));
   document.getElementById("nf-material-bloco").classList.toggle("hidden", partes.tipo !== "separado");
   porValorNoCampo(nfCampos.material, partes.tipo === "separado" ? partes.material : 0);
+  // Valores da nota antiga valem para este texto; mexeu no texto, escreve o valor nele e aprimora de novo.
+  nfValoresDoTexto = partes.servico.trim();
   ajustarAlturaAuto(nfCampos.servico);
   nfAtualizarPrevia();
   nfDesfazerConferencia();
@@ -18110,11 +18139,11 @@ iniciarComLogin();
 // à toa: não manda campo vazio, nem de novo o texto que acabou de voltar aprimorado. Vale para o recibo, a nota
 // (Serviço feito), os itens do orçamento (um por um, de uma vez só) e o "O que está incluso" do orçamento do chamado.
 const aprimorados = new WeakMap(); // campo -> último texto que voltou aprimorado
-function ligarAprimorar(botao, campos) {
+function ligarAprimorar(botao, campos, opcoes = {}) {
   const rotulo = botao.querySelector("span");
   const rotuloOriginal = rotulo.textContent;
   botao.addEventListener("click", async () => {
-    const lista = campos().filter((c) => c.value.trim().length >= 3 && aprimorados.get(c) !== c.value.trim());
+    const lista = campos().filter((c) => c.value.trim().length >= 3 && (aprimorados.get(c) !== c.value.trim() || (opcoes.precisa && opcoes.precisa(c))));
     if (!lista.length) {
       const algum = campos().some((c) => c.value.trim().length >= 3);
       if (algum) mostrarToast(campos().length > 1 ? "Estas descrições já foram aprimoradas." : "Este texto já foi aprimorado.");
@@ -18130,12 +18159,13 @@ function ligarAprimorar(botao, campos) {
       for (const campo of lista) {
         const original = campo.value.trim();
         let r;
-        try { r = await pedirAoN8n("aprimorar-texto", { texto: original }); } catch (err) { erro = "Não foi possível falar com o servidor do PC."; break; }
+        try { r = await pedirAoN8n("aprimorar-texto", { texto: original, ...(opcoes.corpo || {}) }); } catch (err) { erro = "Não foi possível falar com o servidor do PC."; break; }
         if (!r || !r.ok || !r.texto) { erro = (r && r.mensagem) || "Não consegui aprimorar agora."; break; }
         if (campo.value.trim() !== original) continue; // mudou enquanto aprimorava: não atropela
         antes.set(campo, campo.value);
         campo.value = r.texto;
         aprimorados.set(campo, r.texto);
+        if (opcoes.aoVoltar) opcoes.aoVoltar(campo, r);
         campo.dispatchEvent(new Event("input", { bubbles: true }));
       }
       if (antes.size) {
@@ -18154,6 +18184,12 @@ function ligarAprimorar(botao, campos) {
 document.querySelectorAll("[data-aprimorar]").forEach((botao) => {
   const campo = document.getElementById(botao.dataset.aprimorar);
   if (campo) ligarAprimorar(botao, () => [campo]);
+});
+// Nota (26/11/2026): a mesma chamada devolve também os valores lidos do texto (só total, material incluso ou
+// separado). A IA só copia os números; o n8n confere que cada um está no texto e faz as somas.
+document.querySelectorAll("[data-aprimorar-nota]").forEach((botao) => {
+  const campo = document.getElementById(botao.dataset.aprimorarNota);
+  if (campo) ligarAprimorar(botao, () => [campo], { corpo: { modo: "nota" }, precisa: () => !nfValoresValidos(), aoVoltar: (c, r) => nfAplicarValores(r.valores, r.texto) });
 });
 document.querySelectorAll("[data-aprimorar-lista]").forEach((botao) => {
   ligarAprimorar(botao, () => [...document.querySelectorAll(botao.dataset.aprimorarLista)]);

@@ -2296,12 +2296,15 @@
 
           <div class="rotulo-com-acao">
             <label for="nf-servico">Serviço feito</label>
-            <button type="button" class="botao-aprimorar" data-aprimorar="nf-servico" title="Corrige a escrita e deixa o texto mais técnico">
+            <button type="button" class="botao-aprimorar" data-aprimorar-nota="nf-servico" title="Corrige a escrita, deixa o texto técnico e lê os valores escritos">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
-                <span>Aprimorar descrição</span>
+                <span>Aprimorar e ler valores</span>
               </button>
           </div>
-          <textarea id="nf-servico" class="auto-altura" rows="2" placeholder="Ex: Troca de 2 lâmpadas na garagem."></textarea>
+          <textarea id="nf-servico" class="auto-altura" rows="2" placeholder="Ex: troca de 2 lâmpadas na garagem, material incluso, 150"></textarea>
+          <p class="doc-hint nf-dica-valores">Escreva o valor no texto: só o total ("150"), "material incluso" ou separado ("material 50, mão de obra 150"). Depois toque em Aprimorar.</p>
+          <!-- Valores lidos da descrição pela IA (26/11/2026): os campos continuam aqui, escondidos, e são preenchidos sozinhos. -->
+          <div class="hidden" aria-hidden="true">
 
           <label>Valores</label>
           <div class="opcoes nf-tipo-valor" id="nf-tipo-valor">
@@ -2315,6 +2318,7 @@
           </div>
           <label for="nf-valor">Valor total</label>
           <input type="text" id="nf-valor" inputmode="numeric" placeholder="R$ 0,00" />
+          </div>
 
           <!-- Boleto junto com a nota (20/11/2026): só para cliente com "Gera boletos" ligado. Primeiro sai o boleto
                (o link vai na descrição, no lugar dos dados do banco), depois a nota; o boleto entra sozinho no A receber. -->
@@ -2355,6 +2359,7 @@
           <div class="moldura nf-previa">
             <div class="moldura-titulo">Descrição que vai na nota</div>
             <p id="nf-descricao" class="nf-descricao"></p>
+            <p id="nf-valores-lidos" class="nf-valores-lidos"></p>
             <p id="nf-contador" class="placeholder-text nf-contador"></p>
           </div>
 
