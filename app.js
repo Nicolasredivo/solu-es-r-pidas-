@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.26a";
+const APP_VERSION = "2026.11.26b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -1520,7 +1520,10 @@ function mostrarListaStatus(tipo, mensagem) {
 // nunca a tela.
 async function pedirAoN8n(caminho, dados) {
   const resposta = await fetchN8n(caminho, dados);
-  return resposta.json();
+  const json = await resposta.json();
+  // Gravou algo: as outras telas já abertas buscam de novo sozinhas (ver "Atualização automática entre telas").
+  if (json && json.ok && autoMudaDados(caminho, dados)) autoAtualizarTudo();
+  return json;
 }
 
 function formatarDocumento(digitos) {
@@ -16928,8 +16931,9 @@ function cobMostrarStatus(texto, tipo) {
   cobEls.status.className = "doc-hint" + (tipo ? " " + tipo : "");
 }
 
+let cobDeNovo = false;
 async function cobCarregar({ sincronizar = true } = {}) {
-  if (cobPedido) return cobPedido;
+  if (cobPedido) { cobDeNovo = true; return cobPedido; }
   cobPedido = (async () => {
     if (!cobDados) cobMostrarStatus("Carregando as cobranças...");
     try {
@@ -16949,6 +16953,7 @@ async function cobCarregar({ sincronizar = true } = {}) {
       return null;
     } finally {
       cobPedido = null;
+      if (cobDeNovo) { cobDeNovo = false; cobCarregar({ sincronizar: false }).catch(() => {}); }
     }
   })();
   return cobPedido;
@@ -18193,4 +18198,84 @@ document.querySelectorAll("[data-aprimorar-nota]").forEach((botao) => {
 });
 document.querySelectorAll("[data-aprimorar-lista]").forEach((botao) => {
   ligarAprimorar(botao, () => [...document.querySelectorAll(botao.dataset.aprimorarLista)]);
+});
+
+// ----- Atualização automática entre telas (26/11/2026, pedido do dono) -----
+// Terminou uma ação que grava algo (emitir nota, criar boleto, salvar, excluir...): uns segundos depois, as outras
+// telas que já foram abertas e estão escondidas buscam os dados de novo sozinhas, em segundo plano (a da frente já se
+// atualiza pelo próprio botão que gravou). Na volta ao app, a da frente também, se não houver nada sendo digitado nela;
+// senão, fica marcada e recarrega quando for aberta de novo.
+// Voltar ao app depois de 1 minuto fora (ex.: mexeu pelo celular) faz o mesmo, para pegar o que mudou em outro aparelho.
+// "gerar-recorrentes" grava, mas roda sozinho toda vez que o Financeiro carrega: contar ele faria as telas recarregarem sem parar.
+const AUTO_LEITURA_CAMINHO = /^(listar-|detalhe-|consultar-|aprimorar-|asaas-extrato|gerar-recorrentes)/;
+const AUTO_LEITURA_ACAO = new Set(["listar", "painel", "historico", "cliente", "carregar", "preparar", "faturamento",
+  "conferir", "recebidos", "preparar-email", "resumo", "sincronizar"]);
+function autoMudaDados(caminho, dados) {
+  if (AUTO_LEITURA_CAMINHO.test(caminho)) return false;
+  const acao = dados && typeof dados.acao === "string" ? dados.acao : "";
+  return !AUTO_LEITURA_ACAO.has(acao);
+}
+// Chamados e Agenda usam a mesma lista: busca uma vez só por rodada.
+let autoChamadosEm = 0;
+function autoChamados() {
+  if (!chamadosPaginaCarregada || Date.now() - autoChamadosEm < 1000) return;
+  autoChamadosEm = Date.now();
+  carregarChamados();
+}
+// O que cada tela recarrega (só o que já foi carregado alguma vez; tela nunca aberta carrega ao abrir, como sempre).
+const AUTO_TELAS = {
+  inicio: () => painelCarregar(true),
+  financeiro: () => {
+    if (cobDados) cobCarregar({ sincronizar: false }).catch(() => {});
+    if (financeiroCarregado) carregarFinanceiro();
+  },
+  documentos: () => { if (nfLista.children.length || nfAmbiente) carregarNotas(); },
+  chamados: autoChamados,
+  agenda: autoChamados,
+  veiculo: () => { if (veiculoCarregado) carregarVeiculo(); },
+};
+const autoPendentes = new Set();
+let autoTimer = null;
+function autoTelaVisivel(nome) {
+  const p = document.getElementById(`page-${nome}`);
+  return !!p && !p.classList.contains("hidden");
+}
+function autoPodeMexer(nome) {
+  if (!autoTelaVisivel(nome)) return true; // escondida: redesenhar não atrapalha ninguém
+  const p = document.getElementById(`page-${nome}`);
+  const foco = document.activeElement;
+  if (foco && p.contains(foco) && foco.matches("input, textarea, select, [contenteditable]")) return false;
+  try { if (pendenteDeSalvar()) return false; } catch (e) { /* sem formulário aberto */ }
+  return true;
+}
+function autoRodar(nome) {
+  if (!autoPodeMexer(nome)) { autoPendentes.add(nome); return; }
+  autoPendentes.delete(nome);
+  try { AUTO_TELAS[nome](); } catch (e) { /* tela ainda não montada: abre carregando, como sempre */ }
+}
+let autoComVisivel = false;
+let autoRodouEm = 0;
+function autoAtualizarTudo(atraso = 1500, comVisivel = false) {
+  // Trava: gravação que chega logo depois de uma recarga automática veio da própria recarga; não recarrega de novo.
+  if (!comVisivel && Date.now() - autoRodouEm < 4000) return;
+  clearTimeout(autoTimer);
+  autoComVisivel = autoComVisivel || comVisivel;
+  autoTimer = setTimeout(() => {
+    const visivel = autoComVisivel;
+    autoComVisivel = false;
+    autoRodouEm = Date.now();
+    Object.keys(AUTO_TELAS).forEach((nome) => { if (visivel || !autoTelaVisivel(nome)) autoRodar(nome); });
+  }, atraso);
+}
+// A tela marcada recarrega quando aparece de novo.
+Object.keys(AUTO_TELAS).forEach((nome) => {
+  const p = document.getElementById(`page-${nome}`);
+  if (!p) return;
+  new MutationObserver(() => { if (autoPendentes.has(nome) && autoTelaVisivel(nome)) autoRodar(nome); })
+    .observe(p, { attributes: true, attributeFilter: ["class"] });
+});
+let autoSaiuEm = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { autoSaiuEm = Date.now(); return; }
+  if (autoSaiuEm && Date.now() - autoSaiuEm > 60000) autoAtualizarTudo(300, true);
 });
