@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.26b";
+const APP_VERSION = "2026.11.26c";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -18195,6 +18195,79 @@ document.querySelectorAll("[data-aprimorar]").forEach((botao) => {
 document.querySelectorAll("[data-aprimorar-nota]").forEach((botao) => {
   const campo = document.getElementById(botao.dataset.aprimorarNota);
   if (campo) ligarAprimorar(botao, () => [campo], { corpo: { modo: "nota" }, precisa: () => !nfValoresValidos(), aoVoltar: (c, r) => nfAplicarValores(r.valores, r.texto) });
+});
+// Microfone (pedido do dono, 26/11/2026): fala em vez de digitar, pelo reconhecimento de voz do próprio navegador (grátis,
+// sem IA paga). Toca: grava (botão vermelho piscando) e o texto vai aparecendo no campo, depois do que já estava escrito.
+// Toca de novo: para e já toca no botão de aprimorar (data-depois). Navegador sem reconhecimento de voz: o botão some.
+const ReconhecedorDeVoz = window.SpeechRecognition || window.webkitSpeechRecognition;
+document.querySelectorAll("[data-microfone]").forEach((botao) => {
+  const campo = document.getElementById(botao.dataset.microfone);
+  if (!campo) return;
+  if (!ReconhecedorDeVoz) { botao.classList.add("hidden"); return; }
+  const rotulo = botao.querySelector("span");
+  const juntar = (a, b) => [String(a).trim(), String(b).trim()].filter(Boolean).join(" ");
+  let rec = null, gravando = false, base = "", falado = "", negado = false;
+  const mostrar = (provisorio) => {
+    campo.value = juntar(base, juntar(falado, provisorio || ""));
+    campo.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const visual = (ligado) => {
+    botao.classList.toggle("gravando", ligado);
+    botao.setAttribute("aria-pressed", String(ligado));
+    rotulo.textContent = ligado ? "Gravando... toque para parar" : "Falar";
+  };
+  const terminar = () => {
+    rec = null;
+    visual(false);
+    mostrar("");
+    if (falado && !negado) {
+      const depois = botao.dataset.depois && document.querySelector(botao.dataset.depois);
+      if (depois && !depois.disabled) depois.click();
+    }
+  };
+  const comecar = () => {
+    rec = new ReconhecedorDeVoz();
+    rec.lang = "pt-BR";
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = (e) => {
+      let provisorio = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) falado = juntar(falado, t); else provisorio += t;
+      }
+      mostrar(provisorio);
+    };
+    rec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        negado = true;
+        gravando = false;
+        mostrarToast("O microfone está bloqueado. Libere o microfone para o sistema nas permissões do navegador.", null, "erro");
+      } else if (e.error === "network") {
+        gravando = false;
+        mostrarToast("Sem internet para reconhecer a fala. Tente de novo ou digite.", null, "erro");
+      }
+    };
+    // O navegador para sozinho depois de um silêncio: se a pessoa não tocou em parar, continua gravando.
+    rec.onend = () => {
+      if (gravando) { try { rec.start(); return; } catch (err) { gravando = false; } }
+      terminar();
+    };
+    rec.start();
+  };
+  botao.addEventListener("click", () => {
+    if (gravando || rec) {
+      gravando = false;
+      if (rec) rec.stop();
+      return;
+    }
+    base = campo.value;
+    falado = "";
+    negado = false;
+    gravando = true;
+    visual(true);
+    try { comecar(); } catch (err) { gravando = false; terminar(); }
+  });
 });
 document.querySelectorAll("[data-aprimorar-lista]").forEach((botao) => {
   ligarAprimorar(botao, () => [...document.querySelectorAll(botao.dataset.aprimorarLista)]);

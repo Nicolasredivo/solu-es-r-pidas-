@@ -2296,10 +2296,17 @@
 
           <div class="rotulo-com-acao">
             <label for="nf-servico">Serviço feito</label>
+            <div class="rotulo-acoes">
+              <!-- Falar em vez de digitar (26/11/2026): toca para gravar, toca de novo para parar; ao parar, já aprimora. -->
+              <button type="button" class="botao-microfone" data-microfone="nf-servico" data-depois="[data-aprimorar-nota=&quot;nf-servico&quot;]" title="Falar o serviço em vez de digitar" aria-pressed="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+                <span>Falar</span>
+              </button>
             <button type="button" class="botao-aprimorar" data-aprimorar-nota="nf-servico" title="Corrige a escrita, deixa o texto técnico e lê os valores escritos">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
                 <span>Aprimorar e ler valores</span>
               </button>
+            </div>
           </div>
           <textarea id="nf-servico" class="auto-altura" rows="2" placeholder="Ex: troca de 2 lâmpadas na garagem, material incluso, 150"></textarea>
           <p class="doc-hint nf-dica-valores">Escreva o valor no texto: só o total ("150"), "material incluso" ou separado ("material 50, mão de obra 150"). Depois toque em Aprimorar.</p>
