@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.26d";
+const APP_VERSION = "2026.11.26e";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -18200,9 +18200,19 @@ document.querySelectorAll("[data-aprimorar-nota]").forEach((botao) => {
 // sem IA paga). Toca: grava (botão vermelho piscando) e o texto vai aparecendo no campo, depois do que já estava escrito.
 // Toca de novo: para e já toca no botão de aprimorar (data-depois). Navegador sem reconhecimento de voz: o botão some.
 const ReconhecedorDeVoz = window.SpeechRecognition || window.webkitSpeechRecognition;
-document.querySelectorAll("[data-microfone]").forEach((botao) => {
-  const campo = document.getElementById(botao.dataset.microfone);
-  if (!campo) return;
+// data-microfone-lista (orçamento, 27/11/2026): vários campos iguais; a fala vai para o tocado por último ou o primeiro vazio.
+document.querySelectorAll("[data-microfone], [data-microfone-lista]").forEach((botao) => {
+  const lista = botao.dataset.microfoneLista;
+  if (!lista && !document.getElementById(botao.dataset.microfone)) return;
+  let ultimoTocado = null;
+  if (lista) document.addEventListener("focusin", (e) => { if (e.target.matches && e.target.matches(lista)) ultimoTocado = e.target; });
+  const acharCampo = () => {
+    if (!lista) return document.getElementById(botao.dataset.microfone);
+    const todos = [...document.querySelectorAll(lista)];
+    if (ultimoTocado && todos.includes(ultimoTocado)) return ultimoTocado;
+    return todos.find((c) => !c.value.trim()) || todos[todos.length - 1] || null;
+  };
+  let campo = null;
   if (!ReconhecedorDeVoz) { botao.classList.add("hidden"); return; }
   const rotulo = botao.querySelector("span");
   const juntar = (a, b) => [String(a).trim(), String(b).trim()].filter(Boolean).join(" ");
@@ -18261,6 +18271,8 @@ document.querySelectorAll("[data-microfone]").forEach((botao) => {
       if (rec) rec.stop();
       return;
     }
+    campo = acharCampo();
+    if (!campo) return;
     base = campo.value;
     falado = "";
     negado = false;

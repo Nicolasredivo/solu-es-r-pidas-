@@ -1932,10 +1932,16 @@
 
           <div class="rotulo-com-acao">
             <label for="orcamento-detalhes">O que está incluso</label>
+            <div class="rotulo-acoes">
+              <button type="button" class="botao-microfone" data-microfone="orcamento-detalhes" data-depois="[data-aprimorar=&quot;orcamento-detalhes&quot;]" title="Falar em vez de digitar" aria-pressed="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+                <span>Falar</span>
+              </button>
             <button type="button" class="botao-aprimorar" data-aprimorar="orcamento-detalhes" title="Corrige a escrita e deixa o texto mais técnico">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
                 <span>Aprimorar descrição</span>
               </button>
+            </div>
           </div>
           <textarea id="orcamento-detalhes" rows="3" placeholder="O que será feito por esse valor -- ajuda a evitar mal-entendido depois"></textarea>
 
@@ -2216,10 +2222,17 @@
           <div data-tipos="orcamento">
             <div class="rotulo-com-acao">
               <label>Itens</label>
+              <div class="rotulo-acoes">
+              <!-- Fala vai para o item tocado por último (ou o primeiro vazio). -->
+              <button type="button" class="botao-microfone" data-microfone-lista="#doc-itens .doc-item-desc" data-depois="[data-aprimorar-lista]" title="Falar em vez de digitar" aria-pressed="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+                <span>Falar</span>
+              </button>
               <button type="button" class="botao-aprimorar" data-aprimorar-lista="#doc-itens .doc-item-desc" title="Corrige a escrita e deixa o texto mais técnico">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
                 <span>Aprimorar descrições</span>
               </button>
+              </div>
             </div>
             <ul id="doc-itens" class="doc-itens"></ul>
             <button type="button" id="doc-adicionar-item" class="botao-secundario doc-adicionar-item">+ Adicionar item</button>
