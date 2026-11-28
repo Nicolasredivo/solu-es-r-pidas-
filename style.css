@@ -6341,6 +6341,18 @@ body::before {
   width: auto;
   flex: none;
 }
+/* 28/11/2026 (dono): mais destacado, azul, com o símbolo que gira enquanto atualiza. */
+.page h1 button.botao-atualizar-tudo {
+  display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px;
+  border: 1px solid var(--accent); border-radius: 999px; box-shadow: none;
+  background: rgba(91, 141, 239, 0.16); color: var(--accent);
+}
+.page h1 button.botao-atualizar-tudo svg { flex: none; }
+.page h1 button.botao-atualizar-tudo.girando svg { animation: v2-gira 0.9s linear infinite; }
+.page h1 button.botao-atualizar-tudo:disabled { opacity: 0.85; cursor: default; }
+@media (hover: hover) and (pointer: fine) {
+  .page h1 button.botao-atualizar-tudo:not(:disabled):hover { background: rgba(91, 141, 239, 0.28); filter: none; }
+}
 
 .page h1::before {
   content: "";

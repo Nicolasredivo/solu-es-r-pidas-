@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.28i";
+const APP_VERSION = "2026.11.28j";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -16984,7 +16984,7 @@ async function atualizarTudo() {
   if (atualizandoTudo) return;
   atualizandoTudo = true;
   const botoes = [...document.querySelectorAll(".botao-atualizar-tudo")];
-  botoes.forEach((b) => { b.disabled = true; b.textContent = "Atualizando..."; });
+  botoes.forEach((b) => { b.disabled = true; b.classList.add("girando"); b.innerHTML = COB_IC_ATUALIZAR + "<span>Atualizando...</span>"; });
   const inicio = Date.now();
   let conferiu = false;
   try {
@@ -17010,10 +17010,15 @@ async function atualizarTudo() {
     mostrarToast(conferiu ? `Tudo atualizado às ${hora}, já com o Asaas.` : `Números recarregados às ${hora}. A conferência com o Asaas ainda não terminou: toque de novo daqui a pouco.`);
   } finally {
     atualizandoTudo = false;
-    botoes.forEach((b) => { b.disabled = false; b.textContent = "↻ Atualizar"; });
+    botoes.forEach((b) => { b.disabled = false; b.classList.remove("girando"); b.innerHTML = COB_IC_ATUALIZAR + "<span>Atualizar</span>"; });
   }
 }
-document.querySelectorAll(".botao-atualizar-tudo").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); atualizarTudo(); }));
+const COB_IC_ATUALIZAR = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
+// 28/11/2026 (dono): botão com o símbolo e em destaque; o "Conferir agora" do Financeiro saiu (faziam a mesma coisa).
+document.querySelectorAll(".botao-atualizar-tudo").forEach((b) => {
+  b.innerHTML = COB_IC_ATUALIZAR + "<span>Atualizar</span>";
+  b.addEventListener("click", (e) => { e.stopPropagation(); atualizarTudo(); });
+});
 
 async function cobSincronizar(avisar) {
   cobUltimaSinc = Date.now();
@@ -17028,7 +17033,6 @@ async function cobSincronizar(avisar) {
   return true;
 }
 
-const COB_IC_ATUALIZAR = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
 // O botão gira até os números novos chegarem (a linha é redesenhada e o botão volta ao normal sozinho).
 async function cobConferirAgora(b) {
   const rotulo = b.querySelector("span");
@@ -17142,13 +17146,13 @@ function cobDesenharAsaas(d) {
   linha.append(cobEl("span", "", pix));
   // Sem a taxa do aviso: os avisos do Asaas estão desligados desde 22/11/2026 (quem manda os e-mails é o sistema).
   if (taxas) linha.append(cobEl("span", "", `Taxa por boleto pago: ${taxas} (já somada no valor da nota; vira gasto em "Taxas do Asaas" quando o boleto é pago).`));
-  const conferido = cobEl("span", "cob-contas-sinc", ha === null ? "Ainda não conferido com o Asaas." : ha < 1 ? "Conferido com o Asaas agora." : `Conferido com o Asaas há ${ha < 60 ? cobPlural(ha, "minuto", "minutos") : cobPlural(Math.round(ha / 60), "hora", "horas")}.`);
-  // "Conferir agora" bem à vista (pedido do dono, 22/11/2026): botão com o símbolo de atualizar, que gira enquanto confere.
-  const conferir = cobBotao("", (b) => cobConferirAgora(b), "cob-conferir");
-  conferir.innerHTML = COB_IC_ATUALIZAR + "<span>Conferir agora</span>";
-  conferido.append(conferir);
-  linha.append(conferido);
-  destino.append(linha);
+  // 28/11/2026 (dono): o "Conferido há X min" + "Conferir agora" saiu da tela; o "Atualizar" do título faz a mesma
+  // conferência (e mais), e a automática continua. Quando foi a última conferência fica na dica do botão.
+  const quandoTexto = ha === null ? "Ainda não conferido com o Asaas." : ha < 1 ? "Conferido com o Asaas agora." : `Conferido com o Asaas há ${ha < 60 ? cobPlural(ha, "minuto", "minutos") : cobPlural(Math.round(ha / 60), "hora", "horas")}.`;
+  document.querySelectorAll("#page-financeiro .botao-atualizar-tudo").forEach((b) => { b.title = `Confere com o Asaas agora e atualiza todos os números. ${quandoTexto} (O sistema também confere sozinho a cada 30 minutos.)`; });
+  // 28/11/2026 (dono): PIX e taxa já são automáticos, então a linha sai da tela. Só volta se uma conta ficar sem PIX
+  // (aí é coisa que precisa de atenção), e mesmo assim sem a linha da taxa.
+  if (!(pix1 && pix2 && notas1)) { linha.innerHTML = ""; linha.append(cobEl("span", "", pix)); destino.append(linha); }
 }
 
 // --- Recebidos do mês (23/11/2026, pedido do dono) ---
