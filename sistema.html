@@ -1363,15 +1363,22 @@
             <div id="cob-conteudo" class="hidden">
               <div id="cob-asaas" class="cob-asaas"></div>
               <div id="cob-fila" class="hidden"></div>
+              <!-- Entradas anotadas entre o Precisa de você e o Tudo a receber (28/11/2026, dono). -->
+              <div id="cob-anotadas" class="painel-cartao cob-anotadas hidden"></div>
               <div class="painel-grade cob-grade">
                 <div id="cob-periodo" class="painel-cartao painel-largo"></div>
               </div>
               <div id="cob-lista-bloco" class="painel-cartao"></div>
             </div>
-            <div id="cob-anotadas" class="painel-cartao cob-anotadas hidden"></div>
           </section>
-          <h2 class="titulo-bloco cob-manual-titulo">Lançar conta a receber à mão</h2>
-          <p class="doc-hint">Para o que não tem nota nem recibo pelo sistema (um serviço pago em dinheiro, por exemplo). Nota e recibo entram sozinhos lá em cima.</p>
+          <!-- Lançar à mão: bloquinho que abre ao tocar (28/11/2026, dono). -->
+          <details id="cob-manual" class="cob-manual">
+          <summary class="cob-manual-resumo">
+            <span class="cob-manual-textos"><strong>Lançar conta a receber à mão</strong>
+            <small>Para o que não tem nota nem recibo pelo sistema (um serviço pago em dinheiro, por exemplo).</small></span>
+            <svg class="cob-manual-seta" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </summary>
+          <div class="cob-manual-corpo">
           <div id="resumo-receber" class="resumo-financeiro hidden">
             <div class="resumo-item">
               <span class="resumo-rotulo">A receber</span>
@@ -1467,6 +1474,8 @@
 
           <p id="lista-receitas-status" class="doc-hint"></p>
           <div id="lista-receitas" class="grade-responsiva"></div>
+          </div>
+          </details>
 
           <template id="modelo-receita">
             <div class="despesa receita">

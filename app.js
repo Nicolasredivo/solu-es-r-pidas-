@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.28h";
+const APP_VERSION = "2026.11.28i";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -3649,6 +3649,9 @@ function limparFormReceita() {
 }
 
 function abrirFormReceita(receita) {
+  // O bloco "Lançar à mão" fica fechado (28/11/2026): abrir o formulário abre o bloco junto.
+  const blocoManual = document.getElementById("cob-manual");
+  if (blocoManual) blocoManual.open = true;
   limparFormReceita();
 
   if (receita) {
@@ -17766,6 +17769,7 @@ function cobDesenharAnotadas(d) {
   }
 }
 
+let cobTudoAberto = (() => { try { return localStorage.getItem("cob_tudo_aberto") !== "0"; } catch (e) { return true; } })();
 function cobDesenharPeriodo(d) {
   const destino = cobEls.periodo;
   destino.innerHTML = "";
@@ -17774,7 +17778,27 @@ function cobDesenharPeriodo(d) {
     const b = cobBotao(r, () => { cobPeriodo = v; cobDesenharPeriodo(cobDados); }, cobPeriodo === v ? "cob-seg-ativo" : "");
     seletor.append(b);
   });
-  cobCab(destino, "Tudo a receber", "62, 207, 142", COB_IC.barras, seletor);
+  // Tocar no título abre e fecha (28/11/2026, dono); os botões Dia/Semana/Mês continuam só trocando a visão.
+  const lado = cobEl("span", "cob-fila-lado");
+  const seta = cobEl("span", "cob-fila-seta" + (cobTudoAberto ? " aberta" : ""));
+  seta.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  if (cobTudoAberto) lado.append(seletor);
+  else { const abertos = (d.recebimentos || []).filter(cobAberta); lado.append(cobEl("span", "cob-anotadas-resumo", `${abertos.length} · ${dinheiro(cobSoma(abertos))}`)); }
+  lado.append(seta);
+  cobCab(destino, "Tudo a receber", "62, 207, 142", COB_IC.barras, lado);
+  const cabTudo = destino.lastElementChild;
+  cabTudo.classList.add("cob-cab-abre");
+  cabTudo.tabIndex = 0;
+  cabTudo.setAttribute("role", "button");
+  cabTudo.setAttribute("aria-expanded", cobTudoAberto ? "true" : "false");
+  const alternarTudo = () => {
+    cobTudoAberto = !cobTudoAberto;
+    try { localStorage.setItem("cob_tudo_aberto", cobTudoAberto ? "1" : "0"); } catch (e) {}
+    cobDesenharPeriodo(cobDados);
+  };
+  cabTudo.addEventListener("click", (ev) => { if (!ev.target.closest(".cob-seg")) alternarTudo(); });
+  cabTudo.addEventListener("keydown", (ev) => { if (ev.target === cabTudo && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); alternarTudo(); } });
+  if (!cobTudoAberto) return;
   // 28/11/2026 (dono): CNPJ e busca valem para todas as caixas (antes só no "Todas as cobranças", que saiu).
   const filtros = cobEl("div", "cob-filtros cob-t-filtros");
   const segCnpj = cobEl("div", "cob-seg");

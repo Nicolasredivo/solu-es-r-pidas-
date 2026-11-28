@@ -8598,6 +8598,7 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
     grid-template-areas:
       "asaas asaas"
       "fila fila"
+      "anotadas anotadas"
       "periodo periodo";
     column-gap: 18px;
     align-items: start;
@@ -8609,6 +8610,8 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
 
   #cob-conteudo #cob-asaas { grid-area: asaas; }
   #cob-conteudo #cob-fila { grid-area: fila; }
+  #cob-conteudo #cob-anotadas { grid-area: anotadas; grid-column: 1 / -1; margin: 0; }
+  #cob-conteudo:has(#cob-anotadas.hidden) #cob-periodo { margin-top: calc(0px - var(--cob-vao, 18px)); }
   #cob-conteudo #cob-periodo { grid-area: periodo; grid-column: 1 / -1; }
   #cob-conteudo #cob-lista-bloco { grid-area: lista; }
 
@@ -8837,8 +8840,8 @@ button.ext-aplicar { width: auto; padding: 12px 18px; color: var(--accent); bord
 .nf-valores-lidos { margin: 8px 0 0; font-size: 0.85rem; font-weight: 600; color: var(--ok); }
 .nf-valores-lidos.nf-valores-pendentes { color: #fcd34d; font-weight: 500; }
 .nf-valores-lidos:empty { display: none; }
-/* Entradas anotadas (25/11/2026), embaixo do A receber. */
-#cob-anotadas { margin-top: 18px; }
+/* Entradas anotadas (25/11/2026): desde 28/11/2026 entre o "Precisa de você" e o "Tudo a receber". */
+#cob-anotadas { margin: 0 0 12px; }
 .cob-anotacao { font-size: 0.85rem; color: #fcd34d; overflow-wrap: anywhere; }
 .ext-debito { color: #ff7b7f; }
 /* "Precisa de você" abre e fecha ao tocar no título (28/11/2026). */
@@ -8847,6 +8850,16 @@ button.ext-aplicar { width: auto; padding: 12px 18px; color: var(--accent); bord
 .cob-fila-lado { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; }
 .cob-fila-seta { display: inline-flex; color: var(--muted); transition: transform 0.2s; transform: rotate(-90deg); }
 .cob-fila-seta.aberta { transform: rotate(0deg); }
+/* "Lançar conta a receber à mão" como bloquinho que abre ao tocar (28/11/2026). */
+.cob-manual { margin-top: 24px; border: 1px solid var(--borda); border-radius: 14px; background: rgba(255, 255, 255, 0.02); }
+.cob-manual-resumo { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; cursor: pointer; list-style: none; border-radius: 14px; }
+.cob-manual-resumo::-webkit-details-marker { display: none; }
+.cob-manual-resumo:hover { background: rgba(255, 255, 255, 0.03); }
+.cob-manual-textos { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cob-manual-textos small { font-size: 0.8rem; color: var(--muted); }
+.cob-manual-seta { flex: none; color: var(--muted); transform: rotate(-90deg); transition: transform 0.2s; }
+.cob-manual[open] .cob-manual-seta { transform: rotate(0deg); }
+.cob-manual-corpo { padding: 4px 18px 18px; }
 .cob-anotadas-resumo { font-size: 0.85rem; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
 .cob-fila .cob-cab-abre:last-child { margin-bottom: 0; }
 /* Filtro dos recebidos (28/11/2026): botões com quantos e o total de cada tipo. */
@@ -8902,6 +8915,7 @@ button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
     grid-template-areas:
       "asaas asaas"
       "fila fila"
+      "anotadas anotadas"
       "periodo periodo";
     gap: var(--cob-vao);
     align-items: stretch;
@@ -8910,6 +8924,8 @@ button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
   #cob-conteudo .cob-grade { display: contents; }
   #cob-conteudo #cob-asaas { grid-area: asaas; }
   #cob-conteudo #cob-fila { grid-area: fila; margin: 0; }
+  #cob-conteudo #cob-anotadas { grid-area: anotadas; grid-column: 1 / -1; margin: 0; }
+  #cob-conteudo:has(#cob-anotadas.hidden) #cob-periodo { margin-top: calc(0px - var(--cob-vao, 18px)); }
   /* Sem "Precisa de você", a linha dele não pode deixar vão dobrado. */
   #cob-conteudo:has(#cob-fila.hidden) #cob-asaas { margin-bottom: calc(10px - var(--cob-vao)); }
   #cob-conteudo #cob-periodo { grid-area: periodo; grid-column: 1 / -1; }
@@ -8935,6 +8951,7 @@ button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
     grid-template-areas:
       "asaas asaas"
       "fila fila"
+      "anotadas anotadas"
       "periodo periodo";
   }
 }
