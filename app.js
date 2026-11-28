@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.28e";
+const APP_VERSION = "2026.11.28f";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -17241,7 +17241,7 @@ function recDesenhar(r) {
   const liquido = cobSoma(itens, (x) => x.valorLiquido ?? x.valorPago ?? x.valor);
   const taxas = cobSoma(itens, (x) => x.taxa);
   const multa = cobSoma(itens, (x) => x.multaJuros);
-  const grade = cobEl("div", "painel-kpis rec-kpis");
+  const grade = cobEl("div", "painel-kpis rec-kpis rec-kpis-2");
   const kpi = (cor, rotulo, valor, nota) => {
     const k = cobEl("div", "kpi");
     k.style.setProperty("--cor", cor);
@@ -17250,8 +17250,12 @@ function recDesenhar(r) {
   };
   grade.append(
     kpi("167, 139, 250", "Recebido", bruto, itens.length ? cobPlural(itens.length, "recebimento", "recebimentos") : "nada neste mês"),
-    kpi("245, 166, 35", "Taxas do Asaas", taxas, multa ? `multa e juros recebidos: ${dinheiro(multa)}` : taxas ? "dos boletos pagos" : "nenhuma neste mês"),
-    kpi("62, 207, 142", "Ficou na conta", liquido, "depois das taxas"));
+    // Taxas e o que ficou num cartão só (28/11/2026, pedido do dono).
+    kpi("62, 207, 142", "Após desconto de taxa Asaas", liquido, multa ? `multa e juros recebidos: ${dinheiro(multa)}` : ""));
+  // Ao lado do valor, quanto foi de taxa no mês (dono, 28/11/2026).
+  const vLiq = grade.lastElementChild.querySelector(".kpi-valor");
+  vLiq.classList.add("rec-kpi-com-taxa");
+  vLiq.append(cobEl("span", "rec-kpi-taxa", `− ${dinheiro(taxas)} de taxa`));
   p.append(grade);
   const bloco = cobEl("div", "painel-cartao rec-bloco");
   if (!itens.length) {
