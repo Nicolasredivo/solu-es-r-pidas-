@@ -8269,6 +8269,8 @@ button.cob-link {
 .cob-l-previsto > .cob-t-linha .cob-t-barra { background: rgba(62, 207, 142, 0.7); }
 /* 28/11/2026: caixas novas do "Tudo a receber" e a barra de filtros. */
 .cob-l-recebido > .cob-t-linha .cob-t-barra { background: rgba(167, 139, 250, 0.8); }
+.cob-l-expirado > .cob-t-linha .cob-t-barra { background: rgba(140, 40, 45, 0.9); }
+.cob-l-expirado > .cob-t-linha .cob-t-nome > span:first-child { color: #ff7b7f; }
 .cob-l-cancelado > .cob-t-linha .cob-t-barra { background: rgba(154, 160, 180, 0.6); }
 .cob-l-cancelado > .cob-t-linha .cob-t-nome > span:first-child { color: var(--muted); }
 .cob-t-filtros { margin: 4px 0 12px; }
@@ -8611,7 +8613,8 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
       "asaas asaas"
       "fila fila"
       "anotadas anotadas"
-      "periodo periodo";
+      "periodo periodo"
+      "expirados expirados";
     column-gap: 18px;
     align-items: start;
   }
@@ -8623,6 +8626,7 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
   #cob-conteudo #cob-asaas { grid-area: asaas; }
   #cob-conteudo #cob-fila { grid-area: fila; }
   #cob-conteudo #cob-anotadas { grid-area: anotadas; grid-column: 1 / -1; margin: 0; }
+  #cob-conteudo #cob-expirados { grid-area: expirados; grid-column: 1 / -1; margin: 0; }
   #cob-conteudo:has(#cob-anotadas.hidden) #cob-periodo { margin-top: calc(0px - var(--cob-vao, 18px)); }
   #cob-conteudo #cob-periodo { grid-area: periodo; grid-column: 1 / -1; }
   #cob-conteudo #cob-lista-bloco { grid-area: lista; }
@@ -8854,6 +8858,7 @@ button.ext-aplicar { width: auto; padding: 12px 18px; color: var(--accent); bord
 .nf-valores-lidos:empty { display: none; }
 /* Entradas anotadas (25/11/2026): desde 28/11/2026 entre o "Precisa de você" e o "Tudo a receber". */
 #cob-anotadas { margin: 0 0 12px; }
+#cob-expirados { margin: 12px 0 0; }
 .cob-anotacao { font-size: 0.85rem; color: #fcd34d; overflow-wrap: anywhere; }
 .ext-debito { color: #ff7b7f; }
 /* "Precisa de você" abre e fecha ao tocar no título (28/11/2026). */
@@ -8885,9 +8890,9 @@ button.rec-filtro-botao.ativo { border-color: rgba(167, 139, 250, 0.8); backgrou
 /* Observação em cada movimentação do extrato (28/11/2026): embaixo do nome no celular, coluna própria no computador. */
 .ext-item.ext-com-obs { grid-template-areas: "data cli valor" ". obs obs"; }
 .ext-obs { grid-area: obs; display: flex; flex-direction: column; gap: 2px; margin-top: 8px; min-width: 0; }
-.ext-obs input { width: 100%; padding: 7px 10px; font-size: 0.85rem; border: 1px dashed var(--borda); border-radius: 8px; background: transparent; color: #fcd34d; }
-.ext-obs input:focus { border-style: solid; background: rgba(255, 255, 255, 0.03); color: var(--texto, #fff); }
-.ext-obs input::placeholder { color: var(--muted); opacity: 0.6; }
+.ext-obs textarea { width: 100%; min-height: 0; margin: 0; padding: 7px 10px; font: inherit; font-size: 0.85rem; line-height: 1.35; resize: none; overflow: hidden; border: 1px dashed var(--borda); border-radius: 8px; background: transparent; color: #fcd34d; }
+.ext-obs textarea:focus { border-style: solid; background: rgba(255, 255, 255, 0.03); color: var(--texto, #fff); }
+.ext-obs textarea::placeholder { color: var(--muted); opacity: 0.6; }
 .ext-obs-estado { font-size: 0.72rem; color: var(--muted); min-height: 0; }
 .ext-obs-estado:empty { display: none; }
 .ext-obs-ok { color: var(--ok); }
@@ -8928,7 +8933,8 @@ button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
       "asaas asaas"
       "fila fila"
       "anotadas anotadas"
-      "periodo periodo";
+      "periodo periodo"
+      "expirados expirados";
     gap: var(--cob-vao);
     align-items: stretch;
   }
@@ -8937,6 +8943,7 @@ button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
   #cob-conteudo #cob-asaas { grid-area: asaas; }
   #cob-conteudo #cob-fila { grid-area: fila; margin: 0; }
   #cob-conteudo #cob-anotadas { grid-area: anotadas; grid-column: 1 / -1; margin: 0; }
+  #cob-conteudo #cob-expirados { grid-area: expirados; grid-column: 1 / -1; margin: 0; }
   #cob-conteudo:has(#cob-anotadas.hidden) #cob-periodo { margin-top: calc(0px - var(--cob-vao, 18px)); }
   /* Sem "Precisa de você", a linha dele não pode deixar vão dobrado. */
   #cob-conteudo:has(#cob-fila.hidden) #cob-asaas { margin-bottom: calc(10px - var(--cob-vao)); }
@@ -8964,7 +8971,8 @@ button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
       "asaas asaas"
       "fila fila"
       "anotadas anotadas"
-      "periodo periodo";
+      "periodo periodo"
+      "expirados expirados";
   }
 }
 

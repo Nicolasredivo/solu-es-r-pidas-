@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.28j";
+const APP_VERSION = "2026.11.28k";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -16878,6 +16878,10 @@ function cobAberta(x) { return (x.status || "Pendente") === "Pendente"; }
 // Sem previsão = em aberto sem boleto com vencimento. Desde 25/11/2026 ficam só no "Tudo a receber" (linha que abre a lista).
 function cobSemPrevisao(x) { return cobAberta(x) && !(x.asaasId && x.vencimento); }
 function cobVencida(x) { return cobAberta(x) && Boolean(x.asaasId) && Boolean(x.vencimento) && x.vencimento < hojeISO(); }
+// Boleto pagável até 30 dias depois do vencimento; depois disso está expirado (28/11/2026).
+function cobExpirado(x) { return cobVencida(x) && cobDias(x.vencimento, hojeISO()) > 30; }
+// O que entra de fato: vencido (ainda pagável) já com multa e juros de hoje; o resto, o valor da conta.
+function cobValorAReceber(x) { return cobVencida(x) && !cobExpirado(x) ? cobValorHoje(x) : Number(x.valor || 0); }
 function cobSoma(lista, f) { return lista.reduce((s, x) => s + Number((f ? f(x) : x.valor) || 0), 0); }
 function cobPlural(n, um, varios) { return `${n} ${n === 1 ? um : varios}`; }
 function cobSituacao(x) {
@@ -16889,6 +16893,7 @@ function cobSituacao(x) {
   if (x.asaasStatus === "ERRO") return { texto: "Não foi criado", classe: "erro" };
   if (x.asaasStatus === "CRIANDO") return { texto: "Criando…", classe: "neutro" };
   if (!cobTemBoleto(x)) return x.vencimento ? { texto: `Previsto ${dataBonita(x.vencimento).slice(0, 5)}`, classe: "aviso" } : { texto: "Sem previsão", classe: "aviso" };
+  if (cobExpirado(x)) return { texto: `Expirado (venceu há ${cobPlural(cobDias(x.vencimento, hojeISO()), "dia", "dias")})`, classe: "erro" };
   if (cobVencida(x)) {
     const d = cobDias(x.vencimento, hojeISO());
     return { texto: `Vencido há ${cobPlural(d, "dia", "dias")}`, classe: "erro" };
@@ -16935,6 +16940,7 @@ const cobEls = {
   periodo: document.getElementById("cob-periodo"),
   lista: document.getElementById("cob-lista-bloco"),
   anotadas: document.getElementById("cob-anotadas"),
+  expirados: document.getElementById("cob-expirados"),
 };
 let cobDados = null;
 let cobPedido = null;
@@ -17054,6 +17060,7 @@ function cobDesenhar() {
   cobDesenharAsaas(d);
   cobDesenharFila(d);
   cobDesenharPeriodo(d);
+  cobDesenharExpirados(d);
   // 28/11/2026: o "Todas as cobranças" foi para dentro do "Tudo a receber" (filtros, recebidas, canceladas).
   cobEls.lista.classList.add("hidden");
   cobDesenharAnotadas(d);
@@ -17087,8 +17094,9 @@ function cobDesenharAsaas(d) {
   const contas = d.contas || {};
   const itens = d.recebimentos || [];
   const saldo = cobSoma(["CNPJ 1", "CNPJ 2"].map((k) => contas[k] || {}), (c) => c.saldo);
-  const abertos = itens.filter((x) => cobAberta(x) && x.asaasId);
-  const vencidos = itens.filter(cobVencida);
+  const abertos = itens.filter((x) => cobAberta(x) && x.asaasId && !cobExpirado(x));
+  const vencidos = itens.filter((x) => cobVencida(x) && !cobExpirado(x));
+  const expirados = itens.filter(cobExpirado);
   // Tudo o que está em aberto sem boleto no Asaas (nota, recibo, conta à mão, boleto que não chegou a ser criado):
   // a mesma conta do "Total a receber" lá embaixo.
   const semBoleto = itens.filter((x) => cobAberta(x) && !x.asaasId);
@@ -17106,8 +17114,10 @@ function cobDesenharAsaas(d) {
   const erros = ["CNPJ 1", "CNPJ 2"].filter((k) => contas[k] && contas[k].erro);
   grade.append(
     kpi("62, 207, 142", "Saldo no Asaas", saldo, erros.length ? `sem leitura do ${erros.join(" e ")}` : "CNPJ 1 + CNPJ 2", erros.length ? "kpi-aviso" : ""),
-    kpi("91, 141, 239", "Vai entrar", cobSoma(abertos) + cobSoma(semBoleto), `${cobPlural(abertos.length, "boleto", "boletos")} + ${cobPlural(semBoleto.length, "sem boleto", "sem boleto")}`),
-    kpi("229, 72, 77", "Vencido", cobSoma(vencidos), vencidos.length ? `${cobPlural(vencidos.length, "boleto", "boletos")} · hoje ${dinheiro(cobSoma(vencidos, cobValorHoje))}` : "nenhum boleto vencido", vencidos.length ? "kpi-perigo" : ""),
+    // Vencido até 30 dias entra já com multa e juros de hoje; expirado fica de fora (28/11/2026).
+    kpi("91, 141, 239", "Vai entrar", cobSoma(abertos, cobValorAReceber) + cobSoma(semBoleto), `${cobPlural(abertos.length, "boleto", "boletos")} + ${cobPlural(semBoleto.length, "sem boleto", "sem boleto")}`),
+    kpi("229, 72, 77", "Vencido", cobSoma(vencidos, cobValorHoje), (vencidos.length ? `${cobPlural(vencidos.length, "boleto", "boletos")} · com multa e juros de hoje` : "nenhum boleto vencido")
+      + (expirados.length ? ` · ${cobPlural(expirados.length, "expirado", "expirados")}` : ""), vencidos.length || expirados.length ? "kpi-perigo" : ""),
     kpi("167, 139, 250", "Recebido no mês", recebido, recebido ? `líquido ${dinheiro(liquido)}` : "nada ainda neste mês"));
   // Tocar no "Recebido no mês" abre a página dos recebidos (23/11/2026).
   const kRec = grade.lastElementChild;
@@ -17369,8 +17379,9 @@ async function extAbrir(periodo) {
 // Fica no banco (Extrato_Observacoes), presa à conta e à transação; apagar o texto apaga a observação.
 function extCampoObs(x) {
   const caixa = cobEl("span", "ext-obs");
-  const campo = cobEl("input");
-  campo.type = "text";
+  // Caixa que cresce com o texto (28/11/2026: no campo de uma linha o texto longo ficava cortado).
+  const campo = cobEl("textarea", "auto-altura");
+  campo.rows = 1;
   campo.maxLength = 300;
   campo.placeholder = "Observação";
   campo.value = x.obs || "";
@@ -17396,6 +17407,8 @@ function extCampoObs(x) {
     }
   };
   campo.addEventListener("blur", salvar);
+  campo.addEventListener("input", () => ajustarAlturaAuto(campo));
+  requestAnimationFrame(() => ajustarAlturaAuto(campo));
   campo.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); campo.blur(); } });
   caixa.append(campo, estado);
   return caixa;
@@ -17519,7 +17532,8 @@ function cobFilaItens(d) {
       botoes.push(["Ver", () => cobAbrir(x)]);
       add("aviso", `${quem}: ${x.aviso}`, botoes, 1);
     }
-    if (cobVencida(x)) {
+    // Expirado (mais de 30 dias): o aviso do servidor "Venceu há mais de 30 dias..." já cobre.
+    if (cobVencida(x) && !cobExpirado(x)) {
       const dias = cobDias(x.vencimento, hoje);
       add("erro", `${quem}: boleto de ${dinheiro(x.valor)} venceu há ${cobPlural(dias, "dia", "dias")}. Hoje sai por ${dinheiro(cobValorHoje(x))}, com multa e juros.`,
         [["Lembrar no WhatsApp", () => cobWhatsapp(x)], ["Recebi por fora", () => cobAbrirBaixa(x)]], 2);
@@ -17655,7 +17669,8 @@ function cobLinha(x) {
   // 25/11/2026 (dono): o vencimento fica em destaque no canto, em cima do valor (é a data que ordena as listas).
   if (x.vencimento && x.status === "Pendente" && x.asaasId) valor.append(cobEl("span", "cob-linha-vence" + (cobVencida(x) ? " vencido" : ""), `Vence ${cobDiaCurto(x.vencimento)}`));
   valor.append(cobEl("strong", "", dinheiro(x.valor)));
-  if (cobVencida(x)) valor.append(cobEl("span", "cob-vermelho", `hoje ${dinheiro(cobValorHoje(x))}`));
+  if (cobExpirado(x)) valor.append(cobEl("span", "cob-vermelho", "expirado"));
+  else if (cobVencida(x)) valor.append(cobEl("span", "cob-vermelho", `hoje ${dinheiro(cobValorHoje(x))}`));
   else if (x.status === "Recebido" && x.valorLiquido != null && Number(x.valorLiquido) !== Number(x.valorPago ?? x.valor)) valor.append(cobEl("span", "", `líquido ${dinheiro(x.valorLiquido)}`));
   linha.append(txt, valor);
   linha.addEventListener("click", () => cobAbrir(x));
@@ -17773,6 +17788,39 @@ function cobDesenharAnotadas(d) {
   }
 }
 
+// --- Boletos expirados (28/11/2026, dono): passaram de 30 dias do vencimento; o boleto não aceita mais pagamento.
+// Bloco próprio embaixo do "Tudo a receber", só aparece quando há algum. Abre e fecha no título. A aprimorar.
+let cobExpiradosAberto = (() => { try { return localStorage.getItem("cob_expirados_aberto") !== "0"; } catch (e) { return true; } })();
+function cobDesenharExpirados(d) {
+  const destino = cobEls.expirados;
+  destino.innerHTML = "";
+  const lista = (d.recebimentos || []).filter(cobExpirado).sort((a, b) => String(a.vencimento).localeCompare(String(b.vencimento)));
+  destino.classList.toggle("hidden", !lista.length);
+  if (!lista.length) return;
+  const lado = cobEl("span", "cob-fila-lado");
+  const seta = cobEl("span", "cob-fila-seta" + (cobExpiradosAberto ? " aberta" : ""));
+  seta.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  lado.append(cobEl("span", "cob-anotadas-resumo", `${lista.length} · ${dinheiro(cobSoma(lista))}`), seta);
+  cobCab(destino, "Boletos expirados", "229, 72, 77", COB_IC.sino, lado);
+  const cab = destino.lastElementChild;
+  cab.classList.add("cob-cab-abre");
+  cab.tabIndex = 0;
+  cab.setAttribute("role", "button");
+  cab.setAttribute("aria-expanded", cobExpiradosAberto ? "true" : "false");
+  const alternar = () => {
+    cobExpiradosAberto = !cobExpiradosAberto;
+    try { localStorage.setItem("cob_expirados_aberto", cobExpiradosAberto ? "1" : "0"); } catch (e) {}
+    cobDesenharExpirados(cobDados);
+  };
+  cab.addEventListener("click", alternar);
+  cab.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); alternar(); } });
+  if (!cobExpiradosAberto) return;
+  destino.append(cobEl("p", "doc-hint", "Passaram de 30 dias do vencimento: o boleto não aceita mais pagamento e não entra no a receber. Combine com o cliente (PIX, boleto novo) ou cancele."));
+  const caixa = cobEl("div", "cob-lista");
+  lista.forEach((x) => caixa.append(cobLinha(x)));
+  destino.append(caixa);
+}
+
 let cobTudoAberto = (() => { try { return localStorage.getItem("cob_tudo_aberto") !== "0"; } catch (e) { return true; } })();
 function cobDesenharPeriodo(d) {
   const destino = cobEls.periodo;
@@ -17787,7 +17835,7 @@ function cobDesenharPeriodo(d) {
   const seta = cobEl("span", "cob-fila-seta" + (cobTudoAberto ? " aberta" : ""));
   seta.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
   if (cobTudoAberto) lado.append(seletor);
-  else { const abertos = (d.recebimentos || []).filter(cobAberta); lado.append(cobEl("span", "cob-anotadas-resumo", `${abertos.length} · ${dinheiro(cobSoma(abertos))}`)); }
+  else { const abertos = (d.recebimentos || []).filter((x) => cobAberta(x) && !cobExpirado(x)); lado.append(cobEl("span", "cob-anotadas-resumo", `${abertos.length} · ${dinheiro(cobSoma(abertos, cobValorAReceber))}`)); }
   lado.append(seta);
   cobCab(destino, "Tudo a receber", "62, 207, 142", COB_IC.barras, lado);
   const cabTudo = destino.lastElementChild;
@@ -17830,7 +17878,7 @@ function cobDesenharCaixasReceber(d, resumo, destino) {
     if (termo && !normalizarTexto(`${x.cliente} ${x.descricao} ${x.notaNumero || ""} ${x.documento || ""}`).includes(termo)) return false;
     return true;
   });
-  const itens = todos.filter(cobAberta);
+  const itens = todos.filter((x) => cobAberta(x) && !cobExpirado(x));
   const comData = itens.filter((x) => !cobSemPrevisao(x));
   const semPrevisao = itens.filter(cobSemPrevisao);
   const vencidos = comData.filter((x) => x.vencimento < hoje);
@@ -17867,13 +17915,14 @@ function cobDesenharCaixasReceber(d, resumo, destino) {
   const porData = (a, b) => String(a.vencimento || a.criadoEm).localeCompare(String(b.vencimento || b.criadoEm));
   const filtrando = Boolean(cobFiltro.cnpj || termo);
   resumo.textContent = itens.length
-    ? `${cobPlural(itens.length, "conta", "contas")} a receber, somando ${dinheiro(cobSoma(itens))}${vencidos.length ? `; ${dinheiro(cobSoma(vencidos))} já vencido` : ""}${filtrando ? " (com o filtro)" : ""}.`
+    // 28/11/2026 (dono): deixar claro que o vencido já está DENTRO do total.
+    ? `${cobPlural(itens.length, "conta", "contas")} a receber: ${dinheiro(cobSoma(itens, cobValorAReceber))} no total${vencidos.length ? `, já incluindo ${dinheiro(cobSoma(vencidos, cobValorHoje))} de vencidos (com multa e juros de hoje)` : ""}${filtrando ? " (com o filtro)" : ""}.`
     : filtrando ? "Nada a receber com esse filtro." : "Nada a receber agora.";
   if (!todos.length) { destino.append(cobEl("p", "doc-hint", "Nada com esse filtro.")); return; }
   // Caixas, uma embaixo da outra: Vencidos, Previstos (abre os dias, semanas ou meses), Sem previsão, Recebidas e
   // Canceladas. Cada uma mostra quantas e o total (o que era o rodapé do "Todas as cobranças").
   const caixas = cobEl("div", "cob-t-caixas");
-  const totalGeral = Math.max(1, cobSoma(itens), cobSoma(recebidas), cobSoma(canceladas));
+  const totalGeral = Math.max(1, cobSoma(itens, cobValorAReceber), cobSoma(recebidas), cobSoma(canceladas));
   const caixa = (chave, row, corpo, classe) => {
     const box = cobEl("div", "cob-t-caixa " + classe);
     box.append(row, corpo);
@@ -17885,9 +17934,14 @@ function cobDesenharCaixasReceber(d, resumo, destino) {
     lista.slice().sort(ordem || porData).forEach((x) => corpo.append(cobLinha(x)));
     return corpo;
   };
-  if (vencidos.length) {
-    caixa("vencidos", linhaDe("Vencidos (cobrar)", cobPlural(vencidos.length, "boleto", "boletos"), cobSoma(vencidos), totalGeral), listaSimples(vencidos), "cob-l-vencido");
+  // Vencidos sempre à vista (28/11/2026, dono), mesmo sem nenhum.
+  {
+    const corpoV = vencidos.length ? listaSimples(vencidos) : cobEl("div", "cob-t-corpo");
+    if (!vencidos.length) corpoV.append(cobEl("p", "doc-hint", "Nenhum boleto vencido."));
+    if (vencidos.length) corpoV.prepend(cobEl("p", "doc-hint cob-t-explica", "Ainda podem ser pagos (até 30 dias depois do vencimento). O total já está com a multa e os juros de hoje."));
+    caixa("vencidos", linhaDe("Vencidos (cobrar)", vencidos.length ? cobPlural(vencidos.length, "boleto", "boletos") : "nenhum", cobSoma(vencidos, cobValorHoje), totalGeral), corpoV, "cob-l-vencido");
   }
+  // Boletos expirados ficam no bloco próprio, embaixo (cobDesenharExpirados).
   if (previstos.length) {
     const tabela = cobEl("div", "cob-tabela cob-t-corpo");
     const maiorDia = Math.max(1, ...linhas.map((l) => l.total));
