@@ -8830,6 +8830,13 @@ button.ext-aplicar { width: auto; padding: 12px 18px; color: var(--accent); bord
 #cob-anotadas { margin-top: 18px; }
 .cob-anotacao { font-size: 0.85rem; color: #fcd34d; overflow-wrap: anywhere; }
 .ext-debito { color: #ff7b7f; }
+/* "Precisa de você" abre e fecha ao tocar no título (28/11/2026). */
+.cob-cab-abre { cursor: pointer; user-select: none; border-radius: 10px; }
+.cob-cab-abre:hover .cob-fila-seta, .cob-cab-abre:focus-visible .cob-fila-seta { color: var(--texto, #fff); }
+.cob-fila-lado { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; }
+.cob-fila-seta { display: inline-flex; color: var(--muted); transition: transform 0.2s; transform: rotate(-90deg); }
+.cob-fila-seta.aberta { transform: rotate(0deg); }
+.cob-fila .cob-cab-abre:last-child { margin-bottom: 0; }
 /* Filtro dos recebidos (28/11/2026): botões com quantos e o total de cada tipo. */
 .rec-filtro { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
 button.rec-filtro-botao { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: auto; min-width: 130px; margin: 0; padding: 8px 14px;

@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.28d";
+const APP_VERSION = "2026.11.28e";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -17567,6 +17567,7 @@ function cobSinoVigiar(dono) {
   cobSinoTimer = setInterval(() => { if (!document.hidden) cobCarregar({ sincronizar: false }).catch(() => {}); }, 5 * 60000);
 }
 
+let cobFilaAberta = (() => { try { return localStorage.getItem("cob_fila_aberta") !== "0"; } catch (e) { return true; } })();
 function cobDesenharFila(d) {
   const destino = cobEls.fila;
   destino.innerHTML = "";
@@ -17575,7 +17576,26 @@ function cobDesenharFila(d) {
   destino.classList.toggle("hidden", !fila.length);
   if (!fila.length) return;
   destino.className = "painel-cartao cob-fila";
-  cobCab(destino, "Precisa de você", "245, 166, 35", COB_IC.sino, cobEl("span", "cob-contagem", String(fila.length)));
+  // Tocar no título abre e fecha a lista (28/11/2026, pedido do dono). Lembra a escolha neste aparelho.
+  const lado = cobEl("span", "cob-fila-lado");
+  const seta = cobEl("span", "cob-fila-seta" + (cobFilaAberta ? " aberta" : ""));
+  seta.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  lado.append(cobEl("span", "cob-contagem", String(fila.length)), seta);
+  cobCab(destino, "Precisa de você", "245, 166, 35", COB_IC.sino, lado);
+  const cab = destino.lastElementChild;
+  cab.classList.add("cob-cab-abre");
+  cab.tabIndex = 0;
+  cab.setAttribute("role", "button");
+  cab.setAttribute("aria-expanded", cobFilaAberta ? "true" : "false");
+  cab.title = cobFilaAberta ? "Fechar a lista" : "Abrir a lista";
+  const alternar = () => {
+    cobFilaAberta = !cobFilaAberta;
+    try { localStorage.setItem("cob_fila_aberta", cobFilaAberta ? "1" : "0"); } catch (e) {}
+    cobDesenharFila(cobDados);
+  };
+  cab.addEventListener("click", alternar);
+  cab.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); alternar(); } });
+  if (!cobFilaAberta) return;
   const mostrar = cobFilaTudo ? fila : fila.slice(0, 6);
   for (const f of mostrar) {
     const linha = cobEl("div", `cob-fila-item cob-${f.nivel}`);
