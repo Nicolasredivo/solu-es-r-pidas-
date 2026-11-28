@@ -78,6 +78,15 @@ alter table "Conciliacao" add column if not exists "Anotacao" text;
 -- conta nos recebidos. Serviço avulso (e transferência que conta) vira uma conta já recebida no A receber
 -- (Origem 'pix-avulso' ou 'transferencia'), ligada a esta entrada e, se ele quiser, a um chamado.
 alter table "Recebimentos" add column if not exists "Chamado_Ref" text references "Chamados"(id) on delete set null;
+-- Observação do dono em cada movimentação do extrato do Asaas, entrada ou saída (28/11/2026). id = conta:transação.
+create table if not exists "Extrato_Observacoes" (
+  id text primary key,
+  "Conta" text not null,
+  "Transacao_Id" text not null,
+  "Texto" text not null,
+  "Atualizado_Em" timestamptz not null default now()
+);
+grant select, insert, update, delete on "Extrato_Observacoes" to n8n_app;
 
 -- Estado das cobranças: começo (corte das notas antigas), última sincronização, contas do Asaas, trava.
 create table if not exists "Cobranca_Estado" (
@@ -659,6 +668,20 @@ begin
       coalesce(cob_txt(p, 'contar'), '') = 'sim', cob_txt(p, 'chamadoId'), coalesce(cob_txt(p, 'sempre'), '') = 'sim'));
   end if;
   if acao = 'desfazer-entrada' then return jsonb_build_object('resposta', cob_desfazer_entrada(cob_txt(p, 'conciliacaoId'), cob_txt(p, 'id'))); end if;
+  -- Observação numa movimentação do extrato (28/11/2026). Texto vazio apaga a observação.
+  if acao = 'observacao-extrato' then
+    if coalesce(cob_txt(p, 'conta'), '') not in ('CNPJ 1', 'CNPJ 2') or cob_txt(p, 'transacaoId') is null then
+      return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'Movimentação inválida.'));
+    end if;
+    if cob_txt(p, 'texto') is null then
+      delete from "Extrato_Observacoes" where id = cob_txt(p, 'conta') || ':' || cob_txt(p, 'transacaoId');
+    else
+      insert into "Extrato_Observacoes" (id, "Conta", "Transacao_Id", "Texto")
+      values (cob_txt(p, 'conta') || ':' || cob_txt(p, 'transacaoId'), cob_txt(p, 'conta'), cob_txt(p, 'transacaoId'), left(cob_txt(p, 'texto'), 300))
+      on conflict (id) do update set "Texto" = excluded."Texto", "Atualizado_Em" = now();
+    end if;
+    return jsonb_build_object('resposta', jsonb_build_object('ok', true, 'mensagem', 'Observação salva.'));
+  end if;
   if acao = 'esquecer-regra' then
     delete from "Cobranca_Estado" where id = 'regra-pagador:' || coalesce(cob_txt(p, 'chave'), '');
     return jsonb_build_object('resposta', jsonb_build_object('ok', true, 'mensagem', 'Pronto: os próximos PIX dele voltam a perguntar.'));

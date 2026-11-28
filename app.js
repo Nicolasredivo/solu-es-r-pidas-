@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.28a";
+const APP_VERSION = "2026.11.28b";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -15392,6 +15392,8 @@ function navFoto() {
     pagina: pagina.id, abas,
     arq: arquivosAberto ? { view: arq.view, cliente: arq.cliente ? arq.cliente.id : "", pasta: arq.view === "pasta" ? arq.pasta : "" } : null,
     rec: recebidosAberto ? recMes || hojeISO().slice(0, 7) : "",
+    // Extrato do Asaas aberto (28/11/2026: o Voltar não fechava o extrato).
+    ext: pagina.id === "page-financeiro" && !extEls.pagina.classList.contains("hidden"),
   };
 }
 
@@ -15459,6 +15461,9 @@ async function navIrPara(alvo) {
     const aberta = !recEls.pagina.classList.contains("hidden");
     if (alvo.rec && (!aberta || recMes !== alvo.rec)) recAbrir(alvo.rec);
     else if (!alvo.rec && aberta) recFechar();
+    const extAberto = !extEls.pagina.classList.contains("hidden");
+    if (alvo.ext && !extAberto) extAbrir();
+    else if (!alvo.ext && extAberto) extFechar();
   }
   window.scrollTo({ top: 0 });
   return true;
@@ -17316,6 +17321,41 @@ async function extAbrir(periodo) {
   if (vez !== extVez) return;
   extDesenhar(r || { ok: false, mensagem: "Não consegui buscar o extrato agora. Confira a internet e o servidor do PC e tente de novo." });
 }
+// Observação do dono em cada movimentação (28/11/2026): escreve e ela se salva sozinha ao sair do campo (ou no Enter).
+// Fica no banco (Extrato_Observacoes), presa à conta e à transação; apagar o texto apaga a observação.
+function extCampoObs(x) {
+  const caixa = cobEl("span", "ext-obs");
+  const campo = cobEl("input");
+  campo.type = "text";
+  campo.maxLength = 300;
+  campo.placeholder = "Observação";
+  campo.value = x.obs || "";
+  campo.setAttribute("aria-label", "Observação desta movimentação");
+  const estado = cobEl("small", "ext-obs-estado");
+  let salvo = campo.value.trim();
+  const salvar = async () => {
+    const texto = campo.value.trim();
+    if (texto === salvo) return;
+    estado.textContent = "salvando...";
+    estado.className = "ext-obs-estado";
+    try {
+      const r = await pedirAoN8n("cobrancas", { acao: "observacao-extrato", conta: x.conta, transacaoId: x.id, texto });
+      if (!r || !r.ok) throw new Error((r && r.mensagem) || "");
+      salvo = texto;
+      x.obs = texto;
+      estado.textContent = texto ? "salvo ✓" : "apagado";
+      estado.className = "ext-obs-estado ext-obs-ok";
+      setTimeout(() => { if (/salvo|apagado/.test(estado.textContent)) estado.textContent = ""; }, 2500);
+    } catch (err) {
+      estado.textContent = "não salvou — toque fora de novo";
+      estado.className = "ext-obs-estado cob-vermelho";
+    }
+  };
+  campo.addEventListener("blur", salvar);
+  campo.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); campo.blur(); } });
+  caixa.append(campo, estado);
+  return caixa;
+}
 function extDesenhar(r) {
   const p = extEls.pagina;
   p.innerHTML = "";
@@ -17398,7 +17438,8 @@ function extDesenhar(r) {
     meio.append(nome);
     if (x.cliente && x.descricao) meio.append(cobEl("small", "", x.descricao));
     const valor = cobEl("span", "ext-valor " + (x.valor < 0 ? "ext-debito" : "ext-credito"), (x.valor < 0 ? "− " : "+ ") + dinheiro(Math.abs(x.valor)));
-    linha.append(data, meio, valor);
+    linha.classList.add("ext-com-obs");
+    linha.append(data, meio, extCampoObs(x), valor);
     tabela.append(linha);
   }
   const soma = cobEl("div", "rec-linha rec-soma");
