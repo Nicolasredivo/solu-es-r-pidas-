@@ -8255,6 +8255,11 @@ button.cob-link {
 .cob-t-caixa > .cob-t-corpo[hidden] { display: none; }
 .cob-l-sem > .cob-t-linha .cob-t-barra { background: var(--aviso); }
 .cob-l-previsto > .cob-t-linha .cob-t-barra { background: rgba(62, 207, 142, 0.7); }
+/* 28/11/2026: caixas novas do "Tudo a receber" e a barra de filtros. */
+.cob-l-recebido > .cob-t-linha .cob-t-barra { background: rgba(167, 139, 250, 0.8); }
+.cob-l-cancelado > .cob-t-linha .cob-t-barra { background: rgba(154, 160, 180, 0.6); }
+.cob-l-cancelado > .cob-t-linha .cob-t-nome > span:first-child { color: var(--muted); }
+.cob-t-filtros { margin: 4px 0 12px; }
 .cob-t-explica { margin: 0 0 6px; font-size: 0.8rem; line-height: 1.5; }
 .cob-t-detalhe { margin: 0 0 6px; padding-left: 10px; border-left: 2px solid rgba(91, 141, 239, 0.35); }
 .cob-t-detalhe[hidden] { display: none; }
@@ -8593,7 +8598,7 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
     grid-template-areas:
       "asaas asaas"
       "fila fila"
-      "periodo lista";
+      "periodo periodo";
     column-gap: 18px;
     align-items: start;
   }
@@ -8604,7 +8609,7 @@ input[type="text"].cob-busca { width: auto; margin-bottom: 0; padding: 8px 12px;
 
   #cob-conteudo #cob-asaas { grid-area: asaas; }
   #cob-conteudo #cob-fila { grid-area: fila; }
-  #cob-conteudo #cob-periodo { grid-area: periodo; grid-column: auto; }
+  #cob-conteudo #cob-periodo { grid-area: periodo; grid-column: 1 / -1; }
   #cob-conteudo #cob-lista-bloco { grid-area: lista; }
 
   /* PDFs: o formulário e, ao lado, a prévia do PDF (folha A4 inteira à vista, acompanhando a rolagem). */
@@ -8842,6 +8847,7 @@ button.ext-aplicar { width: auto; padding: 12px 18px; color: var(--accent); bord
 .cob-fila-lado { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; }
 .cob-fila-seta { display: inline-flex; color: var(--muted); transition: transform 0.2s; transform: rotate(-90deg); }
 .cob-fila-seta.aberta { transform: rotate(0deg); }
+.cob-anotadas-resumo { font-size: 0.85rem; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
 .cob-fila .cob-cab-abre:last-child { margin-bottom: 0; }
 /* Filtro dos recebidos (28/11/2026): botões com quantos e o total de cada tipo. */
 .rec-filtro { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
@@ -8896,7 +8902,7 @@ button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
     grid-template-areas:
       "asaas asaas"
       "fila fila"
-      "periodo lista";
+      "periodo periodo";
     gap: var(--cob-vao);
     align-items: stretch;
   }
@@ -8906,7 +8912,7 @@ button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
   #cob-conteudo #cob-fila { grid-area: fila; margin: 0; }
   /* Sem "Precisa de você", a linha dele não pode deixar vão dobrado. */
   #cob-conteudo:has(#cob-fila.hidden) #cob-asaas { margin-bottom: calc(10px - var(--cob-vao)); }
-  #cob-conteudo #cob-periodo { grid-area: periodo; grid-column: auto; }
+  #cob-conteudo #cob-periodo { grid-area: periodo; grid-column: 1 / -1; }
   #cob-conteudo #cob-lista-bloco { grid-area: lista; }
   #cob-conteudo #cob-periodo, #cob-conteudo #cob-lista-bloco {
     display: flex; flex-direction: column; margin: 0; padding: 22px 24px;
@@ -8929,7 +8935,7 @@ button.cob-abre-lista.aberta svg { transform: rotate(180deg); }
     grid-template-areas:
       "asaas asaas"
       "fila fila"
-      "periodo lista";
+      "periodo periodo";
   }
 }
 

@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.28g";
+const APP_VERSION = "2026.11.28h";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -17047,7 +17047,8 @@ function cobDesenhar() {
   cobDesenharAsaas(d);
   cobDesenharFila(d);
   cobDesenharPeriodo(d);
-  cobDesenharLista(d);
+  // 28/11/2026: o "Todas as cobranças" foi para dentro do "Tudo a receber" (filtros, recebidas, canceladas).
+  cobEls.lista.classList.add("hidden");
   cobDesenharAnotadas(d);
   // A lista de baixo (lançadas à mão) deixa de mostrar o que agora está aqui.
   if (financeiroCarregado) desenharReceitas();
@@ -17701,6 +17702,7 @@ function cobRotuloPeriodo(chave) {
 }
 // Entradas anotadas (25/11/2026): o que entrou no Asaas sem cobrança e o dono escreveu de onde veio. Só para ver;
 // o que fazer com elas ainda vai ser decidido. Mesmas linhas do extrato (data | quem + CNPJ + anotação | valor).
+let cobAnotadasAberta = (() => { try { return localStorage.getItem("cob_anotadas_aberta") === "1"; } catch (e) { return false; } })();
 function cobDesenharAnotadas(d) {
   const destino = cobEls.anotadas;
   const itens = d.anotadas || [];
@@ -17708,7 +17710,26 @@ function cobDesenharAnotadas(d) {
   destino.innerHTML = "";
   destino.classList.toggle("hidden", !itens.length && !regras.length);
   if (!itens.length && !regras.length) return;
-  cobCab(destino, "Entradas anotadas", "245, 166, 35", COB_IC.barras);
+  // Tocar no título abre e fecha (28/11/2026, pedido do dono). Começa fechada; o aparelho lembra a escolha.
+  const lado = cobEl("span", "cob-fila-lado");
+  const seta = cobEl("span", "cob-fila-seta" + (cobAnotadasAberta ? " aberta" : ""));
+  seta.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  if (itens.length) lado.append(cobEl("span", "cob-anotadas-resumo", `${itens.length} · ${dinheiro(itens.reduce((t, x) => t + Number(x.valor || 0), 0))}`));
+  lado.append(seta);
+  cobCab(destino, "Entradas anotadas", "245, 166, 35", COB_IC.barras, lado);
+  const cab = destino.lastElementChild;
+  cab.classList.add("cob-cab-abre");
+  cab.tabIndex = 0;
+  cab.setAttribute("role", "button");
+  cab.setAttribute("aria-expanded", cobAnotadasAberta ? "true" : "false");
+  const alternar = () => {
+    cobAnotadasAberta = !cobAnotadasAberta;
+    try { localStorage.setItem("cob_anotadas_aberta", cobAnotadasAberta ? "1" : "0"); } catch (e) {}
+    cobDesenharAnotadas(cobDados);
+  };
+  cab.addEventListener("click", alternar);
+  cab.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); alternar(); } });
+  if (!cobAnotadasAberta) return;
   if (itens.length) destino.append(cobEl("p", "doc-hint", `${cobPlural(itens.length, "entrada", "entradas")} no Asaas sem cobrança (anotadas ou transferências suas que não contam). Não entram nos recebidos do mês.`));
   const tabela = cobEl("div", "rec-tabela");
   for (const x of itens) {
@@ -17754,18 +17775,46 @@ function cobDesenharPeriodo(d) {
     seletor.append(b);
   });
   cobCab(destino, "Tudo a receber", "62, 207, 142", COB_IC.barras, seletor);
+  // 28/11/2026 (dono): CNPJ e busca valem para todas as caixas (antes só no "Todas as cobranças", que saiu).
+  const filtros = cobEl("div", "cob-filtros cob-t-filtros");
+  const segCnpj = cobEl("div", "cob-seg");
+  [["", "Os dois CNPJs"], ["CNPJ 1", "CNPJ 1"], ["CNPJ 2", "CNPJ 2"]].forEach(([v, r]) => {
+    segCnpj.append(cobBotao(r, () => { cobFiltro.cnpj = v; cobDesenharPeriodo(cobDados); }, cobFiltro.cnpj === v ? "cob-seg-ativo" : ""));
+  });
+  const busca = cobEl("input", "cob-busca");
+  busca.type = "text";
+  busca.setAttribute("aria-label", "Buscar cobrança");
+  busca.placeholder = "Buscar por cliente, nota, serviço ou CPF/CNPJ";
+  busca.value = cobFiltro.busca;
+  filtros.append(segCnpj, busca);
+  const resumo = cobEl("p", "doc-hint cob-sem-previsao");
+  const corpo = cobEl("div");
+  destino.append(resumo, filtros, corpo);
+  busca.addEventListener("input", () => { cobFiltro.busca = busca.value; cobDesenharCaixasReceber(d, resumo, corpo); });
+  cobDesenharCaixasReceber(d, resumo, corpo);
+}
+function cobDesenharCaixasReceber(d, resumo, destino) {
+  destino.innerHTML = "";
   const hoje = hojeISO();
-  const itens = (d.recebimentos || []).filter(cobAberta);
+  const termo = normalizarTexto(cobFiltro.busca || "");
+  const todos = (d.recebimentos || []).filter((x) => {
+    if (cobFiltro.cnpj && x.emissor !== cobFiltro.cnpj) return false;
+    if (termo && !normalizarTexto(`${x.cliente} ${x.descricao} ${x.notaNumero || ""} ${x.documento || ""}`).includes(termo)) return false;
+    return true;
+  });
+  const itens = todos.filter(cobAberta);
   const comData = itens.filter((x) => !cobSemPrevisao(x));
   const semPrevisao = itens.filter(cobSemPrevisao);
   const vencidos = comData.filter((x) => x.vencimento < hoje);
+  const previstos = comData.filter((x) => x.vencimento >= hoje);
+  const recebidas = todos.filter((x) => x.status === "Recebido");
+  const canceladas = todos.filter((x) => x.status === "Cancelado");
   const grupos = new Map();
-  for (const x of comData.filter((y) => y.vencimento >= hoje).sort((a, b) => a.vencimento.localeCompare(b.vencimento))) {
+  for (const x of previstos.slice().sort((a, b) => a.vencimento.localeCompare(b.vencimento))) {
     const k = cobChavePeriodo(x.vencimento);
     grupos.set(k, (grupos.get(k) || []).concat(x));
   }
   const linhas = [];
-  if (vencidos.length) linhas.push({ chave: "vencidos", lista: vencidos, rotulo: "Vencidos (cobrar)", qtd: vencidos.length, total: cobSoma(vencidos), classe: "cob-l-vencido" });
   for (const [k, lista] of grupos) linhas.push({ chave: k, lista, rotulo: cobRotuloPeriodo(k), qtd: lista.length, total: cobSoma(lista) });
   // Toque abre e fecha o que está embaixo; fica como estava ao atualizar a tela.
   const abreFecha = (row, corpo, chave) => {
@@ -17788,23 +17837,30 @@ function cobDesenharPeriodo(d) {
     return row;
   };
   const porData = (a, b) => String(a.vencimento || a.criadoEm).localeCompare(String(b.vencimento || b.criadoEm));
-  if (!comData.length && !semPrevisao.length) {
-    destino.append(cobEl("p", "doc-hint", "Nada a receber agora."));
-    return;
-  }
-  destino.append(cobEl("p", "doc-hint cob-sem-previsao", `${cobPlural(itens.length, "conta", "contas")} a receber, somando ${dinheiro(cobSoma(itens))}`
-    + (vencidos.length ? `; ${dinheiro(cobSoma(vencidos))} já vencido.` : ".")));
-  // 25/11/2026 (dono): no lugar de "Ver a lista", dois retângulos, um embaixo do outro. "Previstos para receber" abre os
-  // dias (semana, mês), e cada dia abre os boletos dele; "Sem previsão" abre as notas e recibos sem boleto.
+  const filtrando = Boolean(cobFiltro.cnpj || termo);
+  resumo.textContent = itens.length
+    ? `${cobPlural(itens.length, "conta", "contas")} a receber, somando ${dinheiro(cobSoma(itens))}${vencidos.length ? `; ${dinheiro(cobSoma(vencidos))} já vencido` : ""}${filtrando ? " (com o filtro)" : ""}.`
+    : filtrando ? "Nada a receber com esse filtro." : "Nada a receber agora.";
+  if (!todos.length) { destino.append(cobEl("p", "doc-hint", "Nada com esse filtro.")); return; }
+  // Caixas, uma embaixo da outra: Vencidos, Previstos (abre os dias, semanas ou meses), Sem previsão, Recebidas e
+  // Canceladas. Cada uma mostra quantas e o total (o que era o rodapé do "Todas as cobranças").
   const caixas = cobEl("div", "cob-t-caixas");
-  const totalGeral = cobSoma(itens);
+  const totalGeral = Math.max(1, cobSoma(itens), cobSoma(recebidas), cobSoma(canceladas));
   const caixa = (chave, row, corpo, classe) => {
     const box = cobEl("div", "cob-t-caixa " + classe);
     box.append(row, corpo);
     abreFecha(row, corpo, "caixa:" + chave);
     caixas.append(box);
   };
-  if (comData.length) {
+  const listaSimples = (lista, ordem) => {
+    const corpo = cobEl("div", "cob-t-corpo");
+    lista.slice().sort(ordem || porData).forEach((x) => corpo.append(cobLinha(x)));
+    return corpo;
+  };
+  if (vencidos.length) {
+    caixa("vencidos", linhaDe("Vencidos (cobrar)", cobPlural(vencidos.length, "boleto", "boletos"), cobSoma(vencidos), totalGeral), listaSimples(vencidos), "cob-l-vencido");
+  }
+  if (previstos.length) {
     const tabela = cobEl("div", "cob-tabela cob-t-corpo");
     const maiorDia = Math.max(1, ...linhas.map((l) => l.total));
     for (const l of linhas) {
@@ -17814,11 +17870,11 @@ function cobDesenharPeriodo(d) {
       tabela.append(row, detalhe);
       abreFecha(row, detalhe, cobPeriodo + ":" + l.chave);
     }
-    caixa("previstos", linhaDe("Previstos para receber (boletos)", cobPlural(comData.length, "boleto", "boletos"), cobSoma(comData), totalGeral), tabela, "cob-l-previsto");
+    caixa("previstos", linhaDe("Previstos para receber (boletos)", cobPlural(previstos.length, "boleto", "boletos"), cobSoma(previstos), totalGeral), tabela, "cob-l-previsto");
   }
   if (semPrevisao.length) {
     const corpo = cobEl("div", "cob-t-corpo");
-    // Igual ao cartão "Notas e recibos sem boleto": a explicação da baixa e "há N dias" em cada conta.
+    // A explicação da baixa e "há N dias" em cada conta.
     const interAinda = !((d.contas || {})["CNPJ 1"] || {}).notasPeloAsaas;
     corpo.append(cobEl("p", "doc-hint cob-t-explica", "Dá baixa sozinho quando o próprio cliente paga no Asaas o valor exato; se quem paga é outro (a administradora, por exemplo), aparece em \"Precisa de você\" para você confirmar"
       + (interAinda ? "; o que cai no Inter, marque você." : ".")));
@@ -17829,6 +17885,16 @@ function cobDesenharPeriodo(d) {
       corpo.append(linha);
     });
     caixa("sem", linhaDe("Sem previsão (notas e recibos sem boleto)", cobPlural(semPrevisao.length, "conta", "contas"), cobSoma(semPrevisao), totalGeral), corpo, "cob-l-sem");
+  }
+  // Recebidas (últimos 2 a 3 meses) e canceladas (últimos 45 dias): mais nova primeiro.
+  const maisNova = (a, b) => String(b.dataRecebimento || b.criadoEm).localeCompare(String(a.dataRecebimento || a.criadoEm));
+  if (recebidas.length) {
+    caixa("recebidas", linhaDe("Recebidas (últimos meses)", cobPlural(recebidas.length, "conta", "contas"), cobSoma(recebidas, (x) => x.valorPago ?? x.valor), totalGeral),
+      listaSimples(recebidas, maisNova), "cob-l-recebido");
+  }
+  if (canceladas.length) {
+    caixa("canceladas", linhaDe("Canceladas (últimos 45 dias)", cobPlural(canceladas.length, "conta", "contas"), cobSoma(canceladas), totalGeral),
+      listaSimples(canceladas, maisNova), "cob-l-cancelado");
   }
   destino.append(caixas);
 }
