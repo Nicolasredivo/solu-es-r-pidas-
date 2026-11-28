@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.28c";
+const APP_VERSION = "2026.11.28d";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -17194,7 +17194,19 @@ async function recAbrir(mes) {
   if (vez !== recVez) return;
   recDesenhar(r || { ok: false, mensagem: "Não consegui buscar os recebidos agora. Confira a internet e o servidor do PC e tente de novo." });
 }
+// Filtro dos recebidos (28/11/2026, pedido do dono): Todos, Notas, Recibos, Avulsos (PIX sem recibo nem nota) e
+// Outros (transferências que contam, boletos avulsos, lançados à mão...), cada um com quantos e o total.
+let recFiltro = "todos";
+let recUltimo = null;
+function recTipo(x) {
+  if (x.origem === "pix-avulso") return "avulsos";
+  if (x.origem === "recibo" || (x.arquivoId && x.arquivoTipo === "recibo")) return "recibos";
+  if (x.origem === "nota" || x.notaId || x.notaNumero) return "notas";
+  return "outros";
+}
+const REC_FILTROS = [["todos", "Todos"], ["notas", "Notas"], ["recibos", "Recibos"], ["avulsos", "Avulsos"], ["outros", "Outros"]];
 function recDesenhar(r) {
+  recUltimo = r;
   const p = recEls.pagina;
   p.innerHTML = "";
   const esteMes = hojeISO().slice(0, 7);
@@ -17248,12 +17260,29 @@ function recDesenhar(r) {
     p.append(bloco);
     return;
   }
+  // Filtro: um botão por tipo, com quantos e o total (Outros só aparece se tiver algum).
+  const filtro = cobEl("div", "rec-filtro");
+  for (const [k, rotulo] of REC_FILTROS) {
+    const lista = k === "todos" ? itens : itens.filter((x) => recTipo(x) === k);
+    if (k === "outros" && !lista.length) continue;
+    const b = cobBotao("", () => { recFiltro = k; recDesenhar(recUltimo); }, "rec-filtro-botao" + (recFiltro === k ? " ativo" : ""));
+    b.setAttribute("aria-pressed", recFiltro === k ? "true" : "false");
+    b.append(cobEl("span", "rec-filtro-nome", `${rotulo} (${lista.length})`), cobEl("strong", "", dinheiro(cobSoma(lista, (x) => x.valorPago ?? x.valor))));
+    filtro.append(b);
+  }
+  p.append(filtro);
+  const vistos = recFiltro === "todos" ? itens : itens.filter((x) => recTipo(x) === recFiltro);
+  if (!vistos.length) {
+    bloco.append(cobEl("p", "rec-vazio", `Nenhum recebimento deste tipo em ${recNomeMes(recMes)}.`));
+    p.append(bloco);
+    return;
+  }
   // Tabela: no computador, colunas; no celular, cada recebimento vira um cartão.
   const tabela = cobEl("div", "rec-tabela");
   const topo = cobEl("div", "rec-linha rec-topo");
   ["Pago em", "Cliente", "Nota", "Como foi pago", "Valor", "Documentos"].forEach((t) => topo.append(cobEl("span", "", t)));
   tabela.append(topo);
-  for (const x of itens) {
+  for (const x of vistos) {
     const linha = cobEl("div", "rec-linha rec-item");
     linha.tabIndex = 0;
     linha.setAttribute("role", "button");
@@ -17289,7 +17318,8 @@ function recDesenhar(r) {
     tabela.append(linha);
   }
   const soma = cobEl("div", "rec-linha rec-soma");
-  soma.append(cobEl("span", "", `Total de ${recNomeMes(recMes)}`), cobEl("strong", "", dinheiro(bruto)));
+  const nomeFiltro = recFiltro === "todos" ? "" : ` · ${REC_FILTROS.find((f) => f[0] === recFiltro)[1].toLowerCase()}`;
+  soma.append(cobEl("span", "", `Total de ${recNomeMes(recMes)}${nomeFiltro}`), cobEl("strong", "", dinheiro(recFiltro === "todos" ? bruto : cobSoma(vistos, (x) => x.valorPago ?? x.valor))));
   tabela.append(soma);
   bloco.append(tabela);
   p.append(bloco);
