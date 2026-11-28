@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.28b";
+const APP_VERSION = "2026.11.28c";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -17502,8 +17502,8 @@ function cobFilaItens(d) {
         : bate ? ` Parece o chamado nº ${bate.numero}${bate.cliente ? ` (${bate.cliente})` : ""}.` : "";
       const botoes = [];
       if (ant) botoes.push(["Igual da última vez", (b) => cobIgualAnterior(c, b)]);
-      botoes.push(["Serviço avulso", () => cobClassificar(c, "avulso")], ["Transferência minha", () => cobClassificar(c, "transferencia")],
-        ["Anotar", () => cobClassificar(c, "anotar")], ["Ligar a uma cobrança", () => cobEscolherPar(c)]);
+      botoes.push(["Serviço avulso", () => cobClassificar(c, "avulso")], ["Transferência / anotar", () => cobAnotarOuTransferir(c)],
+        ["Ligar a uma cobrança", () => cobEscolherPar(c)]);
       add("info", `Entrou ${de} sem cobrança no sistema.${dica}`, botoes, 5);
     }
   }
@@ -17956,6 +17956,36 @@ function cobClassificar(c, tipo) {
       if (tipo === "anotar" && !t) return "Escreva de onde veio o dinheiro.";
       const r = await cobPedir({ acao: "classificar", conciliacaoId: c.id, tipo, texto: t, contar: contar ? contar.value : "",
         chamadoId: chamado ? chamado.value : "", sempre: sempre.checked ? "sim" : "" }, null, "Guardado.");
+      return r ? "" : "Não deu certo: tente de novo.";
+    },
+  });
+}
+// Transferência e Anotar num botão só (28/11/2026, pedido do dono): conta ou não nos recebidos, de onde e por quê
+// (opcional) e "sempre tratar assim". Contou = vira conta recebida (transferência que conta). Não contou: com texto
+// fica anotada; sem texto, guardada como transferência sua.
+function cobAnotarOuTransferir(c) {
+  let contar, texto, sempre;
+  const quem = c.pagador || "este pagador";
+  cobAbrirDialogo({
+    titulo: "Transferência / anotar",
+    texto: `Entrou ${dinheiro(c.valor)} no Asaas do ${c.conta}${c.pagador ? ` (${c.pagador})` : ""} em ${dataBonita(c.data)}.`,
+    botaoOk: "Guardar",
+    montar: (campos) => {
+      contar = cobCampo(campos, "Conta nos recebidos do mês?", "select");
+      contar.append(new Option("Não conta", ""), new Option("Sim, conta", "sim"));
+      texto = cobCampo(campos, "De onde e por quê (opcional)", "text", "", { maxLength: 300, placeholder: "Ex.: saldo da conta antiga; empréstimo; devolução" });
+      const l = cobEl("label", "cob-check");
+      sempre = cobEl("input");
+      sempre.type = "checkbox";
+      l.append(sempre, document.createTextNode(` Sempre tratar assim os próximos PIX de ${quem}`));
+      campos.append(l);
+    },
+    aoConfirmar: async () => {
+      const t = texto.value.trim();
+      const conta = contar.value === "sim";
+      const tipo = !conta && t ? "anotar" : "transferencia";
+      const r = await cobPedir({ acao: "classificar", conciliacaoId: c.id, tipo, texto: t, contar: conta ? "sim" : "",
+        sempre: sempre.checked ? "sim" : "" }, null, "Guardado.");
       return r ? "" : "Não deu certo: tente de novo.";
     },
   });
