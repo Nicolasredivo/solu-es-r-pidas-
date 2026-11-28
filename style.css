@@ -8205,6 +8205,13 @@ button.cob-link {
 .cob-p-visto { background: rgba(167, 139, 250, 0.18); color: #c4b5fd; }
 .cob-p-neutro { background: rgba(154, 160, 180, 0.16); color: var(--muted); }
 .cob-tag { padding: 1px 6px; border: 1px solid var(--borda); border-radius: 6px; font-size: 0.68rem; color: var(--muted); }
+/* PIX sem cobrança (28/11/2026). */
+.cob-tag-transf { border-color: rgba(91, 141, 239, 0.6); color: #93b4f5; }
+.cob-check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-weight: 500; cursor: pointer; }
+.cob-check input { width: 18px; height: 18px; margin: 0; flex: none; }
+.ext-fim { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.ext-fim .link-button, .cob-regra .link-button { font-size: 0.78rem; padding: 0; }
+.cob-regra { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .cob-vermelho, .cob-linha-valor .cob-vermelho { color: #ff7b7f; font-weight: 600; }
 .cob-amarelo { color: var(--aviso); }
 

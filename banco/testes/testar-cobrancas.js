@@ -363,7 +363,7 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
     confere('boleto pago: a taxa vira gasto "Taxas do Asaas", já pago', desp.length === 1 && Number(desp[0].Valor) === 2.98 && desp[0].Status === 'Pago' && /^Taxa do boleto · /.test(desp[0].Descricao), desp);
     await q(`select cob_despesa_taxa($1, $2::date)`, [p2.id, hoje]);
     confere('o gasto da taxa não duplica', (await q(`select count(*)::int as n from "Despesas" where "Servico_Ref" = $1`, [p2.id]))[0].n === 1);
-    // Entradas: anotar com texto livre; transferência do próprio dono já vem anotada e nunca vira sugestão.
+    // Entradas: anotar com texto livre; transferência do próprio dono fica para ele escolher (sem anotação pronta) e nunca vira sugestão.
     const an = await fn('cob_acao', { acao: 'ignorar', conciliacaoId: concPix.id, texto: 'Pagamento antigo recebido no Inter' });
     const anRow = (await q(`select "Status", "Anotacao" from "Conciliacao" where id = $1`, [concPix.id]))[0];
     confere('anotar entrada: guarda o texto e sai da fila', an.resposta.ok && anRow.Status === 'anotado' && anRow.Anotacao === 'Pagamento antigo recebido no Inter', anRow);
@@ -371,7 +371,43 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
     await fn('cob_sinc_gravar', { respostas: [{ ref: { tipo: 'extrato', conta: 'CNPJ 2' }, resposta: { data: [
       { id: 'ft_teste_proprio' + Date.now(), type: 'PIX_TRANSACTION_CREDIT', value: 99, date: hoje, description: 'Transação via Pix - ' + tit }] } }], clientes: [] });
     const prop = (await q(`select "Status", "Anotacao", "Sugestao_Ref" from "Conciliacao" where "Transacao_Id" like 'ft:ft_teste_proprio%'`))[0];
-    confere('PIX do próprio dono: fica para classificar, já anotado, sem sugestão', prop && prop.Status === 'sem-par' && /contas próprias/.test(prop.Anotacao || '') && !prop.Sugestao_Ref, prop);
+    confere('PIX do próprio dono: fica para o dono escolher, sem anotação pronta e sem sugestão', prop && prop.Status === 'sem-par' && !prop.Anotacao && !prop.Sugestao_Ref, prop);
+    // PIX sem cobrança (28/11/2026): serviço avulso, transferência minha (conta ou não) e "sempre tratar assim".
+    const pixDe = async (id, valor) => {
+      await fn('cob_sinc_gravar', { respostas: [{ ref: { tipo: 'extrato', conta: 'CNPJ 2' }, resposta: { data: [
+        { id: 'ft_teste_av' + id + Date.now(), type: 'PIX_TRANSACTION_CREDIT', value: valor, date: hoje, description: 'Transação via Pix - TESTE PAGADOR AVULSO' }] } }], clientes: [] });
+      return (await q(`select * from "Conciliacao" where "Transacao_Id" like 'ft:ft_teste_av' || $1 || '%'`, [id]))[0];
+    };
+    const av1 = await pixDe('a', 123.45);
+    confere('PIX avulso novo: fica para o dono escolher', av1 && av1.Status === 'sem-par' && av1.Pagador === 'TESTE PAGADOR AVULSO', av1);
+    const semTexto = await fn('cob_acao', { acao: 'classificar', conciliacaoId: av1.id, tipo: 'anotar' });
+    confere('anotar sem texto: recusa', semTexto.resposta.ok === false, semTexto);
+    const cl1 = await fn('cob_acao', { acao: 'classificar', conciliacaoId: av1.id, tipo: 'avulso', texto: 'troca de chuveiro', sempre: 'sim' });
+    const rAv = (await q(`select * from "Recebimentos" where id = $1`, [cl1.resposta.id]))[0];
+    confere('serviço avulso: vira conta já recebida, com o nome da conta que enviou', cl1.resposta.ok && rAv && rAv.Status === 'Recebido' && rAv.Origem === 'pix-avulso'
+      && rAv.Cliente_Nome === 'Avulso – TESTE PAGADOR AVULSO' && Number(rAv.Valor_Pago) === 123.45 && rAv.Descricao === 'troca de chuveiro' && rAv.Emissor === 'CNPJ 2', rAv);
+    const recMes = await fn('cob_recebidos', {});
+    confere('serviço avulso entra nos recebidos do mês', recMes.itens.some((x) => x.id === rAv.id && x.pagador === 'TESTE PAGADOR AVULSO'), recMes.itens.length);
+    const av2 = await pixDe('b', 80);
+    const av2r = (await q(`select c."Status", r."Origem", r.id as rid from "Conciliacao" c left join "Recebimentos" r on r.id = c."Recebimento_Ref" where c.id = $1`, [av2.id]))[0];
+    confere('"sempre tratar assim": o próximo PIX do mesmo pagador já entra como avulso', av2r.Status === 'vinculado' && av2r.Origem === 'pix-avulso', av2r);
+    const des = await fn('cob_acao', { acao: 'desfazer-entrada', id: av2r.rid });
+    const av2d = (await q(`select "Status", "Recebimento_Ref" from "Conciliacao" where id = $1`, [av2.id]))[0];
+    const sumiu = (await q(`select count(*)::int n from "Recebimentos" where id = $1`, [av2r.rid]))[0].n === 0;
+    const regraSumiu = (await q(`select count(*)::int n from "Cobranca_Estado" where id like 'regra-pagador:TESTE PAGADOR%'`))[0].n === 0;
+    confere('desfazer: a conta avulsa sai, a entrada volta para a fila e a regra sai', des.resposta.ok && av2d.Status === 'sem-par' && !av2d.Recebimento_Ref && sumiu && regraSumiu, { des, av2d, sumiu, regraSumiu });
+    const pn = await fn('cob_painel', {});
+    const noPainel = pn.conciliacao.find((x) => x.id === av2.id);
+    confere('painel: sugere o que foi escolhido da última vez para o mesmo pagador', noPainel && noPainel.anterior && noPainel.anterior.tipo === 'avulso' && noPainel.anterior.texto === 'troca de chuveiro', noPainel && noPainel.anterior);
+    const tr = await fn('cob_acao', { acao: 'classificar', conciliacaoId: av2.id, tipo: 'transferencia' });
+    const pn2 = await fn('cob_painel', {});
+    confere('transferência que não conta: sai da fila, fica nas anotadas e não vira conta', tr.resposta.ok && !tr.resposta.id && pn2.anotadas.some((x) => x.id === av2.id && x.tipo === 'transferencia'), tr);
+    await fn('cob_acao', { acao: 'desfazer-entrada', conciliacaoId: av2.id });
+    const tr2 = await fn('cob_acao', { acao: 'classificar', conciliacaoId: av2.id, tipo: 'transferencia', contar: 'sim' });
+    const rTr = (await q(`select * from "Recebimentos" where id = $1`, [tr2.resposta.id]))[0];
+    confere('transferência que conta: vira conta recebida (Origem transferencia)', rTr && rTr.Status === 'Recebido' && rTr.Origem === 'transferencia' && Number(rTr.Valor_Pago) === 80, rTr);
+    const dup = await fn('cob_acao', { acao: 'classificar', conciliacaoId: av2.id, tipo: 'avulso' });
+    confere('entrada já resolvida não classifica de novo', dup.resposta.ok === false, dup);
     await q(`delete from "Cobranca_Estado" where id in ('sinc:trava', 'emails-sistema')`);
     // Destinos (22/11/2026): 1º no Para, todos os outros no Cc (sem cópia oculta).
     const ds = (await q(`select cob_destinos(array['a@x.com','b@x.com','c@x.com','d@x.com']) as d, cob_destinos(array['a@x.com']) as u, cob_emails($1) as e`, [c1]))[0];
@@ -407,6 +443,7 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
   } finally {
     // Limpeza: tudo o que é de teste sai; o estado real volta como estava.
     try {
+      await q(`delete from "Recebimentos" where "Origem" in ('pix-avulso', 'transferencia') and "Cliente_Nome" like '%TESTE PAGADOR AVULSO'`);
       await q(`delete from "Conciliacao" where "Transacao_Id" like 'pay:pay_teste%' or "Transacao_Id" like 'ft:ft_teste%'`);
       await q(`delete from "Despesas" where "Categoria" = 'Taxas do Asaas' and "Servico_Ref" in (select id from "Recebimentos" where "Cliente_Ref" = any($1) or "Nota_Ref" = any($2) or "Asaas_Cobranca_Id" like 'pay_teste%')`, [ids.clientes, ids.notas]);
       await q(`delete from "Recebimentos" where "Cliente_Ref" = any($1) or "Nota_Ref" = any($2) or "Asaas_Cobranca_Id" like 'pay_teste%'`, [ids.clientes, ids.notas]);
@@ -418,7 +455,7 @@ const respostaPay = (id, extra = {}) => ({ id, status: 'PENDING', invoiceUrl: 'h
       // chegar ao Asaas bem durante o teste, a troca vale e a cópia dos dados de antes não pode sumir).
       await q(`delete from "Cobranca_Estado" where id not like 'banco-antes:CNPJ %' and id not like 'banco-trocado:CNPJ %'`);
       for (const e of estadoAntes) await q(`insert into "Cobranca_Estado" (id, "Valor") values ($1, $2) on conflict (id) do nothing`, [e.id, JSON.stringify(e.Valor)]);
-      const sobrou = await q(`select (select count(*) from "Entidades_Cadastradas" where "CPF_CNPJ" like '999999990%')::int as c, (select count(*) from "Recebimentos" where "Descricao" like '%TESTE%' or "Cliente_Nome" like 'TESTE%')::int as r,
+      const sobrou = await q(`select (select count(*) from "Entidades_Cadastradas" where "CPF_CNPJ" like '999999990%')::int as c, (select count(*) from "Recebimentos" where "Descricao" like '%TESTE%' or "Cliente_Nome" like 'TESTE%' or "Cliente_Nome" like '%TESTE PAGADOR%')::int as r,
         (select count(*) from "Despesas" where "Descricao" like 'Taxa do boleto · TESTE %')::int as d`);
       confere('limpeza: nada de teste ficou no banco', sobrou[0].c === 0 && sobrou[0].r === 0 && sobrou[0].d === 0, sobrou);
     } catch (e) { falhas++; console.log('ERRO na limpeza', e.message); }

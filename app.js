@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.26e";
+const APP_VERSION = "2026.11.28a";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -1471,6 +1471,13 @@ formEntidade.addEventListener("submit", async (event) => {
       contatosCarregados = false;
       // O cliente novo já aparece no resto do sistema (Chamados, Documentos, Notas...), sem "Atualizar".
       cadastrosMudaram({ redesenhar: true });
+      // Veio do "Virar cliente" de um PIX avulso (28/11/2026): os avulsos dele passam para este cadastro.
+      if (cobVirarPendente) {
+        const v = cobVirarPendente;
+        cobVirarPendente = null;
+        pedirAoN8n("cobrancas", { acao: "ligar-avulsos", documento: documentoAtual || v.documento, nome: razaoSocialInput.value.trim() || v.nome })
+          .then((r) => { if (r && r.ok && r.ligados) mostrarToast(r.mensagem); }).catch(() => {});
+      }
       formEntidade.classList.add("hidden");
       documentoInput.value = "";
       documentoAtual = "";
@@ -16893,6 +16900,8 @@ function cobOrigemTexto(x) {
   if (x.origem === "recibo") return "Recibo";
   if (x.origem === "asaas") return "Feito no Asaas";
   if (x.origem === "avulsa") return "Boleto avulso";
+  if (x.origem === "pix-avulso") return "Serviço avulso (PIX)";
+  if (x.origem === "transferencia") return "Transferência minha";
   return x.origem === "nota" ? "Nota" : "Lançada à mão";
 }
 
@@ -17443,10 +17452,18 @@ function cobFilaItens(d) {
     const s = c.sugestao && porId[c.sugestao];
     if (c.status === "pendente" && s) {
       add("info", `Entrou ${de}. É de ${s.cliente || "?"} · ${cobOrigemTexto(s)}?`,
-        [["Sim, dar baixa", (b) => cobConciliar(c, s, b)], ["É de outra", () => cobEscolherPar(c)], ["Não é de nenhuma", () => cobAnotar(c)]], 4);
+        [["Sim, dar baixa", (b) => cobConciliar(c, s, b)], ["É de outra", () => cobEscolherPar(c)], ["Não é de nenhuma", () => cobClassificar(c, "avulso")]], 4);
     } else {
-      add("info", `Entrou ${de} sem cobrança no sistema.${c.anotacao ? ` Parece: ${c.anotacao}.` : ""}`,
-        [["Ligar a uma cobrança", () => cobEscolherPar(c)], ["Anotar", () => cobAnotar(c)]], 5);
+      // PIX sem cobrança (28/11/2026): quem diz o que é o dinheiro é sempre o dono. Da 2ª vez do mesmo pagador, sugere igual.
+      const ant = c.anterior;
+      const bate = (c.chamados || []).find((h) => h.bate);
+      const dica = ant ? ` Da última vez: ${COB_TIPO_PIX[ant.tipo] || ant.tipo}${ant.tipo === "transferencia" ? (ant.contar ? " (contou)" : " (não contou)") : ""}${ant.texto ? ` · ${ant.texto}` : ""}.`
+        : bate ? ` Parece o chamado nº ${bate.numero}${bate.cliente ? ` (${bate.cliente})` : ""}.` : "";
+      const botoes = [];
+      if (ant) botoes.push(["Igual da última vez", (b) => cobIgualAnterior(c, b)]);
+      botoes.push(["Serviço avulso", () => cobClassificar(c, "avulso")], ["Transferência minha", () => cobClassificar(c, "transferencia")],
+        ["Anotar", () => cobClassificar(c, "anotar")], ["Ligar a uma cobrança", () => cobEscolherPar(c)]);
+      add("info", `Entrou ${de} sem cobrança no sistema.${dica}`, botoes, 5);
     }
   }
   if ((d.notasSemConta || []).length) {
@@ -17590,11 +17607,12 @@ function cobRotuloPeriodo(chave) {
 function cobDesenharAnotadas(d) {
   const destino = cobEls.anotadas;
   const itens = d.anotadas || [];
+  const regras = d.regras || [];
   destino.innerHTML = "";
-  destino.classList.toggle("hidden", !itens.length);
-  if (!itens.length) return;
+  destino.classList.toggle("hidden", !itens.length && !regras.length);
+  if (!itens.length && !regras.length) return;
   cobCab(destino, "Entradas anotadas", "245, 166, 35", COB_IC.barras);
-  destino.append(cobEl("p", "doc-hint", `${cobPlural(itens.length, "entrada", "entradas")} no Asaas sem cobrança, com a sua anotação de onde veio. Não entram no faturamento.`));
+  if (itens.length) destino.append(cobEl("p", "doc-hint", `${cobPlural(itens.length, "entrada", "entradas")} no Asaas sem cobrança (anotadas ou transferências suas que não contam). Não entram nos recebidos do mês.`));
   const tabela = cobEl("div", "rec-tabela");
   for (const x of itens) {
     const linha = cobEl("div", "ext-item");
@@ -17603,14 +17621,31 @@ function cobDesenharAnotadas(d) {
     const meio = cobEl("span", "rec-cliente");
     const nome = cobEl("span", "rec-cliente-nome");
     nome.append(cobEl("strong", "", x.pagador || x.descricao || "Entrada"), cobEl("span", "cob-tag", x.conta));
+    if (x.tipo === "transferencia") nome.append(cobEl("span", "cob-tag cob-tag-transf", "Transferência minha"));
+    if (x.sempre) nome.append(cobEl("span", "cob-tag", "sempre assim"));
     meio.append(nome, cobEl("span", "cob-anotacao", "📝 " + (x.anotacao || "")));
-    linha.append(data, meio, cobEl("span", "ext-valor ext-credito", "+ " + dinheiro(Number(x.valor))));
+    const fim = cobEl("span", "ext-fim");
+    fim.append(cobEl("span", "ext-valor ext-credito", "+ " + dinheiro(Number(x.valor))), cobBotao("Desfazer", (b) => cobDesfazerEntrada({ conciliacaoId: x.id }, b), "link-button"));
+    linha.append(data, meio, fim);
     tabela.append(linha);
   }
   const soma = cobEl("div", "rec-linha rec-soma");
   soma.append(cobEl("span", "", "Total anotado"), cobEl("strong", "", dinheiro(itens.reduce((t, x) => t + Number(x.valor || 0), 0))));
-  tabela.append(soma);
-  destino.append(tabela);
+  if (itens.length) { tabela.append(soma); destino.append(tabela); }
+  // "Sempre tratar assim" (28/11/2026): o que entra sozinho, e como parar.
+  if (regras.length) {
+    destino.append(cobEl("div", "moldura-titulo", "Sempre tratar assim"));
+    const lista = cobEl("div", "rec-tabela");
+    for (const g of regras) {
+      const l = cobEl("div", "ext-item cob-regra");
+      const txt = `${COB_TIPO_PIX[g.tipo] || g.tipo}${g.tipo === "transferencia" ? (g.contar ? " (conta)" : " (não conta)") : ""}${g.texto ? " · " + g.texto : ""}`;
+      const meio = cobEl("span", "rec-cliente");
+      meio.append(cobEl("strong", "", g.pagador || "?"), cobEl("span", "cob-anotacao", "PIX entra como: " + txt));
+      l.append(meio, cobBotao("Parar", (b) => cobEsquecerRegra(g.chave, b), "link-button"));
+      lista.append(l);
+    }
+    destino.append(lista);
+  }
 }
 
 function cobDesenharPeriodo(d) {
@@ -17834,6 +17869,96 @@ async function cobTentarDeNovo(x, botao) {
 async function cobConciliar(c, x, botao) {
   await cobPedir({ acao: "conciliar", conciliacaoId: c.id, id: x.id }, botao, "Baixa feita.");
 }
+// PIX sem cobrança (28/11/2026). Três escolhas, sempre do dono:
+//  - Serviço avulso: cliente CPF sem recibo nem nota. Vira conta já recebida ("Avulso – nome da conta que enviou") e
+//    entra no Recebido no mês (o medidor do MEI continua só com as notas).
+//  - Transferência minha: dinheiro dele mesmo (conta antiga → nova, entre os CNPJs). Ele escolhe se conta ou não.
+//  - Anotar: outro motivo (devolução, empréstimo...). Fora dos recebidos.
+const COB_TIPO_PIX = { avulso: "Serviço avulso", transferencia: "Transferência minha", anotar: "Anotado" };
+function cobClassificar(c, tipo) {
+  let texto, contar, chamado, sempre;
+  const quem = c.pagador || "este pagador";
+  const titulos = { avulso: "Serviço avulso", transferencia: "Transferência minha", anotar: "Anotar esta entrada" };
+  const explica = {
+    avulso: `Fica registrado como serviço recebido de "Avulso – ${c.pagador || "sem nome"}" e entra no Recebido no mês. Não entra no medidor do MEI (só notas).`,
+    transferencia: "Dinheiro seu, de outra conta sua. Você escolhe se conta nos recebidos do mês.",
+    anotar: "Fica guardado com o seu texto, fora dos recebidos do mês.",
+  };
+  cobAbrirDialogo({
+    titulo: titulos[tipo],
+    texto: `Entrou ${dinheiro(c.valor)} no Asaas do ${c.conta}${c.pagador ? ` (${c.pagador})` : ""} em ${dataBonita(c.data)}. ${explica[tipo]}`,
+    botaoOk: "Guardar",
+    montar: (campos) => {
+      if (tipo === "transferencia") {
+        contar = cobCampo(campos, "Conta nos recebidos do mês?", "select");
+        contar.append(new Option("Não conta", ""), new Option("Sim, conta", "sim"));
+      }
+      texto = cobCampo(campos, tipo === "avulso" ? "O que foi (opcional)" : tipo === "anotar" ? "De onde e por quê" : "Observação (opcional)", "text",
+        tipo === "anotar" ? c.anotacao || "" : "", { maxLength: 300,
+          placeholder: tipo === "avulso" ? "Ex.: troca de chuveiro" : tipo === "anotar" ? "Ex.: devolução de compra; empréstimo" : "Ex.: saldo da conta antiga" });
+      const chs = c.chamados || [];
+      if (tipo === "avulso" && chs.length) {
+        chamado = cobCampo(campos, "Chamado deste serviço (opcional)", "select");
+        chamado.append(new Option("Nenhum", ""));
+        chs.forEach((h) => chamado.append(new Option(`nº ${h.numero || "?"} · ${h.cliente || "sem cliente"} · ${dataBonita(h.dia).slice(0, 5)}${h.bate ? " · mesmo valor" : ""}`, h.id)));
+        const bate = chs.find((h) => h.bate);
+        if (bate) chamado.value = bate.id;
+      }
+      const l = cobEl("label", "cob-check");
+      sempre = cobEl("input");
+      sempre.type = "checkbox";
+      l.append(sempre, document.createTextNode(` Sempre tratar assim os próximos PIX de ${quem}`));
+      campos.append(l);
+    },
+    aoConfirmar: async () => {
+      const t = texto.value.trim();
+      if (tipo === "anotar" && !t) return "Escreva de onde veio o dinheiro.";
+      const r = await cobPedir({ acao: "classificar", conciliacaoId: c.id, tipo, texto: t, contar: contar ? contar.value : "",
+        chamadoId: chamado ? chamado.value : "", sempre: sempre.checked ? "sim" : "" }, null, "Guardado.");
+      return r ? "" : "Não deu certo: tente de novo.";
+    },
+  });
+}
+// "Igual da última vez": a mesma escolha (e o mesmo texto) que o dono fez no PIX anterior deste pagador.
+async function cobIgualAnterior(c, botao) {
+  const a = c.anterior;
+  if (!a) return;
+  if (a.tipo === "anotar" && !a.texto) return cobClassificar(c, "anotar");
+  await cobPedir({ acao: "classificar", conciliacaoId: c.id, tipo: a.tipo, texto: a.texto || "", contar: a.contar ? "sim" : "" }, botao, "Guardado.");
+}
+async function cobDesfazerEntrada(dados, botao) {
+  const ok = await cobConfirmar("Desfazer esta escolha?", "A entrada volta para \"Precisa de você\" e sai dos recebidos (se estava lá). Se havia \"sempre tratar assim\" para este pagador, ele para.", "Sim, desfazer", true);
+  if (!ok) return false;
+  return !!(await cobPedir({ acao: "desfazer-entrada", ...dados }, botao, "Desfeito."));
+}
+async function cobEsquecerRegra(chave, botao) {
+  await cobPedir({ acao: "esquecer-regra", chave }, botao, "Pronto.");
+}
+// "Virar cliente": abre o Adicionar cliente já com o CPF/CNPJ (ou o nome) do PIX. Ao salvar, os avulsos dele vão
+// para o cadastro novo.
+let cobVirarPendente = null;
+function cobVirarCliente(x) {
+  const nome = String(x.cliente || "").replace(/^Avulso – /, "");
+  const doc = String(x.documento || "").replace(/\D/g, "");
+  cobVirarPendente = { documento: doc, nome };
+  if (cobDialogo.open) cobDialogo.close();
+  painelIr("cadastro", '#page-cadastro .subtab[data-subpage="adicionar"]');
+  if (doc.length === 11 || doc.length === 14) {
+    documentoInput.value = doc;
+    documentoInput.dispatchEvent(new Event("input", { bubbles: true }));
+  } else {
+    semDocumentoBotao.click();
+  }
+  // O formulário abre depois da consulta: o nome do PIX entra se o campo ainda estiver vazio.
+  let n = 0;
+  const t = setInterval(() => {
+    n++;
+    if (!formEntidade.classList.contains("hidden") && !razaoSocialInput.value.trim()) razaoSocialInput.value = nome;
+    if (!formEntidade.classList.contains("hidden") || n > 40) clearInterval(t);
+  }, 250);
+  mostrarToast("Complete o cadastro e salve: os PIX avulsos dele passam para o cliente.");
+}
+
 // Entrada sem cobrança (22/11/2026): o dono escreve de onde e por que veio o dinheiro (ex.: "saldo do Inter").
 // Fica guardada e sai da fila, sem entrar no faturamento.
 function cobAnotar(c) {
@@ -18088,7 +18213,7 @@ async function cobAbrir(x) {
       if (cobVencida(x)) linha("Valor de hoje", dinheiro(cobValorHoje(x)), "cob-vermelho");
       linha("Referente a", `${cobOrigemTexto(x)}${cobDescricaoCurta(x) ? " · " + cobDescricaoCurta(x) : ""}`);
       if (x.parcelas > 1) linha("Parcela", `${x.parcela} de ${x.parcelas}`);
-      if (x.vencimento) linha(x.asaasId ? "Vencimento" : "Previsão", `${cobDiaCurto(x.vencimento)}/${x.vencimento.slice(0, 4)}`);
+      if (x.vencimento && !["pix-avulso", "transferencia"].includes(x.origem)) linha(x.asaasId ? "Vencimento" : "Previsão", `${cobDiaCurto(x.vencimento)}/${x.vencimento.slice(0, 4)}`);
       linha("Conta", x.emissor || "");
       if (x.status === "Recebido") {
         linha("Recebido", `${dinheiro(x.valorPago ?? x.valor)} em ${dataBonita(x.dataRecebimento)}`);
@@ -18110,6 +18235,11 @@ async function cobAbrir(x) {
       }
       if (cobAberta(x) && !x.asaasId && !x.grupo && x.clienteId && ["nota", "recibo"].includes(x.origem)) acoes.append(cobBotao("Gerar boleto", () => cobAbrirGerarBoleto(x), ""));
       if (cobAberta(x)) acoes.append(cobBotao("Cancelar", (b) => cobCancelar(x, b), "botao-secundario botao-perigo"));
+      // PIX classificado pelo dono (28/11/2026).
+      if (x.origem === "pix-avulso" && !x.clienteId) acoes.append(cobBotao("Virar cliente", () => cobVirarCliente(x), ""));
+      if (["pix-avulso", "transferencia"].includes(x.origem)) {
+        acoes.append(cobBotao("Desfazer", async (b) => { if (await cobDesfazerEntrada({ id: x.id }, b) && cobDialogo.open) cobDialogo.close(); }, "botao-secundario botao-perigo"));
+      }
       campos.append(acoes);
       const hist = cobEl("div", "cob-historico");
       hist.append(cobEl("p", "doc-hint", "Buscando o histórico..."));

@@ -74,6 +74,10 @@ create table if not exists "Conciliacao" (
 );
 -- De onde e por que veio o dinheiro, escrito pelo dono (22/11/2026). Status 'anotado' = classificada sem ligar a conta.
 alter table "Conciliacao" add column if not exists "Anotacao" text;
+-- PIX sem cobrança (28/11/2026, pedido do dono): o dono diz o que é. 'transferencia' = transferência dele que NÃO
+-- conta nos recebidos. Serviço avulso (e transferência que conta) vira uma conta já recebida no A receber
+-- (Origem 'pix-avulso' ou 'transferencia'), ligada a esta entrada e, se ele quiser, a um chamado.
+alter table "Recebimentos" add column if not exists "Chamado_Ref" text references "Chamados"(id) on delete set null;
 
 -- Estado das cobranças: começo (corte das notas antigas), última sincronização, contas do Asaas, trava.
 create table if not exists "Cobranca_Estado" (
@@ -99,6 +103,11 @@ create or replace function cob_data(j jsonb, k text) returns date language sql i
 
 create or replace function cob_digitos(t text) returns text language sql immutable as $$
   select regexp_replace(coalesce(t, ''), '[^0-9]', '', 'g') $$;
+
+-- Quem mandou o PIX, para lembrar a escolha do dono: o CPF/CNPJ (quando vem) ou o nome da conta.
+create or replace function cob_chave_pagador(doc text, nome text) returns text language sql immutable as $$
+  select case when length(regexp_replace(coalesce(doc, ''), '[^0-9]', '', 'g')) >= 11 then regexp_replace(doc, '[^0-9]', '', 'g')
+              when coalesce(btrim(nome), '') <> '' then upper(regexp_replace(btrim(nome), '\s+', ' ', 'g')) end $$;
 
 create or replace function cob_hoje() returns date language sql stable as $$
   select (now() at time zone 'America/Sao_Paulo')::date $$;
@@ -319,12 +328,36 @@ begin
           or (r."Status" = 'Cancelado' and r."Criado_Em" >= now() - interval '45 days')), '[]'::jsonb),
     'conciliacao', coalesce((select jsonb_agg(jsonb_build_object('id', c.id, 'conta', c."Conta", 'data', c."Data", 'valor', c."Valor",
           'pagador', c."Pagador", 'documento', c."Pagador_Documento", 'clienteId', c."Cliente_Ref", 'descricao', c."Descricao",
-          'status', c."Status", 'confianca', c."Confianca", 'sugestao', c."Sugestao_Ref", 'anotacao', c."Anotacao") order by c."Data" desc)
+          'status', c."Status", 'confianca', c."Confianca", 'sugestao', c."Sugestao_Ref", 'anotacao', c."Anotacao",
+          -- 28/11/2026: o que o dono escolheu da última vez para este mesmo pagador (o app sugere igual).
+          'anterior', (select jsonb_build_object('tipo', case when a."Status" = 'anotado' then 'anotar'
+                when a."Status" = 'transferencia' or ar."Origem" = 'transferencia' then 'transferencia' else 'avulso' end,
+                'contar', a."Status" = 'vinculado', 'texto', coalesce(nullif(a."Anotacao", ''), ar."Descricao"), 'data', a."Data")
+              from "Conciliacao" a left join "Recebimentos" ar on ar.id = a."Recebimento_Ref"
+             where a.id <> c.id and cob_chave_pagador(a."Pagador_Documento", a."Pagador") = cob_chave_pagador(c."Pagador_Documento", c."Pagador")
+               and (a."Status" in ('anotado', 'transferencia') or (a."Status" = 'vinculado' and ar."Origem" in ('pix-avulso', 'transferencia')))
+             order by a."Data" desc, a."Criado_Em" desc limit 1),
+          -- Chamados concluídos na semana do PIX, ainda sem PIX avulso ligado ('bate' = mesmo valor).
+          'chamados', (select coalesce(jsonb_agg(jsonb_build_object('id', h.id, 'numero', h."Numero_Chamado", 'cliente', h."Cliente_Nome",
+                'descricao', left(coalesce(h."Descricao_Solicitacao", ''), 80), 'dia', (coalesce(h."Reservado_Inicio", h."Criado_Em") at time zone 'America/Sao_Paulo')::date,
+                'bate', c."Valor" in (h."Orcamento_Valor_Aproximado", coalesce(h."Orcamento_Valor_MaoDeObra", 0) + coalesce(h."Orcamento_Valor_Material", 0)))
+              order by c."Valor" in (h."Orcamento_Valor_Aproximado", coalesce(h."Orcamento_Valor_MaoDeObra", 0) + coalesce(h."Orcamento_Valor_Material", 0)) desc,
+                       coalesce(h."Reservado_Inicio", h."Criado_Em") desc), '[]'::jsonb)
+              from (select * from "Chamados" h0 where h0."Status" = 'Concluído'
+                      and (coalesce(h0."Reservado_Inicio", h0."Criado_Em") at time zone 'America/Sao_Paulo')::date between c."Data" - 7 and c."Data"
+                      and not exists (select 1 from "Recebimentos" rr where rr."Chamado_Ref" = h0.id)
+                    order by coalesce(h0."Reservado_Inicio", h0."Criado_Em") desc limit 15) h)) order by c."Data" desc)
         from "Conciliacao" c where c."Status" in ('pendente', 'sem-par') and c."Data" >= hoje - 60), '[]'::jsonb),
     -- Entradas que o dono anotou (de onde e por que veio) sem ligar a uma cobrança (25/11/2026): só para ver.
+    -- Desde 28/11/2026 também as transferências dele que não contam ('tipo' diz qual é).
     'anotadas', coalesce((select jsonb_agg(jsonb_build_object('id', c.id, 'conta', c."Conta", 'data', c."Data", 'valor', c."Valor",
-          'pagador', c."Pagador", 'descricao', c."Descricao", 'anotacao', c."Anotacao") order by c."Data" desc)
-        from "Conciliacao" c where c."Status" = 'anotado'), '[]'::jsonb),
+          'pagador', c."Pagador", 'descricao', c."Descricao", 'anotacao', c."Anotacao",
+          'tipo', case when c."Status" = 'transferencia' then 'transferencia' else 'anotar' end,
+          'sempre', exists (select 1 from "Cobranca_Estado" g where g.id = 'regra-pagador:' || cob_chave_pagador(c."Pagador_Documento", c."Pagador"))) order by c."Data" desc)
+        from "Conciliacao" c where c."Status" in ('anotado', 'transferencia')), '[]'::jsonb),
+    -- "Sempre tratar assim" (28/11/2026): PIX deste pagador já entra classificado.
+    'regras', coalesce((select jsonb_agg(g."Valor" || jsonb_build_object('chave', substr(g.id, 15)) order by g."Valor" ->> 'pagador')
+        from "Cobranca_Estado" g where g.id like 'regra-pagador:%'), '[]'::jsonb),
     -- Também as NFS-e trazidas de fora (PDF importado na pasta NFS-e do cliente, com valor; 22/11/2026), até o dono
     -- dizer se vai receber ou se já recebeu.
     'notasSemConta', coalesce((select jsonb_agg(x.j order by x.quando desc) from (
@@ -367,7 +400,8 @@ begin
         'notaPdf', (select n."Pdf_Nota" -> 0 ->> 'url' from "Notas_Fiscais" n where n.id = r."Nota_Ref"),
         'arquivoPdf', (select a."Arquivo" -> 0 ->> 'url' from "Arquivos_Cliente" a where a.id = r."Arquivo_Ref"),
         'arquivoTipo', (select a."Tipo" from "Arquivos_Cliente" a where a.id = r."Arquivo_Ref"),
-        'pagador', (select c."Pagador" from "Conciliacao" c where c.id = r."Baixa_Ref"),
+        -- A baixa guarda o Transacao_Id da entrada (28/11/2026: antes procurava pelo id e o nome nunca aparecia).
+        'pagador', (select c."Pagador" from "Conciliacao" c where c."Transacao_Id" = r."Baixa_Ref" or c."Recebimento_Ref" = r.id limit 1),
         'registradoEm', (select max(e."Quando") from "Cobranca_Eventos" e where e."Recebimento_Ref" = r.id and e."Tipo" = 'pago'))
       order by r."Data_Recebimento" desc, r."Cliente_Nome")
       from "Recebimentos" r
@@ -619,6 +653,35 @@ begin
       case when coalesce(btrim(cob_txt(p, 'texto')), '') <> '' then 'Entrada anotada.' else 'Entrada deixada de lado.' end));
   end if;
 
+  -- PIX sem cobrança (28/11/2026): serviço avulso, transferência minha (conta ou não) ou anotar.
+  if acao = 'classificar' then
+    return jsonb_build_object('resposta', cob_classificar(cob_txt(p, 'conciliacaoId'), cob_txt(p, 'tipo'), cob_txt(p, 'texto'),
+      coalesce(cob_txt(p, 'contar'), '') = 'sim', cob_txt(p, 'chamadoId'), coalesce(cob_txt(p, 'sempre'), '') = 'sim'));
+  end if;
+  if acao = 'desfazer-entrada' then return jsonb_build_object('resposta', cob_desfazer_entrada(cob_txt(p, 'conciliacaoId'), cob_txt(p, 'id'))); end if;
+  if acao = 'esquecer-regra' then
+    delete from "Cobranca_Estado" where id = 'regra-pagador:' || coalesce(cob_txt(p, 'chave'), '');
+    return jsonb_build_object('resposta', jsonb_build_object('ok', true, 'mensagem', 'Pronto: os próximos PIX dele voltam a perguntar.'));
+  end if;
+  -- Depois de cadastrar o pagador como cliente ("Virar cliente"): os avulsos dele passam para o cadastro.
+  -- p: { documento, nome } do PIX (o extrato quase sempre traz só o nome da conta).
+  if acao = 'ligar-avulsos' then
+    if length(cob_digitos(cob_txt(p, 'documento'))) >= 11 then
+      select * into c from "Entidades_Cadastradas" where cob_digitos("CPF_CNPJ") = cob_digitos(cob_txt(p, 'documento')) order by "Criado_Em" desc limit 1;
+    end if;
+    if c.id is null and cob_txt(p, 'nome') is not null then
+      select * into c from "Entidades_Cadastradas" where upper(btrim("Razao_Social_Nome")) = upper(cob_txt(p, 'nome')) order by "Criado_Em" desc limit 1;
+    end if;
+    if c.id is null then return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'Cliente não encontrado.')); end if;
+    update "Recebimentos" set "Cliente_Ref" = c.id, "Cliente_Nome" = cob_nome_cliente(c), "Atualizado_Em" = now()
+     where "Origem" = 'pix-avulso' and "Cliente_Ref" is null
+       and ((length(cob_digitos(c."CPF_CNPJ")) >= 11 and cob_digitos("Cliente_Documento") = cob_digitos(c."CPF_CNPJ"))
+            or upper("Cliente_Nome") = upper('Avulso – ' || coalesce(cob_txt(p, 'nome'), '-')));
+    get diagnostics n = row_count;
+    return jsonb_build_object('resposta', jsonb_build_object('ok', true, 'ligados', n,
+      'mensagem', case when n = 0 then 'Cliente salvo.' else 'Cliente salvo e ' || n || case when n = 1 then ' PIX avulso ligado' else ' PIX avulsos ligados' end || ' a ele.' end));
+  end if;
+
   if acao = 'incluir-antigas' then
     -- Notas de antes das cobranças: o dono diz quais ainda vai receber e quais já recebeu.
     -- O id pode ser de uma nota do sistema ou de uma NFS-e trazida de fora (PDF na pasta do cliente).
@@ -639,6 +702,76 @@ begin
   end if;
 
   return jsonb_build_object('resposta', jsonb_build_object('ok', false, 'mensagem', 'Ação inválida.'));
+end $$;
+
+-- ========== PIX sem cobrança: o dono diz o que é (28/11/2026) ==========
+-- tipo: 'avulso' (serviço sem recibo nem nota: conta nos recebidos do mês, não no medidor do MEI), 'transferencia'
+-- (dinheiro do próprio dono; contar = ele escolheu que conta nos recebidos) ou 'anotar' (fora dos recebidos).
+-- Quem decide é sempre o dono (ou a regra "sempre tratar assim" que ele mesmo marcou).
+create or replace function cob_classificar(cid text, tipo text, texto text, contar boolean, chamado text, sempre boolean)
+returns jsonb language plpgsql as $$
+declare conc "Conciliacao"; rid text; chave text; t text := nullif(left(btrim(coalesce(texto, '')), 300), ''); ch text;
+  quem text; vira_conta boolean;
+begin
+  select * into conc from "Conciliacao" where id = cid for update;
+  if conc.id is null then return jsonb_build_object('ok', false, 'mensagem', 'Entrada não encontrada.'); end if;
+  if conc."Status" not in ('pendente', 'sem-par', 'novo') then return jsonb_build_object('ok', false, 'mensagem', 'Esta entrada já foi resolvida.'); end if;
+  if coalesce(tipo, '') not in ('avulso', 'transferencia', 'anotar') then return jsonb_build_object('ok', false, 'mensagem', 'Escolha o que é este dinheiro.'); end if;
+  if tipo = 'anotar' and t is null then return jsonb_build_object('ok', false, 'mensagem', 'Escreva de onde veio o dinheiro.'); end if;
+  if chamado is not null then select id into ch from "Chamados" where id = chamado; end if;
+  quem := coalesce(nullif(btrim(conc."Pagador"), ''), 'sem nome');
+  vira_conta := tipo = 'avulso' or (tipo = 'transferencia' and coalesce(contar, false));
+  if vira_conta then
+    insert into "Recebimentos" ("Descricao", "Valor", "Cliente_Nome", "Cliente_Documento", "Cliente_Ref", "Vencimento", "Status", "Forma",
+                                "Origem", "Emissor", "Chamado_Ref", "Atualizado_Em")
+    values (coalesce(t, case when tipo = 'avulso' then 'Serviço avulso (PIX)' else 'Transferência entre contas próprias' end), conc."Valor",
+            case when tipo = 'avulso' then 'Avulso – ' else 'Transferência – ' end || quem,
+            nullif(conc."Pagador_Documento", ''), case when tipo = 'avulso' then conc."Cliente_Ref" end, conc."Data", 'Pendente', 'PIX',
+            case when tipo = 'avulso' then 'pix-avulso' else 'transferencia' end, conc."Conta", case when tipo = 'avulso' then ch end, now())
+    returning id into rid;
+    update "Conciliacao" set "Status" = 'vinculado', "Recebimento_Ref" = rid, "Anotacao" = t where id = conc.id;
+    perform cob_evento(rid, 'criado', case when tipo = 'avulso' then 'Serviço avulso registrado pelo PIX de ' else 'Transferência registrada (conta nos recebidos): PIX de ' end
+      || quem || '.', 'classificado:' || conc.id);
+    perform cob_baixar(rid, least(conc."Data", cob_hoje()), conc."Valor", 'conciliacao', conc."Transacao_Id", 'PIX');
+  else
+    update "Conciliacao" set "Status" = case when tipo = 'transferencia' then 'transferencia' else 'anotado' end,
+           "Anotacao" = coalesce(t, 'Transferência entre contas próprias'), "Recebimento_Ref" = null where id = conc.id;
+  end if;
+  if sempre then
+    chave := cob_chave_pagador(conc."Pagador_Documento", conc."Pagador");
+    if chave is not null then
+      insert into "Cobranca_Estado" (id, "Valor") values ('regra-pagador:' || chave, jsonb_build_object('tipo', tipo, 'texto', t,
+          'contar', coalesce(contar, false), 'pagador', quem, 'quando', now()))
+      on conflict (id) do update set "Valor" = excluded."Valor";
+    end if;
+  end if;
+  return jsonb_build_object('ok', true, 'id', rid, 'mensagem', case tipo when 'avulso' then 'Serviço avulso registrado: entrou nos recebidos do mês.'
+    when 'transferencia' then case when vira_conta then 'Transferência registrada: conta nos recebidos do mês.' else 'Transferência guardada: fora dos recebidos.' end
+    else 'Entrada anotada.' end || case when sempre and chave is not null then ' Os próximos PIX de ' || quem || ' já entram assim.' else '' end);
+end $$;
+
+-- Desfaz a escolha (pela entrada ou pela conta criada a partir dela): a conta avulsa sai e a entrada volta para a fila.
+-- Só mexe no que nasceu desta escolha (Origem 'pix-avulso' ou 'transferencia'); a regra do pagador, se houver, sai junto.
+create or replace function cob_desfazer_entrada(cid text, rid text) returns jsonb language plpgsql as $$
+declare conc "Conciliacao"; r "Recebimentos";
+begin
+  if cid is null and rid is not null then select * into conc from "Conciliacao" where "Recebimento_Ref" = rid limit 1;
+  else select * into conc from "Conciliacao" where id = cid; end if;
+  if conc.id is null then return jsonb_build_object('ok', false, 'mensagem', 'Entrada não encontrada.'); end if;
+  if conc."Status" = 'vinculado' then
+    select * into r from "Recebimentos" where id = conc."Recebimento_Ref";
+    if r.id is not null and coalesce(r."Origem", '') not in ('pix-avulso', 'transferencia') then
+      return jsonb_build_object('ok', false, 'mensagem', 'Esta entrada está ligada a uma cobrança de nota ou recibo: não dá para desfazer por aqui.');
+    end if;
+    update "Conciliacao" set "Status" = 'sem-par', "Recebimento_Ref" = null, "Anotacao" = null where id = conc.id;
+    if r.id is not null then delete from "Recebimentos" where id = r.id; end if;
+  elsif conc."Status" in ('anotado', 'transferencia', 'ignorado') then
+    update "Conciliacao" set "Status" = 'sem-par', "Anotacao" = null where id = conc.id;
+  else
+    return jsonb_build_object('ok', false, 'mensagem', 'Esta entrada ainda está esperando a sua escolha.');
+  end if;
+  delete from "Cobranca_Estado" where id = 'regra-pagador:' || cob_chave_pagador(conc."Pagador_Documento", conc."Pagador");
+  return jsonb_build_object('ok', true, 'mensagem', 'Desfeito: a entrada voltou para "Precisa de você".');
 end $$;
 
 -- Resumo de um grupo recém-criado, para o app montar a nota com os links.
@@ -1169,7 +1302,7 @@ end $$;
 create or replace function cob_sinc_gravar(p jsonb) returns jsonb language plpgsql as $$
 declare x jsonb; ref jsonb; res jsonb; pay jsonb; rid text; r "Recebimentos"; st text; vis timestamptz; conta text; e jsonb;
   cli text; novo text; tx jsonb; pagos int := 0; importados int := 0; hoje date := cob_hoje(); ini timestamptz; n "Notas_Fiscais";
-  a "Arquivos_Cliente"; cand record; ncand int; dinheiro jsonb := '[]'; conc "Conciliacao"; sugeridos int := 0; vinculados int := 0;
+  a "Arquivos_Cliente"; cand record; ncand int; dinheiro jsonb := '[]'; conc "Conciliacao"; sugeridos int := 0; vinculados int := 0; regra jsonb;
   estado jsonb; taxa numeric; promo date; pdf jsonb;
 begin
   select ("Valor" ->> 'quando')::timestamptz into ini from "Cobranca_Estado" where id = 'inicio';
@@ -1264,13 +1397,17 @@ begin
   -- Entradas novas: de qual cobrança é cada uma? Mesmo valor (ao centavo) e mesma conta. O documento do pagador
   -- igual ao do cliente (ou o próprio cliente no Asaas) dá certeza: baixa sozinha. Sem certeza: vira sugestão.
   for conc in select * from "Conciliacao" where "Status" = 'novo' order by "Data", "Criado_Em" loop
+    -- "Sempre tratar assim" que o dono marcou para este pagador (28/11/2026).
+    select g."Valor" into regra from "Cobranca_Estado" g where g.id = 'regra-pagador:' || cob_chave_pagador(conc."Pagador_Documento", conc."Pagador");
     -- Dinheiro mandado pelo próprio dono (ex.: o saldo do Inter passando para o Asaas, 22/11/2026): não é pagamento de
-    -- cliente. Fica para classificar, já com a anotação sugerida, e nunca vira baixa nem sugestão de cobrança.
+    -- cliente, então nunca vira baixa nem sugestão de cobrança. Desde 28/11/2026 o sistema não decide nem sugere que é
+    -- transferência: fica para o dono escolher (ou segue a regra dele).
     if exists (select 1 from "Empresas_Emissoras" em
                 where (length(btrim(coalesce(em."Titular", ''))) >= 8
                        and upper(coalesce(conc."Pagador", '') || ' ' || coalesce(conc."Descricao", '')) like '%' || upper(btrim(em."Titular")) || '%')
                    or (length(coalesce(conc."Pagador_Documento", '')) >= 11 and conc."Pagador_Documento" = cob_digitos(em."CNPJ"))) then
-      update "Conciliacao" set "Status" = 'sem-par', "Anotacao" = coalesce("Anotacao", 'Transferência entre contas próprias (ex.: saldo do Inter)') where id = conc.id;
+      update "Conciliacao" set "Status" = 'sem-par' where id = conc.id;
+      if regra is not null then perform cob_classificar(conc.id, regra ->> 'tipo', regra ->> 'texto', coalesce((regra ->> 'contar')::boolean, false), null, false); end if;
       continue;
     end if;
     select count(*) into ncand from "Recebimentos" q
@@ -1291,6 +1428,11 @@ begin
       end if;
       perform cob_baixar(cand.id, least(conc."Data", hoje), conc."Valor", 'conciliacao', conc."Transacao_Id", 'PIX');
       vinculados := vinculados + 1;
+      continue;
+    end if;
+    if regra is not null then
+      update "Conciliacao" set "Status" = 'sem-par' where id = conc.id;
+      perform cob_classificar(conc.id, regra ->> 'tipo', regra ->> 'texto', coalesce((regra ->> 'contar')::boolean, false), null, false);
       continue;
     end if;
     if ncand > 0 then
