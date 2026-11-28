@@ -78,6 +78,8 @@ alter table "Conciliacao" add column if not exists "Anotacao" text;
 -- conta nos recebidos. Serviço avulso (e transferência que conta) vira uma conta já recebida no A receber
 -- (Origem 'pix-avulso' ou 'transferencia'), ligada a esta entrada e, se ele quiser, a um chamado.
 alter table "Recebimentos" add column if not exists "Chamado_Ref" text references "Chamados"(id) on delete set null;
+-- Quando o serviço avulso foi feito (o dono escolhe; a data de pagamento continua a do PIX). 28/11/2026.
+alter table "Recebimentos" add column if not exists "Data_Servico" date;
 -- Observação do dono em cada movimentação do extrato do Asaas, entrada ou saída (28/11/2026). id = conta:transação.
 create table if not exists "Extrato_Observacoes" (
   id text primary key,
@@ -202,7 +204,7 @@ create or replace function cob_item(r "Recebimentos") returns jsonb language sql
     'asaasId', r."Asaas_Cobranca_Id", 'asaasConta', r."Asaas_Conta", 'asaasStatus', r."Asaas_Status", 'link', r."Asaas_Link",
     'boletoUrl', r."Boleto_Url", 'vistoEm', r."Visto_Em", 'valorPago', r."Valor_Pago", 'valorLiquido', r."Valor_Liquido",
     'taxa', r."Taxa", 'multaJuros', r."Multa_Juros", 'baixaPor', r."Baixa_Por", 'material', r."Material_Valor",
-    'aviso', r."Aviso", 'criadoEm', r."Criado_Em", 'observacoes', r."Observacoes",
+    'aviso', r."Aviso", 'criadoEm', r."Criado_Em", 'observacoes', r."Observacoes", 'dataServico', r."Data_Servico",
     -- WhatsApp para o lembrete que o dono manda: o do cadastro ou o do primeiro contato ativo.
     'whatsapp', (select coalesce(nullif(cob_digitos(c."WhatsApp_CNPJ"), ''),
         (select cob_digitos(split_part(k."WhatsApps", E'\n', 1)) from "Contatos_Solicitantes" k
@@ -665,7 +667,7 @@ begin
   -- PIX sem cobrança (28/11/2026): serviço avulso, transferência minha (conta ou não) ou anotar.
   if acao = 'classificar' then
     return jsonb_build_object('resposta', cob_classificar(cob_txt(p, 'conciliacaoId'), cob_txt(p, 'tipo'), cob_txt(p, 'texto'),
-      coalesce(cob_txt(p, 'contar'), '') = 'sim', cob_txt(p, 'chamadoId'), coalesce(cob_txt(p, 'sempre'), '') = 'sim'));
+      coalesce(cob_txt(p, 'contar'), '') = 'sim', cob_txt(p, 'chamadoId'), coalesce(cob_txt(p, 'sempre'), '') = 'sim', cob_data(p, 'dataServico')));
   end if;
   if acao = 'desfazer-entrada' then return jsonb_build_object('resposta', cob_desfazer_entrada(cob_txt(p, 'conciliacaoId'), cob_txt(p, 'id'))); end if;
   -- Observação numa movimentação do extrato (28/11/2026). Texto vazio apaga a observação.
@@ -731,7 +733,8 @@ end $$;
 -- tipo: 'avulso' (serviço sem recibo nem nota: conta nos recebidos do mês, não no medidor do MEI), 'transferencia'
 -- (dinheiro do próprio dono; contar = ele escolheu que conta nos recebidos) ou 'anotar' (fora dos recebidos).
 -- Quem decide é sempre o dono (ou a regra "sempre tratar assim" que ele mesmo marcou).
-create or replace function cob_classificar(cid text, tipo text, texto text, contar boolean, chamado text, sempre boolean)
+drop function if exists cob_classificar(text, text, text, boolean, text, boolean);
+create or replace function cob_classificar(cid text, tipo text, texto text, contar boolean, chamado text, sempre boolean, servico_em date default null)
 returns jsonb language plpgsql as $$
 declare conc "Conciliacao"; rid text; chave text; t text := nullif(left(btrim(coalesce(texto, '')), 300), ''); ch text;
   quem text; vira_conta boolean;
@@ -746,11 +749,12 @@ begin
   vira_conta := tipo = 'avulso' or (tipo = 'transferencia' and coalesce(contar, false));
   if vira_conta then
     insert into "Recebimentos" ("Descricao", "Valor", "Cliente_Nome", "Cliente_Documento", "Cliente_Ref", "Vencimento", "Status", "Forma",
-                                "Origem", "Emissor", "Chamado_Ref", "Atualizado_Em")
+                                "Origem", "Emissor", "Chamado_Ref", "Data_Servico", "Atualizado_Em")
     values (coalesce(t, case when tipo = 'avulso' then 'Serviço avulso (PIX)' else 'Transferência entre contas próprias' end), conc."Valor",
             case when tipo = 'avulso' then 'Avulso – ' else 'Transferência – ' end || quem,
             nullif(conc."Pagador_Documento", ''), case when tipo = 'avulso' then conc."Cliente_Ref" end, conc."Data", 'Pendente', 'PIX',
-            case when tipo = 'avulso' then 'pix-avulso' else 'transferencia' end, conc."Conta", case when tipo = 'avulso' then ch end, now())
+            case when tipo = 'avulso' then 'pix-avulso' else 'transferencia' end, conc."Conta", case when tipo = 'avulso' then ch end,
+            case when tipo = 'avulso' and servico_em <= cob_hoje() then servico_em end, now())
     returning id into rid;
     update "Conciliacao" set "Status" = 'vinculado', "Recebimento_Ref" = rid, "Anotacao" = t where id = conc.id;
     perform cob_evento(rid, 'criado', case when tipo = 'avulso' then 'Serviço avulso registrado pelo PIX de ' else 'Transferência registrada (conta nos recebidos): PIX de ' end

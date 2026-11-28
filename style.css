@@ -8779,6 +8779,7 @@ button.rec-seta:disabled { opacity: 0.3; cursor: default; }
 .rec-cliente-nome { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .rec-cliente small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rec-nota { grid-area: nota; font-size: 0.82rem; font-weight: 600; color: #c4b5fd; }
+.rec-nota .rec-feito { display: block; margin-top: 2px; font-size: 0.75rem; font-weight: 500; color: var(--muted); }
 .rec-como { grid-area: como; display: flex; flex-direction: column; gap: 1px; font-size: 0.85rem; }
 .rec-valor { grid-area: valor; display: flex; flex-direction: column; align-items: flex-end; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .rec-docs { grid-area: docs; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }

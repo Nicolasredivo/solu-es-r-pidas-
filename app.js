@@ -68,7 +68,7 @@ function urlWebhook(caminho) {
 // Sobe junto com o CACHE_NAME do service-worker.js a cada publicação. Fica
 // visível no rodapé do menu para dar uma resposta rápida à pergunta
 // "será que a atualização já chegou neste aparelho?".
-const APP_VERSION = "2026.11.28f";
+const APP_VERSION = "2026.11.28g";
 
 // ----- Sessão (login por e-mail e senha) -----
 //
@@ -17301,6 +17301,8 @@ function recDesenhar(r) {
     const desc = cobDescricaoCurta(x);
     if (desc) cli.append(cobEl("small", "", desc + (x.parcelas > 1 ? ` · parcela ${x.parcela} de ${x.parcelas}` : "")));
     const nota = cobEl("span", "rec-nota", cobOrigemTexto(x));
+    // Serviço avulso: quando foi feito, embaixo do tipo (a coluna da data segue sendo a do pagamento). 28/11/2026.
+    if (x.dataServico) nota.append(cobEl("small", "rec-feito", `serviço feito em ${dataBonita(x.dataServico).slice(0, 5)}`));
     const como = cobEl("span", "rec-como");
     como.append(cobEl("span", "", recComoPagou(x)));
     const marcou = recQuandoMarcou(x);
@@ -17971,7 +17973,7 @@ async function cobConciliar(c, x, botao) {
 //  - Anotar: outro motivo (devolução, empréstimo...). Fora dos recebidos.
 const COB_TIPO_PIX = { avulso: "Serviço avulso", transferencia: "Transferência minha", anotar: "Anotado" };
 function cobClassificar(c, tipo) {
-  let texto, contar, chamado, sempre;
+  let texto, contar, chamado, sempre, dataServico;
   const quem = c.pagador || "este pagador";
   const titulos = { avulso: "Serviço avulso", transferencia: "Transferência minha", anotar: "Anotar esta entrada" };
   const explica = {
@@ -17992,12 +17994,16 @@ function cobClassificar(c, tipo) {
         tipo === "anotar" ? c.anotacao || "" : "", { maxLength: 300,
           placeholder: tipo === "avulso" ? "Ex.: troca de chuveiro" : tipo === "anotar" ? "Ex.: devolução de compra; empréstimo" : "Ex.: saldo da conta antiga" });
       const chs = c.chamados || [];
+      // Quando o serviço foi feito (28/11/2026): começa no dia do PIX (ou do chamado escolhido); o pagamento continua
+      // com a data do PIX.
+      if (tipo === "avulso") dataServico = cobCampo(campos, "Quando o serviço foi feito", "date", c.data, { max: hojeISO() });
       if (tipo === "avulso" && chs.length) {
         chamado = cobCampo(campos, "Chamado deste serviço (opcional)", "select");
         chamado.append(new Option("Nenhum", ""));
         chs.forEach((h) => chamado.append(new Option(`nº ${h.numero || "?"} · ${h.cliente || "sem cliente"} · ${dataBonita(h.dia).slice(0, 5)}${h.bate ? " · mesmo valor" : ""}`, h.id)));
         const bate = chs.find((h) => h.bate);
-        if (bate) chamado.value = bate.id;
+        if (bate) { chamado.value = bate.id; dataServico.value = bate.dia; }
+        chamado.addEventListener("change", () => { const h = chs.find((y) => y.id === chamado.value); if (h) dataServico.value = h.dia; });
       }
       const l = cobEl("label", "cob-check");
       sempre = cobEl("input");
@@ -18008,8 +18014,9 @@ function cobClassificar(c, tipo) {
     aoConfirmar: async () => {
       const t = texto.value.trim();
       if (tipo === "anotar" && !t) return "Escreva de onde veio o dinheiro.";
+      if (dataServico && (!dataServico.value || dataServico.value > hojeISO())) return "Escolha quando o serviço foi feito (hoje ou antes).";
       const r = await cobPedir({ acao: "classificar", conciliacaoId: c.id, tipo, texto: t, contar: contar ? contar.value : "",
-        chamadoId: chamado ? chamado.value : "", sempre: sempre.checked ? "sim" : "" }, null, "Guardado.");
+        chamadoId: chamado ? chamado.value : "", sempre: sempre.checked ? "sim" : "", dataServico: dataServico ? dataServico.value : "" }, null, "Guardado.");
       return r ? "" : "Não deu certo: tente de novo.";
     },
   });
@@ -18337,6 +18344,7 @@ async function cobAbrir(x) {
       linha("Valor", dinheiro(x.valor));
       if (cobVencida(x)) linha("Valor de hoje", dinheiro(cobValorHoje(x)), "cob-vermelho");
       linha("Referente a", `${cobOrigemTexto(x)}${cobDescricaoCurta(x) ? " · " + cobDescricaoCurta(x) : ""}`);
+      if (x.dataServico) linha("Serviço feito em", dataBonita(x.dataServico));
       if (x.parcelas > 1) linha("Parcela", `${x.parcela} de ${x.parcelas}`);
       if (x.vencimento && !["pix-avulso", "transferencia"].includes(x.origem)) linha(x.asaasId ? "Vencimento" : "Previsão", `${cobDiaCurto(x.vencimento)}/${x.vencimento.slice(0, 4)}`);
       linha("Conta", x.emissor || "");
